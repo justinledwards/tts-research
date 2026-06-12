@@ -724,7 +724,7 @@ export function PreparedSourceCinemaOverlay({
             ) : null}
             {href ? (
               <div className="grid min-w-0 grid-cols-[5.6rem_minmax(0,1fr)] gap-3">
-                <dt className="vs-muted">URL</dt>
+                <dt className="vs-muted">Source URL</dt>
                 <dd className="min-w-0 truncate text-[var(--vs-status-info)]" title={href}>
                   <a href={href} rel="noreferrer" target="_blank">
                     {href}
@@ -2203,7 +2203,7 @@ function PreparedSourceCinemaMobileSheet({
             children: (
               <div className="grid gap-3 text-sm">
                 <div className="grid gap-2 rounded-md border p-3 vs-border vs-surface">
-                  <StatusChip tone="metadata">Temporary</StatusChip>
+                  <StatusChip tone="metadata">Temporary source</StatusChip>
                   <p className="leading-6 vs-muted">
                     Keep this source when the extraction, edits, or generated audio should become
                     part of a project.

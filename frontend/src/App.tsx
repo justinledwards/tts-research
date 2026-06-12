@@ -566,9 +566,14 @@ import {
   temporarySessionToPreparedSource,
 } from "./features/quick-listen";
 import { TEMPORARY_SOURCE_COPY } from "./features/temporary-source-copy";
-import { quickListenDisabledReason, studioFeatureFlags } from "./features/featureFlags";
+import {
+  quickListenDisabledReason,
+  studioFeatureFlags,
+  temporaryCinemaDisabledReason,
+} from "./features/featureFlags";
 
 type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
+type TemporaryQuickListenDestination = "review" | "preview" | "cinema";
 
 type VoiceProfileArtifactBuildAction = (
   profileId: string,
@@ -2652,6 +2657,23 @@ function formatErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
+function formatTemporarySourceError(error: unknown): string {
+  const message = formatErrorMessage(error, TEMPORARY_SOURCE_COPY.errors.failed);
+  if (/private|local address|this machine|safety/i.test(message)) {
+    return "Temporary source safety check blocked this URL. Use a public http or https article URL, or choose project intake for private sources when that workflow is explicitly enabled.";
+  }
+  if (/only http and https|unsupported scheme|unsupported content|not supported/i.test(message)) {
+    return "Temporary source does not support that webpage content. Use a readable http or https article, paste the text, or choose project intake.";
+  }
+  if (/HTTP|fetch|network|timeout|too many redirects|redirected|returned/i.test(message)) {
+    return "Temporary source fetch failed. Check the Source URL and try Re-fetch, or paste the article text instead.";
+  }
+  if (/empty|readable|extract|article/i.test(message)) {
+    return "Temporary source extraction failed. The page did not yield readable article text; try Re-fetch or paste the article text.";
+  }
+  return message;
+}
+
 function removeBookSourceById(bookId: string): (books: BookSource[]) => BookSource[] {
   return (books) => books.filter((book) => book.id !== bookId);
 }
@@ -2763,6 +2785,7 @@ export function App() {
   const [isCreatingQuickListenSource, setIsCreatingQuickListenSource] = useState(false);
   const [quickListenError, setQuickListenError] = useState<string | null>(null);
   const quickListenEnabled = studioFeatureFlags.temporarySources.quickListen;
+  const temporaryCinemaEnabled = studioFeatureFlags.temporarySources.cinema;
   const [hydratingPreparedSourceId, setHydratingPreparedSourceId] = useState<string | null>(null);
   const [isPreparingSource, setIsPreparingSource] = useState(false);
   const [sourcePrepError, setSourcePrepError] = useState<string | null>(null);
@@ -6335,7 +6358,7 @@ export function App() {
   );
 
   const activateTemporarySource = useCallback(
-    (session: TemporarySourceSession, destination: "review" | "preview" = "review") => {
+    (session: TemporarySourceSession, destination: TemporaryQuickListenDestination = "review") => {
       setTemporarySources((currentSources) => [
         session,
         ...currentSources.filter((item) => item.id !== session.id),
@@ -6359,6 +6382,9 @@ export function App() {
           label: bookSourceName(book),
         });
         setContentMode(destination === "preview" ? "preview" : "review");
+        if (destination === "cinema" && temporaryCinemaEnabled) {
+          setIsBookCinemaOpen(true);
+        }
         announcePolite("Quick Listen book source is ready as a temporary session.");
         return;
       }
@@ -6376,9 +6402,18 @@ export function App() {
         label: source.title ?? source.sourceName,
       });
       setContentMode(destination === "preview" ? "preview" : "review");
+      if (destination === "cinema" && temporaryCinemaEnabled) {
+        openPreparedSourceCinema(source);
+      }
       announcePolite("Quick Listen source is ready as a temporary session.");
     },
-    [announcePolite, selectWorkspaceInspectorTarget, setContentMode],
+    [
+      announcePolite,
+      openPreparedSourceCinema,
+      selectWorkspaceInspectorTarget,
+      setContentMode,
+      temporaryCinemaEnabled,
+    ],
   );
 
   const refreshTemporaryStorageUsage = useCallback(async () => {
@@ -6394,7 +6429,7 @@ export function App() {
       request: Parameters<typeof createTemporarySource>[0],
       markdownParseMode: MarkdownParseMode,
       confirmation?: SourceReadinessConfirmationRequest,
-      destination: "review" | "preview" = "review",
+      destination: TemporaryQuickListenDestination = "review",
     ) => {
       if (!quickListenEnabled) {
         const message = quickListenDisabledReason();
@@ -6425,14 +6460,23 @@ export function App() {
           announceAssertive(liveStatusMessages.sourceExtractionFailed());
           return;
         }
-        if (destination === "preview" && confirmation) {
+        const effectiveDestination =
+          destination === "cinema" && !temporaryCinemaEnabled ? "review" : destination;
+        if (destination === "cinema" && !temporaryCinemaEnabled) {
+          const message = temporaryCinemaDisabledReason();
+          setQuickListenError(message);
+          announceAssertive(message);
+        }
+        if (
+          (effectiveDestination === "preview" || effectiveDestination === "cinema") &&
+          confirmation
+        ) {
           session = await confirmTemporarySourceReadiness(session.id, confirmation);
         }
-        activateTemporarySource(session, destination);
+        activateTemporarySource(session, effectiveDestination);
         void refreshTemporaryStorageUsage();
       } catch (caughtError) {
-        const message =
-          caughtError instanceof Error ? caughtError.message : "Unable to start Quick Listen";
+        const message = formatTemporarySourceError(caughtError);
         setQuickListenError(message);
         setSourcePrepError(message);
         announceAssertive(liveStatusMessages.sourceExtractionFailed());
@@ -6446,6 +6490,7 @@ export function App() {
       announcePolite,
       quickListenEnabled,
       refreshTemporaryStorageUsage,
+      temporaryCinemaEnabled,
     ],
   );
 
@@ -6484,7 +6529,7 @@ export function App() {
       draftText: string,
       markdownParseMode: MarkdownParseMode,
       confirmation: SourceReadinessConfirmationRequest,
-      destination: "review" | "preview",
+      destination: TemporaryQuickListenDestination,
       sourceName = "Quick Listen paste",
     ) => {
       await createQuickListenSource(
@@ -6507,7 +6552,7 @@ export function App() {
       url: string,
       markdownParseMode: MarkdownParseMode,
       confirmation: SourceReadinessConfirmationRequest,
-      destination: "review" | "preview",
+      destination: TemporaryQuickListenDestination,
     ) => {
       await createQuickListenSource(
         {
@@ -6529,7 +6574,7 @@ export function App() {
       file: File,
       markdownParseMode: MarkdownParseMode,
       confirmation: SourceReadinessConfirmationRequest,
-      destination: "review" | "preview",
+      destination: TemporaryQuickListenDestination,
     ) => {
       await createQuickListenSource(file, markdownParseMode, confirmation, destination);
     },

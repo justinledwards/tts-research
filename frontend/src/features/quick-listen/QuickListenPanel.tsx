@@ -23,7 +23,7 @@ import { TEMPORARY_SOURCE_COPY } from "../temporary-source-copy";
 import { WebsiteExtractionSummary } from "../website-cinema/WebsiteExtractionSummary";
 
 export type QuickListenMode = "paste" | "url" | "file" | "recent";
-type QuickListenDestination = "review" | "preview";
+type QuickListenDestination = "review" | "preview" | "cinema";
 
 export interface QuickListenPanelProps {
   error: string | null;
@@ -284,7 +284,7 @@ export function QuickListenPanel({
 
             {mode === "url" ? (
               <label className="grid gap-2">
-                <span className="text-sm font-semibold">Enter URL</span>
+                <span className="text-sm font-semibold">Source URL</span>
                 <input
                   className={cx(
                     fieldControlClassName,
@@ -513,6 +513,20 @@ export function QuickListenPanel({
             >
               {isSubmitting ? "Starting..." : "Create quick preview"}
             </Button>
+            {mode === "url" ? (
+              <Button
+                className="min-h-12 sm:min-h-10"
+                data-testid="ui-action-quick-listen-url-open-cinema"
+                disabled={isSubmitting}
+                onClick={() => {
+                  submit("cinema");
+                }}
+                size="md"
+                variant="primary"
+              >
+                {isSubmitting ? "Opening..." : "Open Website Cinema"}
+              </Button>
+            ) : null}
           </div>
         </footer>
       </section>
@@ -871,6 +885,7 @@ export function temporarySessionToPreparedSource(source: TemporarySourceSession)
     metadata: {
       ...source.metadata,
       temporaryExpiresAt: source.expiresAt,
+      temporarySourceUrl: source.sourceUrl,
       temporaryStatus: source.status,
     },
     projectId: "",

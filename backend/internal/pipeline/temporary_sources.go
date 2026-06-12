@@ -132,6 +132,11 @@ func (service *Service) CreateTemporarySource(ctx context.Context, request Creat
 		markdownParseMode,
 		request.HTMLContainerSelector,
 	)
+	storedSourceText := sourceText
+	if kind == PreparedSourceKindURL && preprocessed.SourceFormat == "html" &&
+		strings.TrimSpace(preprocessed.ReadableText) != "" {
+		storedSourceText = preprocessed.ReadableText
+	}
 	metadata := preprocessed.Metadata
 	if metadata == nil {
 		metadata = map[string]any{}
@@ -139,6 +144,17 @@ func (service *Service) CreateTemporarySource(ctx context.Context, request Creat
 	if urlSafety != nil {
 		metadata["urlSafety"] = *urlSafety
 		metadata["urlProvenance"] = urlProvenanceMetadata(request.URL, sourceURL)
+	}
+	if kind == PreparedSourceKindURL {
+		if webpage := temporaryWebpageMetadata(
+			metadata,
+			sourceURL,
+			preprocessed.Title,
+			countWords(storedSourceText),
+			len(preprocessed.Blocks),
+		); len(webpage) > 0 {
+			metadata["webpage"] = webpage
+		}
 	}
 	metadata["preprocessorId"] = preprocessed.PreprocessorID
 	metadata["preprocessorVersion"] = preprocessed.PreprocessorVersion
@@ -157,7 +173,7 @@ func (service *Service) CreateTemporarySource(ctx context.Context, request Creat
 		SourceURL:         sourceURL,
 		SourceContentType: contentType,
 		SourceBytes:       sourceBytes,
-		Text:              sourceText,
+		Text:              storedSourceText,
 		MarkdownParseMode: markdownParseMode,
 		Title:             firstNonEmpty(preprocessed.Title, inferPreparedSourceTitle(sourceText, sourceName)),
 		Blocks:            preprocessed.Blocks,
@@ -181,7 +197,7 @@ func (service *Service) CreateTemporarySource(ctx context.Context, request Creat
 		Scope:     SourceArtifactScopeTemporary,
 		Kind:      SourceArtifactKindExtraction,
 		URL:       fmt.Sprintf("/api/temporary-sources/%s/artifacts", id),
-		Bytes:     int64(len([]byte(sourceText))),
+		Bytes:     int64(len([]byte(storedSourceText))),
 		CreatedAt: now,
 		ExpiresAt: &session.ExpiresAt,
 	})
@@ -1310,6 +1326,43 @@ func temporarySessionFromPreparedSource(source PreparedSource, now time.Time, ex
 		ExpiresAt:                   expiresAt,
 		UpdatedAt:                   now,
 	}
+}
+
+func temporaryWebpageMetadata(
+	metadata map[string]any,
+	sourceURL string,
+	title string,
+	wordCount int,
+	blockCount int,
+) map[string]any {
+	webpage := map[string]any{}
+	websiteMetadata, _ := metadata["websiteMetadata"].(map[string]string)
+	canonical := strings.TrimSpace(websiteMetadata["canonicalUrl"])
+	if canonical != "" {
+		webpage["canonicalUrl"] = canonical
+	}
+	if language := strings.TrimSpace(websiteMetadata["language"]); language != "" {
+		webpage["language"] = language
+	}
+	if siteName := strings.TrimSpace(websiteMetadata["siteName"]); siteName != "" {
+		webpage["siteName"] = siteName
+	}
+	if title := firstNonEmpty(websiteMetadata["title"], title); title != "" {
+		webpage["title"] = title
+	}
+	if domain := siteNameFromURL(firstNonEmpty(canonical, sourceURL)); domain != "" {
+		webpage["domain"] = domain
+	}
+	if quality, ok := metadata["websiteExtractionQuality"].(sourceprep.HTMLExtractionQuality); ok {
+		webpage["extractionConfidence"] = quality.ExtractionConfidence
+		webpage["extractionConfidenceScore"] = quality.ExtractionConfidenceScore
+		webpage["skippedContent"] = quality.SkippedBlockCount
+		webpage["wordCount"] = wordCount
+		if blockCount > 0 {
+			webpage["narrationBlocks"] = blockCount
+		}
+	}
+	return webpage
 }
 
 func preparedSourceFromTemporarySession(session TemporarySourceSession) PreparedSource {

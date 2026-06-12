@@ -100,11 +100,37 @@ describe("temporarySessionToPreparedSource", () => {
     expect(source.sourceOwner).toBe("temporary");
     expect(source.kind).toBe("url");
     expect(source.temporarySourceId).toBe("temp-web-1");
+    expect(source.metadata?.temporarySourceUrl).toBe("https://example.com/article");
     expect(websiteExtractionQuality(source)?.extractionConfidence).toBe("high");
     expect(source.metadata?.urlProvenance).toMatchObject({
       domain: "example.com",
       requestedUrl: "https://example.com/article",
     });
+  });
+
+  it("offers a direct Website Cinema action for URL temporary sources", () => {
+    const markup = renderToStaticMarkup(
+      createElement(QuickListenPanel, {
+        error: null,
+        initialMode: "url",
+        isOpen: true,
+        isSubmitting: false,
+        recentSources: [],
+        onCleanup: () => Promise.resolve(),
+        onClearExpired: () => Promise.resolve(),
+        onClose: () => null,
+        onCreateFromFile: () => Promise.resolve(),
+        onCreateFromText: () => Promise.resolve(),
+        onCreateFromUrl: () => Promise.resolve(),
+        onDiscard: () => Promise.resolve(),
+        onExtend: () => Promise.resolve(),
+        onUseRecentSource: () => Promise.resolve(),
+      }),
+    );
+
+    expect(markup).toContain('data-testid="ui-action-quick-listen-url-open-cinema"');
+    expect(markup).toContain("Open Website Cinema");
+    expect(markup).toContain("Source URL");
   });
 
   it("adapts temporary PDFs into Book Cinema sources", () => {

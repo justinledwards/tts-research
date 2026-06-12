@@ -1,3 +1,11 @@
+## 2026-06-12 22:18 CEST - Temporary Webpage Narration Cinema
+- [x] Inspect existing temporary source, Quick Listen, and Cinema flows
+- [x] Add backend webpage temporary source extraction and readiness states
+- [x] Add frontend URL entry, temporary webpage Cinema surfaces, and actions
+- [x] Add focused regression and screenshot evidence coverage
+- [x] Run project checks
+- Validation: frontend typecheck passed; focused frontend Quick Listen Vitest passed; focused backend temporary webpage tests passed; `pnpm e2e:temporary-sources` and `pnpm e2e:responsive-snapshots` passed. `pnpm e2e:reader-wayfinding` failed in Book Cinema waiting for the Intake button after Markdown/Website import narration passed. `pnpm e2e:surface-complexity` failed in the existing UI action audit gate with activation/duplicate/destructive-control findings; report written to `output/ui-complexity/latest/source-action-audit`. `pnpm check` passed format/lint/type/package/script/adapter/httpapi/backend packages until existing backend `internal/pipeline` TempDir cleanup failed in `TestPreparedSourceJobDefensivelyExcludesOnDemandSelectedBlocks`; single-test rerun reproduced the same cleanup failure.
+
 ## 2026-06-12 21:59 CEST - Commit Temporary Source Envelope Hardening
 - [x] Review temporary source envelope hardening diff
 - [x] Stage temporary source envelope hardening files

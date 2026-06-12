@@ -64,6 +64,7 @@ type sourcePreprocessResult struct {
 	SourceFormat        string
 	RenderMode          string
 	Title               string
+	ReadableText        string
 	MarkdownParseMode   string
 	Metadata            map[string]any
 }
@@ -1044,6 +1045,7 @@ func preprocessReadableSource(
 				SourceFormat:        sourceFormat,
 				RenderMode:          "blocks",
 				Title:               inferReadableHTMLTitle(input, readableText, sourceName),
+				ReadableText:        readableText,
 				Metadata: map[string]any{
 					"websiteExtractionQuality": quality,
 					"websiteMetadata":          extractWebsiteMetadata(input, sourceName),
@@ -1074,6 +1076,7 @@ func preprocessReadableSource(
 			SourceFormat:        sourceFormat,
 			RenderMode:          "blocks",
 			Title:               inferReadableHTMLTitle(input, readableText, sourceName),
+			ReadableText:        readableText,
 			Metadata: map[string]any{
 				"websiteExtractionQuality": quality,
 				"websiteMetadata":          extractWebsiteMetadata(input, sourceName),

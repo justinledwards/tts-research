@@ -1,4 +1,5 @@
 export interface TemporarySourcesFeatureFlags {
+  cinema: boolean;
   quickListen: boolean;
 }
 
@@ -13,11 +14,18 @@ function enabledByDefault(value: string | undefined): boolean {
   return !["0", "false", "off", "disabled"].includes(value.trim().toLowerCase());
 }
 
+const featureFlagEnv = import.meta.env as Record<string, string | undefined>;
+
 export const studioFeatureFlags: StudioFeatureFlags = {
   temporarySources: {
-    quickListen: enabledByDefault(import.meta.env.VITE_FEATURE_TEMPORARY_SOURCES_QUICK_LISTEN),
+    cinema: enabledByDefault(featureFlagEnv.VITE_FEATURE_TEMPORARY_SOURCES_CINEMA),
+    quickListen: enabledByDefault(featureFlagEnv.VITE_FEATURE_TEMPORARY_SOURCES_QUICK_LISTEN),
   },
 };
+
+export function temporaryCinemaDisabledReason(): string {
+  return "Website Cinema for temporary sources is disabled by the temporarySources.cinema feature flag.";
+}
 
 export function quickListenDisabledReason(): string {
   return "Quick Listen is disabled by the temporarySources.quickListen feature flag.";

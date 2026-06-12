@@ -413,6 +413,11 @@ func TestTemporaryWebpageMetadataAndPromotion(t *testing.T) {
 	if temporary.ProjectID != "" || temporary.SourceOwner != pipeline.SourceOwnerTemporary {
 		t.Fatalf("temporary ownership = project %q owner %q, want temporary boundary", temporary.ProjectID, temporary.SourceOwner)
 	}
+	if strings.Contains(temporary.Text, "<article") ||
+		strings.Contains(temporary.Text, "Subscribe Search Menu") ||
+		!strings.Contains(temporary.Text, "This article body is readable enough") {
+		t.Fatalf("temporary text = %q, want readable article text without page chrome", temporary.Text)
+	}
 	quality, ok := temporary.Metadata["websiteExtractionQuality"].(sourceprep.HTMLExtractionQuality)
 	if !ok {
 		t.Fatalf("website extraction quality metadata missing: %#v", temporary.Metadata)
@@ -433,6 +438,17 @@ func TestTemporaryWebpageMetadataAndPromotion(t *testing.T) {
 	provenance, ok := temporary.Metadata["urlProvenance"].(map[string]string)
 	if !ok || provenance["requestedUrl"] == "" || provenance["fetchedUrl"] == "" {
 		t.Fatalf("url provenance = %#v, want requested and fetched URL", temporary.Metadata["urlProvenance"])
+	}
+	webpage, ok := temporary.Metadata["webpage"].(map[string]any)
+	if !ok ||
+		webpage["canonicalUrl"] != "https://example.com/articles/temporary-webpage-fixture" ||
+		webpage["domain"] != "example.com" ||
+		webpage["title"] != "Temporary Webpage Fixture" ||
+		webpage["language"] != "en" ||
+		webpage["extractionConfidence"] == "" ||
+		webpage["skippedContent"] == nil ||
+		webpage["wordCount"] == nil {
+		t.Fatalf("webpage metadata = %#v, want canonical url, domain, title, language, word count, skipped content, and confidence", webpage)
 	}
 
 	project, err := service.CreateProject("Webpage project")
