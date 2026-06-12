@@ -122,6 +122,24 @@ Temporary session speech-policy overrides are session scoped. They must not beco
 
 Promotion may copy the effective temporary policy into a durable source pin only when the promotion request explicitly asks for that. Otherwise the promoted source follows the target project's default policy.
 
+## UI Memory Boundary
+
+Temporary source UI memory is session-scoped recovery state, not source content and not project
+history. The canonical model, return context state machine, storage keys, expiry policy, settings
+controls, reset behavior, and validation requirements live in `docs/ui-memory.md`.
+
+Temporary source sessions can be listed in temporary recovery surfaces until their `expiresAt` time,
+but they must not appear in project source lists, last-project restore, project dashboards, durable
+source cards, or preference exports. `Remember last project` may reopen only a durable project id.
+
+Clearing temporary sources deletes temporary content, temporary artifacts, bookmarks/progress, and
+temporary return memory. Resetting workspace layout may remove presentation-only layout pointers,
+but it must not delete temporary source content.
+
+Promotion creates a new project-owned source and may create durable memory only for that promoted
+project source. The old temporary return path remains a temporary entry until the source is
+discarded, cleared, or expired.
+
 ## API Response Shapes
 
 Project source list routes keep returning project-owned sources:

@@ -1,3 +1,15 @@
+## 2026-06-12 13:19 CEST - Commit Temporary UI Memory Spec
+- [x] Review temporary UI memory spec diff
+- [x] Stage temporary UI memory spec files
+- [x] Commit temporary UI memory spec package
+
+## 2026-06-12 13:16 CEST - Temporary UI Memory Spec
+- [x] Inspect existing UI memory and temporary source docs
+- [x] Define temporary memory model and return context
+- [x] Add storage, settings, reset, and test requirements
+- [x] Run project checks
+- Validation: `git diff --check` passed. `pnpm check` passed format, lint with existing warnings/infos, typecheck, package tests, script tests, adapters, and backend packages before failing in existing backend `internal/pipeline` TempDir cleanup for `TestPreparedSourceJobIgnoresUnknownSelectionIDsAndExcludesSkippedBlocks`.
+
 ## 2026-06-12 12:40 CEST - Temporary Inspector Coverage
 - [x] Inspect Inspector/context-panel temporary source surfaces
 - [x] Add temporary context section kinds and adapter coverage
