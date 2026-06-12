@@ -323,6 +323,20 @@ async function loadBookNarrationText(
   if (existingContent?.text.trim()) {
     return existingContent;
   }
+  if (book.sourceOwner === "temporary" && book.text?.trim()) {
+    const content: BookSourceScopeContent = {
+      bookSourceId: book.id,
+      blocks: [],
+      estimatedDurationMs: undefined,
+      scope,
+      sourceStructureValid: Boolean(book.structureVersion ?? book.wordSpans?.length),
+      text: book.text,
+      wordCount: book.wordCount,
+      wordSpans: book.wordSpans ?? [],
+    };
+    deps.setBookScopeContent(content);
+    return content;
+  }
 
   try {
     const content = await deps.getBookSourceScope(book.id, scope);
@@ -440,21 +454,15 @@ export async function submitBookNarrationJob(
     return;
   }
 
-  const sessionOverrides = compactSpeechPolicyOverrides(deps.speechPolicyOverrides);
-  const request: CreateVoiceJobRequest = {
-    ...deps.buildVoiceJobRequest(narrationText),
-    bookSourceId: book.id,
-    bookScope: scope,
-    progressTargetId: progressTargetIdForBookScope(book.id, scope),
-    sourceKind: "book",
-    ...(applyReviewSession || (useCanonicalPreviewPlan && (scopeContent.blocks?.length ?? 0) > 0)
-      ? { speechRenderApplied: true }
-      : {}),
-    ...(hasSpeechPolicyOverrides(sessionOverrides)
-      ? { speechPolicyOverrides: sessionOverrides }
-      : {}),
-    ...(useCanonicalPreviewPlan ? { speechText: narrationText } : {}),
-  };
+  const request = buildBookNarrationJobRequest({
+    applyReviewSession,
+    book,
+    deps,
+    narrationText,
+    scope,
+    scopeContent,
+    useCanonicalPreviewPlan,
+  });
 
   deps.setRequestState("running");
   deps.setError(null);
@@ -468,7 +476,10 @@ export async function submitBookNarrationJob(
   deps.announcePolite();
 
   try {
-    const nextJob = await deps.createBookNarrationJob(book.id, request);
+    const nextJob = await createBookNarrationJobForSource(deps, book, request);
+    if (!nextJob) {
+      return;
+    }
     deps.setActiveDemoProjectId(null);
     deps.setJob(nextJob);
     deps.setSelectedBookSourceId(nextJob.bookSourceId ?? book.id);
@@ -482,6 +493,60 @@ export async function submitBookNarrationJob(
     deps.setBookSourceError(formatErrorMessage(caughtError, "Unable to create book narration"));
     deps.announceAssertive();
   }
+}
+
+function buildBookNarrationJobRequest({
+  applyReviewSession,
+  book,
+  deps,
+  narrationText,
+  scope,
+  scopeContent,
+  useCanonicalPreviewPlan,
+}: {
+  applyReviewSession: boolean;
+  book: BookSource;
+  deps: SubmissionDependencies;
+  narrationText: string;
+  scope: BookScope;
+  scopeContent: BookSourceScopeContent;
+  useCanonicalPreviewPlan: boolean;
+}): CreateVoiceJobRequest {
+  const sessionOverrides = compactSpeechPolicyOverrides(deps.speechPolicyOverrides);
+  return {
+    ...deps.buildVoiceJobRequest(narrationText),
+    bookSourceId: book.sourceOwner === "temporary" ? undefined : book.id,
+    bookScope: scope,
+    progressTargetId:
+      book.sourceOwner === "temporary" && book.temporarySourceId
+        ? `temporary-source:${book.temporarySourceId}`
+        : progressTargetIdForBookScope(book.id, scope),
+    sourceKind: "book",
+    temporarySourceId: book.temporarySourceId,
+    ...(applyReviewSession || (useCanonicalPreviewPlan && (scopeContent.blocks?.length ?? 0) > 0)
+      ? { speechRenderApplied: true }
+      : {}),
+    ...(hasSpeechPolicyOverrides(sessionOverrides)
+      ? { speechPolicyOverrides: sessionOverrides }
+      : {}),
+    ...(useCanonicalPreviewPlan ? { speechText: narrationText } : {}),
+  };
+}
+
+async function createBookNarrationJobForSource(
+  deps: SubmissionDependencies,
+  book: BookSource,
+  request: CreateVoiceJobRequest,
+): Promise<VoiceJob | null> {
+  if (book.sourceOwner !== "temporary" || !book.temporarySourceId) {
+    return deps.createBookNarrationJob(book.id, request);
+  }
+  if (!deps.createTemporarySourceJob) {
+    deps.setBookSourceError("Temporary source audio is not available in this build.");
+    deps.setRequestState("error");
+    return null;
+  }
+  return deps.createTemporarySourceJob(book.temporarySourceId, request);
 }
 
 export async function submitPreparedSourceJob(

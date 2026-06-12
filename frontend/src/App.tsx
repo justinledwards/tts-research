@@ -539,7 +539,11 @@ import {
   orderedKokoroVoicepacksForLanguage,
   voiceProfileMatchesLanguage,
 } from "./features/i18n/languageVoiceMapping";
-import { temporarySessionToPreparedSource } from "./features/quick-listen";
+import {
+  temporarySessionPrefersBookCinema,
+  temporarySessionToBookSource,
+  temporarySessionToPreparedSource,
+} from "./features/quick-listen";
 
 type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
 
@@ -2706,6 +2710,9 @@ export function App() {
   const [bookScopeContent, setBookScopeContent] = useState<BookSourceScopeContent | null>(null);
   const [preparedSources, setPreparedSources] = useState<PreparedSource[]>([]);
   const [temporarySources, setTemporarySources] = useState<TemporarySourceSession[]>([]);
+  const [activeTemporaryBookSource, setActiveTemporaryBookSource] = useState<BookSource | null>(
+    null,
+  );
   const [activeTemporaryPreparedSource, setActiveTemporaryPreparedSource] =
     useState<PreparedSource | null>(null);
   const [selectedPreparedSourceId, setSelectedPreparedSourceId] = useState<string | null>(null);
@@ -3345,13 +3352,15 @@ export function App() {
     }
     return projects.length > 0 ? projects[0] : null;
   }, [activeProjectId, projects]);
-  const selectedBookSource = useMemo(
-    () =>
-      selectedBookSourceId
-        ? (bookSources.find((book) => book.id === selectedBookSourceId) ?? null)
-        : (bookSources[0] ?? null),
-    [bookSources, selectedBookSourceId],
-  );
+  const selectedBookSource = useMemo(() => {
+    if (selectedBookSourceId) {
+      if (activeTemporaryBookSource?.id === selectedBookSourceId) {
+        return activeTemporaryBookSource;
+      }
+      return bookSources.find((book) => book.id === selectedBookSourceId) ?? null;
+    }
+    return bookSources[0] ?? null;
+  }, [activeTemporaryBookSource, bookSources, selectedBookSourceId]);
   const selectedPreparedSource = useMemo(() => {
     if (selectedPreparedSourceId) {
       if (activeTemporaryPreparedSource?.id === selectedPreparedSourceId) {
@@ -3821,7 +3830,10 @@ export function App() {
     if (!selectedBookSource || !effectiveBookScope) {
       return null;
     }
-    const targetId = progressTargetIdForBookScope(selectedBookSource.id, effectiveBookScope);
+    const targetId =
+      selectedBookSource.sourceOwner === "temporary" && selectedBookSource.temporarySourceId
+        ? `temporary-source:${selectedBookSource.temporarySourceId}`
+        : progressTargetIdForBookScope(selectedBookSource.id, effectiveBookScope);
     return projectProgress.find((progress) => progress.targetId === targetId) ?? null;
   }, [effectiveBookScope, projectProgress, selectedBookSource]);
   const currentReadingPosition = useMemo<ReadingPosition | null>(() => {
@@ -6192,19 +6204,39 @@ export function App() {
 
   const activateTemporarySource = useCallback(
     (session: TemporarySourceSession, destination: "review" | "preview" = "review") => {
-      const source = temporarySessionToPreparedSource(session);
       setTemporarySources((currentSources) => [
         session,
         ...currentSources.filter((item) => item.id !== session.id),
       ]);
+      setSourceMode("fileUrl");
+      setQuickListenError(null);
+      setIsQuickListenOpen(false);
+      if (temporarySessionPrefersBookCinema(session)) {
+        const book = temporarySessionToBookSource(session);
+        setActiveTemporaryBookSource(book);
+        setActiveTemporaryPreparedSource(null);
+        setSelectedPreparedSourceId(null);
+        setSelectedBookSourceId(book.id);
+        setSelectedBookScope(resolveDefaultBookScope(book));
+        setBookScopeContent(null);
+        setSourceMode("book");
+        setText(book.text ?? "");
+        selectWorkspaceInspectorTarget({
+          id: book.id,
+          kind: "source",
+          label: bookSourceName(book),
+        });
+        setContentMode(destination === "preview" ? "preview" : "review");
+        announcePolite("Quick Listen book source is ready as a temporary session.");
+        return;
+      }
+      const source = temporarySessionToPreparedSource(session);
+      setActiveTemporaryBookSource(null);
       setActiveTemporaryPreparedSource(source);
       setSelectedBookSourceId(null);
       setSelectedBookScope(null);
       setBookScopeContent(null);
       setSelectedPreparedSourceId(source.id);
-      setSourceMode("fileUrl");
-      setQuickListenError(null);
-      setIsQuickListenOpen(false);
       setText(source.speechText ?? source.text ?? "");
       selectWorkspaceInspectorTarget({
         id: source.id,
@@ -6384,6 +6416,28 @@ export function App() {
         warnings: [...(currentSource.warnings ?? []), message],
       };
     });
+    setActiveTemporaryBookSource((currentSource) => {
+      if (
+        currentSource?.id !== temporarySourceId &&
+        currentSource?.temporarySourceId !== temporarySourceId
+      ) {
+        return currentSource;
+      }
+      return {
+        ...currentSource,
+        ingestion: {
+          ...currentSource.ingestion,
+          temporaryStatus: "expired",
+          warnings: [...(currentSource.ingestion?.warnings ?? []), message],
+        },
+        sourceReadiness: {
+          detail: message,
+          state: "stale",
+          title: currentSource.title ?? currentSource.sourceFile,
+        },
+        warnings: [...(currentSource.warnings ?? []), message],
+      };
+    });
     setSourcePrepError(message);
   }, []);
 
@@ -6424,6 +6478,17 @@ export function App() {
           }
           return temporarySessionToPreparedSource(refreshed);
         });
+        setActiveTemporaryBookSource((currentSource) => {
+          if (
+            currentSource?.id !== refreshed.id &&
+            currentSource?.temporarySourceId !== refreshed.temporarySourceId
+          ) {
+            return currentSource;
+          }
+          return temporarySessionPrefersBookCinema(refreshed)
+            ? temporarySessionToBookSource(refreshed)
+            : null;
+        });
       } catch (caughtError) {
         markTemporarySourceExpired(
           temporarySourceId,
@@ -6445,7 +6510,11 @@ export function App() {
       setActiveTemporaryPreparedSource((currentSource) =>
         currentSource?.temporarySourceId === session.id ? null : currentSource,
       );
+      setActiveTemporaryBookSource((currentSource) =>
+        currentSource?.temporarySourceId === session.id ? null : currentSource,
+      );
       setSelectedPreparedSourceId((currentId) => (currentId === session.id ? null : currentId));
+      setSelectedBookSourceId((currentId) => (currentId === session.id ? null : currentId));
     } catch (caughtError) {
       setQuickListenError(
         caughtError instanceof Error ? caughtError.message : "Unable to discard temporary source.",
@@ -6469,6 +6538,9 @@ export function App() {
             ? null
             : currentSource,
         );
+        setActiveTemporaryBookSource((currentSource) =>
+          currentSource?.temporarySourceId === temporarySourceId ? null : currentSource,
+        );
         setSelectedPreparedSourceId((currentId) => (currentId === source.id ? null : currentId));
         setSourceMode("text");
         setContentMode("intake");
@@ -6484,8 +6556,42 @@ export function App() {
     [announcePolite, setContentMode],
   );
 
+  const handleDiscardTemporaryBookSource = useCallback(
+    async (source: BookSource) => {
+      const temporarySourceId = source.temporarySourceId ?? source.id;
+      try {
+        await deleteTemporarySource(temporarySourceId);
+        setTemporarySources((currentSources) =>
+          currentSources.filter(
+            (session) =>
+              session.id !== temporarySourceId && session.temporarySourceId !== temporarySourceId,
+          ),
+        );
+        setActiveTemporaryBookSource((currentSource) =>
+          currentSource?.id === source.id || currentSource?.temporarySourceId === temporarySourceId
+            ? null
+            : currentSource,
+        );
+        setSelectedBookSourceId((currentId) => (currentId === source.id ? null : currentId));
+        setSelectedBookScope(null);
+        setBookScopeContent(null);
+        setSourceMode("text");
+        setContentMode("intake");
+        setIsBookCinemaOpen(false);
+        announcePolite("Temporary source discarded.");
+      } catch (caughtError) {
+        setBookSourceError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Unable to discard temporary source.",
+        );
+      }
+    },
+    [announcePolite, setContentMode],
+  );
+
   const handleKeepTemporarySource = useCallback(
-    async (source: PreparedSource) => {
+    async (source: PreparedSource, titleOverride?: string) => {
       const temporarySourceId = source.temporarySourceId;
       if (!temporarySourceId) {
         return;
@@ -6499,7 +6605,7 @@ export function App() {
           sourceType: source.sourceReadiness?.sourceType,
           speechPolicyProfile: source.sourceSpeechPolicyProfile,
           structureLabel: source.sourceReadiness?.structureLabel,
-          title: source.title ?? source.sourceReadiness?.title,
+          title: titleOverride?.trim() ?? source.title ?? source.sourceReadiness?.title,
         });
         setPreparedSources((currentSources) => [
           promoted,
@@ -6519,6 +6625,7 @@ export function App() {
           ),
         );
         setActiveTemporaryPreparedSource(null);
+        setActiveTemporaryBookSource(null);
         setSelectedPreparedSourceId(promoted.id);
         setPreparedSourceCinemaSourceId(promoted.id);
         setSourceMode("fileUrl");
@@ -6534,6 +6641,66 @@ export function App() {
             ? caughtError.message
             : "Unable to keep temporary source in the project.";
         setSourcePrepError(message);
+        setQuickListenError(message);
+      }
+    },
+    [activeProjectId, announcePolite, selectWorkspaceInspectorTarget],
+  );
+
+  const handleKeepTemporaryBookSource = useCallback(
+    async (source: BookSource, titleOverride?: string) => {
+      const temporarySourceId = source.temporarySourceId;
+      if (!temporarySourceId) {
+        return;
+      }
+      setBookSourceError(null);
+      try {
+        const promoted = await promoteTemporarySource(temporarySourceId, {
+          language: source.sourceReadiness?.language,
+          preserveGeneratedArtifacts: true,
+          projectId: activeProjectId,
+          sourceType: source.sourceReadiness?.sourceType,
+          speechPolicyProfile: source.sourceSpeechPolicyProfile,
+          structureLabel: source.sourceReadiness?.structureLabel,
+          title: titleOverride?.trim() ?? source.title ?? source.sourceReadiness?.title,
+        });
+        setPreparedSources((currentSources) => [
+          promoted,
+          ...currentSources.filter((item) => item.id !== promoted.id),
+        ]);
+        setTemporarySources((currentSources) =>
+          currentSources.map((item) =>
+            item.id === temporarySourceId
+              ? {
+                  ...item,
+                  promotedProjectId: promoted.projectId,
+                  promotedSourceId: promoted.id,
+                  promotionStatus: "promoted",
+                  status: "promoted",
+                }
+              : item,
+          ),
+        );
+        setActiveTemporaryBookSource(null);
+        setSelectedBookSourceId(null);
+        setSelectedBookScope(null);
+        setBookScopeContent(null);
+        setSourceMode("fileUrl");
+        setSelectedPreparedSourceId(promoted.id);
+        setPreparedSourceCinemaSourceId(promoted.id);
+        setIsBookCinemaOpen(false);
+        selectWorkspaceInspectorTarget({
+          id: promoted.id,
+          kind: "source",
+          label: promoted.title ?? promoted.sourceName,
+        });
+        announcePolite("Temporary source kept as a project source.");
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Unable to keep temporary source in the project.";
+        setBookSourceError(message);
         setQuickListenError(message);
       }
     },
@@ -9187,7 +9354,14 @@ export function App() {
         <Suspense fallback={<LazySurfaceFallback label="Loading Book Cinema..." />}>
           <BookCinemaOverlay
             book={selectedBookSource}
-            bookSources={bookSources}
+            bookSources={
+              activeTemporaryBookSource
+                ? [
+                    activeTemporaryBookSource,
+                    ...bookSources.filter((source) => source.id !== activeTemporaryBookSource.id),
+                  ]
+                : bookSources
+            }
             canCreateAudio={!isProcessing}
             customPolicyProfiles={customSpeechPolicyProfiles}
             importError={bookSourceError}
@@ -9224,6 +9398,9 @@ export function App() {
             onCreateAudio={(book, scope) => {
               void submitBookNarrationJob(book, scope);
             }}
+            onDiscardTemporarySource={(book) => {
+              void handleDiscardTemporaryBookSource(book);
+            }}
             onImport={async (files, options) => {
               await handleImportBookSource(files, options);
             }}
@@ -9238,6 +9415,9 @@ export function App() {
             }}
             onPlayPause={handleBookCinemaPlayPause}
             onHelpOpen={openContextualHelp}
+            onKeepTemporarySource={(book, title) => {
+              void handleKeepTemporaryBookSource(book, title);
+            }}
             onRestart={handleBookCinemaRestart}
             onScopeChange={setSelectedBookScope}
             onSelectBook={handleSelectBookCinemaSource}
@@ -9310,11 +9490,14 @@ export function App() {
             onCreateAudio={(source) => {
               void submitPreparedSourceJob(source);
             }}
+            onDiscardTemporarySource={(source) => {
+              void handleDiscardTemporaryPreparedSource(source);
+            }}
             onInspectStructure={(source) => {
               void handleInspectContentIR(source.id, source.title ?? source.sourceName, true);
             }}
-            onKeepTemporarySource={(source) => {
-              void handleKeepTemporarySource(source);
+            onKeepTemporarySource={(source, title) => {
+              void handleKeepTemporarySource(source, title);
             }}
             onPrepareFile={handlePrepareCinemaSourceFile}
             onPlayPause={handleBookCinemaPlayPause}

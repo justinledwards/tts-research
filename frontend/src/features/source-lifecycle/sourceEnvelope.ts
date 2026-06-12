@@ -63,6 +63,7 @@ export function bookSourceLifecycleEnvelope(
     adapterKind: bookAdapterKind(source.kind),
     canonicalState,
     disabledReason: sourceReadinessDisabledReason(sourceReadiness, source.error),
+    expiresAt: source.ingestion?.temporaryExpiresAt,
     extractionState,
     generatedAudioState,
     isActive: Boolean(options.isActive),
@@ -71,11 +72,15 @@ export function bookSourceLifecycleEnvelope(
     narratableUnitCount: narratableScopeCount,
     narrationState,
     policyScope: sourcePolicyScope(source),
-    projectId: options.projectId ?? source.projectId,
+    ...(source.sourceOwner === "temporary"
+      ? {}
+      : { projectId: options.projectId ?? source.projectId }),
+    promotionStatus: source.sourceOwner === "temporary" ? "notPromoted" : undefined,
     selectedScope: options.selectedScope ? bookScopeLabel(options.selectedScope) : "Default scope",
     sourceId: source.id,
     sourceOwner: source.sourceOwner ?? "project",
     temporarySourceId: source.temporarySourceId,
+    temporaryStatus: source.ingestion?.temporaryStatus,
     sourceKind: source.kind === "html" ? "website" : "book",
     sourceReadiness,
     title: bookSourceName(source),
@@ -129,7 +134,9 @@ export function preparedSourceLifecycleEnvelope(
     narratableUnitCount: source.summary.spokenBlockCount,
     narrationState,
     policyScope: sourcePolicyScope(source),
-    projectId: options.projectId ?? source.projectId,
+    ...(source.sourceOwner === "temporary"
+      ? {}
+      : { projectId: options.projectId ?? source.projectId }),
     selectedScope: "Full source",
     sourceId: source.id,
     sourceOwner: source.sourceOwner ?? "project",

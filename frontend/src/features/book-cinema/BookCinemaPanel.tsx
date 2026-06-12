@@ -11,7 +11,7 @@ import {
   type ElementType,
   type ReactNode,
 } from "react";
-import { compactHitTargetClassName, minInteractiveSize } from "../../design";
+import { StatusChip, compactHitTargetClassName, minInteractiveSize } from "../../design";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
 import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
 import {
@@ -33,7 +33,9 @@ import {
   buildCinemaInspectorPanels,
   buildCinemaInspectorSection,
   buildCinemaWayfindingSection,
+  cinemaContractFromBookSource,
   deriveCinemaPlaybackState,
+  filterCinemaHistoryProgress,
   returnFocusToCinemaReaderCanvas,
   useCinemaFocusController,
   useCinemaTheatreController,
@@ -879,9 +881,11 @@ export function BookCinemaOverlay({
   onBookmark,
   onCommandPaletteOpen,
   onCreateAudio,
+  onDiscardTemporarySource,
   onHelpOpen,
   onImport,
   onInspectStructure,
+  onKeepTemporarySource,
   onShortcutCheatSheetOpen,
   onPlayPause,
   onRestart,
@@ -941,9 +945,11 @@ export function BookCinemaOverlay({
   onBookmark: () => void;
   onCommandPaletteOpen?: () => void;
   onCreateAudio: (book: BookSource, scope: BookScope) => void;
+  onDiscardTemporarySource?: (book: BookSource) => void;
   onHelpOpen?: () => void;
   onImport: (files: File[], options: BookSourceImportOptions) => Promise<void>;
   onInspectStructure: (book: BookSource) => void;
+  onKeepTemporarySource?: (book: BookSource, title?: string) => void;
   onShortcutCheatSheetOpen?: () => void;
   onPlayPause: () => void;
   onRestart: () => void;
@@ -1268,9 +1274,17 @@ export function BookCinemaOverlay({
     () => new Map(bookSources.map((source) => [source.id, bookSourceName(source)])),
     [bookSources],
   );
+  const temporaryContract = useMemo(
+    () => cinemaContractFromBookSource(book, book.kind === "markdown" ? "document" : "book"),
+    [book],
+  );
   const recentItems = useMemo(
-    () => readerRecentPositionsFromProgress(progressItems, { bookSources: bookSourceLabels }),
-    [bookSourceLabels, progressItems],
+    () =>
+      readerRecentPositionsFromProgress(
+        filterCinemaHistoryProgress(progressItems, temporaryContract),
+        { bookSources: bookSourceLabels },
+      ),
+    [bookSourceLabels, progressItems, temporaryContract],
   );
   const outlineItems = useMemo(
     () => readerOutlineFromBookScopes(scopeOptions, pointerScopeKey ?? normalizedScopeKey),
@@ -1421,21 +1435,83 @@ export function BookCinemaOverlay({
             onSelectBook={onSelectBook}
           />
           <dl className="grid gap-3 text-sm">
+            {temporaryContract.isTemporary ? (
+              <div className="grid gap-2 rounded-md border bg-[var(--vs-surface)] p-3 vs-border">
+                <div className="flex flex-wrap gap-2">
+                  <StatusChip tone="metadata">{temporaryContract.ownershipLabel}</StatusChip>
+                  <StatusChip tone="metadata">{temporaryContract.statusLabel}</StatusChip>
+                  <StatusChip tone="metadata">{temporaryContract.expiryLabel}</StatusChip>
+                </div>
+                <MetadataRow label="Provenance" value={temporaryContract.provenanceLabel} />
+                <MetadataRow
+                  label="Session"
+                  value={temporaryContract.temporarySourceId ?? book.id}
+                />
+              </div>
+            ) : null}
             <MetadataRow label="File" value={book.sourceFile} />
             <MetadataRow label="Type" value={book.kind.toUpperCase()} />
             <MetadataRow label="Size" value={formatBytes(book.sourceBytes)} />
             <MetadataRow label="Imported" value={formatDateTime(book.createdAt)} />
             <MetadataRow label="Structure" value={book.structureVersion ? "Detected" : "Basic"} />
           </dl>
-          <button
-            className="cinema-touch-target w-full rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
-            onClick={() => {
-              onInspectStructure(book);
-            }}
-            type="button"
-          >
-            Inspect structure
-          </button>
+          <div className="grid gap-2">
+            <button
+              className="cinema-touch-target w-full rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
+              onClick={() => {
+                onInspectStructure(book);
+              }}
+              type="button"
+            >
+              Inspect structure
+            </button>
+            {temporaryContract.isTemporary ? (
+              <>
+                <button
+                  className="cinema-touch-target w-full rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-3 text-sm font-semibold text-[var(--vs-action-primary)]"
+                  disabled={!onKeepTemporarySource}
+                  onClick={() => {
+                    onKeepTemporarySource?.(book);
+                  }}
+                  type="button"
+                >
+                  Keep in project
+                </button>
+                <button
+                  className="cinema-touch-target w-full rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-50 vs-border"
+                  disabled={!onKeepTemporarySource}
+                  onClick={() => {
+                    const title = globalThis.prompt("Rename before keeping", book.title);
+                    if (title !== null) {
+                      onKeepTemporarySource?.(book, title);
+                    }
+                  }}
+                  type="button"
+                >
+                  Rename before keeping
+                </button>
+                <button
+                  className="cinema-touch-target w-full rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-50 vs-border"
+                  disabled={!onDiscardTemporarySource}
+                  onClick={() => {
+                    onDiscardTemporarySource?.(book);
+                  }}
+                  type="button"
+                >
+                  Discard temporary source
+                </button>
+                {activeBookJob?.audioUrl ? (
+                  <a
+                    className="cinema-touch-target inline-flex h-10 items-center justify-center rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
+                    download
+                    href={activeBookJob.audioUrl}
+                  >
+                    Export audio only
+                  </a>
+                ) : null}
+              </>
+            ) : null}
+          </div>
         </div>
       ),
       detail: book.sourceFile,
@@ -2106,6 +2182,7 @@ export function BookCinemaOverlay({
           <BookCinemaMobileSheet
             activePassage={activePassage}
             activeScope={normalizedScope}
+            audioUrl={activeBookJob?.audioUrl ?? null}
             book={book}
             bookSources={bookSources}
             hasPlayableAudio={hasPlayableAudio}
@@ -2125,10 +2202,12 @@ export function BookCinemaOverlay({
             recentItems={recentItems}
             scopeContent={scopeContent}
             canBookmark={canBookmark}
+            onDiscardTemporarySource={onDiscardTemporarySource}
             onAddBookmark={onBookmark}
             onBookmarkNavigate={handleBookmarkNavigate}
             onImport={onImport}
             onInspectStructure={onInspectStructure}
+            onKeepTemporarySource={onKeepTemporarySource}
             onMobilePanelChange={setMobilePanel}
             onTheatreMode={handleTheatreMode}
             onSelectBook={onSelectBook}
@@ -2634,6 +2713,7 @@ function BookCinemaWaveformPlaceholder({
 function BookCinemaMobileSheet({
   activePassage,
   activeScope,
+  audioUrl,
   book,
   bookSources,
   displayControls,
@@ -2649,8 +2729,10 @@ function BookCinemaMobileSheet({
   scopeContent,
   onAddBookmark,
   onBookmarkNavigate,
+  onDiscardTemporarySource,
   onImport,
   onInspectStructure,
+  onKeepTemporarySource,
   onMobilePanelChange,
   onTheatreMode,
   onOutlineNavigate,
@@ -2660,6 +2742,7 @@ function BookCinemaMobileSheet({
 }: Readonly<{
   activePassage: string;
   activeScope: BookScope;
+  audioUrl: string | null;
   book: BookSource;
   bookSources: BookSource[];
   bookmarkItems: ReaderBookmarkItem[];
@@ -2675,8 +2758,10 @@ function BookCinemaMobileSheet({
   scopeContent: BookSourceScopeContent | null;
   onAddBookmark: () => void;
   onBookmarkNavigate: (bookmark: ReaderBookmarkItem) => void;
+  onDiscardTemporarySource?: (book: BookSource) => void;
   onImport: (files: File[], options: BookSourceImportOptions) => Promise<void>;
   onInspectStructure: (book: BookSource) => void;
+  onKeepTemporarySource?: (book: BookSource, title?: string) => void;
   onMobilePanelChange: (panel: BookCinemaMobilePanel | null) => void;
   onTheatreMode: () => void;
   onOutlineNavigate: (item: ReaderOutlineItem<BookScope>) => void;
@@ -2704,6 +2789,10 @@ function BookCinemaMobileSheet({
     onResumeProgress(nextProgress);
     returnToCanvas();
   };
+  const temporaryContract = cinemaContractFromBookSource(
+    book,
+    book.kind === "markdown" ? "document" : "book",
+  );
   const panels: CinemaMobilePanelSpec<BookCinemaMobilePanel>[] = [
     {
       children: (
@@ -2741,11 +2830,63 @@ function BookCinemaMobileSheet({
           </BookCinemaRailCard>
           <BookCinemaRailCard title="Source & provenance">
             <dl className="grid gap-3">
+              {temporaryContract.isTemporary ? (
+                <div className="grid gap-2">
+                  <StatusChip tone="metadata">{temporaryContract.ownershipLabel}</StatusChip>
+                  <StatusChip tone="metadata">{temporaryContract.expiryLabel}</StatusChip>
+                </div>
+              ) : null}
               <MetadataRow label="File" value={book.sourceFile} />
               <MetadataRow label="Type" value={book.kind.toUpperCase()} />
               <MetadataRow label="Scope" value={bookScopeLabel(activeScope)} />
               <MetadataRow label="Audio" value={hasPlayableAudio ? "Generated" : "Pre-audio"} />
             </dl>
+            {temporaryContract.isTemporary ? (
+              <div className="mt-3 grid gap-2 border-t pt-3 vs-border">
+                <button
+                  className="cinema-touch-target rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-3 font-semibold text-[var(--vs-action-primary)]"
+                  disabled={!onKeepTemporarySource}
+                  onClick={() => {
+                    onKeepTemporarySource?.(book);
+                  }}
+                  type="button"
+                >
+                  Keep in project
+                </button>
+                <button
+                  className="cinema-touch-target rounded-md border px-3 font-semibold disabled:opacity-50 vs-border"
+                  disabled={!onKeepTemporarySource}
+                  onClick={() => {
+                    const title = globalThis.prompt("Rename before keeping", book.title);
+                    if (title !== null) {
+                      onKeepTemporarySource?.(book, title);
+                    }
+                  }}
+                  type="button"
+                >
+                  Rename before keeping
+                </button>
+                <button
+                  className="cinema-touch-target rounded-md border px-3 font-semibold disabled:opacity-50 vs-border"
+                  disabled={!onDiscardTemporarySource}
+                  onClick={() => {
+                    onDiscardTemporarySource?.(book);
+                  }}
+                  type="button"
+                >
+                  Discard temporary source
+                </button>
+                {audioUrl ? (
+                  <a
+                    className="cinema-touch-target inline-flex h-10 items-center justify-center rounded-md border px-3 font-semibold vs-border"
+                    download
+                    href={audioUrl}
+                  >
+                    Export audio only
+                  </a>
+                ) : null}
+              </div>
+            ) : null}
           </BookCinemaRailCard>
           <BookCinemaRailCard title="Extraction health">
             <div className="grid gap-2">

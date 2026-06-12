@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { TemporarySourceSession } from "../../types";
-import { temporarySessionToPreparedSource } from "./QuickListenPanel";
+import {
+  temporarySessionPrefersBookCinema,
+  temporarySessionToBookSource,
+  temporarySessionToPreparedSource,
+} from "./QuickListenPanel";
 import { websiteExtractionQuality } from "../website-cinema";
 
 describe("temporarySessionToPreparedSource", () => {
@@ -70,4 +74,37 @@ describe("temporarySessionToPreparedSource", () => {
       requestedUrl: "https://example.com/article",
     });
   });
+
+  it("adapts temporary PDFs into Book Cinema sources", () => {
+    const source = temporaryBookSession();
+    const book = temporarySessionToBookSource(source);
+
+    expect(temporarySessionPrefersBookCinema(source)).toBe(true);
+    expect(book.sourceOwner).toBe("temporary");
+    expect(book.kind).toBe("pdf");
+    expect(book.temporarySourceId).toBe("temp-book-1");
+    expect(book.ingestion?.temporaryExpiresAt).toBe("2026-06-12T17:00:00Z");
+    expect(book.wordSpans?.map((span) => span.text)).toEqual(["Temporary", "PDF", "body."]);
+  });
 });
+
+function temporaryBookSession(): TemporarySourceSession {
+  return {
+    artifacts: [],
+    createdAt: "2026-06-11T17:00:00Z",
+    expiresAt: "2026-06-12T17:00:00Z",
+    id: "temp-book-1",
+    kind: "pdf",
+    lastAccessedAt: "2026-06-11T17:00:00Z",
+    promotionStatus: "notPromoted",
+    sourceBytes: 120,
+    sourceName: "brief.pdf",
+    sourceOwner: "temporary",
+    status: "reviewable",
+    temporarySourceId: "temp-book-1",
+    text: "Temporary PDF body.",
+    title: "Temporary PDF",
+    updatedAt: "2026-06-11T17:00:00Z",
+    wordCount: 3,
+  };
+}

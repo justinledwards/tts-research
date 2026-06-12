@@ -1,3 +1,12 @@
+## 2026-06-11 22:56 CEST - Cinema Temporary Source Support
+- [x] Map Cinema surfaces and temporary source state
+- [x] Add shared Cinema temporary-source contract
+- [x] Add Book, Document, and Website temporary adapters
+- [x] Wire mobile and context-panel temporary actions
+- [x] Resolve Book Cinema Intake temporary route
+- [x] Run project checks
+- Validation: focused frontend lifecycle/Quick Listen tests, frontend typecheck, and full frontend Vitest passed. `pnpm check` passed format/lint/type/package/script/adapter stages, then failed in backend `internal/pipeline` TempDir cleanup for `TestPreparedSourceJobIgnoresUnknownSelectionIDsAndExcludesSkippedBlocks`; focused rerun reproduced the same backend cleanup failure.
+
 ## 2026-06-11 22:26 CEST - Temporary Teleprompt Theatre Continuity
 - [x] Map existing Teleprompt and Theatre context flows
 - [x] Add temporary context adapters and return memory

@@ -40,6 +40,15 @@ export {
   type CinemaMoreTheatreAction,
 } from "./cinemaMoreActions";
 export {
+  cinemaContractFromBookSource,
+  cinemaContractFromLifecycle,
+  cinemaContractFromPreparedSource,
+  cinemaTemporarySourceContract,
+  filterCinemaHistoryProgress,
+  type CinemaTemporarySourceContract,
+  type CinemaTemporarySurface,
+} from "./cinemaTemporarySource";
+export {
   useCinemaFocusController,
   type CinemaFocusController,
   type CinemaFocusControllerOptions,

@@ -293,6 +293,8 @@ export interface IngestionDiagnostics {
   confidence?: number;
   importProfile?: string;
   pdfTableMode?: string;
+  temporaryExpiresAt?: string;
+  temporaryStatus?: TemporarySourceLifecycleState;
   extractorChain?: ExtractorChainStep[];
   warnings?: string[];
 }

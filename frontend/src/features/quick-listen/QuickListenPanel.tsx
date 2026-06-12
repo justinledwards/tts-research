@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import { Button, SegmentedControl, StatusChip, cx, fieldControlClassName } from "../../design";
 import type {
+  BookSource,
+  BookSourceWordSpan,
   MarkdownParseMode,
   PreparedSource,
   SourceReadinessConfirmationRequest,
@@ -561,7 +563,11 @@ export function temporarySessionToPreparedSource(source: TemporarySourceSession)
     createdAt: source.createdAt,
     id: source.id,
     kind: source.kind as PreparedSource["kind"],
-    metadata: source.metadata,
+    metadata: {
+      ...source.metadata,
+      temporaryExpiresAt: source.expiresAt,
+      temporaryStatus: source.status,
+    },
     projectId: "",
     renderMode: source.kind === "text" ? "markdown" : undefined,
     segmentCount: source.segmentCount ?? 0,
@@ -591,6 +597,93 @@ export function temporarySessionToPreparedSource(source: TemporarySourceSession)
     warnings: source.warnings,
     wordCount: source.wordCount,
   };
+}
+
+export function temporarySessionToBookSource(source: TemporarySourceSession): BookSource {
+  const text = source.text ?? source.speechText ?? "";
+  const wordSpans = temporaryBookWordSpans(text);
+  const sourceFile = source.sourceName;
+  return {
+    chapterCount: text.trim() ? 1 : 0,
+    chapters: text.trim()
+      ? [
+          {
+            index: 0,
+            isNarratable: true,
+            title: source.title ?? sourceFile,
+            text,
+            wordCount: source.wordCount || wordSpans.length,
+          },
+        ]
+      : [],
+    createdAt: source.createdAt,
+    id: source.id,
+    ingestion: {
+      supportTier: "temporary",
+      supportTierLabel: "Temporary source",
+      temporaryExpiresAt: source.expiresAt,
+      temporaryStatus: source.status,
+      warnings: source.warnings,
+    },
+    kind: temporaryBookKind(source.kind),
+    pageCount: text.trim() ? 1 : 0,
+    pages: text.trim()
+      ? [
+          {
+            index: 0,
+            label: "Temporary session",
+            text,
+            wordCount: source.wordCount || wordSpans.length,
+          },
+        ]
+      : [],
+    projectId: "",
+    sourceBytes: source.sourceBytes ?? text.length,
+    sourceFile,
+    sourceOwner: "temporary",
+    sourceReadiness: source.sourceReadiness,
+    sourceSpeechPolicyOverrides: source.sourceSpeechPolicyOverrides,
+    sourceSpeechPolicyProfile: source.sourceSpeechPolicyProfile,
+    status: source.status === "failed" ? "failed" : "ready",
+    temporarySourceId: source.temporarySourceId,
+    text,
+    title: source.title,
+    updatedAt: source.updatedAt,
+    warnings: source.warnings,
+    wordCount: source.wordCount || wordSpans.length,
+    wordSpans,
+  };
+}
+
+export function temporarySessionPrefersBookCinema(source: TemporarySourceSession): boolean {
+  return source.kind === "book" || source.kind === "epub" || source.kind === "pdf";
+}
+
+function temporaryBookKind(kind: TemporarySourceSession["kind"]): BookSource["kind"] {
+  if (kind === "epub" || kind === "pdf") {
+    return kind;
+  }
+  if (kind === "docx" || kind === "html" || kind === "markdown" || kind === "image") {
+    return kind;
+  }
+  return "pdf";
+}
+
+function temporaryBookWordSpans(text: string): BookSourceWordSpan[] {
+  const spans: BookSourceWordSpan[] = [];
+  const wordPattern = /\S+/g;
+  let match = wordPattern.exec(text);
+  while (match) {
+    spans.push({
+      endOffset: match.index + match[0].length,
+      index: spans.length,
+      pageIndex: 0,
+      startOffset: match.index,
+      text: match[0],
+    });
+    match = wordPattern.exec(text);
+  }
+  return spans;
 }
 
 function quickListenFileLooksSupported(file: File): boolean {

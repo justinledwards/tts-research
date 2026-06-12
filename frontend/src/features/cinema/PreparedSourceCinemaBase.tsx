@@ -113,6 +113,10 @@ import { useCinemaFocusController } from "./CinemaFocusController";
 import { CinemaFocusModeToolbar } from "./CinemaFocusModeToolbar";
 import { CinemaInspectorDock } from "./CinemaInspectorDock";
 import {
+  cinemaContractFromPreparedSource,
+  filterCinemaHistoryProgress,
+} from "./cinemaTemporarySource";
+import {
   buildCinemaCurrentReadingSection,
   buildCinemaInspectorPanels,
   buildCinemaInspectorSection,
@@ -260,6 +264,7 @@ export function PreparedSourceCinemaOverlay({
   onCommandPaletteOpen,
   onClearSourcePolicy,
   onCreateAudio,
+  onDiscardTemporarySource,
   onHelpOpen,
   onInspectStructure,
   onKeepTemporarySource,
@@ -312,9 +317,10 @@ export function PreparedSourceCinemaOverlay({
   onCommandPaletteOpen?: () => void;
   onClearSourcePolicy: () => Promise<void> | void;
   onCreateAudio: (source: PreparedSource) => void;
+  onDiscardTemporarySource?: (source: PreparedSource) => void;
   onHelpOpen?: () => void;
   onInspectStructure: (source: PreparedSource) => void;
-  onKeepTemporarySource?: (source: PreparedSource) => void;
+  onKeepTemporarySource?: (source: PreparedSource, title?: string) => void;
   onPrepareFile: (file: File) => Promise<void>;
   onPlayPause: () => void;
   onRerunWebsiteExtraction?: (source: PreparedSource, containerSelector: string) => void;
@@ -349,6 +355,10 @@ export function PreparedSourceCinemaOverlay({
   const cinemaLabel = preparedSourceCinemaLabelForKind(source, surfaceKind);
   const isWebsiteCinema =
     surfaceKind === "website" || preparedSourceCinemaKind(source) === "website";
+  const temporaryContract = useMemo(
+    () => cinemaContractFromPreparedSource(source, isWebsiteCinema ? "website" : "document"),
+    [isWebsiteCinema, source],
+  );
   const effectivePlaybackCursorSec =
     playbackCursorSec > 0 ? playbackCursorSec : (progress?.currentTimeSec ?? playbackCursorSec);
   const calibratedPlaybackCursorSec =
@@ -416,8 +426,12 @@ export function PreparedSourceCinemaOverlay({
   );
   const bookmarkItems = useMemo(() => readerBookmarksFromProgress(progress), [progress]);
   const recentItems = useMemo(
-    () => readerRecentPositionsFromProgress(progressItems, { preparedSources: sourceLabels }),
-    [progressItems, sourceLabels],
+    () =>
+      readerRecentPositionsFromProgress(
+        filterCinemaHistoryProgress(progressItems, temporaryContract),
+        { preparedSources: sourceLabels },
+      ),
+    [progressItems, sourceLabels, temporaryContract],
   );
   const scrollBehavior = readerScrollBehavior(normalizedAccessibility);
   const liveAnnouncement = useMemo(
@@ -645,8 +659,17 @@ export function PreparedSourceCinemaOverlay({
           />
           <dl className="grid gap-3 text-sm">
             {isTemporarySource ? (
-              <div className="flex flex-wrap gap-2">
-                <StatusChip tone="metadata">Temporary webpage</StatusChip>
+              <div className="grid gap-2 rounded-md border bg-[var(--vs-surface)] p-3 vs-border">
+                <div className="flex flex-wrap gap-2">
+                  <StatusChip tone="metadata">{temporaryContract.ownershipLabel}</StatusChip>
+                  <StatusChip tone="metadata">{temporaryContract.statusLabel}</StatusChip>
+                  <StatusChip tone="metadata">{temporaryContract.expiryLabel}</StatusChip>
+                </div>
+                <MetadataRow label="Provenance" value={temporaryContract.provenanceLabel} />
+                <MetadataRow
+                  label="Session"
+                  value={temporaryContract.temporarySourceId ?? source.id}
+                />
                 {websiteQuality ? (
                   <StatusChip tone={websiteExtractionTone(websiteQuality)}>
                     {websiteQuality.extractionConfidence} confidence
@@ -709,6 +732,55 @@ export function PreparedSourceCinemaOverlay({
               >
                 Keep as project source
               </Button>
+            ) : null}
+            {isTemporarySource ? (
+              <Button
+                disabled={!onKeepTemporarySource || source.temporarySourceId === undefined}
+                disabledReason="This temporary source cannot be promoted yet."
+                onClick={
+                  onKeepTemporarySource
+                    ? () => {
+                        const title = globalThis.prompt(
+                          "Rename before keeping",
+                          source.title ?? source.sourceName,
+                        );
+                        if (title !== null) {
+                          onKeepTemporarySource(source, title);
+                        }
+                      }
+                    : undefined
+                }
+                size="md"
+                variant="secondary"
+              >
+                Rename before keeping
+              </Button>
+            ) : null}
+            {isTemporarySource ? (
+              <Button
+                disabled={!onDiscardTemporarySource}
+                disabledReason="Discard is unavailable for this temporary source."
+                onClick={
+                  onDiscardTemporarySource
+                    ? () => {
+                        onDiscardTemporarySource(source);
+                      }
+                    : undefined
+                }
+                size="md"
+                variant="secondary"
+              >
+                Discard temporary source
+              </Button>
+            ) : null}
+            {isTemporarySource && job?.audioUrl ? (
+              <a
+                className="cinema-touch-target inline-flex h-10 items-center rounded-md border border-[var(--vs-action-secondary-border)] bg-[var(--vs-action-secondary-bg)] px-3 text-sm font-semibold text-[var(--vs-action-secondary-text)] shadow-sm hover:bg-[var(--vs-action-secondary-hover)]"
+                download
+                href={job.audioUrl}
+              >
+                Export audio only
+              </a>
             ) : null}
           </div>
         </div>
@@ -1320,6 +1392,8 @@ export function PreparedSourceCinemaOverlay({
             onAddBookmark={onBookmark}
             onBookmarkNavigate={handleBookmarkNavigate}
             onInspectStructure={onInspectStructure}
+            onDiscardTemporarySource={onDiscardTemporarySource}
+            onKeepTemporarySource={onKeepTemporarySource}
             onMobilePanelChange={setMobilePanel}
             onOutlineNavigate={handleWayfindingOutlineNavigate}
             onPrepareFile={onPrepareFile}
@@ -2011,7 +2085,9 @@ function PreparedSourceCinemaMobileSheet({
   sources,
   onAddBookmark,
   onBookmarkNavigate,
+  onDiscardTemporarySource,
   onInspectStructure,
+  onKeepTemporarySource,
   onMobilePanelChange,
   onOutlineNavigate,
   onPrepareFile,
@@ -2035,7 +2111,9 @@ function PreparedSourceCinemaMobileSheet({
   sources: PreparedSource[];
   onAddBookmark: () => void;
   onBookmarkNavigate: (bookmark: ReaderBookmarkItem) => void;
+  onDiscardTemporarySource?: (source: PreparedSource) => void;
   onInspectStructure: (source: PreparedSource) => void;
+  onKeepTemporarySource?: (source: PreparedSource, title?: string) => void;
   onMobilePanelChange: (panel: PreparedSourceCinemaMobilePanel | null) => void;
   onOutlineNavigate: (item: ReaderOutlineItem<PreparedSourceCinemaOutlineItem>) => void;
   onPrepareFile: (file: File) => Promise<void>;
@@ -2067,6 +2145,10 @@ function PreparedSourceCinemaMobileSheet({
   const metrics = preparedSourceCinemaMetrics(source);
   const activeText = activeBlock ? markdownBlockText(activeBlock) : "";
   const href = preparedSourceCinemaSourceHref(source);
+  const temporaryContract = cinemaContractFromPreparedSource(
+    source,
+    preparedSourceCinemaKind(source) === "website" ? "website" : "document",
+  );
   const panels: CinemaMobilePanelSpec<PreparedSourceCinemaMobilePanel>[] = [
     {
       children: (
@@ -2115,6 +2197,56 @@ function PreparedSourceCinemaMobileSheet({
                 >
                   {href}
                 </a>
+              ) : null}
+              {temporaryContract.isTemporary ? (
+                <div className="mt-3 grid gap-2 border-t pt-3 vs-border">
+                  <StatusChip tone="metadata">{temporaryContract.expiryLabel}</StatusChip>
+                  <Button
+                    disabled={!onKeepTemporarySource}
+                    onClick={() => {
+                      onKeepTemporarySource?.(source);
+                    }}
+                    size="md"
+                    variant="primary"
+                  >
+                    Keep in project
+                  </Button>
+                  <Button
+                    disabled={!onKeepTemporarySource}
+                    onClick={() => {
+                      const title = globalThis.prompt(
+                        "Rename before keeping",
+                        source.title ?? source.sourceName,
+                      );
+                      if (title !== null) {
+                        onKeepTemporarySource?.(source, title);
+                      }
+                    }}
+                    size="md"
+                    variant="secondary"
+                  >
+                    Rename before keeping
+                  </Button>
+                  <Button
+                    disabled={!onDiscardTemporarySource}
+                    onClick={() => {
+                      onDiscardTemporarySource?.(source);
+                    }}
+                    size="md"
+                    variant="secondary"
+                  >
+                    Discard temporary source
+                  </Button>
+                  {job?.audioUrl ? (
+                    <a
+                      className="cinema-touch-target inline-flex h-10 items-center justify-center rounded-md border border-[var(--vs-action-secondary-border)] bg-[var(--vs-action-secondary-bg)] px-3 text-sm font-semibold text-[var(--vs-action-secondary-text)] shadow-sm"
+                      download
+                      href={job.audioUrl}
+                    >
+                      Export audio only
+                    </a>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           </div>
