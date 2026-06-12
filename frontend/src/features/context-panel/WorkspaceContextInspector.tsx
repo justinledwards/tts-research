@@ -92,6 +92,28 @@ export interface WorkspaceInspectorHistoryModel {
   readonly notes: readonly InspectorNote[];
 }
 
+export interface WorkspaceInspectorTemporaryModel {
+  readonly artifactCount: number;
+  readonly audioStatus: string;
+  readonly bookmarkCount: number;
+  readonly expiryLabel: string;
+  readonly originLabel: string;
+  readonly policyLabel: string;
+  readonly promotionItems: readonly string[];
+  readonly pronunciationCount: number;
+  readonly recentPositionCount: number;
+  readonly repairNoteCount: number;
+  readonly reviewEditCount: number;
+  readonly sessionId: string;
+  readonly skippedCount: number;
+  readonly sourceTypeLabel: string;
+  readonly statusLabel: string;
+  readonly timingConfidence: string;
+  readonly title: string;
+  readonly warningCount: number;
+  readonly warnings?: readonly string[];
+}
+
 export interface WorkspaceContextInspectorProps {
   readonly audio: WorkspaceInspectorAudioModel;
   readonly diagnostics: WorkspaceInspectorDiagnosticsModel;
@@ -108,6 +130,7 @@ export interface WorkspaceContextInspectorProps {
   readonly status: WorkspaceStageStatus;
   readonly targets?: WorkspaceInspectorContextTargets;
   readonly teleprompt: WorkspaceInspectorTelepromptModel;
+  readonly temporary?: WorkspaceInspectorTemporaryModel | null;
   readonly voice: WorkspaceInspectorVoiceModel;
   readonly onDisplayStateChange?: (state: ContextPanelDisplayState) => void;
   readonly onPinnedChange?: (pinned: boolean) => void;
@@ -138,6 +161,7 @@ export function WorkspaceContextInspector({
   status,
   targets,
   teleprompt,
+  temporary,
   voice,
   onDisplayStateChange,
   onPinnedChange,
@@ -189,6 +213,7 @@ export function WorkspaceContextInspector({
           stage,
           status,
           teleprompt,
+          temporary,
           voice,
         }),
         { allowedSurfaces: ["Workspace"], owner: "workspace" },
@@ -205,6 +230,7 @@ export function WorkspaceContextInspector({
       stage,
       status,
       teleprompt,
+      temporary,
       voice,
     ],
   );
@@ -256,6 +282,7 @@ function workspaceInspectorSections({
   stage,
   status,
   teleprompt,
+  temporary,
   voice,
 }: Readonly<
   Pick<
@@ -269,6 +296,7 @@ function workspaceInspectorSections({
     | "stage"
     | "status"
     | "teleprompt"
+    | "temporary"
     | "voice"
   > & {
     contextTargets: WorkspaceInspectorContextTargets;
@@ -286,6 +314,7 @@ function workspaceInspectorSections({
       stage,
       status,
       teleprompt,
+      temporary,
       voice,
     });
   if (resolvedTarget.invalidPinnedTarget) {
@@ -295,7 +324,11 @@ function workspaceInspectorSections({
     case "cue": {
       const cue = contextTargets.cues.find((item) => item.id === resolvedTarget.target.id);
       return cue
-        ? [cueDetailSection(cue), policySection(policy, review.policyContent)]
+        ? [
+            cueDetailSection(cue),
+            policySection(policy, review.policyContent),
+            ...temporaryWorkspaceSections(temporary),
+          ]
         : stageSections();
     }
     case "issue": {
@@ -317,6 +350,7 @@ function workspaceInspectorSections({
             jobDetailSection(job),
             queueSection(audio),
             diagnosticsSection(diagnostics, review.diagnosticsContent),
+            ...temporaryWorkspaceSections(temporary),
           ]
         : stageSections();
     }
@@ -324,13 +358,18 @@ function workspaceInspectorSections({
       return [
         sourceSection(source, stage),
         ...(source.importConfidence ? [importConfidenceSection(source.importConfidence)] : []),
+        ...temporaryWorkspaceSections(temporary),
       ];
     }
     case "stage": {
       return stageSections();
     }
     case "voice": {
-      return [voiceSection(voice), policySection(policy, review.policyContent)];
+      return [
+        voiceSection(voice),
+        policySection(policy, review.policyContent),
+        ...temporaryWorkspaceSections(temporary),
+      ];
     }
   }
   const exhaustive: never = resolvedTarget.target;
@@ -373,6 +412,7 @@ function workspaceInspectorStageSections({
   stage,
   status,
   teleprompt,
+  temporary,
   voice,
 }: Readonly<
   Pick<
@@ -386,6 +426,7 @@ function workspaceInspectorStageSections({
     | "stage"
     | "status"
     | "teleprompt"
+    | "temporary"
     | "voice"
   >
 >): readonly ContextPanelSectionInput[] {
@@ -397,6 +438,7 @@ function workspaceInspectorStageSections({
       ...(source.importConfidence ? [importConfidenceSection(source.importConfidence)] : []),
       policySection(policy, review.policyContent),
       historySection(history, teleprompt, stage),
+      ...temporaryWorkspaceSections(temporary),
     ];
   }
   if (stage === "preview") {
@@ -408,6 +450,7 @@ function workspaceInspectorStageSections({
       ...(diagnosticsHasContent(diagnostics, review.diagnosticsContent)
         ? [diagnosticsSection(diagnostics, review.diagnosticsContent)]
         : []),
+      ...temporaryWorkspaceSections(temporary),
     ];
   }
   if (stage === "review") {
@@ -418,6 +461,7 @@ function workspaceInspectorStageSections({
       ...(diagnosticsHasContent(diagnostics, review.diagnosticsContent)
         ? [diagnosticsSection(diagnostics, review.diagnosticsContent)]
         : []),
+      ...temporaryWorkspaceSections(temporary),
     ];
   }
   return [
@@ -427,6 +471,7 @@ function workspaceInspectorStageSections({
     ...(stage === "theatre" && diagnosticsHasContent(diagnostics, review.diagnosticsContent)
       ? [diagnosticsSection(diagnostics, review.diagnosticsContent)]
       : []),
+    ...temporaryWorkspaceSections(temporary),
   ];
 }
 
@@ -609,6 +654,168 @@ function importConfidenceSection(importConfidence: InspectorFact): ContextPanelS
     tabId: "overview",
     title: "Import confidence",
   };
+}
+
+function temporaryWorkspaceSections(
+  temporary?: WorkspaceInspectorTemporaryModel | null,
+): readonly ContextPanelSectionInput[] {
+  if (!temporary) {
+    return [];
+  }
+  return [
+    {
+      children: (
+        <SourceInspectorSection
+          facts={[
+            { label: "Ownership", tone: "metadata", value: "Temporary" },
+            { label: "Source type", value: temporary.sourceTypeLabel },
+            { label: "Title", value: temporary.title },
+            { label: "Origin", value: temporary.originLabel },
+            { label: "Session", value: temporary.sessionId },
+            { label: "Expiry", tone: "warning", value: temporary.expiryLabel },
+            { label: "Artifacts", value: artifactCountLabel(temporary.artifactCount) },
+          ]}
+          notes={temporary.warnings?.map((warning) => ({
+            detail: warning,
+            label: "Warning",
+            tone: "warning",
+          }))}
+        />
+      ),
+      detail: `${temporary.statusLabel} · ${temporary.expiryLabel}`,
+      id: "workspace-temporary-source-provenance",
+      kind: "temporary-source-provenance",
+      priority: "primary",
+      tabId: "overview",
+      title: "Temporary source",
+    },
+    {
+      children: (
+        <SourceInspectorSection
+          facts={[
+            { label: "Block status", value: temporaryReviewStatusLabel(temporary.reviewEditCount) },
+            { label: "Review edits", value: temporary.reviewEditCount.toLocaleString() },
+            { label: "Repair notes", value: temporary.repairNoteCount.toLocaleString() },
+            { label: "Warnings", value: temporary.warningCount.toLocaleString() },
+            {
+              label: "Pronunciation",
+              value: `${temporary.pronunciationCount.toLocaleString()} overrides`,
+            },
+          ]}
+          notes={
+            temporary.reviewEditCount === 0 && temporary.repairNoteCount === 0
+              ? [
+                  {
+                    detail: "No review edits or repair notes exist for this temporary source yet.",
+                    label: "Empty state",
+                  },
+                ]
+              : []
+          }
+        />
+      ),
+      detail: temporaryReviewStatusLabel(temporary.reviewEditCount),
+      id: "workspace-temporary-review-status",
+      kind: "temporary-review-status",
+      tabId: "review",
+      title: "Temporary review",
+    },
+    {
+      children: (
+        <DiagnosticsInspectorSection
+          facts={[
+            { label: "Extraction", value: temporary.warningCount > 0 ? "Warnings" : "Healthy" },
+            { label: "Skipped content", value: temporary.skippedCount.toLocaleString() },
+            { label: "Audio", value: temporary.audioStatus },
+            { label: "Timing", value: temporary.timingConfidence },
+          ]}
+          notes={
+            temporary.audioStatus === "No generated audio" && temporary.skippedCount === 0
+              ? [
+                  {
+                    detail:
+                      "No generated audio, skipped content, timing map, or extraction diagnostic exists yet.",
+                    label: "Empty state",
+                  },
+                ]
+              : []
+          }
+        />
+      ),
+      detail: `${temporary.audioStatus} · ${temporary.timingConfidence}`,
+      id: "workspace-temporary-diagnostics",
+      kind: "temporary-diagnostics",
+      tabId: "diagnostics",
+      title: "Temporary diagnostics",
+    },
+    {
+      children: (
+        <HistoryInspectorSection
+          facts={[
+            { label: "Bookmarks", value: temporary.bookmarkCount.toLocaleString() },
+            { label: "Recent positions", value: temporary.recentPositionCount.toLocaleString() },
+            { label: "History scope", value: "Temporary session only" },
+            { label: "Return context", value: temporary.sessionId },
+          ]}
+          notes={
+            temporary.bookmarkCount === 0 && temporary.recentPositionCount === 0
+              ? [
+                  {
+                    detail:
+                      "No temporary bookmarks or recent positions exist for this session yet.",
+                    label: "Empty state",
+                  },
+                ]
+              : []
+          }
+        />
+      ),
+      detail: `${temporary.bookmarkCount.toLocaleString()} bookmarks · temporary only`,
+      id: "workspace-temporary-history",
+      kind: "temporary-history",
+      tabId: "history",
+      title: "Temporary history",
+    },
+    {
+      children: (
+        <PolicyInspectorSection
+          facts={[
+            { label: "Session policy", value: temporary.policyLabel },
+            { label: "Temporary policy", value: "Applies only while this session exists" },
+            {
+              label: "Promotion defaults",
+              value: "Project defaults are considered only when keeping the source",
+            },
+          ]}
+        />
+      ),
+      detail: temporary.policyLabel,
+      id: "workspace-temporary-source-policy",
+      kind: "temporary-source-policy",
+      tabId: "policy",
+      title: "Temporary policy",
+    },
+    {
+      children: (
+        <PolicyInspectorSection
+          facts={[
+            { label: "Keeps", value: "A durable project copy" },
+            { label: "Temporary session", value: "Remains temporary until discarded or expired" },
+            { label: "Available artifacts", value: promotionItemsLabel(temporary.promotionItems) },
+          ]}
+          notes={temporary.promotionItems.map((item) => ({
+            detail: item,
+            label: "Can keep",
+          }))}
+        />
+      ),
+      detail: promotionItemsLabel(temporary.promotionItems),
+      id: "workspace-temporary-promotion",
+      kind: "temporary-promotion",
+      tabId: "policy",
+      title: "Promotion",
+    },
+  ];
 }
 
 function reviewSection(
@@ -992,6 +1199,20 @@ function diagnosticsHasContent(
   return (
     diagnostics.facts.length > 0 || diagnostics.notes.length > 0 || Boolean(diagnosticsContent)
   );
+}
+
+function artifactCountLabel(count: number): string {
+  return count === 1 ? "1 artifact" : `${count.toLocaleString()} artifacts`;
+}
+
+function temporaryReviewStatusLabel(reviewEditCount: number): string {
+  return reviewEditCount > 0
+    ? `${reviewEditCount.toLocaleString()} review edits`
+    : "No review edits";
+}
+
+function promotionItemsLabel(items: readonly string[]): string {
+  return items.length > 0 ? items.join(", ") : "Extracted source";
 }
 
 function WorkspaceInspectorCollapsedSummary({

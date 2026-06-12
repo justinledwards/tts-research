@@ -57,10 +57,12 @@ export {
   buildCinemaCurrentReadingSection,
   buildCinemaInspectorSection,
   buildCinemaInspectorPanels,
+  buildCinemaTemporaryInspectorSections,
   buildCinemaWayfindingSection,
   ReadAlongInvariantDebugPanel,
   type CinemaCurrentReading,
   type CinemaInspectorSection,
+  type CinemaTemporaryInspectorModel,
   type CinemaWayfindingModel,
 } from "./CinemaInspectorPanels";
 export { CinemaInspectorDock } from "./CinemaInspectorDock";

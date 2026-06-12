@@ -22,6 +22,7 @@ export {
   type WorkspaceInspectorReviewModel,
   type WorkspaceInspectorSourceModel,
   type WorkspaceInspectorTelepromptModel,
+  type WorkspaceInspectorTemporaryModel,
   type WorkspaceInspectorVoiceModel,
 } from "./WorkspaceContextInspector";
 export {

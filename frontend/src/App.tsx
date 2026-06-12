@@ -368,6 +368,7 @@ import type {
   WorkspaceInspectorCueDetail,
   WorkspaceInspectorJobDetail,
   WorkspaceInspectorTarget,
+  WorkspaceInspectorTemporaryModel,
 } from "./features/context-panel";
 import { useAudioWaveformBars } from "./audioWaveform";
 import type {
@@ -3422,6 +3423,10 @@ export function App() {
           ) ?? null)
         : null,
     [activeTemporarySourceId, temporarySources],
+  );
+  const workspaceTemporaryInspector = useMemo(
+    () => (activeTemporarySource ? workspaceTemporaryInspectorModel(activeTemporarySource) : null),
+    [activeTemporarySource],
   );
   const workbenchAudioRestoreSource = useMemo<WorkbenchAudioRestoreSource>(() => {
     if (activeNarrationPreparedSource) {
@@ -10362,6 +10367,7 @@ export function App() {
                     returnTargetLabel: workspaceStageMeta(workspaceContext.telepromptReturnStage)
                       .label,
                   }}
+                  temporary={workspaceTemporaryInspector}
                   voice={{
                     detail: selectedVoiceProfile
                       ? formatLikenessLabel(selectedVoiceProfile)
@@ -10857,6 +10863,117 @@ function VoiceCloningRailMini({
       ]}
     />
   );
+}
+
+function workspaceTemporaryInspectorModel(
+  source: TemporarySourceSession,
+): WorkspaceInspectorTemporaryModel {
+  const artifactKinds = new Set(source.artifacts.map((artifact) => artifact.kind));
+  const hasPolicy =
+    Boolean(source.sourceSpeechPolicyProfile) ||
+    hasSpeechPolicyOverrides(source.sourceSpeechPolicyOverrides ?? {});
+  return {
+    artifactCount: source.artifacts.length,
+    audioStatus: artifactKinds.has("generatedAudio")
+      ? "Generated audio ready"
+      : "No generated audio",
+    bookmarkCount: source.bookmarks?.length ?? 0,
+    expiryLabel: temporaryExpiryLabel(source.expiresAt),
+    originLabel: source.sourceUrl ?? source.sourceName,
+    policyLabel:
+      source.sourceSpeechPolicyProfile ?? (hasPolicy ? "Session override" : "Project default"),
+    promotionItems: temporaryWorkspacePromotionItems({
+      artifactKinds,
+      bookmarkCount: source.bookmarks?.length ?? 0,
+      hasPolicy,
+      reviewEditCount: source.artifacts.filter((artifact) => artifact.kind === "review").length,
+    }),
+    pronunciationCount: 0,
+    recentPositionCount: source.playbackProgress ? 1 : 0,
+    repairNoteCount: source.reviewNotes?.length ?? 0,
+    reviewEditCount: source.artifacts.filter((artifact) => artifact.kind === "review").length,
+    sessionId: source.temporarySourceId,
+    skippedCount: source.skippedItems?.length ?? 0,
+    sourceTypeLabel: source.sourceContentType ?? source.kind,
+    statusLabel: temporarySourceStatusLabel(source.status),
+    timingConfidence: artifactKinds.has("timing") ? "Timing map available" : "No timing map",
+    title: source.title ?? source.sourceName,
+    warningCount: source.warnings?.length ?? 0,
+    warnings: source.warnings,
+  };
+}
+
+function temporaryWorkspacePromotionItems({
+  artifactKinds,
+  bookmarkCount,
+  hasPolicy,
+  reviewEditCount,
+}: Readonly<{
+  artifactKinds: ReadonlySet<string>;
+  bookmarkCount: number;
+  hasPolicy: boolean;
+  reviewEditCount: number;
+}>): string[] {
+  const items = ["Extracted source"];
+  if (reviewEditCount > 0) {
+    items.push("Review edits");
+  }
+  if (hasPolicy) {
+    items.push("Policy pin");
+  }
+  if (artifactKinds.has("generatedAudio")) {
+    items.push("Generated audio");
+  }
+  if (artifactKinds.has("timing")) {
+    items.push("Timing maps");
+  }
+  if (bookmarkCount > 0) {
+    items.push("Bookmarks");
+  }
+  if (artifactKinds.has("progress")) {
+    items.push("Progress");
+  }
+  if (artifactKinds.has("validation")) {
+    items.push("Diagnostics report");
+  }
+  return items;
+}
+
+function temporaryExpiryLabel(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Expires with this session";
+  }
+  return `Expires ${new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date)}`;
+}
+
+function temporarySourceStatusLabel(status: TemporarySourceSession["status"]): string {
+  switch (status) {
+    case "audio_ready": {
+      return "Temporary source · audio ready";
+    }
+    case "discarded": {
+      return "Temporary source discarded";
+    }
+    case "expired": {
+      return "Temporary source expired";
+    }
+    case "failed": {
+      return "Temporary source failed";
+    }
+    case "generating": {
+      return "Temporary source · generating audio";
+    }
+    case "promoted": {
+      return "Temporary source kept in project";
+    }
+    default: {
+      return "Temporary source";
+    }
+  }
 }
 
 function WorkspaceInspectorPanel(props: Readonly<WorkspaceContextInspectorProps>) {

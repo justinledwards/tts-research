@@ -14,6 +14,7 @@ import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
 import { Button, fieldControlClassName, StatusChip, Toggle } from "../../design";
 import { markdownBlockText, resolvePreparedSourceActiveWord } from "../../markdownCinema";
 import { looksLikeMermaidDiagram } from "../../markdownModel";
+import { hasSpeechPolicyOverrides } from "../../speechPolicy";
 import type {
   CustomSpeechPolicyProfile,
   NarrationBlock,
@@ -120,6 +121,7 @@ import {
   buildCinemaCurrentReadingSection,
   buildCinemaInspectorPanels,
   buildCinemaInspectorSection,
+  buildCinemaTemporaryInspectorSections,
   buildCinemaWayfindingSection,
   ReadAlongInvariantDebugPanel,
 } from "./CinemaInspectorPanels";
@@ -497,6 +499,42 @@ export function PreparedSourceCinemaOverlay({
   const activeSection = activeOutlineItem(outline, displayBlock);
   const activeJobMatchesSource = !job || preparedSourceCinemaJobMatchesSource(job, source);
   const generatedAudioState = generatedAudioLifecycleFromJob({ job });
+  const temporaryArtifactCount = [job?.audioUrl, job?.timing].filter(Boolean).length;
+  const temporaryInspectorSections = buildCinemaTemporaryInspectorSections({
+    artifactCount: temporaryArtifactCount,
+    audioStatus: job?.audioUrl ? "Generated audio ready" : "No generated audio",
+    bookmarkCount: bookmarkItems.length,
+    contract: temporaryContract,
+    diagnostics: [
+      ...(source.warnings ?? []),
+      ...(activeJobMatchesSource ? [] : ["Generated audio belongs to another source"]),
+    ],
+    originLabel: href ?? source.sourceName,
+    policyLabel:
+      source.sourceSpeechPolicyProfile ??
+      (hasSpeechPolicyOverrides(source.sourceSpeechPolicyOverrides ?? {})
+        ? "Session override"
+        : "Project default"),
+    promotionItems: temporaryPromotionItems({
+      artifactCount: temporaryArtifactCount,
+      bookmarkCount: bookmarkItems.length,
+      hasAudio: Boolean(job?.audioUrl),
+      hasPolicy:
+        Boolean(source.sourceSpeechPolicyProfile) ||
+        hasSpeechPolicyOverrides(source.sourceSpeechPolicyOverrides ?? {}),
+      hasTiming: Boolean(job?.timing),
+      reviewEditCount: 0,
+    }),
+    pronunciationCount: 0,
+    recentPositionCount: recentItems.length,
+    repairNotes: alignmentRepairMap ? ["Alignment repair map exists for this session"] : [],
+    reviewEditCount: 0,
+    skippedCount: metrics.skippedCount,
+    sourceTypeLabel: source.sourceContentType ?? source.sourceFormat ?? source.kind,
+    timingConfidence: temporaryTimingConfidenceLabel(job),
+    title,
+    warnings: source.warnings,
+  });
   const readAlongRuntime = useMemo(
     () =>
       resolveReadAlongRuntimeSnapshot({
@@ -792,6 +830,7 @@ export function PreparedSourceCinemaOverlay({
       tabId: "overview",
       title: "Source provenance",
     }),
+    ...temporaryInspectorSections,
     ...(isWebsiteCinema
       ? [
           buildCinemaInspectorSection({
@@ -2723,6 +2762,54 @@ function increasePreparedSourceCinemaTextSize(
 ): PreparedSourceCinemaTextSize {
   const order: PreparedSourceCinemaTextSize[] = ["compact", "comfortable", "large", "giant"];
   return order[Math.min(order.length - 1, order.indexOf(size) + 1)] ?? "large";
+}
+
+function temporaryPromotionItems({
+  artifactCount,
+  bookmarkCount,
+  hasAudio,
+  hasPolicy,
+  hasTiming,
+  reviewEditCount,
+}: Readonly<{
+  artifactCount: number;
+  bookmarkCount: number;
+  hasAudio: boolean;
+  hasPolicy: boolean;
+  hasTiming: boolean;
+  reviewEditCount: number;
+}>): string[] {
+  const items = ["Extracted source"];
+  if (reviewEditCount > 0) {
+    items.push("Review edits");
+  }
+  if (hasPolicy) {
+    items.push("Policy pin");
+  }
+  if (hasAudio) {
+    items.push("Generated audio");
+  }
+  if (hasTiming) {
+    items.push("Timing maps");
+  }
+  if (bookmarkCount > 0) {
+    items.push("Bookmarks");
+  }
+  if (artifactCount > 0 && !hasAudio && !hasTiming) {
+    items.push("Generated artifacts");
+  }
+  return items;
+}
+
+function temporaryTimingConfidenceLabel(job: VoiceJob | null): string {
+  const alignmentQuality = job?.timing?.alignmentQuality;
+  if (alignmentQuality?.primaryLevel) {
+    return alignmentQuality.primaryLevel;
+  }
+  if (job?.timing?.summary.mode) {
+    return job.timing.summary.mode;
+  }
+  return "No timing map";
 }
 
 function formatDateTime(value: string): string {

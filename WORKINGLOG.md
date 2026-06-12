@@ -1,3 +1,12 @@
+## 2026-06-12 12:40 CEST - Temporary Inspector Coverage
+- [x] Inspect Inspector/context-panel temporary source surfaces
+- [x] Add temporary context section kinds and adapter coverage
+- [x] Expose overview, review, diagnostics, policy, history, and promotion context
+- [x] Add empty states and layout/mode behavior
+- [x] Add E2E or focused coverage for Inspector tabs
+- [x] Run project checks
+- Validation: format, lint, frontend typecheck, and frontend Vitest passed. `pnpm check` passed format/lint/type/package/scripts/adapters and failed in existing backend `internal/pipeline` TempDir cleanup for `TestPreparedSourceJobIgnoresUnknownSelectionIDsAndExcludesSkippedBlocks`.
+
 ## 2026-06-12 12:14 CEST - Commit Temporary Palette Commands
 - [x] Review and stage temporary command package
 - [x] Commit temporary command package

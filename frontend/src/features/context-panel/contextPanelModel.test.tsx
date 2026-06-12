@@ -379,6 +379,96 @@ describe("context panel inspector contract", () => {
     expect(markup).toContain("Generation failed");
     expect(markup).toContain("Retry generation before playback.");
   });
+
+  it("exposes temporary source inspector sections across workspace tabs", () => {
+    const temporary = {
+      artifactCount: 0,
+      audioStatus: "No generated audio",
+      bookmarkCount: 0,
+      expiryLabel: "Expires Jun 12, 2026, 1:40 PM",
+      originLabel: "Pasted text",
+      policyLabel: "Session override",
+      promotionItems: ["Extracted source", "Policy pin"],
+      pronunciationCount: 0,
+      recentPositionCount: 0,
+      repairNoteCount: 0,
+      reviewEditCount: 0,
+      sessionId: "tmp-123",
+      skippedCount: 0,
+      sourceTypeLabel: "Text",
+      statusLabel: "Temporary source",
+      timingConfidence: "No timing map",
+      title: "Temporary Draft",
+      warningCount: 0,
+      warnings: [],
+    } satisfies NonNullable<WorkspaceContextInspectorProps["temporary"]>;
+
+    const overview = renderToStaticMarkup(
+      <WorkspaceContextInspector
+        {...workspaceInspectorProps({
+          selectedTarget: { id: "draft", kind: "source", label: "Draft text" },
+          targets: inspectorTargets(),
+          temporary,
+        })}
+      />,
+    );
+    expect(overview).toContain("Temporary Draft");
+    expect(overview).toContain("Expires Jun 12, 2026, 1:40 PM");
+
+    const review = renderToStaticMarkup(
+      <WorkspaceContextInspector
+        {...workspaceInspectorProps({
+          selectedTarget: { id: "cue-1", kind: "cue", label: "Block 1" },
+          targets: inspectorTargets(),
+          temporary,
+        })}
+      />,
+    );
+    expect(review).toContain("No review edits or repair notes exist");
+
+    const diagnostics = renderToStaticMarkup(
+      <WorkspaceContextInspector
+        {...workspaceInspectorProps({
+          selectedTarget: { id: "job-1", kind: "job", label: "Job 1" },
+          targets: inspectorTargets({
+            jobs: [
+              {
+                detail: "Job detail",
+                facts: [{ label: "Job", value: "Queued" }],
+                id: "job-1",
+                label: "Job 1",
+              },
+            ],
+          }),
+          temporary,
+        })}
+      />,
+    );
+    expect(diagnostics).toContain("No generated audio, skipped content, timing map");
+
+    const history = renderToStaticMarkup(
+      <WorkspaceContextInspector
+        {...workspaceInspectorProps({
+          selectedTarget: null,
+          stage: "teleprompt",
+          temporary,
+        })}
+      />,
+    );
+    expect(history).toContain('data-testid="context-panel-Workspace-history"');
+
+    const policy = renderToStaticMarkup(
+      <WorkspaceContextInspector
+        {...workspaceInspectorProps({
+          selectedTarget: { id: "provider", kind: "voice", label: "Default voice" },
+          targets: inspectorTargets(),
+          temporary,
+        })}
+      />,
+    );
+    expect(policy).toContain("Promotion");
+    expect(policy).toContain("Extracted source, Policy pin");
+  });
 });
 
 function stageStatus(overrides: Partial<WorkspaceStageStatus> = {}): WorkspaceStageStatus {

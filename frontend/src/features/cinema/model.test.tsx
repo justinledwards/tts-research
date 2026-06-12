@@ -6,6 +6,7 @@ import {
   buildCinemaCurrentReadingSection,
   buildCinemaInspectorPanels,
   buildCinemaInspectorSection,
+  buildCinemaTemporaryInspectorSections,
   buildCinemaWayfindingSection,
 } from "./CinemaInspectorPanels";
 import { CinemaMobileSheet } from "./CinemaMobileSheet";
@@ -225,6 +226,116 @@ describe("CinemaInspectorDock", () => {
     expect(markup).toContain("Current passage");
     expect(markup).toContain("The current paragraph is narrated here.");
     expect(markup).not.toContain("Health body");
+  });
+
+  it("exposes temporary source overview, review, diagnostics, history, and promotion tabs", () => {
+    const panels = buildCinemaInspectorPanels([
+      ...buildCinemaTemporaryInspectorSections({
+        artifactCount: 0,
+        audioStatus: "No generated audio",
+        bookmarkCount: 0,
+        contract: {
+          expiryLabel: "Expires Jun 12, 2026, 1:40 PM",
+          historyScope: "temporary-session",
+          isTemporary: true,
+          ownershipLabel: "Temporary",
+          provenanceLabel: "Temporary website cinema session",
+          sourceOwner: "temporary",
+          statusLabel: "Temporary source",
+          surface: "website",
+          temporarySourceId: "tmp-123",
+        },
+        diagnostics: [],
+        originLabel: "https://example.test/story",
+        policyLabel: "Session override",
+        promotionItems: ["Extracted source", "Policy pin"],
+        pronunciationCount: 0,
+        recentPositionCount: 0,
+        repairNotes: [],
+        reviewEditCount: 0,
+        skippedCount: 0,
+        sourceTypeLabel: "Website",
+        timingConfidence: "No timing map",
+        title: "Temporary Story",
+        warnings: [],
+      }),
+    ]);
+
+    expect(panels.map((panel) => panel.id)).toEqual([
+      "overview",
+      "review",
+      "diagnostics",
+      "policy",
+      "history",
+    ]);
+
+    const overview = renderToStaticMarkup(
+      <CinemaInspectorDock
+        activePanelId="overview"
+        mode="inspect"
+        panels={panels}
+        pinnedPanelId={null}
+        surface="website"
+        onActivePanelChange={() => null}
+        onPinnedPanelChange={() => null}
+      />,
+    );
+    expect(overview).toContain("Temporary source");
+    expect(overview).toContain("Temporary Story");
+    expect(overview).toContain("Expires Jun 12, 2026, 1:40 PM");
+
+    const review = renderToStaticMarkup(
+      <CinemaInspectorDock
+        activePanelId="review"
+        mode="review"
+        panels={panels}
+        pinnedPanelId={null}
+        surface="website"
+        onActivePanelChange={() => null}
+        onPinnedPanelChange={() => null}
+      />,
+    );
+    expect(review).toContain("No review edits or repair notes exist");
+
+    const diagnostics = renderToStaticMarkup(
+      <CinemaInspectorDock
+        activePanelId="diagnostics"
+        mode="debug"
+        panels={panels}
+        pinnedPanelId={null}
+        surface="website"
+        onActivePanelChange={() => null}
+        onPinnedPanelChange={() => null}
+      />,
+    );
+    expect(diagnostics).toContain("No generated audio, skipped content, timing map");
+
+    const history = renderToStaticMarkup(
+      <CinemaInspectorDock
+        activePanelId="history"
+        mode="review"
+        panels={panels}
+        pinnedPanelId={null}
+        surface="website"
+        onActivePanelChange={() => null}
+        onPinnedPanelChange={() => null}
+      />,
+    );
+    expect(history).toContain("Temporary session only");
+
+    const policy = renderToStaticMarkup(
+      <CinemaInspectorDock
+        activePanelId="policy"
+        mode="inspect"
+        panels={panels}
+        pinnedPanelId={null}
+        surface="website"
+        onActivePanelChange={() => null}
+        onPinnedPanelChange={() => null}
+      />,
+    );
+    expect(policy).toContain("Promotion");
+    expect(policy).toContain("Extracted source, Policy pin");
   });
 
   it("shows pinned inspector panels as badges instead of selected tabs", () => {

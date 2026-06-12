@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { StatusChip } from "../../design";
 import {
   ReaderWayfindingPanel,
   type ReaderBookmarkItem,
@@ -19,6 +20,7 @@ import {
   type ReadAlongRuntimeSnapshot,
   type ReadAlongInvariantReport,
 } from "../readalong";
+import type { CinemaTemporarySourceContract } from "./cinemaTemporarySource";
 import type { CinemaFocusMode, CinemaInspectorPanelId, CinemaPanelDefinition } from "./model";
 
 export interface CinemaCurrentReading {
@@ -50,6 +52,26 @@ export interface CinemaInspectorSection {
   modeAffinity: CinemaFocusMode | readonly CinemaFocusMode[];
   tabId: CinemaInspectorPanelId;
   title: string;
+}
+
+export interface CinemaTemporaryInspectorModel {
+  artifactCount: number;
+  audioStatus: string;
+  bookmarkCount: number;
+  contract: CinemaTemporarySourceContract;
+  diagnostics?: readonly string[];
+  originLabel: string;
+  policyLabel: string;
+  promotionItems: readonly string[];
+  pronunciationCount?: number;
+  recentPositionCount: number;
+  repairNotes?: readonly string[];
+  reviewEditCount: number;
+  skippedCount: number;
+  sourceTypeLabel: string;
+  timingConfidence: string;
+  title: string;
+  warnings?: readonly string[];
 }
 
 export function buildCinemaCurrentReadingSection(
@@ -99,6 +121,156 @@ export function buildCinemaWayfindingSection<TOutlineTarget>(
     tabId: "history",
     title: "Wayfinding",
   });
+}
+
+export function buildCinemaTemporaryInspectorSections(
+  model: CinemaTemporaryInspectorModel,
+): CinemaInspectorSection[] {
+  if (!model.contract.isTemporary) {
+    return [];
+  }
+  return [
+    buildCinemaInspectorSection({
+      children: (
+        <TemporaryFacts
+          facts={[
+            ["Ownership", model.contract.ownershipLabel],
+            ["Source type", model.sourceTypeLabel],
+            ["Title", model.title],
+            ["Origin", model.originLabel],
+            ["Provenance", model.contract.provenanceLabel],
+            ["Session", model.contract.temporarySourceId ?? "Temporary session"],
+            ["Expiry", model.contract.expiryLabel],
+            ["Artifacts", artifactCountLabel(model.artifactCount)],
+          ]}
+          notes={model.warnings?.map((warning) => ["Warning", warning])}
+        />
+      ),
+      detail: `${model.contract.ownershipLabel} · ${model.contract.expiryLabel}`,
+      id: "temporary-source-provenance",
+      kind: "temporary-source-provenance",
+      modeAffinity: "inspect",
+      tabId: "overview",
+      title: "Temporary source",
+    }),
+    buildCinemaInspectorSection({
+      children: (
+        <TemporaryFacts
+          emptyText={
+            model.reviewEditCount === 0 && (model.repairNotes?.length ?? 0) === 0
+              ? "No review edits or repair notes exist for this temporary source yet."
+              : undefined
+          }
+          facts={[
+            ["Block status", temporaryReviewStatusLabel(model.reviewEditCount)],
+            ["Review edits", model.reviewEditCount.toLocaleString()],
+            ["Repair notes", (model.repairNotes?.length ?? 0).toLocaleString()],
+            ["Warnings", (model.warnings?.length ?? 0).toLocaleString()],
+            ["Pronunciation", `${(model.pronunciationCount ?? 0).toLocaleString()} overrides`],
+          ]}
+          notes={[
+            ...(model.repairNotes ?? []).map((note): [string, string] => ["Repair", note]),
+            ...(model.warnings ?? []).map((warning): [string, string] => ["Warning", warning]),
+          ]}
+        />
+      ),
+      detail: temporaryReviewStatusLabel(model.reviewEditCount),
+      id: "temporary-review-status",
+      kind: "temporary-review-status",
+      modeAffinity: "review",
+      tabId: "review",
+      title: "Temporary review",
+    }),
+    buildCinemaInspectorSection({
+      children: (
+        <TemporaryFacts
+          emptyText={
+            model.audioStatus === "No generated audio" &&
+            model.skippedCount === 0 &&
+            model.timingConfidence === "No timing map"
+              ? "No generated audio, skipped content, timing map, or extraction diagnostic exists yet."
+              : undefined
+          }
+          facts={[
+            ["Extraction", diagnosticsLabel(model.diagnostics)],
+            ["Skipped content", model.skippedCount.toLocaleString()],
+            ["Audio", model.audioStatus],
+            ["Timing", model.timingConfidence],
+          ]}
+          notes={model.diagnostics?.map((diagnostic) => ["Diagnostic", diagnostic])}
+        />
+      ),
+      detail: `${model.audioStatus} · ${model.timingConfidence}`,
+      id: "temporary-diagnostics",
+      kind: "temporary-diagnostics",
+      modeAffinity: "debug",
+      tabId: "diagnostics",
+      title: "Temporary diagnostics",
+    }),
+    buildCinemaInspectorSection({
+      children: (
+        <TemporaryFacts
+          facts={[
+            ["Session policy", model.policyLabel],
+            ["Temporary policy", "Applies only while this session exists"],
+            ["Promotion defaults", "Project defaults are considered only when keeping the source"],
+          ]}
+        />
+      ),
+      detail: model.policyLabel,
+      id: "temporary-source-policy",
+      kind: "temporary-source-policy",
+      modeAffinity: ["inspect", "review"],
+      tabId: "policy",
+      title: "Temporary policy",
+    }),
+    buildCinemaInspectorSection({
+      children: (
+        <TemporaryFacts
+          emptyText={
+            model.bookmarkCount === 0 && model.recentPositionCount === 0
+              ? "No temporary bookmarks or recent positions exist for this session yet."
+              : undefined
+          }
+          facts={[
+            ["Bookmarks", model.bookmarkCount.toLocaleString()],
+            ["Recent positions", model.recentPositionCount.toLocaleString()],
+            ["History scope", "Temporary session only"],
+            ["Return context", model.contract.temporarySourceId ?? "Current temporary source"],
+          ]}
+        />
+      ),
+      detail: `${model.bookmarkCount.toLocaleString()} bookmarks · temporary only`,
+      id: "temporary-history",
+      kind: "temporary-history",
+      modeAffinity: "review",
+      tabId: "history",
+      title: "Temporary history",
+    }),
+    buildCinemaInspectorSection({
+      children: (
+        <TemporaryFacts
+          emptyText={
+            model.promotionItems.length === 0
+              ? "Only the extracted source is ready to keep. Optional artifacts appear here after they exist."
+              : undefined
+          }
+          facts={[
+            ["Keeps", "A durable project copy"],
+            ["Temporary session", "Remains temporary until discarded or expired"],
+            ["Available artifacts", promotionItemsLabel(model.promotionItems)],
+          ]}
+          notes={model.promotionItems.map((item) => ["Can keep", item])}
+        />
+      ),
+      detail: promotionItemsLabel(model.promotionItems),
+      id: "temporary-promotion",
+      kind: "temporary-promotion",
+      modeAffinity: ["inspect", "review"],
+      tabId: "policy",
+      title: "Promotion",
+    }),
+  ];
 }
 
 export function buildCinemaInspectorSection(
@@ -217,4 +389,72 @@ function mergeModeAffinities(
     }
   }
   return [...modes];
+}
+
+function TemporaryFacts({
+  emptyText,
+  facts,
+  notes = [],
+}: Readonly<{
+  emptyText?: string;
+  facts: readonly (readonly [string, string])[];
+  notes?: readonly (readonly [string, string])[];
+}>) {
+  let supportingContent: ReactNode = null;
+  if (notes.length > 0) {
+    supportingContent = (
+      <div className="grid gap-2">
+        {notes.map(([label, value], index) => (
+          <p
+            className="rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-xs leading-5 vs-border"
+            key={`${label}:${index.toString()}:${value}`}
+          >
+            <span className="font-semibold">{label}: </span>
+            {value}
+          </p>
+        ))}
+      </div>
+    );
+  } else if (emptyText) {
+    supportingContent = (
+      <p className="rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-xs leading-5 vs-muted vs-border">
+        {emptyText}
+      </p>
+    );
+  }
+
+  return (
+    <div className="grid gap-3 text-sm">
+      <dl className="grid gap-2">
+        {facts.map(([label, value]) => (
+          <div className="grid min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] gap-2" key={label}>
+            <dt className="vs-muted">{label}</dt>
+            <dd className="min-w-0 break-words font-semibold">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {supportingContent}
+      <div className="flex flex-wrap gap-2">
+        <StatusChip tone="metadata">Temporary</StatusChip>
+      </div>
+    </div>
+  );
+}
+
+function artifactCountLabel(count: number): string {
+  return count === 1 ? "1 artifact" : `${count.toLocaleString()} artifacts`;
+}
+
+function temporaryReviewStatusLabel(reviewEditCount: number): string {
+  return reviewEditCount > 0
+    ? `${reviewEditCount.toLocaleString()} review edits`
+    : "No review edits";
+}
+
+function diagnosticsLabel(diagnostics?: readonly string[]): string {
+  return diagnostics && diagnostics.length > 0 ? `${diagnostics.length.toString()} notes` : "None";
+}
+
+function promotionItemsLabel(items: readonly string[]): string {
+  return items.length > 0 ? items.join(", ") : "Extracted source";
 }

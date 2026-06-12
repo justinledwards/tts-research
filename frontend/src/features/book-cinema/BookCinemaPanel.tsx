@@ -14,6 +14,7 @@ import {
 import { StatusChip, compactHitTargetClassName, minInteractiveSize } from "../../design";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
 import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
+import { hasSpeechPolicyOverrides } from "../../speechPolicy";
 import {
   generatedAudioLifecycleFromJob,
   playbackActionLabel,
@@ -32,6 +33,7 @@ import {
   buildCinemaCurrentReadingSection,
   buildCinemaInspectorPanels,
   buildCinemaInspectorSection,
+  buildCinemaTemporaryInspectorSections,
   buildCinemaWayfindingSection,
   cinemaContractFromBookSource,
   deriveCinemaPlaybackState,
@@ -1422,6 +1424,41 @@ export function BookCinemaOverlay({
   const structuralWarnings = [
     ...new Set([...(book.warnings ?? []), ...(scopeContent?.warnings ?? [])]),
   ];
+  const temporaryArtifactCount = [activeBookJob?.audioUrl, activeBookJob?.timing].filter(
+    Boolean,
+  ).length;
+  const temporaryInspectorSections = buildCinemaTemporaryInspectorSections({
+    artifactCount: temporaryArtifactCount,
+    audioStatus: activeBookJob?.audioUrl ? "Generated audio ready" : "No generated audio",
+    bookmarkCount: bookmarkItems.length,
+    contract: temporaryContract,
+    diagnostics: structuralWarnings,
+    originLabel: book.sourceFile,
+    policyLabel:
+      book.sourceSpeechPolicyProfile ??
+      (hasSpeechPolicyOverrides(book.sourceSpeechPolicyOverrides ?? {})
+        ? "Session override"
+        : "Project default"),
+    promotionItems: temporaryPromotionItems({
+      artifactCount: temporaryArtifactCount,
+      bookmarkCount: bookmarkItems.length,
+      hasAudio: Boolean(activeBookJob?.audioUrl),
+      hasPolicy:
+        Boolean(book.sourceSpeechPolicyProfile) ||
+        hasSpeechPolicyOverrides(book.sourceSpeechPolicyOverrides ?? {}),
+      hasTiming: Boolean(activeBookJob?.timing),
+      reviewEditCount: 0,
+    }),
+    pronunciationCount: 0,
+    recentPositionCount: recentItems.length,
+    repairNotes: [],
+    reviewEditCount: 0,
+    skippedCount: 0,
+    sourceTypeLabel: book.kind.toUpperCase(),
+    timingConfidence: alignmentStatus.label,
+    title: book.title ?? bookSourceName(book),
+    warnings: structuralWarnings,
+  });
   const bookInspectorPanels = buildCinemaInspectorPanels([
     buildCinemaInspectorSection({
       children: (
@@ -1521,6 +1558,7 @@ export function BookCinemaOverlay({
       tabId: "overview",
       title: "Source & provenance",
     }),
+    ...temporaryInspectorSections,
     buildCinemaCurrentReadingSection({
       action: progress ? (
         <BookCinemaResumeButton progress={progress} onResumeProgress={onResumeProgress} />
@@ -4410,6 +4448,43 @@ function formatEstimatedDuration(durationMs: number | null | undefined): string 
     return `${String(seconds)} sec`;
   }
   return `${String(minutes)}:${String(seconds).padStart(2, "0")}`;
+}
+
+function temporaryPromotionItems({
+  artifactCount,
+  bookmarkCount,
+  hasAudio,
+  hasPolicy,
+  hasTiming,
+  reviewEditCount,
+}: Readonly<{
+  artifactCount: number;
+  bookmarkCount: number;
+  hasAudio: boolean;
+  hasPolicy: boolean;
+  hasTiming: boolean;
+  reviewEditCount: number;
+}>): string[] {
+  const items = ["Extracted source"];
+  if (reviewEditCount > 0) {
+    items.push("Review edits");
+  }
+  if (hasPolicy) {
+    items.push("Policy pin");
+  }
+  if (hasAudio) {
+    items.push("Generated audio");
+  }
+  if (hasTiming) {
+    items.push("Timing maps");
+  }
+  if (bookmarkCount > 0) {
+    items.push("Bookmarks");
+  }
+  if (artifactCount > 0 && !hasAudio && !hasTiming) {
+    items.push("Generated artifacts");
+  }
+  return items;
 }
 
 function formatDateTime(value: string): string {

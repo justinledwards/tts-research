@@ -45,6 +45,12 @@ export type ContextPanelSectionKind =
   | "source-provenance"
   | "speech-policy"
   | "timing-map"
+  | "temporary-diagnostics"
+  | "temporary-history"
+  | "temporary-promotion"
+  | "temporary-review-status"
+  | "temporary-source-policy"
+  | "temporary-source-provenance"
   | "voice-profile"
   | "wayfinding";
 
@@ -238,8 +244,22 @@ function relevanceForSectionKind(kind: ContextPanelSectionKind): ContextPanelRel
       return "requires-policy";
     }
     case "source-provenance":
+    case "temporary-source-provenance":
     case "skipped-content": {
       return "requires-source";
+    }
+    case "temporary-diagnostics": {
+      return "requires-diagnostics";
+    }
+    case "temporary-history": {
+      return "requires-wayfinding";
+    }
+    case "temporary-promotion":
+    case "temporary-source-policy": {
+      return "requires-policy";
+    }
+    case "temporary-review-status": {
+      return "requires-active-block";
     }
     case "voice-profile": {
       return "requires-voice";
@@ -295,7 +315,11 @@ function priorityForSection(section: ContextPanelSectionInput): ContextPanelSect
   ) {
     return "primary";
   }
-  if (section.kind === "source-provenance" || section.kind === "current-passage") {
+  if (
+    section.kind === "source-provenance" ||
+    section.kind === "temporary-source-provenance" ||
+    section.kind === "current-passage"
+  ) {
     return "primary";
   }
   return "secondary";
