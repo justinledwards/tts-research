@@ -457,6 +457,7 @@ import type {
   SourceReadinessConfirmationRequest,
   StageStatus,
   SystemMetrics,
+  TemporarySourcePromotionKeep,
   TemporarySourceSession,
   ThemeName,
   TTSEngineDiagnostics,
@@ -2651,6 +2652,14 @@ function resolveResumeBookScope(
   );
 }
 
+type PromotionSource = PreparedSource | BookSource;
+
+interface PendingTemporaryPromotion {
+  source: PromotionSource;
+  titleOverride?: string;
+  origin: "prepared" | "book";
+}
+
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export function App() {
   const [text, setText] = useState("");
@@ -2710,6 +2719,10 @@ export function App() {
   const [bookScopeContent, setBookScopeContent] = useState<BookSourceScopeContent | null>(null);
   const [preparedSources, setPreparedSources] = useState<PreparedSource[]>([]);
   const [temporarySources, setTemporarySources] = useState<TemporarySourceSession[]>([]);
+  const [pendingTemporaryPromotion, setPendingTemporaryPromotion] =
+    useState<PendingTemporaryPromotion | null>(null);
+  const [temporaryPromotionError, setTemporaryPromotionError] = useState<string | null>(null);
+  const [isPromotingTemporarySource, setIsPromotingTemporarySource] = useState(false);
   const [activeTemporaryBookSource, setActiveTemporaryBookSource] = useState<BookSource | null>(
     null,
   );
@@ -6591,79 +6604,76 @@ export function App() {
   );
 
   const handleKeepTemporarySource = useCallback(
-    async (source: PreparedSource, titleOverride?: string) => {
-      const temporarySourceId = source.temporarySourceId;
-      if (!temporarySourceId) {
+    (source: PreparedSource, titleOverride?: string) => {
+      if (!source.temporarySourceId) {
         return;
       }
-      setSourcePrepError(null);
-      try {
-        const promoted = await promoteTemporarySource(temporarySourceId, {
-          language: source.sourceReadiness?.language,
-          preserveGeneratedArtifacts: true,
-          projectId: activeProjectId,
-          sourceType: source.sourceReadiness?.sourceType,
-          speechPolicyProfile: source.sourceSpeechPolicyProfile,
-          structureLabel: source.sourceReadiness?.structureLabel,
-          title: titleOverride?.trim() ?? source.title ?? source.sourceReadiness?.title,
-        });
-        setPreparedSources((currentSources) => [
-          promoted,
-          ...currentSources.filter((item) => item.id !== promoted.id),
-        ]);
-        setTemporarySources((currentSources) =>
-          currentSources.map((item) =>
-            item.id === temporarySourceId
-              ? {
-                  ...item,
-                  promotedProjectId: promoted.projectId,
-                  promotedSourceId: promoted.id,
-                  promotionStatus: "promoted",
-                  status: "promoted",
-                }
-              : item,
-          ),
-        );
-        setActiveTemporaryPreparedSource(null);
-        setActiveTemporaryBookSource(null);
-        setSelectedPreparedSourceId(promoted.id);
-        setPreparedSourceCinemaSourceId(promoted.id);
-        setSourceMode("fileUrl");
-        selectWorkspaceInspectorTarget({
-          id: promoted.id,
-          kind: "source",
-          label: promoted.title ?? promoted.sourceName,
-        });
-        announcePolite("Temporary source kept as a project source.");
-      } catch (caughtError) {
-        const message =
-          caughtError instanceof Error
-            ? caughtError.message
-            : "Unable to keep temporary source in the project.";
-        setSourcePrepError(message);
-        setQuickListenError(message);
-      }
+      setTemporaryPromotionError(null);
+      setPendingTemporaryPromotion({ origin: "prepared", source, titleOverride });
     },
-    [activeProjectId, announcePolite, selectWorkspaceInspectorTarget],
+    [],
   );
 
   const handleKeepTemporaryBookSource = useCallback(
-    async (source: BookSource, titleOverride?: string) => {
+    (source: BookSource, titleOverride?: string) => {
+      if (!source.temporarySourceId) {
+        return;
+      }
+      setTemporaryPromotionError(null);
+      setPendingTemporaryPromotion({ origin: "book", source, titleOverride });
+    },
+    [],
+  );
+
+  const handleConfirmTemporaryPromotion = useCallback(
+    async (request: {
+      conflictResolution?: "error" | "keepBoth";
+      createProjectName?: string;
+      keep: TemporarySourcePromotionKeep;
+      language?: string;
+      projectId: string;
+      scope?: string;
+      sourceType?: string;
+      title: string;
+    }) => {
+      if (!pendingTemporaryPromotion?.source.temporarySourceId) {
+        return;
+      }
+      const { source, origin } = pendingTemporaryPromotion;
       const temporarySourceId = source.temporarySourceId;
       if (!temporarySourceId) {
         return;
       }
+      setTemporaryPromotionError(null);
+      setSourcePrepError(null);
       setBookSourceError(null);
       try {
+        setIsPromotingTemporarySource(true);
         const promoted = await promoteTemporarySource(temporarySourceId, {
-          language: source.sourceReadiness?.language,
-          preserveGeneratedArtifacts: true,
-          projectId: activeProjectId,
-          sourceType: source.sourceReadiness?.sourceType,
+          conflictResolution: request.conflictResolution,
+          createProjectName: request.createProjectName,
+          keep: request.keep,
+          language: request.language,
+          manifest: {
+            keep: request.keep,
+            language: request.language,
+            projectId: request.projectId,
+            scope: request.scope,
+            sourceType: request.sourceType,
+            temporarySourceId,
+            title: request.title,
+          },
+          projectId: request.projectId,
+          scope: request.scope,
+          sourceType: request.sourceType,
           speechPolicyProfile: source.sourceSpeechPolicyProfile,
           structureLabel: source.sourceReadiness?.structureLabel,
-          title: titleOverride?.trim() ?? source.title ?? source.sourceReadiness?.title,
+          title: request.title,
         });
+        if (request.createProjectName) {
+          const refreshedProjects = await listProjects();
+          setProjects(refreshedProjects);
+        }
         setPreparedSources((currentSources) => [
           promoted,
           ...currentSources.filter((item) => item.id !== promoted.id),
@@ -6681,6 +6691,8 @@ export function App() {
               : item,
           ),
         );
+        setPendingTemporaryPromotion(null);
+        setActiveTemporaryPreparedSource(null);
         setActiveTemporaryBookSource(null);
         setSelectedBookSourceId(null);
         setSelectedBookScope(null);
@@ -6689,22 +6701,38 @@ export function App() {
         setSelectedPreparedSourceId(promoted.id);
         setPreparedSourceCinemaSourceId(promoted.id);
         setIsBookCinemaOpen(false);
+        if (promoted.projectId !== activeProjectId) {
+          selectProject(promoted.projectId);
+        }
         selectWorkspaceInspectorTarget({
           id: promoted.id,
           kind: "source",
           label: promoted.title ?? promoted.sourceName,
         });
-        announcePolite("Temporary source kept as a project source.");
+        announcePolite("Temporary source kept in project.");
       } catch (caughtError) {
         const message =
           caughtError instanceof Error
             ? caughtError.message
             : "Unable to keep temporary source in the project.";
-        setBookSourceError(message);
+        setTemporaryPromotionError(message);
+        if (origin === "book") {
+          setBookSourceError(message);
+        } else {
+          setSourcePrepError(message);
+        }
         setQuickListenError(message);
+      } finally {
+        setIsPromotingTemporarySource(false);
       }
     },
-    [activeProjectId, announcePolite, selectWorkspaceInspectorTarget],
+    [
+      activeProjectId,
+      announcePolite,
+      pendingTemporaryPromotion,
+      selectProject,
+      selectWorkspaceInspectorTarget,
+    ],
   );
 
   const handleUsePreparedSource = useCallback(
@@ -8967,6 +8995,27 @@ export function App() {
           />
         </Suspense>
       ) : null}
+      {pendingTemporaryPromotion ? (
+        <TemporaryPromotionDialog
+          activeProjectId={activeProjectId}
+          error={temporaryPromotionError}
+          isSubmitting={isPromotingTemporarySource}
+          pending={pendingTemporaryPromotion}
+          projects={projects}
+          session={
+            temporarySources.find(
+              (source) => source.id === pendingTemporaryPromotion.source.temporarySourceId,
+            ) ?? null
+          }
+          onCancel={() => {
+            setPendingTemporaryPromotion(null);
+            setTemporaryPromotionError(null);
+          }}
+          onConfirm={(request) => {
+            void handleConfirmTemporaryPromotion(request);
+          }}
+        />
+      ) : null}
 
       {isCommandCenterOpen ? (
         <Suspense fallback={<LazySurfaceFallback label="Loading Command Center..." />}>
@@ -9416,7 +9465,7 @@ export function App() {
             onPlayPause={handleBookCinemaPlayPause}
             onHelpOpen={openContextualHelp}
             onKeepTemporarySource={(book, title) => {
-              void handleKeepTemporaryBookSource(book, title);
+              handleKeepTemporaryBookSource(book, title);
             }}
             onRestart={handleBookCinemaRestart}
             onScopeChange={setSelectedBookScope}
@@ -9497,7 +9546,7 @@ export function App() {
               void handleInspectContentIR(source.id, source.title ?? source.sourceName, true);
             }}
             onKeepTemporarySource={(source, title) => {
-              void handleKeepTemporarySource(source, title);
+              handleKeepTemporarySource(source, title);
             }}
             onPrepareFile={handlePrepareCinemaSourceFile}
             onPlayPause={handleBookCinemaPlayPause}
@@ -9939,7 +9988,7 @@ export function App() {
               }}
               onKeepTemporarySource={() => {
                 if (activeNarrationPreparedSource) {
-                  void handleKeepTemporarySource(activeNarrationPreparedSource);
+                  handleKeepTemporarySource(activeNarrationPreparedSource);
                 }
               }}
               onStageAction={runWorkspaceStageAction}
@@ -10134,6 +10183,346 @@ export function App() {
         onStatusChipSelect={handleNarrationStatusChipSelect}
       />
     </main>
+  );
+}
+
+function TemporaryPromotionDialog({
+  activeProjectId,
+  error,
+  isSubmitting,
+  pending,
+  projects,
+  session,
+  onCancel,
+  onConfirm,
+}: Readonly<{
+  activeProjectId: string;
+  error: string | null;
+  isSubmitting: boolean;
+  pending: PendingTemporaryPromotion;
+  projects: VoiceProject[];
+  session: TemporarySourceSession | null;
+  onCancel: () => void;
+  onConfirm: (request: {
+    conflictResolution?: "error" | "keepBoth";
+    createProjectName?: string;
+    keep: TemporarySourcePromotionKeep;
+    language?: string;
+    projectId: string;
+    scope?: string;
+    sourceType?: string;
+    title: string;
+  }) => void;
+}>) {
+  const source = pending.source;
+  const fallbackSourceName = "sourceName" in source ? source.sourceName : source.sourceFile;
+  const [projectMode, setProjectMode] = useState<"existing" | "new">("existing");
+  const [projectId, setProjectId] = useState(activeProjectId);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [title, setTitle] = useState(
+    firstNonEmptyString(
+      pending.titleOverride?.trim(),
+      source.title,
+      source.sourceReadiness?.title,
+      fallbackSourceName,
+    ) ?? fallbackSourceName,
+  );
+  const [sourceType, setSourceType] = useState(source.sourceReadiness?.sourceType ?? "");
+  const [language, setLanguage] = useState(source.sourceReadiness?.language ?? "");
+  const [scope, setScope] = useState(source.sourceReadiness?.structureLabel ?? "Whole source");
+  const [conflictResolution, setConflictResolution] = useState<"error" | "keepBoth">("error");
+  const [keep, setKeep] = useState<TemporarySourcePromotionKeep>({
+    bookmarks: Boolean(session?.bookmarks?.length),
+    diagnosticsReport: Boolean(
+      session?.artifacts.some((artifact) => artifact.kind === "validation"),
+    ),
+    extractedSource: true,
+    generatedAudio: false,
+    lexiconOverrides: Boolean(source.sourceSpeechPolicyOverrides),
+    policySourcePin: Boolean(source.sourceSpeechPolicyProfile),
+    progress: Boolean(session?.playbackProgress),
+    reviewEdits: true,
+    timingMaps: false,
+  });
+  const generatedArtifactBytes =
+    session?.artifacts
+      .filter((artifact) => artifact.kind === "generatedAudio")
+      .reduce((total, artifact) => total + (artifact.bytes ?? 0), 0) ?? 0;
+  const generatedAudioLabel =
+    generatedArtifactBytes > 0
+      ? `Generated audio (${formatBytes(generatedArtifactBytes)})`
+      : "Generated audio";
+  const hasGeneratedAudio =
+    session?.artifacts.some((artifact) => artifact.kind === "generatedAudio") ?? false;
+  const hasTimingMaps = session?.artifacts.some((artifact) => artifact.kind === "timing") ?? false;
+  const audioWarnings = [
+    keep.generatedAudio && session?.status === "generating" ? "Generated audio is partial." : null,
+    keep.generatedAudio && session?.status === "stale" ? "Generated audio may be stale." : null,
+    keep.generatedAudio && !hasGeneratedAudio ? "No generated audio is available to keep." : null,
+  ].filter(Boolean);
+  const canSubmit =
+    title.trim().length > 0 &&
+    (projectMode === "existing" ? projectId.trim().length > 0 : newProjectName.trim().length > 0);
+
+  const setKeepFlag = (key: keyof TemporarySourcePromotionKeep, value: boolean) => {
+    setKeep((current) => ({ ...current, [key]: value }));
+  };
+
+  return (
+    <div className="fixed inset-0 z-[75] grid place-items-center bg-[var(--vs-surface-overlay)] px-4 py-6">
+      <section
+        aria-labelledby="temporary-promotion-title"
+        aria-modal="true"
+        className="max-h-full w-full max-w-3xl overflow-auto rounded-lg border bg-[var(--vs-surface)] p-5 shadow-2xl vs-border"
+        role="dialog"
+      >
+        <div className="flex flex-col gap-1 border-b pb-4 vs-border">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--vs-action-primary)]">
+            Temporary source
+          </p>
+          <h2 className="text-xl font-semibold" id="temporary-promotion-title">
+            Keep in project
+          </h2>
+          <p className="vs-muted text-sm">
+            Choose exactly what becomes durable project history. Temporary cache paths and local
+            file details are not copied.
+          </p>
+        </div>
+
+        <div className="grid gap-5 py-5 md:grid-cols-[1fr_1fr]">
+          <div className="grid gap-3">
+            <label className="grid gap-1 text-sm font-medium">
+              Project
+              <select
+                className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-sm vs-border"
+                disabled={projectMode === "new"}
+                onChange={(event) => {
+                  setProjectId(event.target.value);
+                }}
+                value={projectId}
+              >
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                checked={projectMode === "new"}
+                onChange={(event) => {
+                  setProjectMode(event.target.checked ? "new" : "existing");
+                }}
+                type="checkbox"
+              />
+              Create a project
+            </label>
+            {projectMode === "new" ? (
+              <label className="grid gap-1 text-sm font-medium">
+                New project name
+                <input
+                  className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-sm vs-border"
+                  onChange={(event) => {
+                    setNewProjectName(event.target.value);
+                  }}
+                  value={newProjectName}
+                />
+              </label>
+            ) : null}
+            <label className="grid gap-1 text-sm font-medium">
+              Source title
+              <input
+                className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-sm vs-border"
+                onChange={(event) => {
+                  setTitle(event.target.value);
+                }}
+                value={title}
+              />
+            </label>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label className="grid gap-1 text-sm font-medium">
+                Type
+                <input
+                  className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-sm vs-border"
+                  onChange={(event) => {
+                    setSourceType(event.target.value);
+                  }}
+                  value={sourceType}
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                Language
+                <input
+                  className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-sm vs-border"
+                  onChange={(event) => {
+                    setLanguage(event.target.value);
+                  }}
+                  value={language}
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                Scope
+                <input
+                  className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-sm vs-border"
+                  onChange={(event) => {
+                    setScope(event.target.value);
+                  }}
+                  value={scope}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="grid gap-3">
+            <fieldset className="grid gap-2">
+              <legend className="text-sm font-semibold">What to keep</legend>
+              <PromotionKeepCheckbox checked disabled label="Extracted source" />
+              <PromotionKeepCheckbox
+                checked={Boolean(keep.reviewEdits)}
+                label="Review edits"
+                onChange={(checked) => {
+                  setKeepFlag("reviewEdits", checked);
+                }}
+              />
+              <PromotionKeepCheckbox
+                checked={Boolean(keep.lexiconOverrides)}
+                label="Pronunciation/session lexicon overrides"
+                onChange={(checked) => {
+                  setKeepFlag("lexiconOverrides", checked);
+                }}
+              />
+              <PromotionKeepCheckbox
+                checked={Boolean(keep.policySourcePin)}
+                label="Policy source pin"
+                onChange={(checked) => {
+                  setKeepFlag("policySourcePin", checked);
+                }}
+              />
+              <PromotionKeepCheckbox
+                checked={Boolean(keep.generatedAudio)}
+                label={generatedAudioLabel}
+                onChange={(checked) => {
+                  setKeepFlag("generatedAudio", checked);
+                  if (!checked) {
+                    setKeepFlag("timingMaps", false);
+                  }
+                }}
+              />
+              <PromotionKeepCheckbox
+                checked={Boolean(keep.timingMaps)}
+                disabled={!keep.generatedAudio || !hasTimingMaps}
+                label="Timing maps"
+                onChange={(checked) => {
+                  setKeepFlag("timingMaps", checked);
+                }}
+              />
+              <PromotionKeepCheckbox
+                checked={Boolean(keep.bookmarks)}
+                label="Bookmarks"
+                onChange={(checked) => {
+                  setKeepFlag("bookmarks", checked);
+                }}
+              />
+              <PromotionKeepCheckbox
+                checked={Boolean(keep.progress)}
+                label="Progress"
+                onChange={(checked) => {
+                  setKeepFlag("progress", checked);
+                }}
+              />
+              <PromotionKeepCheckbox
+                checked={Boolean(keep.diagnosticsReport)}
+                label="Diagnostics report"
+                onChange={(checked) => {
+                  setKeepFlag("diagnosticsReport", checked);
+                }}
+              />
+            </fieldset>
+            <label className="flex items-start gap-2 rounded-md border p-3 text-sm vs-border">
+              <input
+                checked={conflictResolution === "keepBoth"}
+                onChange={(event) => {
+                  setConflictResolution(event.target.checked ? "keepBoth" : "error");
+                }}
+                type="checkbox"
+              />
+              <span>
+                Keep both if the title or source URL already exists.
+                <span className="block vs-muted">
+                  Leave unchecked to stop and resolve duplicate project history first.
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        {audioWarnings.length > 0 ? (
+          <div className="mb-4 rounded-md border border-[var(--vs-status-warning)] bg-[var(--vs-warning-soft)] p-3 text-sm">
+            {audioWarnings.map((warning) => (
+              <p key={warning}>{warning}</p>
+            ))}
+          </div>
+        ) : null}
+        {error ? (
+          <p className="mb-4 rounded-md border border-[var(--vs-status-danger)] p-3 text-sm text-[var(--vs-status-danger)]">
+            {error}
+          </p>
+        ) : null}
+
+        <div className="flex flex-col-reverse gap-3 border-t pt-4 vs-border sm:flex-row sm:justify-end">
+          <Button onClick={onCancel} type="button" variant="secondary">
+            Cancel
+          </Button>
+          <Button
+            disabled={!canSubmit || isSubmitting}
+            onClick={() => {
+              onConfirm({
+                conflictResolution,
+                createProjectName:
+                  projectMode === "new" ? newProjectName.trim() || undefined : undefined,
+                keep: { ...keep, extractedSource: true },
+                language: language.trim() || undefined,
+                projectId,
+                scope: scope.trim() || undefined,
+                sourceType: sourceType.trim() || undefined,
+                title: title.trim(),
+              });
+            }}
+            type="button"
+            variant="primary"
+          >
+            {isSubmitting ? "Keeping..." : "Keep in project"}
+          </Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PromotionKeepCheckbox({
+  checked,
+  disabled = false,
+  label,
+  onChange,
+}: Readonly<{
+  checked: boolean;
+  disabled?: boolean;
+  label: string;
+  onChange?: (checked: boolean) => void;
+}>) {
+  return (
+    <label className={`flex items-center gap-2 text-sm ${disabled ? "opacity-60" : ""}`}>
+      <input
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => {
+          onChange?.(event.target.checked);
+        }}
+        type="checkbox"
+      />
+      {label}
+    </label>
   );
 }
 

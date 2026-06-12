@@ -100,11 +100,18 @@ func TestTemporarySourceLifecycleCreatesGeneratesDeletesAndPromotesByCopy(t *tes
 	if err != nil {
 		t.Fatalf("PromoteTemporarySource returned error: %v", err)
 	}
-	if promoted.ID == temporary.ID || promoted.ProjectID != project.ID || promoted.TemporarySourceID != temporary.ID {
-		t.Fatalf("promoted source = %#v, want copied project source linked to temporary id", promoted)
+	if promoted.ID == temporary.ID || promoted.ProjectID != project.ID || promoted.TemporarySourceID != "" {
+		t.Fatalf("promoted source = %#v, want project-owned source without temporary id field", promoted)
 	}
 	if promoted.Metadata["sourceType"] != "document" || promoted.SourceReadiness.SourceType != "document" {
 		t.Fatalf("promoted metadata/readiness = %#v/%#v, want confirmed source type", promoted.Metadata, promoted.SourceReadiness)
+	}
+	manifest, ok := promoted.Metadata["promotion"].(pipeline.TemporarySourcePromotionManifest)
+	if !ok {
+		t.Fatalf("promotion manifest = %#v, want safe provenance note", promoted.Metadata["promotion"])
+	}
+	if manifest.TemporarySourceID != temporary.ID || !manifest.Keep.GeneratedAudio || !manifest.Keep.TimingMaps {
+		t.Fatalf("promotion manifest = %#v, want temporary provenance and kept generated artifacts", manifest)
 	}
 	if _, err := os.Stat(filepath.Join(service.Options().SourcePrepDir, promoted.ID, "source-prep.json")); err != nil {
 		t.Fatalf("promoted source metadata should exist: %v", err)
@@ -157,6 +164,55 @@ func hasSourceArtifactKind(artifacts []pipeline.SourceArtifactRef, kind pipeline
 		}
 	}
 	return false
+}
+
+func TestTemporarySourcePromotionRejectsDuplicateProjectSourceUnlessKeepBoth(t *testing.T) {
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	project, err := service.CreateProject("Duplicates")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	first, err := service.CreateTemporarySource(context.Background(), pipeline.CreateTemporarySourceRequest{
+		Kind:       pipeline.PreparedSourceKindText,
+		Text:       "First duplicate body.",
+		SourceName: "duplicate.md",
+		URL:        "https://example.test/duplicate",
+	})
+	if err != nil {
+		t.Fatalf("CreateTemporarySource first returned error: %v", err)
+	}
+	if _, err := service.PromoteTemporarySource(context.Background(), first.ID, pipeline.TemporarySourcePromotionRequest{
+		ProjectID: project.ID,
+		Title:     "Duplicate title",
+	}); err != nil {
+		t.Fatalf("PromoteTemporarySource first returned error: %v", err)
+	}
+	second, err := service.CreateTemporarySource(context.Background(), pipeline.CreateTemporarySourceRequest{
+		Kind:       pipeline.PreparedSourceKindText,
+		Text:       "Second duplicate body.",
+		SourceName: "duplicate-again.md",
+		URL:        "https://example.test/duplicate",
+	})
+	if err != nil {
+		t.Fatalf("CreateTemporarySource second returned error: %v", err)
+	}
+	if _, err := service.PromoteTemporarySource(context.Background(), second.ID, pipeline.TemporarySourcePromotionRequest{
+		ProjectID: project.ID,
+		Title:     "Duplicate title",
+	}); !errors.Is(err, pipeline.ErrTemporarySourceConflict) {
+		t.Fatalf("PromoteTemporarySource duplicate error = %v, want conflict", err)
+	}
+	promoted, err := service.PromoteTemporarySource(context.Background(), second.ID, pipeline.TemporarySourcePromotionRequest{
+		ConflictResolution: "keepBoth",
+		ProjectID:          project.ID,
+		Title:              "Duplicate title",
+	})
+	if err != nil {
+		t.Fatalf("PromoteTemporarySource keepBoth returned error: %v", err)
+	}
+	if promoted.ProjectID != project.ID || promoted.ID == second.ID {
+		t.Fatalf("promoted keepBoth source = %#v, want new project source", promoted)
+	}
 }
 
 func TestTemporaryWebpageMetadataAndPromotion(t *testing.T) {
@@ -243,11 +299,15 @@ func TestTemporaryWebpageMetadataAndPromotion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PromoteTemporarySource returned error: %v", err)
 	}
-	if promoted.ProjectID != project.ID || promoted.TemporarySourceID != temporary.ID {
-		t.Fatalf("promoted source = %#v, want project copy linked to temporary source", promoted)
+	if promoted.ProjectID != project.ID || promoted.TemporarySourceID != "" {
+		t.Fatalf("promoted source = %#v, want project copy with safe metadata provenance", promoted)
 	}
 	if promoted.Metadata["websiteMetadata"] == nil || promoted.Metadata["urlProvenance"] == nil {
 		t.Fatalf("promoted metadata = %#v, want webpage provenance preserved", promoted.Metadata)
+	}
+	manifest, ok := promoted.Metadata["promotion"].(pipeline.TemporarySourcePromotionManifest)
+	if !ok || manifest.TemporarySourceID != temporary.ID || manifest.SourceType != "webpage" || manifest.Language != "en-US" {
+		t.Fatalf("promotion manifest = %#v, want safe webpage promotion provenance", promoted.Metadata["promotion"])
 	}
 	if promoted.Metadata["sourceType"] != "webpage" || promoted.Metadata["language"] != "en-US" {
 		t.Fatalf("promoted metadata = %#v, want promotion confirmation facts", promoted.Metadata)

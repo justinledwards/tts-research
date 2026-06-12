@@ -121,6 +121,9 @@ func temporarySourceError(ctx fiber.Ctx, err error) error {
 		errors.Is(err, pipeline.ErrSpeechPolicyProfileNotFound) {
 		return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
 	}
+	if errors.Is(err, pipeline.ErrTemporarySourceConflict) {
+		return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
+	}
 	return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
 }
 

@@ -109,8 +109,12 @@ func TestTemporarySourceRoutesCreateGenerateArtifactsAndPromote(t *testing.T) {
 	if err := json.NewDecoder(promoteResponse.Body).Decode(&promoted); err != nil {
 		t.Fatalf("decode promoted source: %v", err)
 	}
-	if promoted.ProjectID != "default" || promoted.TemporarySourceID != temporary.ID {
-		t.Fatalf("promoted = %#v, want default project copy linked to temporary id", promoted)
+	if promoted.ProjectID != "default" || promoted.TemporarySourceID != "" {
+		t.Fatalf("promoted = %#v, want default project copy without temporary id field", promoted)
+	}
+	promotion, ok := promoted.Metadata["promotion"].(map[string]any)
+	if !ok || promotion["temporarySourceId"] != temporary.ID {
+		t.Fatalf("promotion metadata = %#v, want safe temporary provenance", promoted.Metadata["promotion"])
 	}
 }
 

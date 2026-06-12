@@ -30,15 +30,46 @@ type CreateTemporarySourceRequest struct {
 }
 
 type TemporarySourcePromotionRequest struct {
-	ProjectID                  string `json:"projectId"`
-	Title                      string `json:"title,omitempty"`
-	SourceType                 string `json:"sourceType,omitempty"`
-	Language                   string `json:"language,omitempty"`
-	StructureChoice            string `json:"structureChoice,omitempty"`
-	StructureLabel             string `json:"structureLabel,omitempty"`
-	SpeechPolicyProfile        string `json:"speechPolicyProfile,omitempty"`
-	VoiceProfileID             string `json:"voiceProfileId,omitempty"`
-	PreserveGeneratedArtifacts bool   `json:"preserveGeneratedArtifacts,omitempty"`
+	ProjectID                  string                            `json:"projectId"`
+	CreateProjectName          string                            `json:"createProjectName,omitempty"`
+	Title                      string                            `json:"title,omitempty"`
+	SourceType                 string                            `json:"sourceType,omitempty"`
+	Language                   string                            `json:"language,omitempty"`
+	Scope                      string                            `json:"scope,omitempty"`
+	StructureChoice            string                            `json:"structureChoice,omitempty"`
+	StructureLabel             string                            `json:"structureLabel,omitempty"`
+	SpeechPolicyProfile        string                            `json:"speechPolicyProfile,omitempty"`
+	VoiceProfileID             string                            `json:"voiceProfileId,omitempty"`
+	ConflictResolution         string                            `json:"conflictResolution,omitempty"`
+	Keep                       TemporarySourcePromotionKeep      `json:"keep,omitempty"`
+	PreserveGeneratedArtifacts bool                              `json:"preserveGeneratedArtifacts,omitempty"`
+	ClientManifest             *TemporarySourcePromotionManifest `json:"manifest,omitempty"`
+}
+
+type TemporarySourcePromotionKeep struct {
+	ExtractedSource   bool `json:"extractedSource,omitempty"`
+	ReviewEdits       bool `json:"reviewEdits,omitempty"`
+	LexiconOverrides  bool `json:"lexiconOverrides,omitempty"`
+	PolicySourcePin   bool `json:"policySourcePin,omitempty"`
+	GeneratedAudio    bool `json:"generatedAudio,omitempty"`
+	TimingMaps        bool `json:"timingMaps,omitempty"`
+	Bookmarks         bool `json:"bookmarks,omitempty"`
+	Progress          bool `json:"progress,omitempty"`
+	DiagnosticsReport bool `json:"diagnosticsReport,omitempty"`
+}
+
+type TemporarySourcePromotionManifest struct {
+	TemporarySourceID string                       `json:"temporarySourceId"`
+	ProjectID         string                       `json:"projectId"`
+	SourceID          string                       `json:"sourceId,omitempty"`
+	Title             string                       `json:"title"`
+	SourceType        string                       `json:"sourceType,omitempty"`
+	Language          string                       `json:"language,omitempty"`
+	Scope             string                       `json:"scope,omitempty"`
+	Keep              TemporarySourcePromotionKeep `json:"keep"`
+	StorageImpact     int64                        `json:"storageImpactBytes,omitempty"`
+	Warnings          []string                     `json:"warnings,omitempty"`
+	CreatedAt         time.Time                    `json:"createdAt"`
 }
 
 func (service *Service) CreateTemporarySource(ctx context.Context, request CreateTemporarySourceRequest) (TemporarySourceSession, error) {
@@ -337,10 +368,15 @@ func (service *Service) PromoteTemporarySource(ctx context.Context, id string, r
 		return PreparedSource{}, err
 	}
 	projectID := strings.TrimSpace(request.ProjectID)
-	if projectID == "" {
+	if projectID == "" && strings.TrimSpace(request.CreateProjectName) == "" {
 		projectID = defaultProjectID
 	}
-	project, err := service.GetProject(projectID)
+	var project VoiceProject
+	if name := strings.TrimSpace(request.CreateProjectName); name != "" {
+		project, err = service.CreateProject(name)
+	} else {
+		project, err = service.GetProject(projectID)
+	}
 	if err != nil {
 		session.PromotionStatus = TemporarySourcePromotionFailed
 		session.Error = err.Error()
@@ -370,10 +406,41 @@ func (service *Service) PromoteTemporarySource(ctx context.Context, id string, r
 	source.ID = newID()
 	source.SourceOwner = SourceOwnerProject
 	source.ProjectID = project.ID
-	source.TemporarySourceID = session.ID
+	source.TemporarySourceID = ""
 	source.SpeechPolicyProfile = project.SpeechPolicyProfile
 	source.CreatedAt = now
 	source.UpdatedAt = now
+	source.Title = promotionTitle(source, request)
+	if err := service.ensureTemporaryPromotionConflictFree(project.ID, source, request.ConflictResolution); err != nil {
+		session.PromotionStatus = TemporarySourcePromotionFailed
+		session.Error = err.Error()
+		_ = service.persistTemporarySource(session)
+		service.mu.Lock()
+		service.temporary[session.ID] = cloneTemporarySourceSession(session)
+		service.mu.Unlock()
+		return PreparedSource{}, err
+	}
+	keep := normalizeTemporaryPromotionKeep(request)
+	storageImpact, artifactWarnings := service.temporaryPromotionStorageImpact(session.ID, keep)
+	if !keep.PolicySourcePin {
+		source.SourceSpeechPolicyProfile = ""
+	}
+	if !keep.LexiconOverrides {
+		source.SourceSpeechPolicyOverrides = policy.Overrides{}
+	}
+	source.Metadata = sanitizeTemporaryPromotionMetadata(source.Metadata, TemporarySourcePromotionManifest{
+		TemporarySourceID: session.ID,
+		ProjectID:         project.ID,
+		SourceID:          source.ID,
+		Title:             source.Title,
+		SourceType:        firstNonEmpty(request.SourceType, temporaryPromotionMetadataString(session.Metadata, "sourceType")),
+		Language:          firstNonEmpty(request.Language, temporaryPromotionMetadataString(session.Metadata, "language")),
+		Scope:             strings.TrimSpace(request.Scope),
+		Keep:              keep,
+		StorageImpact:     storageImpact,
+		Warnings:          artifactWarnings,
+		CreatedAt:         now,
+	})
 	source = service.sanitizePreparedSourceWarnings(applySpeechPolicyToPreparedSourceWithEvaluator(
 		source,
 		speechPolicyEvaluatorForSource(project, source.SourceSpeechPolicyProfile, source.SourceSpeechPolicyOverrides, "", policy.Overrides{}),
@@ -387,8 +454,8 @@ func (service *Service) PromoteTemporarySource(ctx context.Context, id string, r
 	if err := service.writePreparedSourceContentIR(source); err != nil {
 		return PreparedSource{}, err
 	}
-	if request.PreserveGeneratedArtifacts {
-		if _, err := service.promoteTemporarySourceJobArtifacts(session.ID, source); err != nil {
+	if keep.GeneratedAudio {
+		if _, err := service.promoteTemporarySourceJobArtifacts(session.ID, source, keep); err != nil {
 			session.PromotionStatus = TemporarySourcePromotionFailed
 			session.Error = err.Error()
 			_ = service.persistTemporarySource(session)
@@ -411,6 +478,95 @@ func (service *Service) PromoteTemporarySource(ctx context.Context, id string, r
 	service.temporary[session.ID] = cloneTemporarySourceSession(session)
 	service.mu.Unlock()
 	return source, nil
+}
+
+func promotionTitle(source PreparedSource, request TemporarySourcePromotionRequest) string {
+	title := strings.TrimSpace(request.Title)
+	if title == "" {
+		title = strings.TrimSpace(source.Title)
+	}
+	if title == "" {
+		title = inferPreparedSourceTitle(source.Text, source.SourceName)
+	}
+	return title
+}
+
+func normalizeTemporaryPromotionKeep(request TemporarySourcePromotionRequest) TemporarySourcePromotionKeep {
+	keep := request.Keep
+	if request.ClientManifest != nil {
+		keep = request.ClientManifest.Keep
+	}
+	if !keep.ExtractedSource && !keep.ReviewEdits && !keep.LexiconOverrides && !keep.PolicySourcePin &&
+		!keep.GeneratedAudio && !keep.TimingMaps && !keep.Bookmarks && !keep.Progress && !keep.DiagnosticsReport {
+		keep.ExtractedSource = true
+		keep.ReviewEdits = true
+	}
+	if request.PreserveGeneratedArtifacts {
+		keep.GeneratedAudio = true
+		keep.TimingMaps = true
+	}
+	return keep
+}
+
+func sanitizeTemporaryPromotionMetadata(metadata map[string]any, manifest TemporarySourcePromotionManifest) map[string]any {
+	next := cloneMetadataMap(metadata)
+	if next == nil {
+		next = map[string]any{}
+	}
+	for _, key := range []string{"localPath", "cachePath", "temporaryCachePath", "temporaryArtifactPath", "credentials", "credential", "token", "apiKey"} {
+		delete(next, key)
+	}
+	next["promotion"] = manifest
+	return next
+}
+
+func temporaryPromotionMetadataString(metadata map[string]any, key string) string {
+	if metadata == nil {
+		return ""
+	}
+	if value, ok := metadata[key].(string); ok {
+		return strings.TrimSpace(value)
+	}
+	return ""
+}
+
+func (service *Service) ensureTemporaryPromotionConflictFree(projectID string, source PreparedSource, resolution string) error {
+	if strings.EqualFold(strings.TrimSpace(resolution), "keepBoth") {
+		return nil
+	}
+	service.mu.RLock()
+	defer service.mu.RUnlock()
+	title := strings.EqualFold
+	sourceTitle := strings.TrimSpace(source.Title)
+	sourceURL := strings.TrimSpace(source.SourceURL)
+	for _, existing := range service.sourcePreps {
+		if existing.ProjectID != projectID {
+			continue
+		}
+		if sourceTitle != "" && title(existing.Title, sourceTitle) {
+			return fmt.Errorf("%w: title %q already exists", ErrTemporarySourceConflict, sourceTitle)
+		}
+		if sourceURL != "" && strings.EqualFold(strings.TrimSpace(existing.SourceURL), sourceURL) {
+			return fmt.Errorf("%w: source URL already exists", ErrTemporarySourceConflict)
+		}
+	}
+	return nil
+}
+
+func (service *Service) temporaryPromotionStorageImpact(temporarySourceID string, keep TemporarySourcePromotionKeep) (int64, []string) {
+	if !keep.GeneratedAudio {
+		return 0, nil
+	}
+	job, ok := service.latestPromotableTemporaryJob(temporarySourceID)
+	if !ok {
+		return 0, []string{"Generated audio was selected, but no complete or partial temporary audio is available."}
+	}
+	bytes := fileSize(job.AudioPath)
+	warnings := make([]string, 0)
+	if job.Status != JobStatusCompleted {
+		warnings = append(warnings, "Generated audio is partial.")
+	}
+	return bytes, warnings
 }
 
 func requestHasTemporaryPromotionMetadata(request TemporarySourcePromotionRequest) bool {
@@ -541,7 +697,7 @@ func (service *Service) removeTemporarySource(session TemporarySourceSession, st
 	return nil
 }
 
-func (service *Service) promoteTemporarySourceJobArtifacts(temporarySourceID string, source PreparedSource) (VoiceJob, error) {
+func (service *Service) promoteTemporarySourceJobArtifacts(temporarySourceID string, source PreparedSource, keep TemporarySourcePromotionKeep) (VoiceJob, error) {
 	sourceJob, ok := service.latestPromotableTemporaryJob(temporarySourceID)
 	if !ok {
 		return VoiceJob{}, nil
@@ -572,7 +728,11 @@ func (service *Service) promoteTemporarySourceJobArtifacts(temporarySourceID str
 	if sourceJob.AudioPartialURL != "" || sourceJob.AudioReadySegments > 0 {
 		promotedJob.AudioPartialURL = fmt.Sprintf("/api/voice-jobs/%s/audio/partial", promotedJob.ID)
 	}
-	promotedJob.Timing = rewriteTimingArtifactURLs(promotedJob.Timing, promotedJob.ID)
+	if keep.TimingMaps {
+		promotedJob.Timing = rewriteTimingArtifactURLs(promotedJob.Timing, promotedJob.ID)
+	} else {
+		promotedJob.Timing = nil
+	}
 
 	targetDir, err := filepath.Abs(filepath.Join(service.options.JobDataDir, promotedJob.ID))
 	if err != nil {

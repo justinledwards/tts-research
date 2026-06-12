@@ -586,14 +586,45 @@ export interface CreateTemporarySourceRequest extends CreatePreparedSourceReques
 
 export interface TemporarySourcePromotionRequest {
   projectId: string;
+  createProjectName?: string;
   title?: string;
   sourceType?: string;
   language?: string;
+  scope?: string;
   structureChoice?: string;
   structureLabel?: string;
   speechPolicyProfile?: string;
   voiceProfileId?: string;
+  conflictResolution?: "error" | "keepBoth";
+  keep?: TemporarySourcePromotionKeep;
   preserveGeneratedArtifacts?: boolean;
+  manifest?: TemporarySourcePromotionManifest;
+}
+
+export interface TemporarySourcePromotionKeep {
+  extractedSource?: boolean;
+  reviewEdits?: boolean;
+  lexiconOverrides?: boolean;
+  policySourcePin?: boolean;
+  generatedAudio?: boolean;
+  timingMaps?: boolean;
+  bookmarks?: boolean;
+  progress?: boolean;
+  diagnosticsReport?: boolean;
+}
+
+export interface TemporarySourcePromotionManifest {
+  temporarySourceId: string;
+  projectId: string;
+  sourceId?: string;
+  title: string;
+  sourceType?: string;
+  language?: string;
+  scope?: string;
+  keep: TemporarySourcePromotionKeep;
+  storageImpactBytes?: number;
+  warnings?: string[];
+  createdAt?: string;
 }
 
 export interface TemporarySourceSession {

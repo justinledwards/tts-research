@@ -50,6 +50,7 @@ var (
 	ErrPreparedSourceNotFound      = errors.New("prepared source not found")
 	ErrTemporarySourceNotFound     = errors.New("temporary source not found")
 	ErrTemporarySourceExpired      = errors.New("temporary source expired")
+	ErrTemporarySourceConflict     = errors.New("temporary source promotion conflicts with an existing project source")
 	ErrContentIRNotFound           = errors.New("content IR not found")
 	ErrSpeechPolicyProfileNotFound = errors.New("speech policy profile not found")
 	ErrProgressNotFound            = errors.New("playback progress not found")

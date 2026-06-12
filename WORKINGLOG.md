@@ -1,3 +1,16 @@
+## 2026-06-12 09:53 CEST - Commit Explicit Promotion Package
+- [x] Review promotion package diff
+- [x] Stage promotion package files
+- [x] Commit promotion package
+
+## 2026-06-12 09:38 CEST - Explicit Temporary Source Promotion
+- [x] Inspect existing temporary promotion backend and frontend flows
+- [x] Add explicit promotion manifest and conflict handling
+- [x] Add promotion dialog with project choice and artifact choices
+- [x] Add promotion success and failure recovery states
+- [x] Run project checks
+- Validation: focused backend temporary promotion tests, focused HTTP temporary route tests, frontend typecheck, focused frontend temporary-source tests, and full frontend Vitest passed. `pnpm check` passed format/lint/type/package/script/adapter stages and failed in backend `internal/pipeline` TempDir cleanup for `TestPreparedSourceJobIgnoresUnknownSelectionIDsAndExcludesSkippedBlocks` and `TestPreparedSourceJobDefensivelyExcludesOnDemandSelectedBlocks`.
+
 ## 2026-06-11 22:56 CEST - Cinema Temporary Source Support
 - [x] Map Cinema surfaces and temporary source state
 - [x] Add shared Cinema temporary-source contract
