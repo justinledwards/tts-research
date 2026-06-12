@@ -71,7 +71,7 @@ export const TEMPORARY_SOURCE_COPY = {
   },
   privacy: {
     localFirst:
-      "Temporary source content stays local unless you generate audio or use another provider-backed feature. Provider-backed generation can send request text, selected voice settings, and run configuration to the configured provider.",
+      "Temporary source content stays local unless you generate audio or use another provider-backed feature. Provider-backed generation can send request text, selected voice settings, and run configuration. Requests go to the configured provider.",
     projectBoundary:
       "Keep in project creates a durable project source. Discard temporary source deletes only temporary work and does not change project sources.",
   },

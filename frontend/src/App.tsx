@@ -14484,6 +14484,7 @@ function NarrationPreviewStage({
             generatedAudioReadiness?.detail ??
             "Create & Listen will generate playback for this scope."
           }
+          isTemporarySource={selectedPreparedSource?.sourceOwner === "temporary"}
           playbackAvailable={previewPlaybackAvailable}
           status={generatedAudioReadiness?.status ?? "waiting"}
           summary={previewGeneratedAudioPanelSummary({

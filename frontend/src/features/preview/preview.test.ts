@@ -514,6 +514,28 @@ describe("preview readiness model", () => {
     expect(ready.primaryLabel).toBe("Create Again");
   });
 
+  it("labels temporary generated audio as session-scoped", () => {
+    const missing = resolvePreviewReadinessModel(
+      readinessInput({ generatedAudioLifecycle: "missing", isTemporarySource: true }),
+    );
+    const ready = resolvePreviewReadinessModel(
+      readinessInput({ generatedAudioLifecycle: "ready", isTemporarySource: true }),
+    );
+
+    expect(missing.rows.find((row) => row.id === "audio")).toMatchObject({
+      detail:
+        "Preview shows the listener-ready text. No generated temporary audio exists yet. Create & Listen to generate disposable audio for this session.",
+      label: "Generated temporary audio",
+      status: "waiting",
+    });
+    expect(ready.rows.find((row) => row.id === "audio")).toMatchObject({
+      detail:
+        "Generated temporary audio ready. Preview playback and Cinema are available for this session.",
+      label: "Generated temporary audio",
+      status: "ready",
+    });
+  });
+
   it("requires rebuild when completed audio input differs from the current spoken plan", () => {
     const plan = buildCanonicalPreviewSpeechPlan([
       block({ id: "intro", index: 1, spokenText: "Intro body." }),
@@ -674,6 +696,26 @@ describe("preview readiness UI", () => {
     expect(markup).toContain("No generated audio exists yet");
     expect(markup).not.toContain('data-testid="localized-preview-playback-toolbar"');
     expect(markup).not.toContain("Jump to Audio");
+  });
+
+  it("renders generated temporary audio copy for temporary sources", () => {
+    const markup = renderToStaticMarkup(
+      createElement(PreviewGeneratedAudioPanel, {
+        detail:
+          "Preview shows the listener-ready text. No generated temporary audio exists yet. Create & Listen to generate disposable audio for this session.",
+        isTemporarySource: true,
+        playbackAvailable: false,
+        playbackToolbar: createElement(
+          "div",
+          { "data-testid": "localized-preview-playback-toolbar" },
+          "Transport",
+        ),
+        status: "waiting",
+      }),
+    );
+
+    expect(markup).toContain("Generated temporary audio");
+    expect(markup).toContain("No generated temporary audio exists yet");
   });
 
   it("describes partial generated audio without implying playback waits for completion", () => {

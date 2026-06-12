@@ -156,7 +156,9 @@ describe("temporarySessionToPreparedSource", () => {
     expect(pasteMarkup).toContain("Temporary source text");
     expect(pasteMarkup).toContain('data-testid="ui-action-quick-listen-paste-open-cinema"');
     expect(pasteMarkup).toContain("Generated temporary audio");
-    expect(pasteMarkup).toContain("request text and voice settings");
+    expect(pasteMarkup).toContain(
+      "Provider-backed generation can send request text, selected voice settings, and run configuration.",
+    );
 
     const fileMarkup = renderToStaticMarkup(
       createElement(QuickListenPanel, {

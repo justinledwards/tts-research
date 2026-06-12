@@ -19,6 +19,7 @@ export interface PreviewVoiceAuditionState {
 
 export interface PreviewGeneratedAudioPanelProps {
   readonly detail: string;
+  readonly isTemporarySource?: boolean;
   readonly playbackAvailable: boolean;
   readonly playbackToolbar: ReactNode;
   readonly status: PreviewReadinessRowStatus;
@@ -51,30 +52,35 @@ export function PreviewReadinessChecklist({ model }: Readonly<{ model: PreviewRe
 
 export function PreviewGeneratedAudioPanel({
   detail,
+  isTemporarySource = false,
   playbackAvailable,
   playbackToolbar,
   status,
   summary,
 }: Readonly<PreviewGeneratedAudioPanelProps>) {
   const emptyTitle = previewGeneratedAudioEmptyTitle(status);
+  const title = isTemporarySource ? "Generated temporary audio" : "Generated audio playback";
   const statusLabel = playbackAvailable ? "Ready" : previewReadinessStatusLabel(status);
   const statusTone = playbackAvailable ? "success" : previewReadinessTone(status);
+  const readySummary = isTemporarySource
+    ? "Generated temporary audio is ready for this session."
+    : "Full narration playback is ready for this scope.";
   const panelSummary =
     summary ??
     (playbackAvailable
-      ? "Full narration playback is ready for this scope."
+      ? readySummary
       : "Generated audio appears here when playable media is available.");
   return (
     <Panel
       as="section"
-      aria-label="Generated audio playback"
+      aria-label={title}
       className="grid gap-3 p-3"
       data-testid="preview-generated-audio-panel"
       variant="workSurface"
     >
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="text-base font-semibold">Generated audio playback</h3>
+          <h3 className="text-base font-semibold">{title}</h3>
           <p className="mt-1 text-xs leading-5 vs-muted">{panelSummary}</p>
         </div>
         <StatusChip tone={statusTone}>{statusLabel}</StatusChip>

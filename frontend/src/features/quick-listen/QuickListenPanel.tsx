@@ -505,8 +505,7 @@ export function QuickListenPanel({
               <p className="font-semibold">Temporary source boundary</p>
               <p className="vs-muted mt-1">
                 {TEMPORARY_SOURCE_COPY.launcher.boundaryDetail}{" "}
-                {TEMPORARY_SOURCE_COPY.privacy.localFirst} Provider-backed generation sends request
-                text and voice settings to the selected provider.
+                {TEMPORARY_SOURCE_COPY.privacy.localFirst}
               </p>
             </div>
 

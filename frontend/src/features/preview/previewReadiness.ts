@@ -78,7 +78,11 @@ export function resolvePreviewReadinessModel(
   const runtime = resolveRuntimeReadiness(input, source, spoken, voice, review);
   const canAudition =
     source.status === "ready" && spoken.status === "ready" && voice.status === "ready";
-  const audio = resolveGeneratedAudioReadiness(input.generatedAudioLifecycle, input.audioPipeline);
+  const audio = resolveGeneratedAudioReadiness(
+    input.generatedAudioLifecycle,
+    input.audioPipeline,
+    input.isTemporarySource,
+  );
   const canOpenAudioSurface = input.generatedAudioLifecycle === "ready";
   const canCreate = input.canCreate && canAudition;
   const canOpenTeleprompt = source.status === "ready" && spoken.status === "ready";
@@ -317,21 +321,25 @@ function resolveRuntimeReadiness(
 function resolveGeneratedAudioReadiness(
   lifecycle: GeneratedAudioLifecycleState,
   pipeline?: AudioGenerationPipelineModel,
+  isTemporarySource = false,
 ): PreviewReadinessRow {
+  const label = isTemporarySource ? "Generated temporary audio" : "Generated audio";
   if (pipeline?.state === "partialReady") {
     return {
       detail: pipeline.detail,
       id: "audio",
-      label: "Generated audio",
+      label,
       status: "working",
     };
   }
   const descriptor = generatedAudioLifecycleDescriptor(lifecycle);
   if (lifecycle === "ready") {
     return {
-      detail: "Audio ready. Preview playback and Cinema are available.",
+      detail: isTemporarySource
+        ? "Generated temporary audio ready. Preview playback and Cinema are available for this session."
+        : "Audio ready. Preview playback and Cinema are available.",
       id: "audio",
-      label: "Generated audio",
+      label,
       status: "ready",
     };
   }
@@ -339,7 +347,7 @@ function resolveGeneratedAudioReadiness(
     return {
       detail: descriptor.disabledReason,
       id: "audio",
-      label: "Generated audio",
+      label,
       status: "working",
     };
   }
@@ -347,9 +355,11 @@ function resolveGeneratedAudioReadiness(
     return {
       detail:
         pipeline?.detail ??
-        "Preview shows the listener-ready text. No generated audio exists yet. Create & Listen to generate audio for this scope.",
+        (isTemporarySource
+          ? "Preview shows the listener-ready text. No generated temporary audio exists yet. Create & Listen to generate disposable audio for this session."
+          : "Preview shows the listener-ready text. No generated audio exists yet. Create & Listen to generate audio for this scope."),
       id: "audio",
-      label: "Generated audio",
+      label,
       status: "waiting",
     };
   }
@@ -357,14 +367,14 @@ function resolveGeneratedAudioReadiness(
     return {
       detail: pipeline.detail,
       id: "audio",
-      label: "Generated audio",
+      label,
       status: "warning",
     };
   }
   return {
     detail: pipeline?.detail ?? descriptor.disabledReason,
     id: "audio",
-    label: "Generated audio",
+    label,
     status: "blocked",
   };
 }

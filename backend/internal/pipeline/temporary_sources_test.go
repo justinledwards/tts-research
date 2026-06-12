@@ -82,6 +82,13 @@ func TestTemporarySourceLifecycleCreatesGeneratesDeletesAndPromotesByCopy(t *tes
 	if _, err := service.GetFragmentTiming(job.ID); err != nil {
 		t.Fatalf("GetFragmentTiming(temporary job) returned error: %v", err)
 	}
+	audioReadySession, err := service.GetTemporarySource(temporary.ID)
+	if err != nil {
+		t.Fatalf("GetTemporarySource after temporary generation returned error: %v", err)
+	}
+	if audioReadySession.Status != pipeline.TemporarySourceStateAudioReady {
+		t.Fatalf("temporary status = %q, want audio_ready", audioReadySession.Status)
+	}
 	artifacts, err := service.ListTemporarySourceArtifacts(temporary.ID)
 	if err != nil {
 		t.Fatalf("ListTemporarySourceArtifacts returned error: %v", err)

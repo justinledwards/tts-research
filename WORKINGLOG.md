@@ -1,3 +1,16 @@
+## 2026-06-13 01:00 CEST - Commit Temporary Audio Job Package
+- [x] Review and stage temporary audio job files
+- [x] Commit temporary audio job work package
+- Validation: pre-commit `pnpm check` rerun passed format/lint/type/package/script/adapter/backend packages until existing backend `internal/pipeline` TempDir cleanup failed in `TestPreparedSourceJobIgnoresUnknownSelectionIDsAndExcludesSkippedBlocks`; committed with prior full `pnpm check` pass and focused/e2e results from the work package.
+
+## 2026-06-13 00:46 CEST - Temporary Audio Jobs and Read Along Binding
+- [x] Inspect existing temporary source, audio job, timing, and read-along flows
+- [x] Add backend temporary voice job metadata and artifact lifecycle
+- [x] Wire frontend temporary audio generation, health, playback, and read-along binding
+- [x] Add focused regression and screenshot evidence coverage
+- [x] Run project checks
+- Validation: focused backend temporary-source lifecycle tests passed; focused frontend Preview, Quick Listen, and temporary-source copy Vitest passed; `pnpm check` passed with existing Biome warning/info output in adapter/scripts files; `pnpm e2e:readalong-sync`, `pnpm e2e:read-along-fidelity`, and `pnpm e2e:temporary-sources` passed. `pnpm e2e:golden-minute` refreshed screenshots through Cinema resume, then failed waiting for visible `ui-action-teleprompt-theatre-play-pause`.
+
 ## 2026-06-12 23:06 CEST - Commit Temporary Paste and File Narration
 - [x] Review and stage temporary paste/file narration files
 - [x] Commit temporary paste/file narration work package
