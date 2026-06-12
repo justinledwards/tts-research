@@ -504,6 +504,10 @@ import type {
   HelpCommandTarget,
   SettingsCommandTarget,
 } from "./features/navigation/commands";
+import {
+  DEFAULT_TEMPORARY_SOURCE_BEHAVIOR,
+  type TemporarySourceBehaviorSettings,
+} from "./features/settings/model";
 import type { CommandPaletteView } from "./features/command-palette/CommandPalette";
 import type { CommandEntry } from "./features/command-palette/commandRegistry";
 import {
@@ -2725,6 +2729,8 @@ export function App() {
   const [temporarySources, setTemporarySources] = useState<TemporarySourceSession[]>([]);
   const [temporaryStorageUsage, setTemporaryStorageUsage] =
     useState<TemporaryStorageUsageSummary | null>(null);
+  const [temporarySourceBehavior, setTemporarySourceBehavior] =
+    useState<TemporarySourceBehaviorSettings>(DEFAULT_TEMPORARY_SOURCE_BEHAVIOR);
   const [pendingTemporaryPromotion, setPendingTemporaryPromotion] =
     useState<PendingTemporaryPromotion | null>(null);
   const [temporaryPromotionError, setTemporaryPromotionError] = useState<string | null>(null);
@@ -9194,6 +9200,7 @@ export function App() {
             isSubmitting={isCreatingQuickListenSource}
             recentSources={temporarySources}
             storageUsage={temporaryStorageUsage}
+            temporaryBehavior={temporarySourceBehavior}
             onClearExpired={handleClearExpiredTemporarySources}
             onClose={() => {
               setIsQuickListenOpen(false);
@@ -9212,6 +9219,7 @@ export function App() {
         <TemporaryPromotionDialog
           activeProjectId={activeProjectId}
           error={temporaryPromotionError}
+          includeGeneratedAudioDefault={temporarySourceBehavior.includeGeneratedAudioOnPromotion}
           isSubmitting={isPromotingTemporarySource}
           pending={pendingTemporaryPromotion}
           projects={projects}
@@ -9410,6 +9418,12 @@ export function App() {
             onClose={() => {
               setIsHelpOpen(false);
             }}
+            onOpenSettings={(target) => {
+              setHelpCommandTarget(null);
+              setIsHelpOpen(false);
+              setSettingsCommandTarget(target);
+              setIsSettingsOpen(true);
+            }}
           />
         </Suspense>
       ) : null}
@@ -9450,6 +9464,7 @@ export function App() {
             shortcutPreferences={shortcutPreferences}
             telepromptTheatreSettings={telepromptTheatreSettings}
             teleprompterSettings={teleprompterSettings}
+            temporarySourceBehavior={temporarySourceBehavior}
             themeName={themeName}
             ttsEngineError={ttsEngineError}
             ttsEngines={ttsEngines}
@@ -9484,6 +9499,7 @@ export function App() {
             onTeleprompterSettingsChange={(settings) => {
               setTeleprompterSettings(normalizeTeleprompterHighlightSettings(settings));
             }}
+            onTemporarySourceBehaviorChange={setTemporarySourceBehavior}
             onThemeChange={setThemeName}
             onUiMemoryExportPreferences={handleUiMemoryExportPreferences}
             onUiMemoryImportPreferences={handleUiMemoryImportPreferences}
@@ -10410,6 +10426,7 @@ export function App() {
 function TemporaryPromotionDialog({
   activeProjectId,
   error,
+  includeGeneratedAudioDefault,
   isSubmitting,
   pending,
   projects,
@@ -10419,6 +10436,7 @@ function TemporaryPromotionDialog({
 }: Readonly<{
   activeProjectId: string;
   error: string | null;
+  includeGeneratedAudioDefault: boolean;
   isSubmitting: boolean;
   pending: PendingTemporaryPromotion;
   projects: VoiceProject[];
@@ -10458,7 +10476,9 @@ function TemporaryPromotionDialog({
       session?.artifacts.some((artifact) => artifact.kind === "validation"),
     ),
     extractedSource: true,
-    generatedAudio: false,
+    generatedAudio:
+      includeGeneratedAudioDefault &&
+      Boolean(session?.artifacts.some((artifact) => artifact.kind === "generatedAudio")),
     lexiconOverrides: Boolean(source.sourceSpeechPolicyOverrides),
     policySourcePin: Boolean(source.sourceSpeechPolicyProfile),
     progress: Boolean(session?.playbackProgress),

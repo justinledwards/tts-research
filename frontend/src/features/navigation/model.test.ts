@@ -97,8 +97,16 @@ describe("metadata command generation", () => {
       layerId: "quick",
     });
     expect(commands.map((command) => command.id)).toContain("settings:field:sourceSpeechPolicy");
+    expect(commands.map((command) => command.id)).toContain(
+      "settings:field:temporarySourceBehavior",
+    );
     expect(commands.map((command) => command.id)).toContain("settings:field:telepromptTheatre");
     expect(commands.map((command) => command.id)).toContain("settings:scope:machine");
+    expect(
+      commands.find((command) => command.id === "settings:scope:temporarySource"),
+    ).toMatchObject({
+      target: { groupId: "sources" },
+    });
   });
 
   it("generates workspace and cinema commands from shared metadata", () => {

@@ -584,7 +584,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     },
     {
       category: "Voice",
-      detail: "Open saved voices, candidates, targets, and voice diagnostics.",
+      detail: "Open voice profiles kept in project, candidates, targets, and voice diagnostics.",
       id: "voice:dashboard",
       keywords: ["voice", "profile", "candidate", "diagnostics"],
       owner: "voice",

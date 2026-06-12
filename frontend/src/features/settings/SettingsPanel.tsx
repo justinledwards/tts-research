@@ -36,7 +36,11 @@ import {
   resolveProviderRuntimeCapabilities,
   type ProviderCapabilityKey,
 } from "../provider-capabilities";
-import { PrivacyBoundaryPanel, providerRuntimePrivacyBoundary } from "../privacy";
+import {
+  PrivacyBoundaryPanel,
+  providerRuntimePrivacyBoundary,
+  temporarySourcePrivacyBoundary,
+} from "../privacy";
 import type { UiMemoryPreferenceId, UiMemoryState } from "../preferences";
 import {
   UiMemoryPreferences,
@@ -85,6 +89,7 @@ import {
   SETTINGS_LAYERS,
   SETTINGS_PRECEDENCE,
   SETTINGS_SCOPE_META,
+  DEFAULT_TEMPORARY_SOURCE_BEHAVIOR,
   buildSettingsAuditRows,
   settingsGroupMeta,
   settingsGroupsForLayer,
@@ -98,6 +103,11 @@ import {
   type SettingsGroupId,
   type SettingsLayerId,
   type SettingsScope,
+  type TemporaryDestination,
+  type TemporaryExpiryDuration,
+  type TemporaryReturnContextMemory,
+  type TemporarySourceBehaviorSettings,
+  type TemporaryWebExtractionMode,
 } from "./model";
 import { ScopeBadge } from "./ScopeBadge";
 import { ReadAlongSettingsControls } from "./ReadAlongSettingsControls";
@@ -176,6 +186,81 @@ interface SourcePolicyTarget {
 
 type SettingsSourceMode = "book" | "fileUrl" | "text";
 
+const TEMPORARY_EXPIRY_OPTIONS: readonly {
+  detail: string;
+  label: string;
+  value: TemporaryExpiryDuration;
+}[] = [
+  {
+    detail: "Deleted when discarded or when the browser session ends.",
+    label: "End of temporary session",
+    value: "endOfSession",
+  },
+  {
+    detail: "Default runtime expiry for recent temporary work.",
+    label: "24 hours",
+    value: "24h",
+  },
+  {
+    detail: "Keep recent temporary work available for a longer review pass.",
+    label: "7 days",
+    value: "7d",
+  },
+];
+
+const TEMPORARY_DESTINATION_OPTIONS: readonly {
+  label: string;
+  value: TemporaryDestination;
+}[] = [
+  { label: "Review", value: "review" },
+  { label: "Preview", value: "preview" },
+  { label: "Cinema", value: "cinema" },
+];
+
+const TEMPORARY_WEB_EXTRACTION_OPTIONS: readonly {
+  detail: string;
+  label: string;
+  value: TemporaryWebExtractionMode;
+}[] = [
+  {
+    detail: "Prefer article text and remove navigation chrome.",
+    label: "Article",
+    value: "article",
+  },
+  {
+    detail: "Use readable main content and keep useful headings.",
+    label: "Readable page",
+    value: "readable",
+  },
+  {
+    detail: "Keep more page text for manual review before generation.",
+    label: "Full page review",
+    value: "fullPage",
+  },
+];
+
+const TEMPORARY_RETURN_CONTEXT_OPTIONS: readonly {
+  detail: string;
+  label: string;
+  value: TemporaryReturnContextMemory;
+}[] = [
+  {
+    detail: "Return to the last temporary Review, Preview, or Cinema surface.",
+    label: "Remember return surface",
+    value: "rememberSurface",
+  },
+  {
+    detail: "Ask before reopening a temporary surface with prior context.",
+    label: "Ask each time",
+    value: "askEachTime",
+  },
+  {
+    detail: "Forget temporary return context when the surface closes.",
+    label: "Forget on close",
+    value: "forgetOnClose",
+  },
+];
+
 export function SettingsPanel({
   adapterDiagnostics,
   adapterDiagnosticsError,
@@ -209,6 +294,7 @@ export function SettingsPanel({
   shortcutPreferences,
   telepromptTheatreSettings,
   teleprompterSettings,
+  temporarySourceBehavior,
   themeName,
   ttsEngineError,
   ttsEngines,
@@ -231,6 +317,7 @@ export function SettingsPanel({
   onSubmit,
   onTelepromptTheatreSettingsChange,
   onTeleprompterSettingsChange,
+  onTemporarySourceBehaviorChange,
   onThemeChange,
   onUiMemoryExportPreferences,
   onUiMemoryImportPreferences,
@@ -270,6 +357,7 @@ export function SettingsPanel({
   shortcutPreferences: ShortcutPreferences;
   telepromptTheatreSettings: TelepromptTheatreSettings;
   teleprompterSettings: TeleprompterHighlightSettings;
+  temporarySourceBehavior?: TemporarySourceBehaviorSettings;
   themeName: ThemeName;
   ttsEngineError: string | null;
   ttsEngines: TTSEngineDiagnostics[];
@@ -302,6 +390,7 @@ export function SettingsPanel({
   onSubmit: () => void;
   onTelepromptTheatreSettingsChange: (settings: TelepromptTheatreSettings) => void;
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
+  onTemporarySourceBehaviorChange?: (settings: TemporarySourceBehaviorSettings) => void;
   onThemeChange: (theme: ThemeName) => void;
   onUiMemoryExportPreferences: () => Promise<string> | string;
   onUiMemoryImportPreferences: (
@@ -527,6 +616,9 @@ export function SettingsPanel({
                 speechPolicyOverrides={speechPolicyOverrides}
                 speechPolicyProfile={speechPolicyProfile}
                 speechPolicyProfiles={speechPolicyProfiles}
+                temporarySourceBehavior={
+                  temporarySourceBehavior ?? DEFAULT_TEMPORARY_SOURCE_BEHAVIOR
+                }
                 onClearBookSourcePolicy={onClearBookSourcePolicy}
                 onClearPreparedSourcePolicy={onClearPreparedSourcePolicy}
                 onClearSpeechPolicyOverrides={onClearSpeechPolicyOverrides}
@@ -536,6 +628,12 @@ export function SettingsPanel({
                 onSavePreparedSourcePolicy={onSavePreparedSourcePolicy}
                 onSpeechPolicyOverridesChange={onSpeechPolicyOverridesChange}
                 onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
+                onTemporarySourceBehaviorChange={
+                  onTemporarySourceBehaviorChange ??
+                  (() => {
+                    // Optional in tests and legacy callers; App owns the live setting.
+                  })
+                }
                 onUpdateCustomSpeechPolicyProfile={onUpdateCustomSpeechPolicyProfile}
               />
             ) : null}
@@ -729,12 +827,14 @@ function QuickSettings({
         "field-voice",
         "field-activeSource",
         "field-projectSpeechPolicy",
+        "field-temporarySourceBehavior",
         "field-previewSample",
         "field-ergonomicPresets",
         "field-readerPreferences",
         "field-readAlongPreferences",
         "field-telepromptTheatre",
         "scope-session",
+        "scope-temporarySource",
         "scope-machine",
         "scope-source",
         "scope-project",
@@ -1275,7 +1375,7 @@ function ScopeLegend() {
   return (
     <fieldset className="grid gap-2 text-xs sm:grid-cols-2">
       <legend className="sr-only">Settings applies-to scopes</legend>
-      {(["session", "source", "project", "machine"] as const).map((scope) => (
+      {(["session", "temporarySource", "source", "project", "machine"] as const).map((scope) => (
         <Panel className="px-3 py-2" key={scope} variant="raised">
           <div className="flex items-center gap-2">
             <ScopeBadge scope={scope} />
@@ -1571,7 +1671,7 @@ function ThemeSettingsControls({
           Theme
           <ScopeBadge scope="machine" />
         </h4>
-        <span className="vs-muted text-xs">Saved locally</span>
+        <span className="vs-muted text-xs">Stored on this machine</span>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {VOICE_STUDIO_THEMES.map((theme) => (
@@ -1843,6 +1943,7 @@ function SourceSettingsGroup({
   speechPolicyOverrides,
   speechPolicyProfile,
   speechPolicyProfiles,
+  temporarySourceBehavior,
   onClearBookSourcePolicy,
   onClearPreparedSourcePolicy,
   onClearSpeechPolicyOverrides,
@@ -1852,6 +1953,7 @@ function SourceSettingsGroup({
   onSavePreparedSourcePolicy,
   onSpeechPolicyOverridesChange,
   onSpeechPolicyProfileChange,
+  onTemporarySourceBehaviorChange,
   onUpdateCustomSpeechPolicyProfile,
 }: Readonly<{
   customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
@@ -1866,6 +1968,7 @@ function SourceSettingsGroup({
   speechPolicyOverrides: SpeechPolicyOverrides;
   speechPolicyProfile: string;
   speechPolicyProfiles: SpeechPolicyProfile[];
+  temporarySourceBehavior: TemporarySourceBehaviorSettings;
   onClearBookSourcePolicy: (sourceId: string) => Promise<void>;
   onClearPreparedSourcePolicy: (sourceId: string) => Promise<void>;
   onClearSpeechPolicyOverrides: () => void;
@@ -1885,6 +1988,7 @@ function SourceSettingsGroup({
   ) => Promise<void>;
   onSpeechPolicyOverridesChange: (overrides: SpeechPolicyOverrides) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
+  onTemporarySourceBehaviorChange: (settings: TemporarySourceBehaviorSettings) => void;
   onUpdateCustomSpeechPolicyProfile: (
     profileId: string,
     name: string,
@@ -1927,16 +2031,23 @@ function SourceSettingsGroup({
     <PanelSection
       commandTargetTokens={[
         "group-sources",
+        "field-temporarySourceBehavior",
         "field-projectSpeechPolicy",
         "field-sourceSpeechPolicy",
+        "scope-temporarySource",
         "scope-project",
         "scope-source",
       ]}
       highlightedCommandToken={highlightedCommandToken}
       scope="project"
       title="Sources"
-      subtitle="Project defaults, session overrides, and selected-source pins use separate scopes."
+      subtitle="Temporary sources, project defaults, session overrides, and selected-source pins use separate scopes."
     >
+      <TemporarySourceBehaviorPanel
+        highlightedCommandToken={highlightedCommandToken}
+        settings={temporarySourceBehavior}
+        onChange={onTemporarySourceBehaviorChange}
+      />
       <SpeechPolicyWizard
         customProfiles={customSpeechPolicyProfiles}
         definition={speechPolicyDefinition}
@@ -2042,6 +2153,198 @@ function SourceSettingsGroup({
         )}
       </Panel>
     </PanelSection>
+  );
+}
+
+function TemporarySourceBehaviorPanel({
+  highlightedCommandToken,
+  settings,
+  onChange,
+}: Readonly<{
+  highlightedCommandToken: string | null;
+  settings: TemporarySourceBehaviorSettings;
+  onChange: (settings: TemporarySourceBehaviorSettings) => void;
+}>) {
+  const boundary = temporarySourcePrivacyBoundary();
+  const highlighted =
+    highlightedCommandToken === "field-temporarySourceBehavior" ||
+    highlightedCommandToken === "scope-temporarySource";
+  const patchSettings = (patch: Partial<TemporarySourceBehaviorSettings>) => {
+    onChange({ ...settings, ...patch });
+  };
+
+  return (
+    <Panel
+      className="grid gap-4 p-3"
+      data-settings-command-targets="field-temporarySourceBehavior scope-temporarySource"
+      data-testid="settings-temporary-source-behavior"
+      highlighted={highlighted}
+      variant="surface"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h4 className="flex items-center gap-2 text-sm font-semibold">
+            Temporary source behavior
+            <ScopeBadge scope="temporarySource" />
+          </h4>
+          <p className="vs-muted mt-1 text-xs leading-5">
+            Saved to this temporary session until discarded or kept in project. Presets do not
+            promote these choices into project defaults.
+          </p>
+        </div>
+        <StatusChip tone="warning">Deleted when discarded</StatusChip>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <TemporarySelect
+          detail={
+            TEMPORARY_EXPIRY_OPTIONS.find((option) => option.value === settings.expiryDuration)
+              ?.detail ?? ""
+          }
+          label="Expiry duration"
+          testId="settings-temporary-expiry"
+          value={settings.expiryDuration}
+          onChange={(value) => {
+            patchSettings({ expiryDuration: value as TemporaryExpiryDuration });
+          }}
+        >
+          {TEMPORARY_EXPIRY_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </TemporarySelect>
+        <TemporarySelect
+          detail="Open new temporary sources in the selected surface after creation."
+          label="Default destination after creation"
+          testId="settings-temporary-destination"
+          value={settings.defaultDestination}
+          onChange={(value) => {
+            patchSettings({ defaultDestination: value as TemporaryDestination });
+          }}
+        >
+          {TEMPORARY_DESTINATION_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </TemporarySelect>
+        <TemporarySelect
+          detail={
+            TEMPORARY_WEB_EXTRACTION_OPTIONS.find(
+              (option) => option.value === settings.webpageExtractionMode,
+            )?.detail ?? ""
+          }
+          label="Default temporary webpage extraction"
+          testId="settings-temporary-webpage-extraction"
+          value={settings.webpageExtractionMode}
+          onChange={(value) => {
+            patchSettings({ webpageExtractionMode: value as TemporaryWebExtractionMode });
+          }}
+        >
+          {TEMPORARY_WEB_EXTRACTION_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </TemporarySelect>
+        <TemporarySelect
+          detail={
+            TEMPORARY_RETURN_CONTEXT_OPTIONS.find(
+              (option) => option.value === settings.returnContextMemory,
+            )?.detail ?? ""
+          }
+          label="UI memory for temporary return context"
+          testId="settings-temporary-return-context"
+          value={settings.returnContextMemory}
+          onChange={(value) => {
+            patchSettings({ returnContextMemory: value as TemporaryReturnContextMemory });
+          }}
+        >
+          {TEMPORARY_RETURN_CONTEXT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </TemporarySelect>
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-3">
+        <Toggle
+          checked={settings.autoClean}
+          data-testid="settings-temporary-auto-clean"
+          detail="Expired temporary sessions and artifacts are eligible for cleanup without changing project sources."
+          label="Auto-clean expired temporary work"
+          onChange={(checked) => {
+            patchSettings({ autoClean: checked });
+          }}
+        />
+        <Toggle
+          checked={settings.askBeforeDiscardingAudio}
+          data-testid="settings-temporary-confirm-audio-discard"
+          detail="Ask before discarding generated temporary audio from this temporary session."
+          label="Ask before discarding generated temporary audio"
+          onChange={(checked) => {
+            patchSettings({ askBeforeDiscardingAudio: checked });
+          }}
+        />
+        <Toggle
+          checked={settings.includeGeneratedAudioOnPromotion}
+          data-testid="settings-temporary-promote-audio"
+          detail="When enabled, generated audio may be included when the temporary source is kept in project."
+          label="Include generated audio during promotion"
+          onChange={(checked) => {
+            patchSettings({ includeGeneratedAudioOnPromotion: checked });
+          }}
+        />
+      </div>
+
+      <Panel className="grid gap-2 p-3 text-xs" variant="metadata">
+        <p className="font-semibold">Reset and cleanup stay separate</p>
+        <p className="vs-muted leading-5">
+          Reset UI memory clears preferences stored on this machine for panels and return context.
+          It does not delete temporary source content; choose discard or temporary cleanup for that.
+        </p>
+      </Panel>
+
+      <PrivacyBoundaryPanel boundaries={boundary} compact title="Temporary source privacy" />
+    </Panel>
+  );
+}
+
+function TemporarySelect({
+  children,
+  detail,
+  label,
+  testId,
+  value,
+  onChange,
+}: Readonly<{
+  children: ReactNode;
+  detail: string;
+  label: string;
+  testId: string;
+  value: string;
+  onChange: (value: string) => void;
+}>) {
+  return (
+    <label className="grid gap-1 text-xs font-semibold">
+      <span className="flex items-center gap-2">
+        {label}
+        <ScopeBadge scope="temporarySource" />
+      </span>
+      <select
+        className={`${fieldControlClassName} min-w-0`}
+        data-testid={testId}
+        onChange={(event) => {
+          onChange(event.currentTarget.value);
+        }}
+        value={value}
+      >
+        {children}
+      </select>
+      <span className="vs-muted leading-5">{detail}</span>
+    </label>
   );
 }
 
@@ -2888,7 +3191,7 @@ function PanelShell({
       overlayOwner={overlayAttributes["data-overlay-owner"]}
       overlayZone={overlayAttributes["data-overlay-zone"]}
       ref={panelRef}
-      scopeTitle="Session, Source, Project, Machine"
+      scopeTitle="Session, Temporary source, Source, Project, Machine"
       title={title}
     >
       {children}

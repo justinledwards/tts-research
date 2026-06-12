@@ -13,6 +13,7 @@ import {
   resolveActiveHelpAnchor,
   type HelpWorkflowContext,
 } from "./model";
+import type { SettingsCommandTarget } from "../settings/model";
 
 export function HelpPanel({
   commandPaletteShortcutLabel,
@@ -24,6 +25,7 @@ export function HelpPanel({
   selectedProfile,
   shortcutCheatSheetLabel,
   preferredAnchorId,
+  onOpenSettings,
   onClose,
 }: Readonly<{
   commandPaletteShortcutLabel: string;
@@ -35,6 +37,7 @@ export function HelpPanel({
   selectedProfile: VoiceProfile | null;
   shortcutCheatSheetLabel: string;
   preferredAnchorId?: (typeof HELP_ANCHORS)[number]["id"] | null;
+  onOpenSettings?: (target: SettingsCommandTarget) => void;
   onClose: () => void;
 }>) {
   if (!isOpen) {
@@ -61,6 +64,43 @@ export function HelpPanel({
         <div className="grid gap-2 text-sm sm:grid-cols-2">
           <ShortcutHint label="Command palette" value={commandPaletteShortcutLabel} />
           <ShortcutHint label="Shortcut cheat sheet" value={shortcutCheatSheetLabel} />
+        </div>
+      </section>
+
+      <section className="mt-4 grid gap-3 rounded-md border p-4 vs-border vs-surface">
+        <div>
+          <h3 className="text-sm font-semibold">Settings links</h3>
+          <p className="vs-muted mt-1 text-xs leading-5">
+            Jump straight to the source scope that controls temporary work.
+          </p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <SettingsLink
+            detail="Expiry, cleanup, webpage extraction, generated temporary audio, and return context."
+            disabled={!onOpenSettings}
+            label="Temporary source behavior"
+            onClick={() => {
+              onOpenSettings?.({
+                fieldId: "temporarySourceBehavior",
+                groupId: "sources",
+                layerId: "advanced",
+                scope: "temporarySource",
+              });
+            }}
+          />
+          <SettingsLink
+            detail="Durable project behavior for unpinned promoted sources."
+            disabled={!onOpenSettings}
+            label="Project source defaults"
+            onClick={() => {
+              onOpenSettings?.({
+                fieldId: "projectSpeechPolicy",
+                groupId: "sources",
+                layerId: "advanced",
+                scope: "project",
+              });
+            }}
+          />
         </div>
       </section>
 
@@ -122,6 +162,30 @@ function ShortcutHint({ label, value }: Readonly<{ label: string; value: string 
         {value}
       </kbd>
     </div>
+  );
+}
+
+function SettingsLink({
+  detail,
+  disabled,
+  label,
+  onClick,
+}: Readonly<{
+  detail: string;
+  disabled: boolean;
+  label: string;
+  onClick: () => void;
+}>) {
+  return (
+    <button
+      className="rounded-md border p-3 text-left transition vs-border vs-raised hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-60"
+      disabled={disabled}
+      onClick={onClick}
+      type="button"
+    >
+      <span className="block text-sm font-semibold">{label}</span>
+      <span className="vs-muted mt-1 block text-xs leading-5">{detail}</span>
+    </button>
   );
 }
 

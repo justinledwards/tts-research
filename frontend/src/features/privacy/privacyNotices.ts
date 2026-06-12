@@ -12,7 +12,7 @@ export const PRIVACY_NOTICES = {
   fileIntake: {
     id: "file-intake",
     message:
-      "Local files are read by the local backend and stored as prepared source data for this project.",
+      "Local files are read by the local backend and kept in project as prepared source data.",
     title: "Local file intake",
     tone: "success",
   },
@@ -33,7 +33,7 @@ export const PRIVACY_NOTICES = {
   providerBackedGeneration: {
     id: "provider-backed-generation",
     message:
-      "Provider-backed generation can send request text and selected voice settings to the configured provider.",
+      "Provider-backed generation can send request text and selected voice settings to the configured provider for generation.",
     title: "Provider-backed generation",
     tone: "warning",
   },
@@ -82,7 +82,7 @@ export function sourcePrepFailureNotice(error: string): PrivacyNotice {
   }
   return {
     id: "source-prep-failed",
-    message: "Extraction failed before a prepared source was stored.",
+    message: "Extraction failed before readable content was kept in project.",
     title: "Extraction failed",
     tone: "danger",
   };

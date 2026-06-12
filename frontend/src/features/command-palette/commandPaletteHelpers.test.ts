@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildSettingsCommandMetadata } from "../navigation";
 import { buildCommandEntries, type CommandPaletteHandlers } from "./commandPaletteHelpers";
 import { commandDisabledReason, searchCommandEntries, type CommandEntry } from "./commandRegistry";
 import type { TemporarySourceSession } from "../../types";
@@ -102,6 +103,31 @@ describe("command palette helpers", () => {
     expect(searchCommandEntries(entries, "scratch paste").map((entry) => entry.id)).toContain(
       "temporary-source:paste",
     );
+  });
+
+  it("exposes settings deep links for temporary source behavior", () => {
+    const entries = buildCommandEntries(
+      buildContext({
+        commandMetadata: {
+          cinemaAdvanced: [],
+          cinemaFocus: [],
+          help: [],
+          settings: buildSettingsCommandMetadata(),
+          workspace: [],
+        },
+      }),
+    );
+
+    const temporarySettings = entryById(entries, "settings:field:temporarySourceBehavior");
+    expect(temporarySettings).toMatchObject({
+      category: "Settings",
+      owner: "settings",
+      title: "Temporary source behavior",
+    });
+    expect(temporarySettings.detail).toContain("Temporary source scope");
+    expect(
+      searchCommandEntries(entries, "temporary expiry cleanup").map((entry) => entry.id),
+    ).toContain("settings:field:temporarySourceBehavior");
   });
 });
 

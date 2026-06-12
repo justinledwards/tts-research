@@ -224,7 +224,7 @@ function defaultSettingsGroupForScope(scope: SettingsScope): SettingsGroupId {
   if (scope === "machine") {
     return "reader";
   }
-  if (scope === "project" || scope === "source") {
+  if (scope === "project" || scope === "source" || scope === "temporarySource") {
     return "sources";
   }
   return "run";

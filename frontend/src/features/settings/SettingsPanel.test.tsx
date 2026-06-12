@@ -131,7 +131,29 @@ describe("SettingsPanel", () => {
     expect(markup).toContain("Session");
     expect(markup).toContain("Project");
     expect(markup).toContain("Source");
+    expect(markup).toContain("Temporary source");
     expect(markup).toContain("Machine");
+  });
+
+  it("renders temporary source behavior and privacy copy when targeted", () => {
+    const markup = renderSettingsPanel({
+      fieldId: "temporarySourceBehavior",
+      groupId: "sources",
+      layerId: "advanced",
+      scope: "temporarySource",
+    });
+
+    expect(markup).toContain("Temporary source behavior");
+    expect(markup).toContain("Expiry duration");
+    expect(markup).toContain("Auto-clean expired temporary work");
+    expect(markup).toContain("Ask before discarding generated temporary audio");
+    expect(markup).toContain("Default destination after creation");
+    expect(markup).toContain("Default temporary webpage extraction");
+    expect(markup).toContain("Include generated audio during promotion");
+    expect(markup).toContain("UI memory for temporary return context");
+    expect(markup).toContain("Temporary source privacy");
+    expect(markup).toContain("sent to provider for generation");
+    expect(markup).toContain("does not delete temporary source content");
   });
 
   it("renders the golden-minute speech-policy preview when targeted", () => {

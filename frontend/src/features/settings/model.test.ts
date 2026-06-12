@@ -41,8 +41,15 @@ describe("settings metadata", () => {
   });
 
   it("keeps scope labels and applies-to copy centralized", () => {
-    expect(Object.keys(SETTINGS_SCOPE_META)).toEqual(["machine", "project", "session", "source"]);
-    expect(settingsScopeAppliesTo("session")).toContain("current browser session");
+    expect(Object.keys(SETTINGS_SCOPE_META)).toEqual([
+      "machine",
+      "project",
+      "session",
+      "source",
+      "temporarySource",
+    ]);
+    expect(settingsScopeAppliesTo("session")).toContain("current run");
+    expect(settingsScopeAppliesTo("temporarySource")).toContain("until discarded or promoted");
     expect(settingsScopeAppliesTo("source")).toContain("selected source");
     expect(settingsScopeAppliesTo("project")).toContain("project");
     expect(settingsScopeAppliesTo("machine")).toContain("local runtime");
@@ -55,6 +62,7 @@ describe("settings metadata", () => {
     expect(settingsFieldMeta("ergonomicPresets")?.scope).toBe("machine");
     expect(settingsFieldMeta("runtimeDiagnostics")?.group).toBe("runtime");
     expect(settingsFieldMeta("shortcuts")?.group).toBe("reader");
+    expect(settingsFieldMeta("temporarySourceBehavior")?.scope).toBe("temporarySource");
   });
 
   it("defines a scoped contract for every searchable setting", () => {
@@ -74,6 +82,11 @@ describe("settings metadata", () => {
       resetTarget: "sourceOverride",
       sourceOfTruth: "Backend selected-source pin",
     });
+    expect(scopedSettingDefinition("temporarySourceBehavior")).toMatchObject({
+      persistenceTarget: "temporarySourceRecord",
+      presetEligible: false,
+      resetTarget: "temporarySourceCleanup",
+    });
     expect(scopedSettingDefinition("runtimeDiagnostics")).toMatchObject({
       confirmationLevel: "expert",
       persistenceTarget: "readOnly",
@@ -86,6 +99,7 @@ describe("settings metadata", () => {
       "builtIn",
       "machine",
       "project",
+      "temporarySource",
       "source",
       "session",
       "previewDraft",
@@ -105,12 +119,18 @@ describe("settings metadata", () => {
           fieldId: "sourceSpeechPolicy",
           preserved: true,
         },
+        {
+          after: "Unchanged by preset",
+          before: "Saved to this temporary session",
+          fieldId: "temporarySourceBehavior",
+          preserved: true,
+        },
       ],
     });
 
-    expect(changeSet.affectedScopes).toEqual(["session", "source", "project"]);
+    expect(changeSet.affectedScopes).toEqual(["session", "temporarySource", "source", "project"]);
     expect(changeSet.changedCount).toBe(2);
-    expect(changeSet.preservedCount).toBe(1);
+    expect(changeSet.preservedCount).toBe(2);
     expect(changeSet.requiresConfirmation).toBe(true);
     expect(changeSet.items.find((item) => item.fieldId === "sourceSpeechPolicy")).toMatchObject({
       preserved: true,
@@ -147,6 +167,13 @@ describe("settings metadata", () => {
         fieldId: "sourceSpeechPolicy",
         groupId: "sources",
         scope: "source",
+      }),
+    ).toBe("advanced");
+    expect(
+      settingsLayerForCommandTarget({
+        fieldId: "temporarySourceBehavior",
+        groupId: "sources",
+        scope: "temporarySource",
       }),
     ).toBe("advanced");
     expect(settingsLayerForCommandTarget({ groupId: "diagnostics", scope: "machine" })).toBe(

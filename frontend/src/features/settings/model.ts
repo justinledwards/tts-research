@@ -1,5 +1,29 @@
-export type SettingsScope = "session" | "source" | "project" | "machine";
+export type SettingsScope = "session" | "temporarySource" | "source" | "project" | "machine";
 export type SettingsLayerId = "quick" | "advanced" | "expert";
+export type TemporaryExpiryDuration = "endOfSession" | "24h" | "7d";
+export type TemporaryDestination = "review" | "preview" | "cinema";
+export type TemporaryWebExtractionMode = "article" | "readable" | "fullPage";
+export type TemporaryReturnContextMemory = "rememberSurface" | "askEachTime" | "forgetOnClose";
+
+export interface TemporarySourceBehaviorSettings {
+  askBeforeDiscardingAudio: boolean;
+  autoClean: boolean;
+  defaultDestination: TemporaryDestination;
+  expiryDuration: TemporaryExpiryDuration;
+  includeGeneratedAudioOnPromotion: boolean;
+  returnContextMemory: TemporaryReturnContextMemory;
+  webpageExtractionMode: TemporaryWebExtractionMode;
+}
+
+export const DEFAULT_TEMPORARY_SOURCE_BEHAVIOR: TemporarySourceBehaviorSettings = {
+  askBeforeDiscardingAudio: true,
+  autoClean: true,
+  defaultDestination: "review",
+  expiryDuration: "24h",
+  includeGeneratedAudioOnPromotion: false,
+  returnContextMemory: "rememberSurface",
+  webpageExtractionMode: "article",
+};
 
 export interface SettingsScopeMeta {
   appliesTo: string;
@@ -40,14 +64,16 @@ export type SettingsPersistenceTarget =
   | "localRuntime"
   | "projectRecord"
   | "readOnly"
-  | "sourceRecord";
+  | "sourceRecord"
+  | "temporarySourceRecord";
 export type SettingsResetTarget =
   | "display"
   | "machineMemory"
   | "none"
   | "projectDefault"
   | "runDefaults"
-  | "sourceOverride";
+  | "sourceOverride"
+  | "temporarySourceCleanup";
 export type SettingsConfirmationLevel = "none" | "confirm" | "expert";
 
 export interface SettingsScopeContract {
@@ -150,10 +176,10 @@ export const SETTINGS_SCOPE_META: Record<SettingsScope, SettingsScopeMeta> = {
     shortLabel: "Project",
   },
   session: {
-    appliesTo: "Applies to the current browser session or next run.",
+    appliesTo: "Affects the current run or temporary session.",
     badgeClassName:
       "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)]",
-    description: "Temporary choices for the current preview, run, or in-browser session.",
+    description: "Run choices for the current preview, run, or temporary session.",
     label: "Session",
     shortLabel: "Session",
   },
@@ -165,6 +191,14 @@ export const SETTINGS_SCOPE_META: Record<SettingsScope, SettingsScopeMeta> = {
     label: "Source",
     shortLabel: "Source",
   },
+  temporarySource: {
+    appliesTo: "Applies to this temporary source until discarded or promoted.",
+    badgeClassName:
+      "border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]",
+    description: "Session-owned source content, extraction results, and generated temporary audio.",
+    label: "Temporary source",
+    shortLabel: "Temp source",
+  },
 };
 
 export const SETTINGS_PRECEDENCE: readonly {
@@ -173,7 +207,7 @@ export const SETTINGS_PRECEDENCE: readonly {
   scope: SettingsScope | "builtIn" | "previewDraft";
 }[] = [
   {
-    description: "Product defaults used when no saved preference exists.",
+    description: "Product defaults used when no scoped preference exists.",
     label: "Built-in defaults",
     scope: "builtIn",
   },
@@ -186,6 +220,12 @@ export const SETTINGS_PRECEDENCE: readonly {
     description: "Durable defaults for unpinned sources in the active project.",
     label: "Project defaults",
     scope: "project",
+  },
+  {
+    description:
+      "Session-owned source behavior kept only until the temporary source is discarded or promoted.",
+    label: "Temporary source",
+    scope: "temporarySource",
   },
   {
     description: "Durable selected-source policy profile and field pins.",
@@ -232,6 +272,11 @@ export const SETTINGS_RESET_META: Record<
     description: "Clear the selected-source pin or override.",
     label: "Reset source override",
   },
+  temporarySourceCleanup: {
+    description:
+      "Delete when discarded, clear expired sessions, or keep in project through promotion.",
+    label: "Clean up temporary source",
+  },
 };
 
 const SETTINGS_SCOPE_CONTRACT_DEFAULTS: Record<SettingsScope, SettingsScopeContract> = {
@@ -266,6 +311,14 @@ const SETTINGS_SCOPE_CONTRACT_DEFAULTS: Record<SettingsScope, SettingsScopeContr
     previewSupported: true,
     resetTarget: "sourceOverride",
     sourceOfTruth: "Backend source record",
+  },
+  temporarySource: {
+    confirmationLevel: "confirm",
+    persistenceTarget: "temporarySourceRecord",
+    presetEligible: false,
+    previewSupported: true,
+    resetTarget: "temporarySourceCleanup",
+    sourceOfTruth: "Temporary source session record",
   },
 };
 
@@ -325,6 +378,12 @@ const SETTINGS_FIELD_CONTRACT_OVERRIDES: Record<string, Partial<SettingsScopeCon
     presetEligible: false,
     sourceOfTruth: "Backend selected-source pin",
   },
+  temporarySourceBehavior: {
+    confirmationLevel: "confirm",
+    presetEligible: false,
+    resetTarget: "temporarySourceCleanup",
+    sourceOfTruth: "Temporary source session record",
+  },
   structuredContent: {
     sourceOfTruth: "Session speech policy overrides",
   },
@@ -378,11 +437,11 @@ export const SETTINGS_GROUPS: SettingsGroupMeta[] = [
     summary: "Understand which voice path will be used and whether it is ready.",
   },
   {
-    detail: "Project defaults, session overrides, and source pins",
+    detail: "Project defaults, temporary behavior, session overrides, and source pins",
     id: "sources",
     label: "Sources",
     layer: "advanced",
-    summary: "Control how source structure becomes listener-ready narration.",
+    summary: "Control durable and temporary source behavior without mixing their scopes.",
   },
   {
     detail: "Narration engines, research modules, and local setup",
@@ -492,6 +551,15 @@ export const SETTINGS_FIELD_META: SettingsFieldMeta[] = [
     label: "Keyboard shortcuts",
     layer: "advanced",
     scope: "machine",
+  },
+  {
+    description:
+      "Controls expiry, cleanup, generated temporary audio, return context, webpage extraction, and promotion behavior.",
+    group: "sources",
+    id: "temporarySourceBehavior",
+    label: "Temporary source behavior",
+    layer: "advanced",
+    scope: "temporarySource",
   },
   {
     description: "Sets the durable speech-policy default for unpinned project sources.",
@@ -678,6 +746,12 @@ export function buildSettingsAuditRows(
 }
 
 function uniqueScopes(scopes: SettingsScope[]): SettingsScope[] {
-  const orderedScopes: SettingsScope[] = ["session", "source", "project", "machine"];
+  const orderedScopes: SettingsScope[] = [
+    "session",
+    "temporarySource",
+    "source",
+    "project",
+    "machine",
+  ];
   return orderedScopes.filter((scope) => scopes.includes(scope));
 }

@@ -4,6 +4,7 @@ import {
   classifyUrlIntake,
   projectExportPrivacyBoundary,
   providerRuntimePrivacyBoundary,
+  temporarySourcePrivacyBoundary,
 } from "./privacyModel";
 import { completeProviderCapabilities } from "../provider-capabilities";
 
@@ -56,5 +57,21 @@ describe("privacy model", () => {
     expect(boundary.included).toContain("generated audio and waveform artifacts when present");
     expect(boundary.excluded).toContain("provider secrets and credential files");
     expect(boundary.excluded).toContain("model cache directories and absolute model paths");
+  });
+
+  it("documents the temporary source privacy boundary", () => {
+    const boundary = temporarySourcePrivacyBoundary();
+
+    expect(boundary.status).toBe("Session-owned");
+    expect(boundary.summary).toContain("session-owned content");
+    expect(boundary.facts.map((fact) => fact.value).join(" ")).toContain(
+      "Saved to this temporary session",
+    );
+    expect(boundary.facts.map((fact) => fact.value).join(" ")).toContain(
+      "sent to provider for generation",
+    );
+    expect(boundary.excluded).toContain(
+      "project source pins unless the temporary source is promoted",
+    );
   });
 });

@@ -8,6 +8,7 @@ export {
   projectExportPrivacyBoundary,
   projectImportPrivacyBoundary,
   providerRuntimePrivacyBoundary,
+  temporarySourcePrivacyBoundary,
   urlIntakePrivacyBoundary,
   type PrivacyBoundary,
   type PrivacyBoundaryFact,

@@ -7,6 +7,7 @@ export type PrivacyBoundaryId =
   | "generated-audio"
   | "ui-memory"
   | "provider-runtime"
+  | "temporary-source"
   | "url-intake"
   | "project-export"
   | "project-import"
@@ -68,25 +69,40 @@ export const PROJECT_EXPORT_INCLUDED_ITEMS = [
   "quality reports, telemetry, and reading settings",
 ] as const;
 
+export const TEMPORARY_SOURCE_INCLUDED_ITEMS = [
+  "URL fetch request and extracted readable text, when the temporary source comes from a webpage",
+  "pasted text or uploaded file extraction output saved to this temporary session",
+  "generated temporary audio saved to this temporary session until discarded",
+  "temporary return context used to reopen Review, Preview, or Cinema",
+] as const;
+
+export const TEMPORARY_SOURCE_EXCLUDED_ITEMS = [
+  "project source pins unless the temporary source is promoted",
+  "project defaults unless the user changes project settings separately",
+  "browser UI memory when reset without choosing temporary cleanup",
+  "provider secrets and local model paths",
+] as const;
+
 export const privacyBoundaryCatalog = {
   generatedAudio: {
     facts: [
-      { label: "Stored", value: "Local job data under backend/data/jobs." },
+      { label: "Storage", value: "Stored on this machine under backend/data/jobs." },
       { label: "Export", value: "Included in project bundles when generated audio exists." },
       { label: "Provider", value: "Creation may be mock, local, or provider-backed by runtime." },
     ],
     id: "generated-audio",
     status: "Local artifact",
     summary:
-      "Generated audio is a project asset stored locally and exported only through an explicit bundle.",
+      "Generated audio is a project asset kept in project and exported only through an explicit bundle.",
     title: "Generated Audio",
     tone: "success",
   },
   projectStorage: {
     facts: [
       {
-        label: "Stored",
-        value: "Projects, source preps, books, jobs, progress, and voices live in backend/data.",
+        label: "Storage",
+        value:
+          "Projects, source preps, books, jobs, progress, and voices are stored on this machine in backend/data.",
       },
       {
         label: "Network",
@@ -104,7 +120,10 @@ export const privacyBoundaryCatalog = {
   uiMemory: {
     excluded: UI_MEMORY_EXPORT_OMITTED_ITEMS,
     facts: [
-      { label: "Stored", value: "Browser-local presentation preferences only." },
+      {
+        label: "Storage",
+        value: "Stored on this machine as browser-local presentation preferences only.",
+      },
       { label: "Export", value: "JSON preferences export contains enabled UI memory categories." },
       {
         label: "Import",
@@ -120,9 +139,9 @@ export const privacyBoundaryCatalog = {
   voiceProfile: {
     facts: [
       {
-        label: "Stored",
+        label: "Storage",
         value:
-          "Recordings, references, candidates, and clone artifacts stay in local voice-profile data.",
+          "Recordings, references, candidates, and clone artifacts are stored on this machine in local voice-profile data.",
       },
       {
         label: "Export",
@@ -141,6 +160,46 @@ export const privacyBoundaryCatalog = {
     tone: "success",
   },
 } satisfies Record<string, PrivacyBoundary>;
+
+export function temporarySourcePrivacyBoundary(): PrivacyBoundary {
+  return {
+    excluded: TEMPORARY_SOURCE_EXCLUDED_ITEMS,
+    facts: [
+      {
+        label: "Temporary content",
+        value:
+          "Saved to this temporary session with extraction results and deleted when discarded.",
+      },
+      {
+        label: "Promotion",
+        value:
+          "Kept in project only after promotion; temporary settings do not become project defaults.",
+      },
+      {
+        label: "URL fetching",
+        value:
+          "URL content is fetched by the local backend, then local extraction saves readable text to this temporary session.",
+      },
+      {
+        label: "Generation",
+        value:
+          "Local TTS stays on this machine; provider-backed TTS is sent to provider for generation.",
+      },
+      {
+        label: "Generated audio",
+        value:
+          "Saved to this temporary session by default, optionally included when the source is kept in project, and deleted when discarded.",
+      },
+    ],
+    id: "temporary-source",
+    included: TEMPORARY_SOURCE_INCLUDED_ITEMS,
+    status: "Session-owned",
+    summary:
+      "Temporary sources are session-owned content with artifacts; they are not durable project source pins until promoted.",
+    title: "Temporary Source Boundary",
+    tone: "warning",
+  };
+}
 
 export function providerRuntimePrivacyBoundary(
   runtime: ProviderRuntimeCapabilities,
@@ -163,7 +222,7 @@ export function providerRuntimePrivacyBoundary(
         label: "Generation boundary",
         value: isLocal
           ? "Mock/local generation does not require an external provider call."
-          : "Provider-backed generation can send request text and voice settings to the configured provider.",
+          : "Provider-backed generation can send request text and voice settings to the configured provider for generation.",
       },
       {
         label: "Fallback",

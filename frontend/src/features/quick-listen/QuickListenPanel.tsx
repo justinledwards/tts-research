@@ -10,6 +10,10 @@ import type {
   TemporaryStorageUsageSummary,
 } from "../../types";
 import {
+  DEFAULT_TEMPORARY_SOURCE_BEHAVIOR,
+  type TemporarySourceBehaviorSettings,
+} from "../settings/model";
+import {
   detectIntakeSource,
   sourceTypeLabel,
   type IntakeSourceChoice,
@@ -27,6 +31,7 @@ export interface QuickListenPanelProps {
   isSubmitting: boolean;
   recentSources: TemporarySourceSession[];
   storageUsage?: TemporaryStorageUsageSummary | null;
+  temporaryBehavior?: TemporarySourceBehaviorSettings;
   onCleanup: (
     source: TemporarySourceSession,
     action: "removeGeneratedAudioOnly" | "removeAllTemporaryArtifacts",
@@ -67,6 +72,7 @@ export function QuickListenPanel({
   isSubmitting,
   recentSources,
   storageUsage,
+  temporaryBehavior = DEFAULT_TEMPORARY_SOURCE_BEHAVIOR,
   onCleanup,
   onClearExpired,
   onClose,
@@ -92,6 +98,20 @@ export function QuickListenPanel({
   const [autoCleanExpired, setAutoCleanExpired] = useState(true);
   const [includeTemporaryDiagnostics, setIncludeTemporaryDiagnostics] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    setExpiryHours(expiryDurationHours(temporaryBehavior.expiryDuration));
+    setAskBeforeAudioDiscard(temporaryBehavior.askBeforeDiscardingAudio);
+    setAutoCleanExpired(temporaryBehavior.autoClean);
+  }, [
+    isOpen,
+    temporaryBehavior.askBeforeDiscardingAudio,
+    temporaryBehavior.autoClean,
+    temporaryBehavior.expiryDuration,
+  ]);
 
   useEffect(() => {
     if (!isOpen || !initialMode) {
@@ -945,6 +965,16 @@ function temporaryBookWordSpans(text: string): BookSourceWordSpan[] {
 function quickListenFileLooksSupported(file: File): boolean {
   const extension = file.name.toLowerCase().split(".").pop() ?? "";
   return QUICK_LISTEN_SUPPORTED_EXTENSIONS.has(extension);
+}
+
+function expiryDurationHours(duration: TemporarySourceBehaviorSettings["expiryDuration"]): number {
+  if (duration === "endOfSession") {
+    return 1;
+  }
+  if (duration === "7d") {
+    return 168;
+  }
+  return 24;
 }
 
 const QUICK_LISTEN_SUPPORTED_EXTENSIONS = new Set([

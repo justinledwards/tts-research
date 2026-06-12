@@ -351,6 +351,12 @@ export function buildErgonomicPresetChangeSet(
         fieldId: "sourceSpeechPolicy",
         preserved: true,
       },
+      {
+        after: "Unchanged by preset",
+        before: "Saved to this temporary session",
+        fieldId: "temporarySourceBehavior",
+        preserved: true,
+      },
     ],
   });
   return {

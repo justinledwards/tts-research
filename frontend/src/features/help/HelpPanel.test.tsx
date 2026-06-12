@@ -26,11 +26,15 @@ describe("HelpPanel", () => {
         selectedProfile={null}
         shortcutCheatSheetLabel="?"
         onClose={noop}
+        onOpenSettings={noop}
       />,
     );
 
     expect(markup).toContain("Context Guide");
     expect(markup).toContain("Fast access");
+    expect(markup).toContain("Settings links");
+    expect(markup).toContain("Temporary source behavior");
+    expect(markup).toContain("Project source defaults");
     expect(markup).toContain("Workflow anchors");
     expect(markup).toContain("Intake");
     expect(markup).toContain("Review");

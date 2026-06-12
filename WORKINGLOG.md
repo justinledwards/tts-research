@@ -2019,3 +2019,10 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Add temporary preview readiness, retry, cancel, and partial playback handling
 - [x] Add promotion handling for generated artifacts
 - [x] Run project checks
+
+## 2026-06-12 12:19 CEST - Temporary Source Settings Privacy
+- [x] Inspect settings metadata and scope copy
+- [x] Add temporary source settings and privacy copy
+- [x] Add settings deep links from palette and context guide
+- [x] Run project checks
+- Validation: focused frontend settings/privacy/navigation/help/command-palette tests passed; full `pnpm check` passed.
