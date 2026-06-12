@@ -1,19 +1,20 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { WorkspaceDrawer } from "./WorkspaceDrawer";
-import { CreateProjectRow } from "./WorkspaceDrawerHelpers";
+import type { NarrationStatusModel } from "./features/status-strip";
 import type {
   AdapterDiagnostics,
   BookSource,
   PreparedSource,
   ProjectStorageSummary,
   SystemMetrics,
+  TemporarySourceSession,
   TTSEngineDiagnostics,
   VoiceJob,
   VoiceProfile,
   VoiceProject,
 } from "./types";
-import type { NarrationStatusModel } from "./features/status-strip";
+import { WorkspaceDrawer } from "./WorkspaceDrawer";
+import { CreateProjectRow } from "./WorkspaceDrawerHelpers";
 
 describe("Command Center", () => {
   it("renders consolidated IA and return behavior", () => {
@@ -47,6 +48,22 @@ describe("Command Center", () => {
 
     expect(markup).toContain("Return to Voice Cloning Workbench");
     expect(markup).toContain('aria-label="Return to Voice Cloning Workbench"');
+  });
+
+  it("exposes stable temporary source actions with disabled reasons", () => {
+    const markup = renderToStaticMarkup(
+      <WorkspaceDrawer
+        {...props()}
+        activeSection="temporary"
+        temporarySources={[temporarySource({ status: "promoted" })]}
+      />,
+    );
+
+    expect(markup).toContain('data-testid="temporary-source-card-temp-1"');
+    expect(markup).toContain('data-testid="ui-action-temporary-source-reopen-temp-1"');
+    expect(markup).toContain('data-testid="ui-action-temporary-source-keep-temp-1"');
+    expect(markup).toContain('data-testid="ui-action-temporary-source-discard-temp-1"');
+    expect(markup).toContain("Temporary source is already kept in a project.");
   });
 
   it("keeps project library and generated audio in the projects section", () => {
@@ -418,6 +435,27 @@ function otherProject(overrides: Partial<VoiceProject> = {}): VoiceProject {
     name: "Later Project",
     speechPolicyProfile: "general",
     updatedAt: "2026-06-03T10:00:00Z",
+    ...overrides,
+  };
+}
+
+function temporarySource(overrides: Partial<TemporarySourceSession> = {}): TemporarySourceSession {
+  return {
+    artifacts: [],
+    createdAt: "2026-06-12T10:00:00Z",
+    expiresAt: "2026-06-13T10:00:00Z",
+    id: "temp-1",
+    kind: "text",
+    lastAccessedAt: "2026-06-12T11:00:00Z",
+    promotionStatus: "notPromoted",
+    sourceName: "Temporary briefing",
+    sourceOwner: "temporary",
+    status: "reviewable",
+    temporarySourceId: "temp-1",
+    text: "Temporary briefing text.",
+    title: "Temporary briefing",
+    updatedAt: "2026-06-12T11:00:00Z",
+    wordCount: 3,
     ...overrides,
   };
 }

@@ -1,60 +1,62 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { buildTeleprompterCue, type TeleprompterHighlightSettings } from "../../teleprompter";
-import type { HighlightMap, VoiceJob } from "../../types";
 import { audioSource } from "../../api";
 import { useAudioWaveformBars } from "../../audioWaveform";
 import {
   Button,
+  cx,
   Panel,
   SegmentedControl,
   StatusChip,
-  Toggle,
-  cx,
   type StatusChipTone,
+  Toggle,
 } from "../../design";
-import { ContextPanel, type ContextPanelTabId } from "../context-panel";
-import {
-  readAlongTimingStateFromRuntime,
-  type HighlightMapV2,
-  type ReadAlongCueRole,
-} from "../readalong";
+import { buildTeleprompterCue, type TeleprompterHighlightSettings } from "../../teleprompter";
+import type { HighlightMap, VoiceJob } from "../../types";
 import { liveStatusMessages, useLiveStatus } from "../accessibility";
-import { nextReaderPlaybackRate } from "../reader-accessibility";
-import { useFocusedTheatreControls } from "../theatre/FocusedTheatreShell";
-import { useReaderModalLifecycle } from "../reader-accessibility";
-import { revisionBlockIsSpeakable, type RevisionBlock } from "../revision";
+import { ContextPanel, type ContextPanelTabId } from "../context-panel";
 import {
   canQueueGeneratedAudioPlayback,
   generatedAudioLifecycleDescriptor,
   generatedAudioLifecycleFromJob,
   LocalizedPlaybackToolbar,
+  type LocalizedPlaybackToolbarModel,
   playbackActionAriaLabel,
   playbackActionDataAttributes,
   playbackActionDisabledReason,
   playbackActionLabel,
   playbackTimeLabels,
   telepromptSecondaryActionVariant,
-  type LocalizedPlaybackToolbarModel,
 } from "../playback";
 import { providerCapabilityDataAttributes } from "../provider-capabilities";
-import { workspaceStageActionLabel, workspaceStageActionTestId } from "../workspace";
+import {
+  type HighlightMapV2,
+  type ReadAlongCueRole,
+  readAlongTimingStateFromRuntime,
+} from "../readalong";
+import { nextReaderPlaybackRate, useReaderModalLifecycle } from "../reader-accessibility";
+import { type RevisionBlock, revisionBlockIsSpeakable } from "../revision";
+import {
+  DEFAULT_SHORTCUT_PREFERENCES,
+  type ShortcutCommandId,
+  type ShortcutPreferences,
+  shortcutLabelForCommand,
+} from "../shortcuts/shortcutRegistry";
+import type { SourceLifecycleEnvelope } from "../source-lifecycle/sourceLifecycle";
+import { useFocusedTheatreControls } from "../theatre/FocusedTheatreShell";
 import type {
   WorkspaceLayoutSlotDensity,
   WorkspaceReturnStage,
   WorkspaceSourceType,
 } from "../workspace";
-import type { SourceLifecycleEnvelope } from "../source-lifecycle/sourceLifecycle";
-import {
-  TELEPROMPT_PRESET_IDS,
-  telepromptPreset,
-  telepromptPresetHighlightSettings,
-  type TelepromptPresetId,
-} from "./telepromptPresets";
-import {
-  normalizeTelepromptTheatreSettings,
-  type TelepromptTheatreSettings,
-} from "./telepromptTheatreSettings";
+import { workspaceStageActionLabel, workspaceStageActionTestId } from "../workspace";
 import { TelepromptTheatre } from "./TelepromptTheatre";
+import {
+  buildTelepromptCueTimeline,
+  resolveTelepromptCueSync,
+  type TelepromptCueSyncMode,
+  type TelepromptCueTimeline,
+  telepromptCueSeekSeconds,
+} from "./telepromptCueTimeline";
 import {
   exitTelepromptFullscreen,
   isTelepromptFullscreenActive,
@@ -63,29 +65,21 @@ import {
   telepromptFullscreenAvailability,
 } from "./telepromptFullscreen";
 import {
+  TELEPROMPT_PRESET_IDS,
+  type TelepromptPresetId,
+  telepromptPreset,
+  telepromptPresetHighlightSettings,
+} from "./telepromptPresets";
+import {
   readTelepromptReturnSnapshot,
   rememberTelepromptReturnSnapshot,
-  telepromptSourceKey,
   type TelepromptReturnTarget,
+  telepromptSourceKey,
 } from "./telepromptReturnMemory";
-import { buildTemporaryTelepromptContextAdapter } from "./temporaryTelepromptContext";
-import { resolveTelepromptTheatreShortcut } from "./telepromptTheatreShortcuts";
 import {
-  buildTelepromptTheatreSummary,
-  type TelepromptTheatreMode,
-  type TelepromptTheatreViewMode,
-} from "./telepromptTheatreState";
-import {
-  buildTelepromptCueTimeline,
-  resolveTelepromptCueSync,
-  telepromptCueSeekSeconds,
-  type TelepromptCueTimeline,
-  type TelepromptCueSyncMode,
-} from "./telepromptCueTimeline";
-import {
+  TelepromptBlockPreview,
   TelepromptCurrentCueStage,
   TelepromptScriptBlock,
-  TelepromptBlockPreview,
   telepromptCueLiveLabel,
 } from "./telepromptStudioComponents";
 import { buildTelepromptContextTabs } from "./telepromptStudioHelpers";
@@ -93,10 +87,20 @@ import {
   buildTelepromptWorkModeModel,
   defaultTelepromptWorkMode,
   TELEPROMPT_WORK_MODES,
+  type TelepromptWorkMode,
   telepromptCueSyncModeForWorkMode,
   telepromptGeneratedAudioReady,
-  type TelepromptWorkMode,
 } from "./telepromptStudioModel";
+import {
+  normalizeTelepromptTheatreSettings,
+  type TelepromptTheatreSettings,
+} from "./telepromptTheatreSettings";
+import { resolveTelepromptTheatreShortcut } from "./telepromptTheatreShortcuts";
+import {
+  buildTelepromptTheatreSummary,
+  type TelepromptTheatreMode,
+  type TelepromptTheatreViewMode,
+} from "./telepromptTheatreState";
 import {
   adjacentTelepromptBlockId,
   countTelepromptWords,
@@ -107,12 +111,7 @@ import {
   resolveTelepromptShortcut,
   totalTelepromptWords,
 } from "./telepromptToolbar";
-import {
-  DEFAULT_SHORTCUT_PREFERENCES,
-  shortcutLabelForCommand,
-  type ShortcutCommandId,
-  type ShortcutPreferences,
-} from "../shortcuts/shortcutRegistry";
+import { buildTemporaryTelepromptContextAdapter } from "./temporaryTelepromptContext";
 
 export interface TelepromptPlaybackController {
   readonly isAvailable: boolean;
@@ -1485,15 +1484,24 @@ export function TelepromptStudio({
               </section>
             ) : null}
 
-            <details className="rounded-lg border bg-[var(--vs-surface)] shadow-sm vs-border">
+            <details
+              className="rounded-lg border bg-[var(--vs-surface)] shadow-sm vs-border"
+              data-teleprompt-preset-menu="display"
+            >
               <summary
+                aria-controls="teleprompt-display-preset-menu"
                 className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold transition hover:text-[var(--vs-selected-text)] [&::-webkit-details-marker]:hidden"
                 data-testid="ui-action-teleprompt-display-presets"
+                data-ui-action-owner="teleprompt"
+                data-ui-action-surface="Teleprompt"
               >
                 <span>Display preset</span>
                 <span className="text-xs vs-muted">{preset.label}</span>
               </summary>
-              <div className="grid gap-3 border-t p-3 vs-border">
+              <div
+                className="grid gap-3 border-t p-3 vs-border"
+                id="teleprompt-display-preset-menu"
+              >
                 <SegmentedControl
                   ariaLabel="Teleprompt accessibility preset"
                   columns={2}

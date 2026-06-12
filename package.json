@@ -77,6 +77,7 @@
     "ui:component-baseline": "node scripts/ui-component-baseline-snapshots.mjs",
     "e2e:book-cinema:low-resource": "E2E_LOW_RESOURCE=1 node scripts/e2e-book-cinema.mjs",
     "e2e:book-cinema:responsive": "E2E_RESPONSIVE_CINEMA=1 node scripts/e2e-book-cinema.mjs",
+    "e2e:temporary-sources": "pnpm e2e:responsive-snapshots && pnpm e2e:teleprompt-memory && pnpm e2e:context-panel && pnpm e2e:command-palette",
     "validate:local:ui": "UI_ACTION_AUDIT_FAIL_ON_FINDINGS=1 pnpm e2e:ui-actions",
     "validate:live-ingestion": "node scripts/validate-live-ingestion.mjs"
   },

@@ -1,3 +1,11 @@
+## 2026-06-12 15:57 CEST - Screenshot Evidence Hardening
+- [x] Map failed screenshot surfaces to existing E2E scripts
+- [x] Add stable action ids and accessible tab ids
+- [x] Harden temporary source screenshot scenarios
+- [x] Add failure summaries and review commands
+- [x] Run project checks
+- Validation: focused frontend Vitest, frontend typecheck, touched-file ESLint, script syntax checks, `git diff --check`, and full `pnpm check` passed. `pnpm check` still reports existing Biome warnings/infos in adapter/scripts files during lint.
+
 ## 2026-06-12 15:35 CEST - Commit Temporary Surface Budget
 - [x] Review and stage temporary surface budget files
 - [x] Commit temporary surface budget package

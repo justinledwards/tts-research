@@ -1,13 +1,42 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { TemporarySourceSession } from "../../types";
+import { websiteExtractionQuality } from "../website-cinema";
 import {
+  QuickListenPanel,
   temporarySessionPrefersBookCinema,
   temporarySessionToBookSource,
   temporarySessionToPreparedSource,
 } from "./QuickListenPanel";
-import { websiteExtractionQuality } from "../website-cinema";
 
 describe("temporarySessionToPreparedSource", () => {
+  it("exposes stable recovery action ids and disabled reasons for expired temporary sources", () => {
+    const markup = renderToStaticMarkup(
+      createElement(QuickListenPanel, {
+        error: null,
+        initialMode: "recent",
+        isOpen: true,
+        isSubmitting: false,
+        recentSources: [temporaryBookSession({ status: "expired" })],
+        onCleanup: () => Promise.resolve(),
+        onClearExpired: () => Promise.resolve(),
+        onClose: () => null,
+        onCreateFromFile: () => Promise.resolve(),
+        onCreateFromText: () => Promise.resolve(),
+        onCreateFromUrl: () => Promise.resolve(),
+        onDiscard: () => Promise.resolve(),
+        onExtend: () => Promise.resolve(),
+        onUseRecentSource: () => Promise.resolve(),
+      }),
+    );
+
+    expect(markup).toContain('data-testid="quick-listen-temporary-source-temp-book-1"');
+    expect(markup).toContain('data-testid="ui-action-quick-listen-temporary-open-temp-book-1"');
+    expect(markup).toContain("Temporary source expired. Extend the session before reopening it.");
+    expect(markup).toContain('data-testid="ui-action-quick-listen-temporary-discard-temp-book-1"');
+  });
+
   it("adapts temporary webpages into Website Cinema sources with extraction metadata", () => {
     const source = temporarySessionToPreparedSource({
       artifacts: [],
@@ -88,7 +117,9 @@ describe("temporarySessionToPreparedSource", () => {
   });
 });
 
-function temporaryBookSession(): TemporarySourceSession {
+function temporaryBookSession(
+  overrides: Partial<TemporarySourceSession> = {},
+): TemporarySourceSession {
   return {
     artifacts: [],
     createdAt: "2026-06-11T17:00:00Z",
@@ -106,5 +137,6 @@ function temporaryBookSession(): TemporarySourceSession {
     title: "Temporary PDF",
     updatedAt: "2026-06-11T17:00:00Z",
     wordCount: 3,
+    ...overrides,
   };
 }

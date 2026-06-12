@@ -88,7 +88,9 @@ pnpm e2e:responsive-snapshots
 
 `e2e:accessibility-audit` starts the mock local stack, scans visible interactive controls for accessible names, disabled reasons, touch-target warnings, live regions, image alt text, first-tab focus, and browser console/page issues. It writes `output/accessibility/latest/accessibility-results.json`, `a11y-findings.json`, and `accessibility-report.md` (or the configured output directory).
 
-`e2e:responsive-snapshots` captures the workspace and settings drawer at `390px`, `1100px`, `1440px`, and `1920px (taskbar context)`. It checks for meaningful content, browser issues, and horizontal overflow while saving screenshots under `output/accessibility/latest/responsive-snapshots/screenshots/` (or the configured output directory).
+`e2e:responsive-snapshots` captures the workspace, settings drawer, temporary Quick Listen paste flow, temporary Website Cinema read mode, and temporary Teleprompt Theatre at `390px`, `1100px`, `1440px`, and `1920px (taskbar context)`. It checks for meaningful content, browser issues, owner/route failure summaries, and horizontal overflow while saving screenshots under `output/accessibility/latest/responsive-snapshots/screenshots/` (or the configured output directory).
+
+`e2e:book-cinema:responsive` covers Book, Document, and Website Cinema at phone, constrained desktop, desktop, and wide desktop widths. `e2e:temporary-sources` runs the temporary-source visual regression lane: responsive screenshots, Teleprompt return memory, Context Inspector tabs, and Command Palette temporary commands.
 
 `pnpm validate:local` includes both checks so accessibility and responsive coverage remain part of the local gate, not an afterthought.
 

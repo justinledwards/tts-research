@@ -218,6 +218,11 @@ async function runContextPanelAudit(browser, projectId, screenshots) {
     }
 
     return {
+      failureSummaries: failures.map((failure) => ({
+        owner: "context-panel",
+        route: "workspace:review:inspector",
+        summary: failure,
+      })),
       failures,
       panels,
       passed: failures.length === 0,
@@ -435,6 +440,14 @@ function renderReport(document) {
     for (const failure of document.result.failures) {
       lines.push(`- ${failure}`);
     }
+  }
+  lines.push("", "## Owner / Route Summaries", "");
+  if (document.result.failureSummaries?.length > 0) {
+    for (const failure of document.result.failureSummaries) {
+      lines.push(`- ${failure.owner} ${failure.route}: ${failure.summary}`);
+    }
+  } else {
+    lines.push("- None");
   }
   lines.push("");
   return lines.join("\n");

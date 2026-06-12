@@ -1,6 +1,6 @@
 import { forwardRef, type ReactNode } from "react";
-import { Button } from "./Button";
 import { cx } from "../tokens";
+import { Button } from "./Button";
 
 export interface DrawerProps {
   children: ReactNode;
@@ -30,6 +30,10 @@ export const Drawer = forwardRef<HTMLElement, DrawerProps>(function Drawer(
   },
   ref,
 ) {
+  const isSettingsDrawer = label === "Settings";
+  const closeTestId = isSettingsDrawer
+    ? "ui-action-settings-return-workspace"
+    : `ui-action-${label.toLowerCase().replaceAll(/\s+/g, "-")}-close`;
   return (
     <div
       className={cx(
@@ -58,8 +62,16 @@ export const Drawer = forwardRef<HTMLElement, DrawerProps>(function Drawer(
             scopeTitle={scopeTitle}
             title={title}
           />
-          <Button aria-label={`Close ${label}`} onClick={onClose} size="sm" variant="ghost">
-            Close
+          <Button
+            aria-label={`Close ${label}`}
+            data-testid={closeTestId}
+            data-ui-action-owner={isSettingsDrawer ? "settings" : undefined}
+            data-ui-action-surface={isSettingsDrawer ? "Settings" : undefined}
+            onClick={onClose}
+            size="sm"
+            variant="ghost"
+          >
+            {isSettingsDrawer ? "Return to Workspace" : "Close"}
           </Button>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5">{children}</div>

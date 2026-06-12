@@ -9,18 +9,12 @@ import {
   blockingPageIssues,
   collectPageIssues,
   createQaProject,
-  projectStorageState,
   loadPlaywright,
   prepareOutputDir,
+  projectStorageState,
   startLocalServices,
   writeJson,
 } from "./e2e-browser-qa-helpers.mjs";
-import { instrumentScreenshotState, writeScreenshotStateArtifacts } from "./screenshot-state.mjs";
-import {
-  collectOverlayCollisionReport,
-  renderOverlayCollisionReport,
-  summarizeOverlayCollisionReports,
-} from "./overlay-collision-audit.mjs";
 import {
   collectWebsiteCalmReadMetrics,
   compareWebsiteReadMetrics,
@@ -32,6 +26,12 @@ import {
   switchVisibleCinemaMode,
   websiteReadCalmBudget,
 } from "./e2e-responsive-snapshots-helpers.mjs";
+import {
+  collectOverlayCollisionReport,
+  renderOverlayCollisionReport,
+  summarizeOverlayCollisionReports,
+} from "./overlay-collision-audit.mjs";
+import { instrumentScreenshotState, writeScreenshotStateArtifacts } from "./screenshot-state.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outputDir =
@@ -147,6 +147,28 @@ async function main() {
       results: path.join(outputDir, "overlay-collisions.json"),
       summary: overlayCollisionSummary,
     };
+    document.failureSummaries = results.flatMap((result) => [
+      ...(result.quickListen?.failures ?? []).map((summary) => ({
+        owner: "quick-listen",
+        route: `${result.viewport.id}:temporary:paste-review`,
+        summary,
+      })),
+      ...result.websiteCalmRead.failures.map((summary) => ({
+        owner: "website-cinema",
+        route: `${result.viewport.id}:temporary:website-cinema`,
+        summary,
+      })),
+      ...result.telepromptTheatre.failures.map((summary) => ({
+        owner: "teleprompt",
+        route: `${result.viewport.id}:temporary:teleprompt-theatre`,
+        summary,
+      })),
+      ...result.layout.failures.map((summary) => ({
+        owner: "responsive-layout",
+        route: `${result.viewport.id}:workspace-settings`,
+        summary,
+      })),
+    ]);
     document.status = document.summary.failures === 0 ? "passed" : "failed";
     await writeJson(path.join(outputDir, "overlay-collisions.json"), {
       generatedAt: document.generatedAt,

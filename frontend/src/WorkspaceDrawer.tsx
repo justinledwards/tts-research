@@ -1,8 +1,36 @@
 import { useMemo, useRef, useState } from "react";
-import { StatusChip } from "./design";
 import type { BundleOperationReport } from "./BundlePanels";
+import { StatusChip } from "./design";
+import {
+  buildSourceAssetModels,
+  buildSpeechPolicyAssetModel,
+  buildVoiceAssetModels,
+  type SourceAssetModel,
+  type SpeechPolicyAssetModel,
+  type VoiceAssetModel,
+} from "./features/assets/assetModels";
+import { resolveDefaultBookScope } from "./features/book-cinema/model";
+import {
+  COMMAND_CENTER_ROUTES,
+  commandCenterGeneratedAudioState,
+  filterTemporaryWorkSessions,
+  sortCommandCenterProjects,
+  type TemporaryWorkFilter,
+  temporarySessionAudioReadiness,
+  temporarySessionStorageUsage,
+  visibleCommandCenterJobs,
+  visibleTemporaryCommandCenterJobs,
+} from "./features/command-center";
+import {
+  buildHealthReport,
+  type HealthReport,
+  type HealthReportCard,
+} from "./features/health-report";
 import { useReaderModalLifecycle } from "./features/reader-accessibility";
+import type { SettingsCommandTarget } from "./features/settings/model";
+import type { NarrationStatusModel } from "./features/status-strip";
 import { formatDuration } from "./format";
+import { SPEECH_POLICY_PROFILE_OPTIONS, speechPolicyProfileLabel } from "./speechPolicy";
 import type {
   AdapterDiagnostics,
   BookScope,
@@ -13,58 +41,30 @@ import type {
   SpeechPolicyOverrides,
   SpeechPolicyProfile,
   SystemMetrics,
-  TTSEngineDiagnostics,
   TemporarySourceSession,
   TemporaryStorageUsageSummary,
+  TTSEngineDiagnostics,
   VoiceJob,
   VoiceProfile,
   VoiceProfileSource,
   VoiceProject,
 } from "./types";
 import {
-  buildHealthReport,
-  type HealthReport,
-  type HealthReportCard,
-} from "./features/health-report";
-import type { NarrationStatusModel } from "./features/status-strip";
-import type { SettingsCommandTarget } from "./features/settings/model";
-import {
-  COMMAND_CENTER_ROUTES,
-  commandCenterGeneratedAudioState,
-  filterTemporaryWorkSessions,
-  sortCommandCenterProjects,
-  temporarySessionAudioReadiness,
-  temporarySessionStorageUsage,
-  visibleCommandCenterJobs,
-  visibleTemporaryCommandCenterJobs,
-  type TemporaryWorkFilter,
-} from "./features/command-center";
-import {
-  buildSourceAssetModels,
-  buildSpeechPolicyAssetModel,
-  buildVoiceAssetModels,
-  type SourceAssetModel,
-  type SpeechPolicyAssetModel,
-  type VoiceAssetModel,
-} from "./features/assets/assetModels";
-import { resolveDefaultBookScope } from "./features/book-cinema/model";
-import { SPEECH_POLICY_PROFILE_OPTIONS, speechPolicyProfileLabel } from "./speechPolicy";
-import {
-  CreateProjectRow,
-  DrawerStat,
-  EmptyDrawerText,
-  ProjectLibraryRow,
-  WorkspaceActivityRow,
-  WorkspaceDashboardSummary,
-  WorkspaceSection,
   buildWorkspaceActivitySummaries,
+  type CommandCenterSectionId,
+  CreateProjectRow,
   commandCenterSectionDescription,
   commandCenterSectionHeadline,
+  DrawerStat,
+  EmptyDrawerText,
   formatBytes,
   formatDate,
+  ProjectLibraryRow,
   resolveProjectQualityScore,
-  type CommandCenterSectionId,
+  WorkspaceActivityRow,
   type WorkspaceActivitySummary,
+  WorkspaceDashboardSummary,
+  WorkspaceSection,
 } from "./WorkspaceDrawerHelpers";
 
 interface GenerateNarrationOptions {
@@ -963,9 +963,29 @@ function TemporarySourceCard({
   const audioReadiness = temporarySessionAudioReadiness(session, jobs);
   const isDiscarded = session.status === "discarded";
   const isPromoted = session.status === "promoted" || session.promotionStatus === "promoted";
+  const reopenDisabledReason = isDiscarded
+    ? "Temporary source was discarded. Start Quick Listen again to create a new temporary session."
+    : undefined;
+  let keepDisabledReason: string | undefined;
+  if (isDiscarded) {
+    keepDisabledReason = "Temporary source was discarded and cannot be kept in a project.";
+  } else if (isPromoted) {
+    keepDisabledReason = "Temporary source is already kept in a project.";
+  }
+  let discardDisabledReason: string | undefined;
+  if (isDiscarded) {
+    discardDisabledReason = "Temporary source was already discarded.";
+  } else if (isPromoted) {
+    discardDisabledReason =
+      "Temporary source is already kept in a project, so discard is unavailable here.";
+  }
   const expiryWarning = temporaryExpiryWarning(session.expiresAt);
   return (
-    <article className="grid gap-3 rounded-md border p-4 vs-management-surface">
+    <article
+      className="grid gap-3 rounded-md border p-4 vs-management-surface"
+      data-temporary-source-session-id={session.id}
+      data-testid={`temporary-source-card-${session.id}`}
+    >
       <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -996,30 +1016,45 @@ function TemporarySourceCard({
         <div className="grid gap-2 sm:flex sm:flex-wrap md:justify-end">
           <button
             className="min-h-11 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50 vs-accent-bg sm:h-9 sm:min-h-0"
+            data-disabled-reason={reopenDisabledReason}
+            data-testid={`ui-action-temporary-source-reopen-${session.id}`}
+            data-ui-action-owner="temporary-source"
+            data-ui-action-surface="Command Center"
             disabled={isDiscarded}
             onClick={() => {
               void onOpen(session);
             }}
+            title={reopenDisabledReason}
             type="button"
           >
             Reopen
           </button>
           <button
             className="min-h-11 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border sm:h-9 sm:min-h-0"
+            data-disabled-reason={keepDisabledReason}
+            data-testid={`ui-action-temporary-source-keep-${session.id}`}
+            data-ui-action-owner="temporary-source"
+            data-ui-action-surface="Command Center"
             disabled={isDiscarded || isPromoted}
             onClick={() => {
               onKeep(session);
             }}
+            title={keepDisabledReason}
             type="button"
           >
             Keep in Project
           </button>
           <button
             className="min-h-11 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-surface-primary)] px-3 text-xs font-semibold text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)] disabled:opacity-50 sm:h-9 sm:min-h-0"
+            data-disabled-reason={discardDisabledReason}
+            data-testid={`ui-action-temporary-source-discard-${session.id}`}
+            data-ui-action-owner="temporary-source"
+            data-ui-action-surface="Command Center"
             disabled={isDiscarded || isPromoted}
             onClick={() => {
               void onDiscard(session);
             }}
+            title={discardDisabledReason}
             type="button"
           >
             Discard

@@ -5,8 +5,8 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import JSZip from "jszip";
-import { instrumentScreenshotState, writeScreenshotStateArtifacts } from "./screenshot-state.mjs";
 import { createBookCinemaCommandHelpers } from "./e2e-book-cinema-commands.mjs";
+import { instrumentScreenshotState, writeScreenshotStateArtifacts } from "./screenshot-state.mjs";
 import {
   buildReaderResumeArtifact,
   evaluateReaderTimingSummary,
@@ -35,10 +35,10 @@ const workspaceFlowOnly = process.env.E2E_WORKSPACE_FLOW === "1";
 const activeProjectKey = "tts-active-project-id";
 const jobTimeoutMs = Number.parseInt(process.env.E2E_JOB_TIMEOUT_MS ?? "180000", 10);
 const responsiveCinemaViewports = [
-  { height: 844, name: "phone", width: 390 },
-  { height: 1024, name: "tablet-portrait", width: 768 },
-  { height: 768, name: "tablet-landscape", width: 1024 },
-  { height: 820, name: "narrow-desktop", width: 1180 },
+  { height: 844, name: "phone-390", width: 390 },
+  { height: 820, name: "constrained-1100", width: 1100 },
+  { height: 980, name: "desktop-1440", width: 1440 },
+  { height: 1080, name: "wide-1920", width: 1920 },
 ];
 const cinemaOverlaySelector =
   '[role="dialog"][aria-labelledby="book-cinema-title"], [role="dialog"][aria-labelledby="prepared-source-cinema-title"]';
@@ -768,7 +768,7 @@ async function runSettingsIAUX(browser, projectId) {
     await page.getByRole("dialog", { name: "Help" }).getByText("Cinema").first().waitFor();
     await page.getByRole("button", { exact: true, name: "Close Help" }).click();
 
-    await page.getByRole("button", { exact: true, name: "Open workspace" }).click();
+    await page.getByTestId("ui-action-workspace-open-menu").click();
     await page.getByText("Project library and current chapter context").first().waitFor();
     const workspaceScreenshot = path.join(screenshotsDir, "workspace-project-library.png");
     await page.screenshot({ fullPage: false, path: workspaceScreenshot });
@@ -1485,7 +1485,13 @@ async function runResponsiveCinemaUX(
   await waitForPreparedSavedBookmark(projectId, websiteSource.id, websiteJob.id);
 
   const screenshots = [];
+  const evidenceRoutes = [];
   for (const viewport of responsiveCinemaViewports) {
+    evidenceRoutes.push(
+      `book:${viewport.name}:Book Cinema`,
+      `document:${viewport.name}:Document Cinema`,
+      `website:${viewport.name}:Website Cinema`,
+    );
     screenshots.push(
       ...(await runResponsiveBookCinemaSurface(browser, {
         book,
@@ -1530,6 +1536,8 @@ async function runResponsiveCinemaUX(
       passed: bottomSheetScreenshots.length >= mobileSurfaceCount,
       screenshots: bottomSheetScreenshots,
     },
+    evidenceRoutes,
+    failureSummaries: [],
     screenshots,
     status: "passed",
     viewports: responsiveCinemaViewports,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, SegmentedControl, StatusChip, cx, fieldControlClassName } from "../../design";
+import { Button, cx, fieldControlClassName, SegmentedControl, StatusChip } from "../../design";
 import type {
   BookSource,
   BookSourceWordSpan,
@@ -10,15 +10,15 @@ import type {
   TemporaryStorageUsageSummary,
 } from "../../types";
 import {
+  detectIntakeSource,
+  type IntakeSourceChoice,
+  type IntakeSourceType,
+  sourceTypeLabel,
+} from "../intake/sourceTypeModel";
+import {
   DEFAULT_TEMPORARY_SOURCE_BEHAVIOR,
   type TemporarySourceBehaviorSettings,
 } from "../settings/model";
-import {
-  detectIntakeSource,
-  sourceTypeLabel,
-  type IntakeSourceChoice,
-  type IntakeSourceType,
-} from "../intake/sourceTypeModel";
 import { WebsiteExtractionSummary } from "../website-cinema/WebsiteExtractionSummary";
 
 export type QuickListenMode = "paste" | "url" | "file" | "recent";
@@ -679,8 +679,16 @@ function TemporarySourceRow({
   onExtend,
   onUseRecentSource,
 }: Readonly<TemporarySourceRowProps>) {
+  const openDisabledReason =
+    source.status === "expired"
+      ? "Temporary source expired. Extend the session before reopening it."
+      : undefined;
   return (
-    <div className="grid gap-2 rounded-md border p-3 vs-border vs-surface sm:grid-cols-[minmax(0,1fr)_auto]">
+    <div
+      className="grid gap-2 rounded-md border p-3 vs-border vs-surface sm:grid-cols-[minmax(0,1fr)_auto]"
+      data-temporary-source-session-id={source.id}
+      data-testid={`quick-listen-temporary-source-${source.id}`}
+    >
       <div className="min-w-0">
         <div className="mb-2 flex flex-wrap gap-2">
           {source.kind === "url" ? (
@@ -705,16 +713,22 @@ function TemporarySourceRow({
       </div>
       <div className="flex flex-wrap items-center gap-2 sm:justify-end">
         <Button
+          data-testid={`ui-action-quick-listen-temporary-open-${source.id}`}
+          data-ui-action-owner="temporary-source"
+          disabledReason={openDisabledReason}
           disabled={source.status === "expired"}
           onClick={() => {
             void onUseRecentSource(source);
           }}
           size="sm"
+          title={openDisabledReason}
           variant="primary"
         >
           Open
         </Button>
         <Button
+          data-testid={`ui-action-quick-listen-temporary-extend-${source.id}`}
+          data-ui-action-owner="temporary-source"
           onClick={() => {
             void onExtend(source, expiryHours);
           }}
@@ -724,6 +738,8 @@ function TemporarySourceRow({
           Extend
         </Button>
         <Button
+          data-testid={`ui-action-quick-listen-temporary-clean-audio-${source.id}`}
+          data-ui-action-owner="temporary-source"
           onClick={() => {
             if (
               askBeforeAudioDiscard &&
@@ -741,6 +757,8 @@ function TemporarySourceRow({
           Audio only
         </Button>
         <Button
+          data-testid={`ui-action-quick-listen-temporary-clean-artifacts-${source.id}`}
+          data-ui-action-owner="temporary-source"
           onClick={() => {
             if (
               !globalThis.confirm(
@@ -757,6 +775,8 @@ function TemporarySourceRow({
           Artifacts
         </Button>
         <Button
+          data-testid={`ui-action-quick-listen-temporary-discard-${source.id}`}
+          data-ui-action-owner="temporary-source"
           onClick={() => {
             if (
               !globalThis.confirm(

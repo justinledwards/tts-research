@@ -2,10 +2,10 @@ import type { ReactNode } from "react";
 import { Button, Panel, StatusChip } from "../../design";
 import { overlayDataAttributes } from "../layout";
 import {
-  selectContextPanelTab,
   type ContextPanelDisplayState,
   type ContextPanelSurface,
   type ContextPanelTabDefinition,
+  selectContextPanelTab,
 } from "./contextPanelModel";
 import type { ContextPanelTabId } from "./contextPanelTabs";
 
@@ -148,7 +148,10 @@ export function ContextPanel({
                   aria-controls={isActive ? tabPanelId : undefined}
                   aria-selected={isActive}
                   className="min-w-0 flex-col gap-1 px-3 py-2"
+                  data-context-panel-tab-id={tab.id}
+                  data-context-panel-tab-surface={surface}
                   data-testid={`context-panel-${surface}-${tab.id}`}
+                  id={`context-panel-tab-${surface}-${tab.id}`}
                   key={tab.id}
                   onClick={() => {
                     onTabChange(tab.id);
