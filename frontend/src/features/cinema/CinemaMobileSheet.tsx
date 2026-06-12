@@ -42,12 +42,12 @@ export function CinemaMobileSheet<TPanelId extends string>({
     >
       <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-[var(--vs-border-strong)]" />
       <div
-        className="mb-4 grid border-b text-sm font-semibold vs-border"
-        style={{ gridTemplateColumns: `repeat(${panels.length.toString()}, minmax(0, 1fr))` }}
+        className="mb-4 grid snap-x grid-flow-col auto-cols-[minmax(6rem,1fr)] overflow-x-auto border-b text-sm font-semibold vs-border"
+        style={{ gridTemplateColumns: `repeat(${panels.length.toString()}, minmax(6rem, 1fr))` }}
       >
         {panels.map((panel) => (
           <Button
-            className="gap-2 rounded-none border-x-0 border-t-0 px-2 pb-3 shadow-none"
+            className="min-h-11 snap-start gap-2 rounded-none border-x-0 border-t-0 px-2 pb-3 shadow-none"
             key={panel.id}
             onClick={() => {
               onPanelChange(panel.id);

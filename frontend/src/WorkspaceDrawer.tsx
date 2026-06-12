@@ -963,6 +963,7 @@ function TemporarySourceCard({
   const audioReadiness = temporarySessionAudioReadiness(session, jobs);
   const isDiscarded = session.status === "discarded";
   const isPromoted = session.status === "promoted" || session.promotionStatus === "promoted";
+  const expiryWarning = temporaryExpiryWarning(session.expiresAt);
   return (
     <article className="grid gap-3 rounded-md border p-4 vs-management-surface">
       <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
@@ -981,15 +982,20 @@ function TemporarySourceCard({
             {temporarySourceTypeLabel(session)} · expires {formatDate(session.expiresAt)} · last
             opened {formatDate(session.lastAccessedAt)}
           </p>
+          {expiryWarning ? (
+            <p className="mt-2 rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-3 py-2 text-xs font-semibold text-[var(--vs-status-warning)]">
+              {expiryWarning}
+            </p>
+          ) : null}
           {session.error || session.sourceReadiness?.state === "failed" ? (
             <p className="mt-2 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] px-3 py-2 text-xs text-[var(--vs-status-danger)]">
               {session.error ?? session.sourceReadiness?.detail ?? "Temporary source failed."}
             </p>
           ) : null}
         </div>
-        <div className="flex flex-wrap gap-2 md:justify-end">
+        <div className="grid gap-2 sm:flex sm:flex-wrap md:justify-end">
           <button
-            className="h-9 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50 vs-accent-bg"
+            className="min-h-11 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50 vs-accent-bg sm:h-9 sm:min-h-0"
             disabled={isDiscarded}
             onClick={() => {
               void onOpen(session);
@@ -999,7 +1005,7 @@ function TemporarySourceCard({
             Reopen
           </button>
           <button
-            className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
+            className="min-h-11 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border sm:h-9 sm:min-h-0"
             disabled={isDiscarded || isPromoted}
             onClick={() => {
               onKeep(session);
@@ -1009,7 +1015,7 @@ function TemporarySourceCard({
             Keep in Project
           </button>
           <button
-            className="h-9 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-surface-primary)] px-3 text-xs font-semibold text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)] disabled:opacity-50"
+            className="min-h-11 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-surface-primary)] px-3 text-xs font-semibold text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)] disabled:opacity-50 sm:h-9 sm:min-h-0"
             disabled={isDiscarded || isPromoted}
             onClick={() => {
               void onDiscard(session);
@@ -1032,6 +1038,21 @@ function TemporarySourceCard({
       />
     </article>
   );
+}
+
+function temporaryExpiryWarning(expiresAt: string): string | null {
+  const expiresTime = new Date(expiresAt).getTime();
+  if (!Number.isFinite(expiresTime)) {
+    return null;
+  }
+  const hoursRemaining = (expiresTime - Date.now()) / (60 * 60 * 1000);
+  if (hoursRemaining <= 0) {
+    return "Expired temporary work is ready for cleanup.";
+  }
+  if (hoursRemaining <= 6) {
+    return `Expires in about ${Math.max(1, Math.ceil(hoursRemaining)).toString()} hour(s).`;
+  }
+  return null;
 }
 
 function temporarySessionTitle(session: TemporarySourceSession): string {

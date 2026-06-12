@@ -629,7 +629,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
 
             {controlsVisible ? (
               <div
-                className="grid max-h-[min(18vh,10rem)] gap-2 overflow-auto rounded-lg border p-2 vs-theatre-panel"
+                className="grid max-h-[min(20vh,9.5rem)] gap-2 overflow-auto rounded-lg border p-2 vs-theatre-panel sm:max-h-[min(18vh,10rem)]"
                 data-teleprompt-theatre-control-zone="transport"
               >
                 {settings.nextCuePlacement === "below" ? (

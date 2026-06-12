@@ -604,7 +604,7 @@ function ToolbarSpeedSelect({
 
 function localizedPlaybackToolbarClassName(variant: LocalizedPlaybackToolbarVariant): string {
   if (variant === "theatre") {
-    return "grid gap-3 rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-3 text-[var(--vs-theatre-text)] shadow-2xl";
+    return "grid gap-2 rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-2 text-[var(--vs-theatre-text)] shadow-2xl sm:gap-3 sm:p-3";
   }
   if (variant === "compact") {
     return "grid gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 shadow-sm vs-border";

@@ -185,6 +185,8 @@ async function captureViewport(browser, viewport, websiteCalmFixture, teleprompt
     const workspaceScreenshot = path.join(screenshotsDir, `${viewport.id}-workspace.png`);
     await page.screenshot({ fullPage: false, path: workspaceScreenshot });
     screenshots.push(workspaceScreenshot);
+    const quickListen =
+      viewport.id === "phone-390" ? await verifyPhoneQuickListenCreation(browser, viewport) : null;
 
     await openSettingsIfAvailable(page);
     const settingsScreenshot = path.join(screenshotsDir, `${viewport.id}-settings.png`);
@@ -300,12 +302,104 @@ async function captureViewport(browser, viewport, websiteCalmFixture, teleprompt
       overlayCollision,
       passed:
         layoutPassed &&
+        (quickListen?.summary.failures ?? 0) === 0 &&
         websiteCalmRead.summary.failures === 0 &&
         telepromptTheatre.summary.failures === 0,
+      quickListen,
       screenshots,
       telepromptTheatre,
       viewport,
       websiteCalmRead,
+    };
+  } finally {
+    await context.close();
+  }
+}
+
+async function verifyPhoneQuickListenCreation(browser, viewport) {
+  const context = await browser.newContext({ viewport });
+  const page = await context.newPage();
+  page.setDefaultTimeout(60_000);
+  const failures = [];
+  try {
+    await page.goto(appBaseUrl);
+    await page.waitForLoadState("networkidle");
+    await page.getByTestId("ui-action-quick-listen-open").filter({ visible: true }).first().click();
+    await page.getByRole("dialog", { name: "Quick Listen" }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Paste" }).click();
+    await page
+      .locator("textarea")
+      .first()
+      .fill(
+        "Temporary phone narration fixture. Quick Listen should accept pasted article text from a narrow viewport and keep recovery actions reachable.",
+      );
+    const temporarySourceResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/temporary-sources") && response.request().method() === "POST",
+      { timeout: 20_000 },
+    );
+    await page.getByRole("button", { name: "Review first" }).click();
+    const response = await temporarySourceResponse;
+    if (!response.ok()) {
+      failures.push(
+        `Phone Quick Listen temporary source API returned ${String(response.status())}.`,
+      );
+    }
+    const temporarySource = await response.json().catch(() => null);
+    if (
+      !temporarySource ||
+      temporarySource.sourceOwner !== "temporary" ||
+      !temporarySource.temporarySourceId
+    ) {
+      failures.push("Phone Quick Listen did not create a temporary source session.");
+    }
+    await page
+      .getByRole("dialog", { name: "Quick Listen" })
+      .waitFor({
+        state: "hidden",
+        timeout: 5_000,
+      })
+      .catch(async () => {
+        await page
+          .getByRole("dialog", { name: "Quick Listen" })
+          .getByRole("button", { name: "Close" })
+          .click();
+      });
+    const metrics = await page.evaluate(() => ({
+      hasHorizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 4,
+      visibleDialogCount: Array.from(document.querySelectorAll("[role='dialog']")).filter(
+        (element) =>
+          element instanceof HTMLElement &&
+          element.offsetParent !== null &&
+          element.getClientRects().length > 0,
+      ).length,
+    }));
+    if (metrics.hasHorizontalOverflow) {
+      failures.push("Phone Quick Listen temporary creation produced horizontal overflow.");
+    }
+    return {
+      failures,
+      metrics,
+      summary: {
+        failures: failures.length,
+        status: failures.length === 0 ? "passed" : "failed",
+      },
+    };
+  } catch (error) {
+    failures.push(error instanceof Error ? error.message : String(error));
+    const closeButton = page
+      .getByRole("dialog", { name: "Quick Listen" })
+      .getByRole("button", { name: "Close" });
+    if (await closeButton.isVisible().catch(() => false)) {
+      await closeButton.click().catch(() => {});
+    }
+    return {
+      failures,
+      metrics: null,
+      summary: {
+        failures: failures.length,
+        status: "failed",
+      },
     };
   } finally {
     await context.close();

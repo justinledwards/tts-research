@@ -188,7 +188,13 @@ export interface PreparedSourceCinemaPlaybackControls {
   skipBy?: (seconds: number) => void;
 }
 
-type PreparedSourceCinemaMobilePanel = "source" | "structure" | "narration" | "theatre";
+type PreparedSourceCinemaMobilePanel =
+  | "discard"
+  | "keep"
+  | "narration"
+  | "source"
+  | "structure"
+  | "theatre";
 const PREPARED_SOURCE_CINEMA_MOBILE_SHEET_ID = "prepared-source-cinema-mobile-sheet";
 
 function preparedSourceCinemaLabelForKind(
@@ -2188,7 +2194,79 @@ function PreparedSourceCinemaMobileSheet({
     source,
     preparedSourceCinemaKind(source) === "website" ? "website" : "document",
   );
+  const isTemporarySource = temporaryContract.isTemporary;
   const panels: CinemaMobilePanelSpec<PreparedSourceCinemaMobilePanel>[] = [
+    ...(isTemporarySource
+      ? [
+          {
+            children: (
+              <div className="grid gap-3 text-sm">
+                <div className="grid gap-2 rounded-md border p-3 vs-border vs-surface">
+                  <StatusChip tone="metadata">Temporary</StatusChip>
+                  <p className="leading-6 vs-muted">
+                    Keep this source when the extraction, edits, or generated audio should become
+                    part of a project.
+                  </p>
+                  <StatusChip tone="metadata">{temporaryContract.expiryLabel}</StatusChip>
+                </div>
+                <Button
+                  data-testid="ui-action-prepared-cinema-mobile-keep-temporary"
+                  disabled={!onKeepTemporarySource}
+                  onClick={() => {
+                    onKeepTemporarySource?.(source);
+                  }}
+                  size="md"
+                  variant="secondary"
+                >
+                  Keep in project
+                </Button>
+                <Button
+                  data-testid="ui-action-prepared-cinema-mobile-rename-keep-temporary"
+                  disabled={!onKeepTemporarySource}
+                  onClick={() => {
+                    const title = globalThis.prompt(
+                      "Rename before keeping",
+                      source.title ?? source.sourceName,
+                    );
+                    if (title !== null) {
+                      onKeepTemporarySource?.(source, title);
+                    }
+                  }}
+                  size="md"
+                  variant="ghost"
+                >
+                  Rename before keeping
+                </Button>
+              </div>
+            ),
+            id: "keep" as const,
+            label: "Keep",
+          },
+          {
+            children: (
+              <div className="grid gap-3 text-sm">
+                <p className="rounded-md border p-3 leading-6 vs-border vs-surface vs-muted">
+                  Discard removes this temporary session and its session-scoped work. Keep it first
+                  if the source should become durable.
+                </p>
+                <Button
+                  data-testid="ui-action-prepared-cinema-mobile-discard-temporary"
+                  disabled={!onDiscardTemporarySource}
+                  onClick={() => {
+                    onDiscardTemporarySource?.(source);
+                  }}
+                  size="md"
+                  variant="destructive"
+                >
+                  Discard temporary source
+                </Button>
+              </div>
+            ),
+            id: "discard" as const,
+            label: "Discard",
+          },
+        ]
+      : []),
     {
       children: (
         <div className="grid gap-3 text-sm">
@@ -2237,8 +2315,12 @@ function PreparedSourceCinemaMobileSheet({
                   {href}
                 </a>
               ) : null}
-              {temporaryContract.isTemporary ? (
+              {isTemporarySource ? (
                 <div className="mt-3 grid gap-2 border-t pt-3 vs-border">
+                  <div className="flex flex-wrap gap-2">
+                    <StatusChip tone="metadata">Temporary</StatusChip>
+                    <StatusChip tone="metadata">{temporaryContract.statusLabel}</StatusChip>
+                  </div>
                   <StatusChip tone="metadata">{temporaryContract.expiryLabel}</StatusChip>
                   <Button
                     disabled={!onKeepTemporarySource}
@@ -2249,32 +2331,6 @@ function PreparedSourceCinemaMobileSheet({
                     variant="primary"
                   >
                     Keep in project
-                  </Button>
-                  <Button
-                    disabled={!onKeepTemporarySource}
-                    onClick={() => {
-                      const title = globalThis.prompt(
-                        "Rename before keeping",
-                        source.title ?? source.sourceName,
-                      );
-                      if (title !== null) {
-                        onKeepTemporarySource?.(source, title);
-                      }
-                    }}
-                    size="md"
-                    variant="secondary"
-                  >
-                    Rename before keeping
-                  </Button>
-                  <Button
-                    disabled={!onDiscardTemporarySource}
-                    onClick={() => {
-                      onDiscardTemporarySource?.(source);
-                    }}
-                    size="md"
-                    variant="secondary"
-                  >
-                    Discard temporary source
                   </Button>
                   {job?.audioUrl ? (
                     <a

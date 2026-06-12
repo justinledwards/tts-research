@@ -631,6 +631,31 @@ describe("CinemaMobileSheet", () => {
     expect(markup).toContain("Display panel");
     expect(markup).toContain("Source body");
   });
+
+  it("keeps temporary action tabs stable when the mobile sheet has more than four panels", () => {
+    const markup = renderToStaticMarkup(
+      <CinemaMobileSheet
+        activePanelId="keep"
+        id="cinema-more-sheet"
+        label="Cinema more controls"
+        panels={[
+          { children: <p>Keep body</p>, id: "keep", label: "Keep" },
+          { children: <p>Discard body</p>, id: "discard", label: "Discard" },
+          { children: <p>Source body</p>, id: "source", label: "Source" },
+          { children: <p>Structure body</p>, id: "structure", label: "Structure" },
+          { children: <p>Narration body</p>, id: "narration", label: "Narration" },
+        ]}
+        onPanelChange={() => null}
+      />,
+    );
+
+    expect(markup).toContain("auto-cols-[minmax(6rem,1fr)]");
+    expect(markup).toContain(">Keep<");
+    expect(markup).toContain(">Discard<");
+    expect(markup).toContain(">Source<");
+    expect(markup).toContain(">Structure<");
+    expect(markup).toContain(">Narration<");
+  });
 });
 
 function makePanels(): CinemaPanelDefinition[] {

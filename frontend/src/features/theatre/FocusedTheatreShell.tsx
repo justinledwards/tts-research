@@ -277,10 +277,10 @@ function FocusedTheatreTitleRow({
   const titleActions = persistentAction ? [persistentAction] : [];
   return (
     <div
-      className="flex min-w-0 flex-wrap items-center justify-between gap-2"
+      className="grid min-w-0 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-between"
       data-theatre-control-zone="persistent"
     >
-      <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <StatusChip tone="success">{surfaceLabel}</StatusChip>
         <div className="min-w-0">
           <p
@@ -294,10 +294,10 @@ function FocusedTheatreTitleRow({
           </p>
         </div>
       </div>
-      <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-2">
+      <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 sm:shrink-0 sm:justify-end">
         {statusLabel ? (
           <span
-            className="max-w-full rounded-full border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] px-2 py-1 text-left text-xs font-semibold break-words text-[var(--vs-text-primary)]"
+            className="max-w-[min(100%,18rem)] rounded-full border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] px-2 py-1 text-left text-xs font-semibold break-words text-[var(--vs-text-primary)] sm:max-w-full"
             title={statusLabel}
           >
             {statusLabel}

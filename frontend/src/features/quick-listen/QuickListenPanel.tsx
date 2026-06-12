@@ -191,16 +191,16 @@ export function QuickListenPanel({
   const displayError = localError ?? error;
   return (
     <div
-      className="fixed inset-0 z-[65] bg-[var(--vs-surface-overlay)] px-3 py-6 sm:px-6"
+      className="fixed inset-0 z-[65] bg-[var(--vs-surface-overlay)] px-3 py-3 sm:px-6 sm:py-6"
       role="presentation"
     >
       <section
         aria-label="Quick Listen"
         aria-modal="true"
-        className="vs-app mx-auto flex max-h-[min(760px,calc(100vh-3rem))] w-full max-w-2xl flex-col overflow-hidden rounded-lg border bg-[var(--vs-raised)] shadow-2xl vs-border"
+        className="vs-app mx-auto flex max-h-[calc(100vh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-lg border bg-[var(--vs-raised)] shadow-2xl vs-border sm:max-h-[min(760px,calc(100vh-3rem))]"
         role="dialog"
       >
-        <header className="grid gap-3 border-b p-4 vs-border">
+        <header className="grid gap-3 border-b p-4 pb-3 vs-border sm:pb-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="vs-muted text-xs font-semibold uppercase tracking-wide">
@@ -260,7 +260,10 @@ export function QuickListenPanel({
               <label className="grid gap-2">
                 <span className="text-sm font-semibold">Paste text</span>
                 <textarea
-                  className={cx(fieldControlClassName, "min-h-44 resize-y p-3 leading-6")}
+                  className={cx(
+                    fieldControlClassName,
+                    "min-h-[12rem] resize-y p-4 text-base leading-7 sm:min-h-44 sm:p-3 sm:text-sm sm:leading-6",
+                  )}
                   onChange={(event) => {
                     setText(event.currentTarget.value);
                     if (!hasEditedMetadata) {
@@ -277,7 +280,10 @@ export function QuickListenPanel({
               <label className="grid gap-2">
                 <span className="text-sm font-semibold">Enter URL</span>
                 <input
-                  className={fieldControlClassName}
+                  className={cx(
+                    fieldControlClassName,
+                    "min-h-12 px-4 text-base sm:min-h-10 sm:px-3 sm:text-sm",
+                  )}
                   onChange={(event) => {
                     setUrl(event.currentTarget.value);
                     if (!hasEditedMetadata) {
@@ -304,7 +310,7 @@ export function QuickListenPanel({
 
             {mode === "file" ? (
               <button
-                className="grid w-full gap-3 rounded-md border border-dashed p-4 text-left vs-border vs-surface"
+                className="grid w-full gap-3 rounded-md border border-dashed p-5 text-left vs-border vs-surface sm:p-4"
                 onClick={() => {
                   fileInputRef.current?.click();
                 }}
@@ -352,7 +358,7 @@ export function QuickListenPanel({
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex min-h-9 items-center justify-center rounded-md border border-[var(--vs-action-secondary-border)] bg-[var(--vs-action-secondary-bg)] px-3 text-sm font-semibold text-[var(--vs-action-secondary-text)] shadow-sm">
+                  <span className="inline-flex min-h-12 items-center justify-center rounded-md border border-[var(--vs-action-secondary-border)] bg-[var(--vs-action-secondary-bg)] px-4 text-sm font-semibold text-[var(--vs-action-secondary-text)] shadow-sm sm:min-h-9 sm:px-3">
                     Choose file
                   </span>
                   <span className="min-w-0 truncate text-sm font-semibold">
@@ -374,7 +380,10 @@ export function QuickListenPanel({
                   <label className="grid gap-1 text-xs font-semibold">
                     <span className="vs-muted">Title</span>
                     <input
-                      className={fieldControlClassName}
+                      className={cx(
+                        fieldControlClassName,
+                        "min-h-11 text-base sm:min-h-10 sm:text-sm",
+                      )}
                       onChange={(event) => {
                         setTitle(event.currentTarget.value);
                         setHasEditedMetadata(true);
@@ -386,7 +395,10 @@ export function QuickListenPanel({
                   <label className="grid gap-1 text-xs font-semibold">
                     <span className="vs-muted">Source type</span>
                     <select
-                      className={fieldControlClassName}
+                      className={cx(
+                        fieldControlClassName,
+                        "min-h-11 text-base sm:min-h-10 sm:text-sm",
+                      )}
                       onChange={(event) => {
                         setSourceType(event.currentTarget.value as IntakeSourceType);
                         setHasEditedMetadata(true);
@@ -402,7 +414,10 @@ export function QuickListenPanel({
                   <label className="grid gap-1 text-xs font-semibold">
                     <span className="vs-muted">Language</span>
                     <select
-                      className={fieldControlClassName}
+                      className={cx(
+                        fieldControlClassName,
+                        "min-h-11 text-base sm:min-h-10 sm:text-sm",
+                      )}
                       onChange={(event) => {
                         setLanguage(event.currentTarget.value);
                         setHasEditedMetadata(true);
@@ -438,7 +453,7 @@ export function QuickListenPanel({
             <label className="grid max-w-xs gap-2">
               <span className="text-sm font-semibold">Markdown parsing</span>
               <select
-                className={fieldControlClassName}
+                className={cx(fieldControlClassName, "min-h-11 text-base sm:min-h-10 sm:text-sm")}
                 onChange={(event) => {
                   setMarkdownParseMode(event.currentTarget.value as MarkdownParseMode);
                 }}
@@ -467,12 +482,13 @@ export function QuickListenPanel({
           </div>
         </div>
 
-        <footer className="flex flex-wrap items-center justify-between gap-3 border-t p-4 vs-border">
+        <footer className="grid gap-3 border-t p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] vs-border sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:pb-4">
           <p className="vs-muted max-w-sm text-xs leading-5">
             Keep in project appears after there is useful temporary work to save.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid gap-2 sm:flex sm:flex-wrap">
             <Button
+              className="min-h-12 sm:min-h-10"
               disabled={isSubmitting}
               onClick={() => {
                 submit("review");
@@ -483,6 +499,7 @@ export function QuickListenPanel({
               {isSubmitting ? "Starting..." : "Review first"}
             </Button>
             <Button
+              className="min-h-12 sm:min-h-10"
               disabled={isSubmitting}
               onClick={() => {
                 submit("preview");
