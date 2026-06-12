@@ -195,6 +195,9 @@ func (service *Service) CreateTemporarySource(ctx context.Context, request Creat
 func (service *Service) GetTemporarySource(id string) (TemporarySourceSession, error) {
 	source, err := service.getTemporarySource(id, true)
 	if err != nil {
+		if errors.Is(err, ErrTemporarySourceExpired) || errors.Is(err, ErrTemporarySourceNotFound) {
+			return service.recoverExpiredTemporarySource(id)
+		}
 		return TemporarySourceSession{}, err
 	}
 	return source, nil
@@ -336,7 +339,8 @@ func (service *Service) DeleteTemporarySource(id string) error {
 	if err != nil {
 		return err
 	}
-	return service.removeTemporarySource(session, TemporarySourceStateDiscarded)
+	_, err = service.removeTemporarySource(session, TemporarySourceStateDiscarded, true)
+	return err
 }
 
 func (service *Service) CleanupExpiredTemporarySources(now time.Time) ([]string, error) {
@@ -345,20 +349,404 @@ func (service *Service) CleanupExpiredTemporarySources(now time.Time) ([]string,
 	}
 	service.mu.RLock()
 	sources := make([]TemporarySourceSession, 0, len(service.temporary))
+	seen := map[string]struct{}{}
 	for _, source := range service.temporary {
+		seen[source.ID] = struct{}{}
 		if !source.ExpiresAt.After(now) {
 			sources = append(sources, cloneTemporarySourceSession(source))
 		}
 	}
 	service.mu.RUnlock()
+	for _, source := range service.loadTemporarySourceMetadataSessions() {
+		if _, ok := seen[source.ID]; ok {
+			continue
+		}
+		if source.Status == TemporarySourceStateExpired ||
+			(!source.ExpiresAt.IsZero() && !source.ExpiresAt.After(now)) {
+			sources = append(sources, cloneTemporarySourceSession(source))
+		}
+	}
 	removed := make([]string, 0, len(sources))
 	for _, source := range sources {
-		if err := service.removeTemporarySource(source, TemporarySourceStateExpired); err != nil {
+		if service.temporarySourceHasActiveJob(source.ID) {
+			source.ExpiresAt = now.Add(service.options.TemporarySourceTTL)
+			source.LastAccessedAt = now
+			source.UpdatedAt = now
+			_ = service.persistTemporarySource(source)
+			service.mu.Lock()
+			service.temporary[source.ID] = cloneTemporarySourceSession(source)
+			service.mu.Unlock()
+			continue
+		}
+		if _, err := service.removeTemporarySource(source, TemporarySourceStateExpired, false); err != nil {
 			return removed, err
 		}
 		removed = append(removed, source.ID)
 	}
 	return removed, nil
+}
+
+func (service *Service) CleanupTemporarySource(id string, request TemporarySourceCleanupRequest) (TemporarySourceCleanupResult, error) {
+	session, err := service.getTemporarySource(id, false)
+	if err != nil && !errors.Is(err, ErrTemporarySourceExpired) {
+		return TemporarySourceCleanupResult{}, err
+	}
+	if errors.Is(err, ErrTemporarySourceExpired) {
+		session, err = service.recoverExpiredTemporarySource(id)
+		if err != nil {
+			return TemporarySourceCleanupResult{}, err
+		}
+	}
+	action := request.Action
+	if action == "" {
+		action = TemporarySourceCleanupDiscardNow
+	}
+	switch action {
+	case TemporarySourceCleanupDiscardNow:
+		removed, err := service.removeTemporarySource(session, TemporarySourceStateDiscarded, true)
+		if err != nil {
+			return TemporarySourceCleanupResult{}, err
+		}
+		return TemporarySourceCleanupResult{
+			TemporarySourceID: session.ID,
+			Action:            action,
+			Status:            TemporarySourceStateDiscarded,
+			RemovedBytes:      removed,
+			Message:           "Temporary source discarded.",
+		}, nil
+	case TemporarySourceCleanupExtendSession:
+		now := time.Now().UTC()
+		extendBy := time.Duration(request.ExtendByHours) * time.Hour
+		if extendBy <= 0 {
+			extendBy = service.options.TemporarySourceTTL
+		}
+		session.Status = firstActiveTemporaryStatus(session.Status)
+		session.LastAccessedAt = now
+		session.ExpiresAt = now.Add(extendBy)
+		session.UpdatedAt = now
+		session.Error = ""
+		if err := service.persistTemporarySource(session); err != nil {
+			return TemporarySourceCleanupResult{}, err
+		}
+		service.mu.Lock()
+		service.temporary[session.ID] = cloneTemporarySourceSession(session)
+		service.mu.Unlock()
+		return TemporarySourceCleanupResult{
+			TemporarySourceID: session.ID,
+			Action:            action,
+			Status:            session.Status,
+			ExpiresAt:         &session.ExpiresAt,
+			Message:           "Temporary session extended.",
+			Source:            &session,
+		}, nil
+	case TemporarySourceCleanupRemoveAudioOnly:
+		removed, err := service.removeTemporaryGeneratedAudio(session)
+		if err != nil {
+			return TemporarySourceCleanupResult{}, err
+		}
+		session.Artifacts = filterSourceArtifacts(session.Artifacts, func(artifact SourceArtifactRef) bool {
+			return artifact.Kind != SourceArtifactKindGeneratedAudio &&
+				artifact.Kind != SourceArtifactKindTiming &&
+				artifact.Kind != SourceArtifactKindValidation
+		})
+		session.Status = TemporarySourceStateStale
+		session.UpdatedAt = time.Now().UTC()
+		session.LastAccessedAt = session.UpdatedAt
+		if err := service.persistTemporarySource(session); err != nil {
+			return TemporarySourceCleanupResult{}, err
+		}
+		service.mu.Lock()
+		service.temporary[session.ID] = cloneTemporarySourceSession(session)
+		service.mu.Unlock()
+		return TemporarySourceCleanupResult{
+			TemporarySourceID: session.ID,
+			Action:            action,
+			Status:            session.Status,
+			RemovedBytes:      removed,
+			Message:           "Generated audio removed; extracted source remains available.",
+			Source:            &session,
+		}, nil
+	case TemporarySourceCleanupRemoveAllArtifacts:
+		removed, err := service.removeTemporarySource(session, TemporarySourceStateExpired, false)
+		if err != nil {
+			return TemporarySourceCleanupResult{}, err
+		}
+		recovered, recoverErr := service.recoverExpiredTemporarySource(session.ID)
+		if recoverErr == nil {
+			return TemporarySourceCleanupResult{
+				TemporarySourceID: session.ID,
+				Action:            action,
+				Status:            TemporarySourceStateExpired,
+				RemovedBytes:      removed,
+				Message:           "Temporary artifacts removed; recovery metadata remains.",
+				Source:            &recovered,
+			}, nil
+		}
+		return TemporarySourceCleanupResult{
+			TemporarySourceID: session.ID,
+			Action:            action,
+			Status:            TemporarySourceStateExpired,
+			RemovedBytes:      removed,
+			Message:           "Temporary artifacts removed.",
+		}, nil
+	default:
+		return TemporarySourceCleanupResult{}, fmt.Errorf("%w: unsupported cleanup action %q", ErrTemporarySourceConflict, action)
+	}
+}
+
+func (service *Service) ClearExpiredTemporarySources(now time.Time) (TemporarySourceCleanupResult, error) {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	sources := service.expiredTemporarySourceSessions(now)
+	ids := make([]string, 0, len(sources))
+	var removed int64
+	for _, source := range sources {
+		if service.temporarySourceHasActiveJob(source.ID) {
+			continue
+		}
+		bytes, err := service.removeTemporarySource(source, TemporarySourceStateExpired, true)
+		if err != nil {
+			return TemporarySourceCleanupResult{}, err
+		}
+		removed += bytes
+		ids = append(ids, source.ID)
+	}
+	return TemporarySourceCleanupResult{
+		Action:       TemporarySourceCleanupRemoveAllArtifacts,
+		Status:       TemporarySourceStateExpired,
+		RemovedBytes: removed,
+		Message:      fmt.Sprintf("Cleaned %d expired temporary session(s).", len(ids)),
+	}, nil
+}
+
+func (service *Service) expiredTemporarySourceSessions(now time.Time) []TemporarySourceSession {
+	service.mu.RLock()
+	sources := make([]TemporarySourceSession, 0, len(service.temporary))
+	seen := map[string]struct{}{}
+	for _, source := range service.temporary {
+		seen[source.ID] = struct{}{}
+		if !source.ExpiresAt.After(now) || source.Status == TemporarySourceStateExpired {
+			sources = append(sources, cloneTemporarySourceSession(source))
+		}
+	}
+	service.mu.RUnlock()
+	for _, source := range service.loadTemporarySourceMetadataSessions() {
+		if _, ok := seen[source.ID]; ok {
+			continue
+		}
+		if source.Status == TemporarySourceStateExpired ||
+			(!source.ExpiresAt.IsZero() && !source.ExpiresAt.After(now)) {
+			sources = append(sources, cloneTemporarySourceSession(source))
+		}
+	}
+	return sources
+}
+
+func (service *Service) TemporaryStorageUsageSummary(now time.Time) TemporaryStorageUsageSummary {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	sessions := make([]TemporarySourceSession, 0)
+	service.mu.RLock()
+	for _, session := range service.temporary {
+		sessions = append(sessions, cloneTemporarySourceSession(session))
+	}
+	service.mu.RUnlock()
+	seen := map[string]struct{}{}
+	for _, session := range sessions {
+		seen[session.ID] = struct{}{}
+	}
+	for _, session := range service.loadTemporarySourceMetadataSessions() {
+		if _, ok := seen[session.ID]; ok {
+			continue
+		}
+		if session.Status == TemporarySourceStateExpired ||
+			(!session.ExpiresAt.IsZero() && !session.ExpiresAt.After(now)) {
+			sessions = append(sessions, cloneTemporarySourceSession(session))
+		}
+	}
+	summary := TemporaryStorageUsageSummary{UpdatedAt: now}
+	for _, session := range sessions {
+		bytes := service.temporarySourceStorageBytes(session.ID)
+		row := TemporaryStorageUsageSession{
+			TemporarySourceID: session.ID,
+			Title:             firstNonEmpty(session.Title, session.SourceName),
+			Status:            session.Status,
+			Bytes:             bytes.total,
+			AudioBytes:        bytes.audio,
+			ArtifactBytes:     bytes.artifact,
+			SourceBytes:       bytes.source,
+			ProgressBytes:     bytes.progress,
+			ExpiresAt:         session.ExpiresAt,
+			LastAccessedAt:    session.LastAccessedAt,
+		}
+		summary.Sessions = append(summary.Sessions, row)
+		summary.TotalBytes += bytes.total
+		summary.SourceBytes += bytes.source
+		summary.ArtifactBytes += bytes.artifact
+		summary.AudioBytes += bytes.audio
+		summary.ProgressBytes += bytes.progress
+		summary.TemporaryCount++
+		if !session.ExpiresAt.After(now) || session.Status == TemporarySourceStateExpired {
+			summary.ExpiredCount++
+		}
+		if service.temporarySourceHasActiveJob(session.ID) {
+			summary.GeneratingCount++
+		}
+	}
+	sort.Slice(summary.Sessions, func(i, j int) bool {
+		return summary.Sessions[i].LastAccessedAt.After(summary.Sessions[j].LastAccessedAt)
+	})
+	return summary
+}
+
+type temporaryStorageBytes struct {
+	total    int64
+	source   int64
+	artifact int64
+	audio    int64
+	progress int64
+}
+
+func (service *Service) recoverExpiredTemporarySource(id string) (TemporarySourceSession, error) {
+	session, err := service.loadTemporarySourceMetadata(id)
+	if err != nil {
+		return TemporarySourceSession{}, err
+	}
+	session.Status = TemporarySourceStateExpired
+	session.Text = ""
+	session.SpeechText = ""
+	session.Blocks = nil
+	session.SkippedItems = nil
+	session.Artifacts = nil
+	session.Bookmarks = nil
+	session.PlaybackProgress = nil
+	session.Error = temporaryRecoveryMessage(TemporarySourceStateExpired)
+	return session, nil
+}
+
+func (service *Service) loadTemporarySourceMetadata(id string) (TemporarySourceSession, error) {
+	cleanID := strings.TrimSpace(id)
+	if cleanID == "" {
+		return TemporarySourceSession{}, ErrTemporarySourceNotFound
+	}
+	metadataBytes, err := os.ReadFile(filepath.Join(service.options.TemporarySourceDataDir, cleanID, temporarySourceMetadataFilename))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return TemporarySourceSession{}, ErrTemporarySourceNotFound
+		}
+		return TemporarySourceSession{}, err
+	}
+	var session TemporarySourceSession
+	if err := json.Unmarshal(metadataBytes, &session); err != nil {
+		return TemporarySourceSession{}, err
+	}
+	if strings.TrimSpace(session.ID) == "" {
+		return TemporarySourceSession{}, ErrTemporarySourceNotFound
+	}
+	return cloneTemporarySourceSession(session), nil
+}
+
+func (service *Service) loadTemporarySourceMetadataSessions() []TemporarySourceSession {
+	baseDir := service.options.TemporarySourceDataDir
+	entries, err := os.ReadDir(baseDir)
+	if err != nil {
+		return nil
+	}
+	sessions := make([]TemporarySourceSession, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		session, loadErr := service.loadTemporarySourceMetadata(entry.Name())
+		if loadErr == nil {
+			sessions = append(sessions, session)
+		}
+	}
+	return sessions
+}
+
+func temporaryRecoveryMessage(status TemporarySourceLifecycleState) string {
+	if status == TemporarySourceStateDiscarded {
+		return "This temporary source was discarded and its artifacts were removed."
+	}
+	return "This temporary source expired. Generated files were removed, but enough metadata remains to explain what happened."
+}
+
+func firstActiveTemporaryStatus(status TemporarySourceLifecycleState) TemporarySourceLifecycleState {
+	switch status {
+	case TemporarySourceStateExpired, TemporarySourceStateDiscarded:
+		return TemporarySourceStateReviewable
+	default:
+		return status
+	}
+}
+
+func (service *Service) temporarySourceHasActiveJob(id string) bool {
+	service.mu.RLock()
+	defer service.mu.RUnlock()
+	for _, job := range service.jobs {
+		if job.TemporarySourceID == id && !jobStatusIsTerminal(job.Status) {
+			return true
+		}
+	}
+	return false
+}
+
+func (service *Service) removeTemporaryGeneratedAudio(session TemporarySourceSession) (int64, error) {
+	var removed int64
+	service.mu.Lock()
+	for jobID, job := range service.jobs {
+		if job.TemporarySourceID != session.ID {
+			continue
+		}
+		if cancel := service.jobCancels[jobID]; cancel != nil && !jobStatusIsTerminal(job.Status) {
+			cancel()
+		}
+		delete(service.jobs, jobID)
+		delete(service.jobCancels, jobID)
+	}
+	service.mu.Unlock()
+	for _, dir := range []string{
+		filepath.Join(service.options.TemporaryAudioDir, session.ID),
+		filepath.Join(service.options.TemporaryProgressDir, session.ID),
+		filepath.Join(service.options.ProgressDataDir, safeDataPathID(progressTargetForTemporarySource(session.ID))),
+		filepath.Join(service.options.PlaybackSessionDir, safeDataPathID(progressTargetForTemporarySource(session.ID))),
+	} {
+		removed += directorySize(dir)
+		if err := os.RemoveAll(dir); err != nil {
+			return removed, err
+		}
+	}
+	return removed, nil
+}
+
+func (service *Service) temporarySourceStorageBytes(id string) temporaryStorageBytes {
+	sourceDir := filepath.Join(service.options.TemporarySourceDataDir, id)
+	artifactDir := filepath.Join(service.options.TemporaryArtifactDir, id)
+	audioDir := filepath.Join(service.options.TemporaryAudioDir, id)
+	progressDir := filepath.Join(service.options.TemporaryProgressDir, id)
+	progressTargetDir := filepath.Join(service.options.ProgressDataDir, safeDataPathID(progressTargetForTemporarySource(id)))
+	playbackDir := filepath.Join(service.options.PlaybackSessionDir, safeDataPathID(progressTargetForTemporarySource(id)))
+	bytes := temporaryStorageBytes{
+		source:   directorySize(sourceDir),
+		artifact: directorySize(artifactDir),
+		audio:    directorySize(audioDir),
+		progress: directorySize(progressDir) + directorySize(progressTargetDir) + directorySize(playbackDir),
+	}
+	bytes.total = bytes.source + bytes.artifact + bytes.audio + bytes.progress
+	return bytes
+}
+
+func filterSourceArtifacts(artifacts []SourceArtifactRef, keep func(SourceArtifactRef) bool) []SourceArtifactRef {
+	next := make([]SourceArtifactRef, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		if keep(artifact) {
+			next = append(next, artifact)
+		}
+	}
+	return next
 }
 
 func (service *Service) PromoteTemporarySource(ctx context.Context, id string, request TemporarySourcePromotionRequest) (PreparedSource, error) {
@@ -588,6 +976,12 @@ func (service *Service) getTemporarySource(id string, touch bool) (TemporarySour
 	session, ok := service.temporary[cleanID]
 	service.mu.RUnlock()
 	if !ok {
+		recovered, loadErr := service.loadTemporarySourceMetadata(cleanID)
+		if loadErr == nil && (recovered.Status == TemporarySourceStateExpired ||
+			recovered.Status == TemporarySourceStateDiscarded ||
+			(!recovered.ExpiresAt.IsZero() && !recovered.ExpiresAt.After(time.Now().UTC()))) {
+			return TemporarySourceSession{}, ErrTemporarySourceExpired
+		}
 		return TemporarySourceSession{}, ErrTemporarySourceNotFound
 	}
 	session = cloneTemporarySourceSession(session)
@@ -655,7 +1049,7 @@ func (service *Service) reloadTemporarySources() {
 			continue
 		}
 		if !session.ExpiresAt.IsZero() && !session.ExpiresAt.After(now) {
-			_ = service.removeTemporarySource(session, TemporarySourceStateExpired)
+			_, _ = service.removeTemporarySource(session, TemporarySourceStateExpired, false)
 			continue
 		}
 		sources[session.ID] = cloneTemporarySourceSession(session)
@@ -665,7 +1059,8 @@ func (service *Service) reloadTemporarySources() {
 	service.mu.Unlock()
 }
 
-func (service *Service) removeTemporarySource(session TemporarySourceSession, status TemporarySourceLifecycleState) error {
+func (service *Service) removeTemporarySource(session TemporarySourceSession, status TemporarySourceLifecycleState, removeMetadata bool) (int64, error) {
+	bytesBefore := service.temporarySourceStorageBytes(session.ID).total
 	service.mu.Lock()
 	delete(service.temporary, session.ID)
 	for jobID, job := range service.jobs {
@@ -681,9 +1076,22 @@ func (service *Service) removeTemporarySource(session TemporarySourceSession, st
 
 	session.Status = status
 	session.UpdatedAt = time.Now().UTC()
-	_ = writeJSON(filepath.Join(service.options.TemporarySourceDataDir, session.ID, temporarySourceMetadataFilename), session)
+	session.Error = temporaryRecoveryMessage(status)
+	if !removeMetadata {
+		session.Text = ""
+		session.SpeechText = ""
+		session.Blocks = nil
+		session.SkippedItems = nil
+		session.ReviewNotes = nil
+		session.Artifacts = nil
+		session.Bookmarks = nil
+		session.PlaybackProgress = nil
+		if err := os.MkdirAll(filepath.Join(service.options.TemporarySourceDataDir, session.ID), 0o755); err != nil {
+			return 0, err
+		}
+		_ = writeJSON(filepath.Join(service.options.TemporarySourceDataDir, session.ID, temporarySourceMetadataFilename), session)
+	}
 	for _, dir := range []string{
-		filepath.Join(service.options.TemporarySourceDataDir, session.ID),
 		filepath.Join(service.options.TemporaryArtifactDir, session.ID),
 		filepath.Join(service.options.TemporaryAudioDir, session.ID),
 		filepath.Join(service.options.TemporaryProgressDir, session.ID),
@@ -691,10 +1099,15 @@ func (service *Service) removeTemporarySource(session TemporarySourceSession, st
 		filepath.Join(service.options.PlaybackSessionDir, safeDataPathID(progressTargetForTemporarySource(session.ID))),
 	} {
 		if err := os.RemoveAll(dir); err != nil {
-			return err
+			return 0, err
 		}
 	}
-	return nil
+	if removeMetadata {
+		if err := os.RemoveAll(filepath.Join(service.options.TemporarySourceDataDir, session.ID)); err != nil {
+			return 0, err
+		}
+	}
+	return bytesBefore, nil
 }
 
 func (service *Service) promoteTemporarySourceJobArtifacts(temporarySourceID string, source PreparedSource, keep TemporarySourcePromotionKeep) (VoiceJob, error) {

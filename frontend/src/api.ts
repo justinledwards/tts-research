@@ -39,7 +39,10 @@ import type {
   UpsertSpeechPolicyProfileRequest,
   SystemMetrics,
   TemporarySourcePromotionRequest,
+  TemporarySourceCleanupRequest,
+  TemporarySourceCleanupResult,
   TemporarySourceSession,
+  TemporaryStorageUsageSummary,
   TokenTimingArtifact,
   TTSEngineDiagnostics,
   Voice,
@@ -746,6 +749,42 @@ export async function getTemporarySource(id: string): Promise<TemporarySourceSes
     throw await apiError(response);
   }
   return response.json() as Promise<TemporarySourceSession>;
+}
+
+export async function getTemporaryStorageUsageSummary(): Promise<TemporaryStorageUsageSummary> {
+  const response = await fetch(`${apiBaseUrl}/api/temporary-sources/storage/summary`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<TemporaryStorageUsageSummary>;
+}
+
+export async function cleanupTemporarySource(
+  id: string,
+  request: TemporarySourceCleanupRequest,
+): Promise<TemporarySourceCleanupResult> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/temporary-sources/${encodeURIComponent(id)}/cleanup`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<TemporarySourceCleanupResult>;
+}
+
+export async function clearExpiredTemporarySources(): Promise<TemporarySourceCleanupResult> {
+  const response = await fetch(`${apiBaseUrl}/api/temporary-sources/cleanup-expired`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<TemporarySourceCleanupResult>;
 }
 
 export async function deleteTemporarySource(id: string): Promise<void> {

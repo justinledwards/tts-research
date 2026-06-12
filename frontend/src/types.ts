@@ -154,6 +154,53 @@ export interface SourceArtifactRef {
   expiresAt?: string;
 }
 
+export type TemporarySourceCleanupAction =
+  | "discardNow"
+  | "extendSession"
+  | "removeGeneratedAudioOnly"
+  | "removeAllTemporaryArtifacts";
+
+export interface TemporarySourceCleanupRequest {
+  action: TemporarySourceCleanupAction;
+  extendByHours?: number;
+}
+
+export interface TemporarySourceCleanupResult {
+  temporarySourceId: string;
+  action: TemporarySourceCleanupAction;
+  status: TemporarySourceLifecycleState;
+  removedBytes?: number;
+  expiresAt?: string;
+  message?: string;
+  source?: TemporarySourceSession;
+}
+
+export interface TemporaryStorageUsageSession {
+  temporarySourceId: string;
+  title?: string;
+  status: TemporarySourceLifecycleState;
+  bytes: number;
+  audioBytes?: number;
+  artifactBytes?: number;
+  sourceBytes?: number;
+  progressBytes?: number;
+  expiresAt: string;
+  lastAccessedAt: string;
+}
+
+export interface TemporaryStorageUsageSummary {
+  totalBytes: number;
+  sourceBytes: number;
+  artifactBytes: number;
+  audioBytes: number;
+  progressBytes: number;
+  temporaryCount: number;
+  expiredCount: number;
+  generatingCount: number;
+  sessions: TemporaryStorageUsageSession[];
+  updatedAt: string;
+}
+
 export type SourceReadinessState =
   | "noSource"
   | "importing"

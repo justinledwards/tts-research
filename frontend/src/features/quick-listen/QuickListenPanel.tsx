@@ -7,6 +7,7 @@ import type {
   PreparedSource,
   SourceReadinessConfirmationRequest,
   TemporarySourceSession,
+  TemporaryStorageUsageSummary,
 } from "../../types";
 import {
   detectIntakeSource,
@@ -24,6 +25,12 @@ export interface QuickListenPanelProps {
   isOpen: boolean;
   isSubmitting: boolean;
   recentSources: TemporarySourceSession[];
+  storageUsage?: TemporaryStorageUsageSummary | null;
+  onCleanup: (
+    source: TemporarySourceSession,
+    action: "removeGeneratedAudioOnly" | "removeAllTemporaryArtifacts",
+  ) => Promise<void>;
+  onClearExpired: () => Promise<void>;
   onClose: () => void;
   onCreateFromFile: (
     file: File,
@@ -45,6 +52,7 @@ export interface QuickListenPanelProps {
     destination: QuickListenDestination,
   ) => Promise<void>;
   onDiscard: (source: TemporarySourceSession) => Promise<void>;
+  onExtend: (source: TemporarySourceSession, extendByHours: number) => Promise<void>;
   onUseRecentSource: (source: TemporarySourceSession) => Promise<void>;
 }
 
@@ -56,11 +64,15 @@ export function QuickListenPanel({
   isOpen,
   isSubmitting,
   recentSources,
+  storageUsage,
+  onCleanup,
+  onClearExpired,
   onClose,
   onCreateFromFile,
   onCreateFromText,
   onCreateFromUrl,
   onDiscard,
+  onExtend,
   onUseRecentSource,
 }: Readonly<QuickListenPanelProps>) {
   const [mode, setMode] = useState<QuickListenMode>("paste");
@@ -73,6 +85,10 @@ export function QuickListenPanel({
   const [title, setTitle] = useState("");
   const [hasEditedMetadata, setHasEditedMetadata] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [expiryHours, setExpiryHours] = useState(24);
+  const [askBeforeAudioDiscard, setAskBeforeAudioDiscard] = useState(true);
+  const [autoCleanExpired, setAutoCleanExpired] = useState(true);
+  const [includeTemporaryDiagnostics, setIncludeTemporaryDiagnostics] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const detection = useMemo(() => {
@@ -170,8 +186,20 @@ export function QuickListenPanel({
           <div className="flex flex-wrap gap-2 text-xs">
             <StatusChip tone="metadata">Temporary</StatusChip>
             <StatusChip tone="success">Local-first when possible</StatusChip>
-            <StatusChip tone="warning">Expires after about 24 hours</StatusChip>
+            <StatusChip tone="warning">Expires after about {expiryHours} hours</StatusChip>
           </div>
+          <TemporaryStorageControls
+            askBeforeAudioDiscard={askBeforeAudioDiscard}
+            autoCleanExpired={autoCleanExpired}
+            expiryHours={expiryHours}
+            includeTemporaryDiagnostics={includeTemporaryDiagnostics}
+            storageUsage={storageUsage}
+            onClearExpired={onClearExpired}
+            onSetAskBeforeAudioDiscard={setAskBeforeAudioDiscard}
+            onSetAutoCleanExpired={setAutoCleanExpired}
+            onSetExpiryHours={setExpiryHours}
+            onSetIncludeTemporaryDiagnostics={setIncludeTemporaryDiagnostics}
+          />
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
@@ -363,63 +391,15 @@ export function QuickListenPanel({
             )}
 
             {mode === "recent" ? (
-              <div className="grid gap-2">
-                {recentSources.length === 0 ? (
-                  <p className="vs-muted rounded-md border p-4 text-sm vs-border vs-surface">
-                    Recent temporary sources appear here after you start Quick Listen in this app
-                    session.
-                  </p>
-                ) : (
-                  recentSources.map((source) => (
-                    <div
-                      className="grid gap-2 rounded-md border p-3 vs-border vs-surface sm:grid-cols-[minmax(0,1fr)_auto]"
-                      key={source.id}
-                    >
-                      <div className="min-w-0">
-                        <div className="mb-2 flex flex-wrap gap-2">
-                          {source.kind === "url" ? (
-                            <>
-                              <StatusChip tone="metadata">Temporary webpage</StatusChip>
-                              <WebsiteExtractionSummary
-                                source={temporarySessionToPreparedSource(source)}
-                              />
-                            </>
-                          ) : (
-                            <StatusChip tone="metadata">Temporary source</StatusChip>
-                          )}
-                        </div>
-                        <p className="truncate text-sm font-semibold">
-                          {source.title ?? source.sourceName}
-                        </p>
-                        <p className="vs-muted mt-1 text-xs">
-                          {source.wordCount.toLocaleString()} words · expires{" "}
-                          {formatExpiry(source.expiresAt)}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          onClick={() => {
-                            void onUseRecentSource(source);
-                          }}
-                          size="sm"
-                          variant="primary"
-                        >
-                          Open
-                        </Button>
-                        <Button
-                          onClick={() => {
-                            void onDiscard(source);
-                          }}
-                          size="sm"
-                          variant="secondary"
-                        >
-                          Discard
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+              <RecentTemporarySources
+                askBeforeAudioDiscard={askBeforeAudioDiscard}
+                expiryHours={expiryHours}
+                sources={recentSources}
+                onCleanup={onCleanup}
+                onDiscard={onDiscard}
+                onExtend={onExtend}
+                onUseRecentSource={onUseRecentSource}
+              />
             ) : null}
 
             <label className="grid max-w-xs gap-2">
@@ -441,6 +421,8 @@ export function QuickListenPanel({
               <p className="vs-muted mt-1">
                 Quick Listen does not create a durable project source. Generated files and progress
                 stay tied to this temporary session until it expires, is discarded, or is promoted.
+                Promotion keeps a project copy without deleting this session unless you choose to
+                clean it.
               </p>
             </div>
 
@@ -480,6 +462,267 @@ export function QuickListenPanel({
           </div>
         </footer>
       </section>
+    </div>
+  );
+}
+
+interface TemporaryStorageControlsProps {
+  askBeforeAudioDiscard: boolean;
+  autoCleanExpired: boolean;
+  expiryHours: number;
+  includeTemporaryDiagnostics: boolean;
+  storageUsage?: TemporaryStorageUsageSummary | null;
+  onClearExpired: () => Promise<void>;
+  onSetAskBeforeAudioDiscard: (value: boolean) => void;
+  onSetAutoCleanExpired: (value: boolean) => void;
+  onSetExpiryHours: (value: number) => void;
+  onSetIncludeTemporaryDiagnostics: (value: boolean) => void;
+}
+
+function TemporaryStorageControls({
+  askBeforeAudioDiscard,
+  autoCleanExpired,
+  expiryHours,
+  includeTemporaryDiagnostics,
+  storageUsage,
+  onClearExpired,
+  onSetAskBeforeAudioDiscard,
+  onSetAutoCleanExpired,
+  onSetExpiryHours,
+  onSetIncludeTemporaryDiagnostics,
+}: Readonly<TemporaryStorageControlsProps>) {
+  return (
+    <div className="grid gap-3 rounded-md border p-3 text-xs leading-5 vs-border vs-surface">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="font-semibold">Temporary storage</p>
+          <p className="vs-muted">{temporaryUsageSummaryLabel(storageUsage)}</p>
+        </div>
+        <Button
+          disabled={!storageUsage || storageUsage.expiredCount === 0}
+          onClick={() => {
+            void onClearExpired();
+          }}
+          size="sm"
+          variant="secondary"
+        >
+          Clear expired
+        </Button>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="grid gap-1 font-semibold">
+          <span className="vs-muted">Expiry duration</span>
+          <select
+            className={fieldControlClassName}
+            onChange={(event) => {
+              onSetExpiryHours(Number(event.currentTarget.value));
+            }}
+            value={expiryHours}
+          >
+            <option value={6}>6 hours</option>
+            <option value={24}>24 hours</option>
+            <option value={72}>3 days</option>
+            <option value={168}>7 days</option>
+          </select>
+        </label>
+        <div className="grid gap-2">
+          <TemporarySettingCheckbox
+            checked={askBeforeAudioDiscard}
+            label="Ask before discarding generated audio"
+            onChange={onSetAskBeforeAudioDiscard}
+          />
+          <TemporarySettingCheckbox
+            checked={autoCleanExpired}
+            label="Auto-clean expired sessions"
+            onChange={onSetAutoCleanExpired}
+          />
+          <TemporarySettingCheckbox
+            checked={includeTemporaryDiagnostics}
+            label="Include temporary sessions in diagnostics"
+            onChange={onSetIncludeTemporaryDiagnostics}
+          />
+        </div>
+      </div>
+      {storageUsage && storageUsage.expiredCount > 0 ? (
+        <p className="rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-3 py-2 text-[var(--vs-status-warning)]">
+          {storageUsage.expiredCount} expired temporary session
+          {storageUsage.expiredCount === 1 ? "" : "s"} can be cleaned.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function TemporarySettingCheckbox({
+  checked,
+  label,
+  onChange,
+}: Readonly<{ checked: boolean; label: string; onChange: (value: boolean) => void }>) {
+  return (
+    <label className="flex items-center gap-2">
+      <input
+        checked={checked}
+        onChange={(event) => {
+          onChange(event.currentTarget.checked);
+        }}
+        type="checkbox"
+      />
+      <span>{label}</span>
+    </label>
+  );
+}
+
+interface RecentTemporarySourcesProps {
+  askBeforeAudioDiscard: boolean;
+  expiryHours: number;
+  sources: TemporarySourceSession[];
+  onCleanup: QuickListenPanelProps["onCleanup"];
+  onDiscard: QuickListenPanelProps["onDiscard"];
+  onExtend: QuickListenPanelProps["onExtend"];
+  onUseRecentSource: QuickListenPanelProps["onUseRecentSource"];
+}
+
+function RecentTemporarySources({
+  askBeforeAudioDiscard,
+  expiryHours,
+  sources,
+  onCleanup,
+  onDiscard,
+  onExtend,
+  onUseRecentSource,
+}: Readonly<RecentTemporarySourcesProps>) {
+  if (sources.length === 0) {
+    return (
+      <p className="vs-muted rounded-md border p-4 text-sm vs-border vs-surface">
+        Recent temporary sources appear here after you start Quick Listen in this app session.
+      </p>
+    );
+  }
+  return (
+    <div className="grid gap-2">
+      {sources.map((source) => (
+        <TemporarySourceRow
+          askBeforeAudioDiscard={askBeforeAudioDiscard}
+          expiryHours={expiryHours}
+          key={source.id}
+          source={source}
+          onCleanup={onCleanup}
+          onDiscard={onDiscard}
+          onExtend={onExtend}
+          onUseRecentSource={onUseRecentSource}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface TemporarySourceRowProps extends Omit<RecentTemporarySourcesProps, "sources"> {
+  source: TemporarySourceSession;
+}
+
+function TemporarySourceRow({
+  askBeforeAudioDiscard,
+  expiryHours,
+  source,
+  onCleanup,
+  onDiscard,
+  onExtend,
+  onUseRecentSource,
+}: Readonly<TemporarySourceRowProps>) {
+  return (
+    <div className="grid gap-2 rounded-md border p-3 vs-border vs-surface sm:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="min-w-0">
+        <div className="mb-2 flex flex-wrap gap-2">
+          {source.kind === "url" ? (
+            <>
+              <StatusChip tone="metadata">Temporary webpage</StatusChip>
+              <WebsiteExtractionSummary source={temporarySessionToPreparedSource(source)} />
+            </>
+          ) : (
+            <StatusChip tone="metadata">Temporary source</StatusChip>
+          )}
+        </div>
+        <p className="truncate text-sm font-semibold">{source.title ?? source.sourceName}</p>
+        <p className="vs-muted mt-1 text-xs">
+          {source.wordCount.toLocaleString()} words · expires {formatExpiry(source.expiresAt)}
+        </p>
+        {source.status === "expired" ? (
+          <p className="mt-2 rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-3 py-2 text-xs font-semibold text-[var(--vs-status-warning)]">
+            {source.error ??
+              "This temporary source expired. Recovery metadata remains, but generated artifacts were cleaned."}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        <Button
+          disabled={source.status === "expired"}
+          onClick={() => {
+            void onUseRecentSource(source);
+          }}
+          size="sm"
+          variant="primary"
+        >
+          Open
+        </Button>
+        <Button
+          onClick={() => {
+            void onExtend(source, expiryHours);
+          }}
+          size="sm"
+          variant="secondary"
+        >
+          Extend
+        </Button>
+        <Button
+          onClick={() => {
+            if (
+              askBeforeAudioDiscard &&
+              !globalThis.confirm(
+                "Remove generated audio for this temporary session? Extracted source text and review state will remain.",
+              )
+            ) {
+              return;
+            }
+            void onCleanup(source, "removeGeneratedAudioOnly");
+          }}
+          size="sm"
+          variant="secondary"
+        >
+          Audio only
+        </Button>
+        <Button
+          onClick={() => {
+            if (
+              !globalThis.confirm(
+                "Remove all temporary artifacts for this session? Recovery metadata will remain, but source text, audio, timing, bookmarks, and progress will be cleaned.",
+              )
+            ) {
+              return;
+            }
+            void onCleanup(source, "removeAllTemporaryArtifacts");
+          }}
+          size="sm"
+          variant="secondary"
+        >
+          Artifacts
+        </Button>
+        <Button
+          onClick={() => {
+            if (
+              !globalThis.confirm(
+                "Discard this temporary session now? This removes temporary source data, generated audio, timing, bookmarks, progress, and diagnostics.",
+              )
+            ) {
+              return;
+            }
+            void onDiscard(source);
+          }}
+          size="sm"
+          variant="secondary"
+        >
+          Discard
+        </Button>
+      </div>
     </div>
   );
 }
@@ -722,4 +965,26 @@ function formatExpiry(value: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+function temporaryUsageSummaryLabel(storageUsage?: TemporaryStorageUsageSummary | null): string {
+  if (!storageUsage) {
+    return "Storage usage will appear after the backend responds.";
+  }
+  const sessionLabel = storageUsage.temporaryCount === 1 ? "session" : "sessions";
+  return `${formatBytes(storageUsage.totalBytes)} across ${String(storageUsage.temporaryCount)} ${sessionLabel}`;
+}
+
+function formatBytes(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "0 B";
+  }
+  const units = ["B", "KB", "MB", "GB"];
+  let amount = value;
+  let unitIndex = 0;
+  while (amount >= 1024 && unitIndex < units.length - 1) {
+    amount /= 1024;
+    unitIndex += 1;
+  }
+  return `${amount >= 10 || unitIndex === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[unitIndex]}`;
 }

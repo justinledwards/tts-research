@@ -1,3 +1,17 @@
+## 2026-06-12 11:37 CEST - Commit Temporary Cleanup Package
+- [x] Review temporary cleanup diff
+- [x] Stage temporary cleanup files
+- [x] Commit temporary cleanup package
+
+## 2026-06-12 11:15 CEST - Temporary Source Cleanup Expiry Recovery
+- [x] Inspect existing temporary source lifecycle and cleanup code
+- [x] Add expiry model and cleanup service behavior
+- [x] Add frontend expiry notices, confirmations, settings, and usage summary
+- [x] Add recovery state and route-safe expired handling
+- [x] Add tests for cleanup boundaries and promoted artifact safety
+- [x] Run project checks
+- Validation: focused temporary-source backend tests passed, frontend typecheck and targeted ESLint passed, and `pnpm check` passed format/lint/type/package/script/adapter/backend/frontend stages.
+
 ## 2026-06-12 09:53 CEST - Commit Explicit Promotion Package
 - [x] Review promotion package diff
 - [x] Stage promotion package files

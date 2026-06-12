@@ -209,6 +209,56 @@ type SourceArtifactRef struct {
 	ExpiresAt *time.Time          `json:"expiresAt,omitempty"`
 }
 
+type TemporarySourceCleanupAction string
+
+const (
+	TemporarySourceCleanupDiscardNow         TemporarySourceCleanupAction = "discardNow"
+	TemporarySourceCleanupExtendSession      TemporarySourceCleanupAction = "extendSession"
+	TemporarySourceCleanupRemoveAudioOnly    TemporarySourceCleanupAction = "removeGeneratedAudioOnly"
+	TemporarySourceCleanupRemoveAllArtifacts TemporarySourceCleanupAction = "removeAllTemporaryArtifacts"
+)
+
+type TemporarySourceCleanupRequest struct {
+	Action        TemporarySourceCleanupAction `json:"action"`
+	ExtendByHours int                          `json:"extendByHours,omitempty"`
+}
+
+type TemporarySourceCleanupResult struct {
+	TemporarySourceID string                        `json:"temporarySourceId"`
+	Action            TemporarySourceCleanupAction  `json:"action"`
+	Status            TemporarySourceLifecycleState `json:"status"`
+	RemovedBytes      int64                         `json:"removedBytes,omitempty"`
+	ExpiresAt         *time.Time                    `json:"expiresAt,omitempty"`
+	Message           string                        `json:"message,omitempty"`
+	Source            *TemporarySourceSession       `json:"source,omitempty"`
+}
+
+type TemporaryStorageUsageSummary struct {
+	TotalBytes      int64                          `json:"totalBytes"`
+	SourceBytes     int64                          `json:"sourceBytes"`
+	ArtifactBytes   int64                          `json:"artifactBytes"`
+	AudioBytes      int64                          `json:"audioBytes"`
+	ProgressBytes   int64                          `json:"progressBytes"`
+	TemporaryCount  int                            `json:"temporaryCount"`
+	ExpiredCount    int                            `json:"expiredCount"`
+	GeneratingCount int                            `json:"generatingCount"`
+	Sessions        []TemporaryStorageUsageSession `json:"sessions"`
+	UpdatedAt       time.Time                      `json:"updatedAt"`
+}
+
+type TemporaryStorageUsageSession struct {
+	TemporarySourceID string                        `json:"temporarySourceId"`
+	Title             string                        `json:"title,omitempty"`
+	Status            TemporarySourceLifecycleState `json:"status"`
+	Bytes             int64                         `json:"bytes"`
+	AudioBytes        int64                         `json:"audioBytes,omitempty"`
+	ArtifactBytes     int64                         `json:"artifactBytes,omitempty"`
+	SourceBytes       int64                         `json:"sourceBytes,omitempty"`
+	ProgressBytes     int64                         `json:"progressBytes,omitempty"`
+	ExpiresAt         time.Time                     `json:"expiresAt"`
+	LastAccessedAt    time.Time                     `json:"lastAccessedAt"`
+}
+
 type SourceReadinessState string
 
 const (

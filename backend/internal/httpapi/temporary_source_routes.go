@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
@@ -48,6 +49,18 @@ func registerTemporarySourceRoutes(app *fiber.App, service *pipeline.Service) {
 			return temporarySourceError(ctx, err)
 		}
 		return ctx.Status(fiber.StatusCreated).JSON(source)
+	})
+
+	app.Get("/api/temporary-sources/storage/summary", func(ctx fiber.Ctx) error {
+		return ctx.JSON(service.TemporaryStorageUsageSummary(time.Now().UTC()))
+	})
+
+	app.Post("/api/temporary-sources/cleanup-expired", func(ctx fiber.Ctx) error {
+		result, err := service.ClearExpiredTemporarySources(time.Now().UTC())
+		if err != nil {
+			return temporarySourceError(ctx, err)
+		}
+		return ctx.JSON(result)
 	})
 
 	app.Get("/api/temporary-sources/:id", func(ctx fiber.Ctx) error {
@@ -95,6 +108,18 @@ func registerTemporarySourceRoutes(app *fiber.App, service *pipeline.Service) {
 			return temporarySourceError(ctx, err)
 		}
 		return ctx.SendStatus(fiber.StatusNoContent)
+	})
+
+	app.Post("/api/temporary-sources/:id/cleanup", func(ctx fiber.Ctx) error {
+		var request pipeline.TemporarySourceCleanupRequest
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		result, err := service.CleanupTemporarySource(ctx.Params("id"), request)
+		if err != nil {
+			return temporarySourceError(ctx, err)
+		}
+		return ctx.JSON(result)
 	})
 
 	app.Post("/api/temporary-sources/:id/promote", func(ctx fiber.Ctx) error {

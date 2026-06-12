@@ -166,6 +166,127 @@ func hasSourceArtifactKind(artifacts []pipeline.SourceArtifactRef, kind pipeline
 	return false
 }
 
+func TestTemporarySourceCleanupPreservesExpiredRecoveryMetadata(t *testing.T) {
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:             1,
+			JobDataDir:             t.TempDir(),
+			ProjectDataDir:         t.TempDir(),
+			SourcePrepDir:          t.TempDir(),
+			TemporarySourceDataDir: t.TempDir(),
+			TemporaryArtifactDir:   t.TempDir(),
+			TemporaryAudioDir:      t.TempDir(),
+			TemporaryProgressDir:   t.TempDir(),
+			TemporarySourceTTL:     time.Millisecond,
+		},
+	)
+	temporary, err := service.CreateTemporarySource(context.Background(), pipeline.CreateTemporarySourceRequest{
+		Kind:       pipeline.PreparedSourceKindText,
+		Text:       "Temporary source that should expire.",
+		SourceName: "expires.md",
+	})
+	if err != nil {
+		t.Fatalf("CreateTemporarySource returned error: %v", err)
+	}
+	artifactPath := filepath.Join(service.Options().TemporaryArtifactDir, temporary.ID, "source.txt")
+	if _, err := os.Stat(artifactPath); err != nil {
+		t.Fatalf("temporary artifact should exist before cleanup: %v", err)
+	}
+	time.Sleep(5 * time.Millisecond)
+	if _, err := service.CleanupExpiredTemporarySources(time.Now().UTC()); err != nil {
+		t.Fatalf("CleanupExpiredTemporarySources returned error: %v", err)
+	}
+	recovered, err := service.GetTemporarySource(temporary.ID)
+	if err != nil {
+		t.Fatalf("GetTemporarySource expired recovery returned error: %v", err)
+	}
+	if recovered.Status != pipeline.TemporarySourceStateExpired || recovered.Text != "" || len(recovered.Artifacts) != 0 {
+		t.Fatalf("recovered = %#v, want expired metadata without artifacts", recovered)
+	}
+	if recovered.Error == "" {
+		t.Fatalf("recovered error message is empty, want recovery explanation")
+	}
+	if _, err := os.Stat(artifactPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("artifact stat error = %v, want removed artifact", err)
+	}
+	if _, err := service.CreateTemporarySourceJob(context.Background(), temporary.ID, pipeline.CreateJobRequest{}); !errors.Is(err, pipeline.ErrTemporarySourceExpired) {
+		t.Fatalf("CreateTemporarySourceJob after cleanup error = %v, want expired", err)
+	}
+	summary := service.TemporaryStorageUsageSummary(time.Now().UTC())
+	if summary.ExpiredCount != 1 {
+		t.Fatalf("summary expired count = %d, want 1", summary.ExpiredCount)
+	}
+	if _, err := service.ClearExpiredTemporarySources(time.Now().UTC()); err != nil {
+		t.Fatalf("ClearExpiredTemporarySources returned error: %v", err)
+	}
+	if _, err := service.GetTemporarySource(temporary.ID); !errors.Is(err, pipeline.ErrTemporarySourceNotFound) {
+		t.Fatalf("GetTemporarySource after clear error = %v, want not found", err)
+	}
+}
+
+func TestTemporaryCleanupAllArtifactsDoesNotAffectPromotedProjectArtifacts(t *testing.T) {
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	temporary, err := service.CreateTemporarySource(context.Background(), pipeline.CreateTemporarySourceRequest{
+		Kind:       pipeline.PreparedSourceKindText,
+		Text:       "Temporary narration source with audio to promote.",
+		SourceName: "promote-cleanup.md",
+	})
+	if err != nil {
+		t.Fatalf("CreateTemporarySource returned error: %v", err)
+	}
+	job, err := service.CreateTemporarySourceJob(context.Background(), temporary.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreateTemporarySourceJob returned error: %v", err)
+	}
+	_ = waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	project, err := service.CreateProject("Promoted cleanup")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	promoted, err := service.PromoteTemporarySource(context.Background(), temporary.ID, pipeline.TemporarySourcePromotionRequest{
+		ProjectID: project.ID,
+		Keep: pipeline.TemporarySourcePromotionKeep{
+			ExtractedSource: true,
+			GeneratedAudio:  true,
+			TimingMaps:      true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("PromoteTemporarySource returned error: %v", err)
+	}
+	projectJobs, err := service.ListProjectJobs(project.ID)
+	if err != nil {
+		t.Fatalf("ListProjectJobs returned error: %v", err)
+	}
+	var promotedJob *pipeline.VoiceJob
+	for index := range projectJobs {
+		if projectJobs[index].PreparedSourceID == promoted.ID {
+			promotedJob = &projectJobs[index]
+			break
+		}
+	}
+	if promotedJob == nil {
+		t.Fatalf("project jobs = %#v, want promoted generated audio", projectJobs)
+	}
+	if _, err := service.CleanupTemporarySource(temporary.ID, pipeline.TemporarySourceCleanupRequest{
+		Action: pipeline.TemporarySourceCleanupRemoveAllArtifacts,
+	}); err != nil {
+		t.Fatalf("CleanupTemporarySource returned error: %v", err)
+	}
+	if _, _, err := service.GetAudio(promotedJob.ID); err != nil {
+		t.Fatalf("promoted audio should survive temporary cleanup: %v", err)
+	}
+	if _, err := service.GetHighlightMap(promotedJob.ID); err != nil {
+		t.Fatalf("promoted timing should survive temporary cleanup: %v", err)
+	}
+	if _, err := service.GetPreparedSource(promoted.ID); err != nil {
+		t.Fatalf("promoted source should survive temporary cleanup: %v", err)
+	}
+}
+
 func TestTemporarySourcePromotionRejectsDuplicateProjectSourceUnlessKeepBoth(t *testing.T) {
 	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
 	project, err := service.CreateProject("Duplicates")

@@ -23,6 +23,8 @@ import {
   audioSource,
   cancelVoiceJob,
   cancelVoiceProfileSource,
+  cleanupTemporarySource,
+  clearExpiredTemporarySources,
   cancelVoiceProfileTarget,
   confirmBookSourceReadiness,
   confirmPreparedSourceReadiness,
@@ -47,7 +49,6 @@ import {
   deleteProject,
   deleteCustomSpeechPolicyProfile,
   deletePreparedSource,
-  deleteTemporarySource,
   deleteVoiceJob,
   deleteVoiceProfile,
   getBookSourceScope,
@@ -61,6 +62,7 @@ import {
   getSpeechPolicyDefinition,
   getSystemMetrics,
   getTemporarySource,
+  getTemporaryStorageUsageSummary,
   getVoiceJob,
   buildVoiceProfileArtifact,
   getVoiceProfileCredentials,
@@ -459,6 +461,7 @@ import type {
   SystemMetrics,
   TemporarySourcePromotionKeep,
   TemporarySourceSession,
+  TemporaryStorageUsageSummary,
   ThemeName,
   TTSEngineDiagnostics,
   VoiceJob,
@@ -2719,6 +2722,8 @@ export function App() {
   const [bookScopeContent, setBookScopeContent] = useState<BookSourceScopeContent | null>(null);
   const [preparedSources, setPreparedSources] = useState<PreparedSource[]>([]);
   const [temporarySources, setTemporarySources] = useState<TemporarySourceSession[]>([]);
+  const [temporaryStorageUsage, setTemporaryStorageUsage] =
+    useState<TemporaryStorageUsageSummary | null>(null);
   const [pendingTemporaryPromotion, setPendingTemporaryPromotion] =
     useState<PendingTemporaryPromotion | null>(null);
   const [temporaryPromotionError, setTemporaryPromotionError] = useState<string | null>(null);
@@ -6262,6 +6267,14 @@ export function App() {
     [announcePolite, selectWorkspaceInspectorTarget, setContentMode],
   );
 
+  const refreshTemporaryStorageUsage = useCallback(async () => {
+    try {
+      setTemporaryStorageUsage(await getTemporaryStorageUsageSummary());
+    } catch {
+      setTemporaryStorageUsage(null);
+    }
+  }, []);
+
   const createQuickListenSource = useCallback(
     async (
       request: Parameters<typeof createTemporarySource>[0],
@@ -6295,6 +6308,7 @@ export function App() {
           session = await confirmTemporarySourceReadiness(session.id, confirmation);
         }
         activateTemporarySource(session, destination);
+        void refreshTemporaryStorageUsage();
       } catch (caughtError) {
         const message =
           caughtError instanceof Error ? caughtError.message : "Unable to start Quick Listen";
@@ -6305,7 +6319,7 @@ export function App() {
         setIsCreatingQuickListenSource(false);
       }
     },
-    [activateTemporarySource, announceAssertive, announcePolite],
+    [activateTemporarySource, announceAssertive, announcePolite, refreshTemporaryStorageUsage],
   );
 
   const handleRerunWebsiteExtraction = useCallback(
@@ -6394,6 +6408,12 @@ export function App() {
     },
     [createQuickListenSource],
   );
+
+  useEffect(() => {
+    if (isQuickListenOpen) {
+      void refreshTemporaryStorageUsage();
+    }
+  }, [isQuickListenOpen, refreshTemporaryStorageUsage]);
 
   const markTemporarySourceExpired = useCallback((temporarySourceId: string, message: string) => {
     setTemporarySources((currentSources) =>
@@ -6514,32 +6534,104 @@ export function App() {
     [markTemporarySourceExpired],
   );
 
-  const handleDiscardTemporarySource = useCallback(async (session: TemporarySourceSession) => {
+  const handleDiscardTemporarySource = useCallback(
+    async (session: TemporarySourceSession) => {
+      try {
+        await cleanupTemporarySource(session.id, { action: "discardNow" });
+        setTemporarySources((currentSources) =>
+          currentSources.filter((source) => source.id !== session.id),
+        );
+        setActiveTemporaryPreparedSource((currentSource) =>
+          currentSource?.temporarySourceId === session.id ? null : currentSource,
+        );
+        setActiveTemporaryBookSource((currentSource) =>
+          currentSource?.temporarySourceId === session.id ? null : currentSource,
+        );
+        setSelectedPreparedSourceId((currentId) => (currentId === session.id ? null : currentId));
+        setSelectedBookSourceId((currentId) => (currentId === session.id ? null : currentId));
+        void refreshTemporaryStorageUsage();
+      } catch (caughtError) {
+        setQuickListenError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Unable to discard temporary source.",
+        );
+      }
+    },
+    [refreshTemporaryStorageUsage],
+  );
+
+  const handleExtendTemporarySource = useCallback(
+    async (session: TemporarySourceSession, extendByHours: number) => {
+      try {
+        const result = await cleanupTemporarySource(session.id, {
+          action: "extendSession",
+          extendByHours,
+        });
+        if (result.source) {
+          const updatedSource = result.source;
+          setTemporarySources((currentSources) => [
+            updatedSource,
+            ...currentSources.filter((source) => source.id !== session.id),
+          ]);
+        }
+        void refreshTemporaryStorageUsage();
+      } catch (caughtError) {
+        setQuickListenError(
+          caughtError instanceof Error ? caughtError.message : "Unable to extend temporary source.",
+        );
+      }
+    },
+    [refreshTemporaryStorageUsage],
+  );
+
+  const handleCleanupTemporarySource = useCallback(
+    async (
+      session: TemporarySourceSession,
+      action: "removeGeneratedAudioOnly" | "removeAllTemporaryArtifacts",
+    ) => {
+      try {
+        const result = await cleanupTemporarySource(session.id, { action });
+        if (result.source) {
+          const updatedSource = result.source;
+          setTemporarySources((currentSources) => [
+            updatedSource,
+            ...currentSources.filter((source) => source.id !== session.id),
+          ]);
+        } else if (action === "removeAllTemporaryArtifacts") {
+          markTemporarySourceExpired(
+            session.id,
+            result.message ?? "Temporary artifacts were removed.",
+          );
+        }
+        void refreshTemporaryStorageUsage();
+      } catch (caughtError) {
+        setQuickListenError(
+          caughtError instanceof Error ? caughtError.message : "Unable to clean temporary source.",
+        );
+      }
+    },
+    [markTemporarySourceExpired, refreshTemporaryStorageUsage],
+  );
+
+  const handleClearExpiredTemporarySources = useCallback(async () => {
     try {
-      await deleteTemporarySource(session.id);
-      setTemporarySources((currentSources) =>
-        currentSources.filter((source) => source.id !== session.id),
-      );
-      setActiveTemporaryPreparedSource((currentSource) =>
-        currentSource?.temporarySourceId === session.id ? null : currentSource,
-      );
-      setActiveTemporaryBookSource((currentSource) =>
-        currentSource?.temporarySourceId === session.id ? null : currentSource,
-      );
-      setSelectedPreparedSourceId((currentId) => (currentId === session.id ? null : currentId));
-      setSelectedBookSourceId((currentId) => (currentId === session.id ? null : currentId));
+      await clearExpiredTemporarySources();
+      await refreshTemporaryStorageUsage();
     } catch (caughtError) {
       setQuickListenError(
-        caughtError instanceof Error ? caughtError.message : "Unable to discard temporary source.",
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Unable to clear expired temporary sessions.",
       );
     }
-  }, []);
+  }, [refreshTemporaryStorageUsage]);
 
   const handleDiscardTemporaryPreparedSource = useCallback(
     async (source: PreparedSource) => {
       const temporarySourceId = source.temporarySourceId ?? source.id;
       try {
-        await deleteTemporarySource(temporarySourceId);
+        await cleanupTemporarySource(temporarySourceId, { action: "discardNow" });
         setTemporarySources((currentSources) =>
           currentSources.filter(
             (session) =>
@@ -6558,6 +6650,7 @@ export function App() {
         setSourceMode("text");
         setContentMode("intake");
         announcePolite("Temporary source discarded.");
+        void refreshTemporaryStorageUsage();
       } catch (caughtError) {
         setSourcePrepError(
           caughtError instanceof Error
@@ -6566,14 +6659,14 @@ export function App() {
         );
       }
     },
-    [announcePolite, setContentMode],
+    [announcePolite, refreshTemporaryStorageUsage, setContentMode],
   );
 
   const handleDiscardTemporaryBookSource = useCallback(
     async (source: BookSource) => {
       const temporarySourceId = source.temporarySourceId ?? source.id;
       try {
-        await deleteTemporarySource(temporarySourceId);
+        await cleanupTemporarySource(temporarySourceId, { action: "discardNow" });
         setTemporarySources((currentSources) =>
           currentSources.filter(
             (session) =>
@@ -6592,6 +6685,7 @@ export function App() {
         setContentMode("intake");
         setIsBookCinemaOpen(false);
         announcePolite("Temporary source discarded.");
+        void refreshTemporaryStorageUsage();
       } catch (caughtError) {
         setBookSourceError(
           caughtError instanceof Error
@@ -6600,7 +6694,7 @@ export function App() {
         );
       }
     },
-    [announcePolite, setContentMode],
+    [announcePolite, refreshTemporaryStorageUsage, setContentMode],
   );
 
   const handleKeepTemporarySource = useCallback(
@@ -8984,13 +9078,17 @@ export function App() {
             isOpen={isQuickListenOpen}
             isSubmitting={isCreatingQuickListenSource}
             recentSources={temporarySources}
+            storageUsage={temporaryStorageUsage}
+            onClearExpired={handleClearExpiredTemporarySources}
             onClose={() => {
               setIsQuickListenOpen(false);
             }}
             onCreateFromFile={handleQuickListenFile}
             onCreateFromText={handleQuickListenText}
             onCreateFromUrl={handleQuickListenUrl}
+            onCleanup={handleCleanupTemporarySource}
             onDiscard={handleDiscardTemporarySource}
+            onExtend={handleExtendTemporarySource}
             onUseRecentSource={handleUseTemporarySource}
           />
         </Suspense>
