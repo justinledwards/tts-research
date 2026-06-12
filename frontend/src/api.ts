@@ -742,7 +742,7 @@ export async function createTemporarySource(
     throw await apiError(response);
   }
   const payload = (await response.json()) as TemporarySourceEnvelope | TemporarySourceSession;
-  return "source" in payload ? payload.source : payload;
+  return temporarySourceFromPayload(payload);
 }
 
 export async function getTemporarySource(id: string): Promise<TemporarySourceSession> {
@@ -750,7 +750,9 @@ export async function getTemporarySource(id: string): Promise<TemporarySourceSes
   if (!response.ok) {
     throw await apiError(response);
   }
-  return response.json() as Promise<TemporarySourceSession>;
+  return temporarySourceFromPayload(
+    (await response.json()) as TemporarySourceEnvelope | TemporarySourceSession,
+  );
 }
 
 export async function getTemporaryStorageUsageSummary(): Promise<TemporaryStorageUsageSummary> {
@@ -813,7 +815,16 @@ export async function confirmTemporarySourceReadiness(
   if (!response.ok) {
     throw await apiError(response);
   }
-  return response.json() as Promise<TemporarySourceSession>;
+  return temporarySourceFromPayload(
+    (await response.json()) as TemporarySourceEnvelope | TemporarySourceSession,
+  );
+}
+
+function temporarySourceFromPayload(
+  payload: TemporarySourceEnvelope | TemporarySourceSession,
+): TemporarySourceSession {
+  const source = "source" in payload ? payload.source : payload;
+  return { ...source, scope: "temporary", sourceOwner: "temporary" };
 }
 
 export async function promoteTemporarySource(

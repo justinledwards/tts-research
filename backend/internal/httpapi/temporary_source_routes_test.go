@@ -47,14 +47,18 @@ func TestTemporarySourceRoutesCreateGenerateArtifactsAndPromote(t *testing.T) {
 	if err := json.NewDecoder(createResponse.Body).Decode(&envelope); err != nil {
 		t.Fatalf("decode temporary source: %v", err)
 	}
-	if envelope.SourceOwner != pipeline.SourceOwnerTemporary || envelope.TemporarySourceID == "" {
+	if envelope.SourceOwner != pipeline.SourceOwnerTemporary ||
+		envelope.Scope != pipeline.SourceArtifactScopeTemporary ||
+		envelope.TemporarySourceID == "" {
 		t.Fatalf("envelope = %#v, want temporary source envelope", envelope)
 	}
 	temporary := envelope.Source
 	if temporary.ProjectID != "" {
 		t.Fatalf("temporary project id = %q, want empty", temporary.ProjectID)
 	}
-	if temporary.SourceOwner != pipeline.SourceOwnerTemporary || temporary.TemporarySourceID != temporary.ID {
+	if temporary.SourceOwner != pipeline.SourceOwnerTemporary ||
+		temporary.Scope != pipeline.SourceArtifactScopeTemporary ||
+		temporary.TemporarySourceID != temporary.ID {
 		t.Fatalf("temporary = %#v, want source owner and temporary id metadata", temporary)
 	}
 	preparedAfter, err := service.ListProjectPreparedSources("default")
@@ -183,5 +187,44 @@ func TestTemporarySourceRouteAcceptsMultipartFile(t *testing.T) {
 	temporary := envelope.Source
 	if temporary.Kind != string(pipeline.PreparedSourceKindFile) || temporary.SourceName != "upload.md" {
 		t.Fatalf("temporary = %#v, want file-backed upload", temporary)
+	}
+}
+
+func TestTemporarySourceRoutesFailClosedWhenFeatureDisabled(t *testing.T) {
+	disabled := false
+	service := newServiceWithTemporarySourcesEnabled(t, &disabled)
+	app := httpapi.NewRouter(service)
+
+	createRequest, err := http.NewRequest(
+		http.MethodPost,
+		"/api/temporary-sources",
+		bytes.NewBufferString(`{"kind":"text","text":"Temporary route source.","sourceName":"route.md"}`),
+	)
+	if err != nil {
+		t.Fatalf("NewRequest(create) returned error: %v", err)
+	}
+	createRequest.Header.Set("Content-Type", "application/json")
+	createResponse, err := app.Test(createRequest)
+	if err != nil {
+		t.Fatalf("app.Test(create) returned error: %v", err)
+	}
+	defer createResponse.Body.Close()
+	if createResponse.StatusCode != http.StatusNotFound {
+		payload, _ := io.ReadAll(createResponse.Body)
+		t.Fatalf("temporary create status = %d, want %d, body = %s", createResponse.StatusCode, http.StatusNotFound, payload)
+	}
+
+	projectRequest, err := http.NewRequest(http.MethodGet, "/api/projects", nil)
+	if err != nil {
+		t.Fatalf("NewRequest(projects) returned error: %v", err)
+	}
+	projectResponse, err := app.Test(projectRequest)
+	if err != nil {
+		t.Fatalf("app.Test(projects) returned error: %v", err)
+	}
+	defer projectResponse.Body.Close()
+	if projectResponse.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(projectResponse.Body)
+		t.Fatalf("project route status = %d, want %d, body = %s", projectResponse.StatusCode, http.StatusOK, payload)
 	}
 }

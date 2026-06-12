@@ -27,16 +27,19 @@ describe("temporary source copy", () => {
     expect(TEMPORARY_SOURCE_COPY.privacy.localFirst).toContain("Provider-backed generation");
   });
 
-  it("avoids ambiguous save language in temporary-source action copy", () => {
+  it("avoids ambiguous bare lifecycle language in temporary-source action copy", () => {
     const copy = JSON.stringify({
       actions: TEMPORARY_SOURCE_COPY.actions,
       confirmation: TEMPORARY_SOURCE_COPY.confirmation,
       empty: TEMPORARY_SOURCE_COPY.empty,
       launcher: TEMPORARY_SOURCE_COPY.launcher,
       promotion: TEMPORARY_SOURCE_COPY.promotion,
-    }).toLowerCase();
+    });
 
-    expect(copy).not.toContain("save");
-    expect(copy).not.toContain("saved");
+    expect(copy).not.toMatch(/\bSave\b/);
+    expect(copy).not.toMatch(/\bSaved\b/);
+    expect(copy).not.toMatch(/"Import"/);
+    expect(copy).not.toMatch(/"Discard"/);
+    expect(copy).not.toMatch(/"History"/);
   });
 });

@@ -191,6 +191,7 @@ function temporarySourceSession(): TemporarySourceSession {
     promotionStatus: "notPromoted",
     sourceName: "https://example.com/cache-article",
     sourceOwner: "temporary",
+    scope: "temporary",
     sourceUrl: "https://example.com/cache-article",
     status: "reviewable",
     temporarySourceId: "temp-article",

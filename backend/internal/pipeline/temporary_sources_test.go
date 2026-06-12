@@ -33,6 +33,9 @@ func TestTemporarySourceLifecycleCreatesGeneratesDeletesAndPromotesByCopy(t *tes
 	if temporary.SourceOwner != pipeline.SourceOwnerTemporary {
 		t.Fatalf("source owner = %q, want temporary", temporary.SourceOwner)
 	}
+	if !strings.HasPrefix(temporary.ID, "tmp_") || temporary.Scope != pipeline.SourceArtifactScopeTemporary {
+		t.Fatalf("temporary id/scope = %q/%q, want disjoint temporary envelope", temporary.ID, temporary.Scope)
+	}
 	if _, err := os.Stat(filepath.Join(service.Options().TemporaryArtifactDir, temporary.ID, "source.txt")); err != nil {
 		t.Fatalf("temporary extraction artifact should exist: %v", err)
 	}
@@ -284,6 +287,30 @@ func TestTemporaryCleanupAllArtifactsDoesNotAffectPromotedProjectArtifacts(t *te
 	}
 	if _, err := service.GetPreparedSource(promoted.ID); err != nil {
 		t.Fatalf("promoted source should survive temporary cleanup: %v", err)
+	}
+}
+
+func TestTemporarySourceCleanupRejectsPathTraversalIDs(t *testing.T) {
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	projectArtifactRoot := filepath.Join(service.Options().SourcePrepDir, "project-artifact-root")
+	if err := os.MkdirAll(projectArtifactRoot, 0o755); err != nil {
+		t.Fatalf("mkdir project artifact root: %v", err)
+	}
+	projectArtifactPath := filepath.Join(projectArtifactRoot, "source-prep.json")
+	if err := os.WriteFile(projectArtifactPath, []byte(`{"project":"durable"}`), 0o644); err != nil {
+		t.Fatalf("write project artifact: %v", err)
+	}
+
+	if err := service.DeleteTemporarySource("../source-preps/project-artifact-root"); !errors.Is(err, pipeline.ErrTemporarySourceNotFound) {
+		t.Fatalf("DeleteTemporarySource traversal error = %v, want temporary source not found", err)
+	}
+	if _, err := service.CleanupTemporarySource("../source-preps/project-artifact-root", pipeline.TemporarySourceCleanupRequest{
+		Action: pipeline.TemporarySourceCleanupRemoveAllArtifacts,
+	}); !errors.Is(err, pipeline.ErrTemporarySourceNotFound) {
+		t.Fatalf("CleanupTemporarySource traversal error = %v, want temporary source not found", err)
+	}
+	if _, err := os.Stat(projectArtifactPath); err != nil {
+		t.Fatalf("project artifact should survive traversal cleanup attempt: %v", err)
 	}
 }
 

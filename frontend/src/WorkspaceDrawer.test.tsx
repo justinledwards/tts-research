@@ -468,6 +468,7 @@ function temporarySource(overrides: Partial<TemporarySourceSession> = {}): Tempo
     promotionStatus: "notPromoted",
     sourceName: "Temporary briefing",
     sourceOwner: "temporary",
+    scope: "temporary",
     status: "reviewable",
     temporarySourceId: "temp-1",
     text: "Temporary briefing text.",

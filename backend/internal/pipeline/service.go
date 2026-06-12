@@ -137,6 +137,7 @@ type Options struct {
 	TemporaryAudioDir                    string
 	TemporaryProgressDir                 string
 	TemporarySourceTTL                   time.Duration
+	TemporarySourcesEnabled              *bool
 	BookSourceDir                        string
 	SourcePrepDir                        string
 	ProgressDataDir                      string
@@ -432,6 +433,10 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	if options.TemporarySourceTTL <= 0 {
 		options.TemporarySourceTTL = defaultTemporarySourceTTL
 	}
+	if options.TemporarySourcesEnabled == nil {
+		enabled := true
+		options.TemporarySourcesEnabled = &enabled
+	}
 	if strings.TrimSpace(options.BookSourceDir) == "" {
 		options.BookSourceDir = defaultBookSourceDir
 	}
@@ -620,6 +625,10 @@ func (service *Service) resolveSegmentSettingsForMode(isReferenceProfile bool, p
 // Options exposes the normalized runtime options used by this service.
 func (service *Service) Options() Options {
 	return service.options
+}
+
+func (service *Service) TemporarySourcesEnabled() bool {
+	return service.options.TemporarySourcesEnabled != nil && *service.options.TemporarySourcesEnabled
 }
 
 func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest) (VoiceJob, error) {

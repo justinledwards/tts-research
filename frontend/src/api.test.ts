@@ -143,10 +143,12 @@ describe("API errors", () => {
       requests.push({ url: fetchInputUrl(input), init });
       return Promise.resolve(
         Response.json({
+          scope: "temporary",
           sourceOwner: "temporary",
           temporarySourceId: "temp-1",
           source: {
             id: "temp-1",
+            scope: "temporary",
             temporarySourceId: "temp-1",
             sourceOwner: "temporary",
             status: "reviewable",
@@ -174,6 +176,7 @@ describe("API errors", () => {
 
       expect(source).toMatchObject({
         id: "temp-1",
+        scope: "temporary",
         sourceOwner: "temporary",
         temporarySourceId: "temp-1",
       });
@@ -227,6 +230,7 @@ describe("API errors", () => {
       return Promise.resolve(
         Response.json({
           id: "temp-1",
+          scope: "temporary",
           temporarySourceId: "temp-1",
           sourceOwner: "temporary",
           status: "previewable",

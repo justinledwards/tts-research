@@ -12,6 +12,13 @@ import (
 )
 
 func registerTemporarySourceRoutes(app *fiber.App, service *pipeline.Service) {
+	app.Use("/api/temporary-sources", func(ctx fiber.Ctx) error {
+		if service.TemporarySourcesEnabled() {
+			return ctx.Next()
+		}
+		return ctx.Status(fiber.StatusNotFound).JSON(errorResponse("temporary sources are disabled"))
+	})
+
 	app.Post("/api/temporary-sources", func(ctx fiber.Ctx) error {
 		if !strings.Contains(ctx.Get(fiber.HeaderContentType), "application/json") {
 			fileHeader, err := ctx.FormFile("file")
@@ -68,7 +75,7 @@ func registerTemporarySourceRoutes(app *fiber.App, service *pipeline.Service) {
 		if err != nil {
 			return temporarySourceError(ctx, err)
 		}
-		return ctx.JSON(source)
+		return ctx.JSON(temporarySourceEnvelope(source))
 	})
 
 	app.Patch("/api/temporary-sources/:id/readiness/confirm", func(ctx fiber.Ctx) error {
@@ -80,7 +87,7 @@ func registerTemporarySourceRoutes(app *fiber.App, service *pipeline.Service) {
 		if err != nil {
 			return temporarySourceError(ctx, err)
 		}
-		return ctx.JSON(source)
+		return ctx.JSON(temporarySourceEnvelope(source))
 	})
 
 	app.Post("/api/temporary-sources/:id/voice-jobs", func(ctx fiber.Ctx) error {
@@ -138,6 +145,7 @@ func registerTemporarySourceRoutes(app *fiber.App, service *pipeline.Service) {
 func temporarySourceEnvelope(source pipeline.TemporarySourceSession) pipeline.TemporarySourceEnvelope {
 	return pipeline.TemporarySourceEnvelope{
 		SourceOwner:       pipeline.SourceOwnerTemporary,
+		Scope:             pipeline.SourceArtifactScopeTemporary,
 		TemporarySourceID: source.TemporarySourceID,
 		Source:            source,
 	}

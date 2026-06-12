@@ -16,6 +16,7 @@ import (
 )
 
 const temporarySourceMetadataFilename = "temporary-source.json"
+const temporarySourceIDPrefix = "tmp_"
 
 type CreateTemporarySourceRequest struct {
 	Kind                  PreparedSourceKind `json:"kind"`
@@ -121,7 +122,7 @@ func (service *Service) CreateTemporarySource(ctx context.Context, request Creat
 	}
 
 	now := time.Now().UTC()
-	id := newID()
+	id := temporarySourceIDPrefix + newID()
 	markdownParseMode := normalizeMarkdownParseMode(request.MarkdownParseMode)
 	preprocessed := preprocessReadableSource(
 		sourceText,
@@ -174,6 +175,7 @@ func (service *Service) CreateTemporarySource(ctx context.Context, request Creat
 	source.SourceReadiness = &readiness
 
 	session := temporarySessionFromPreparedSource(source, now, now.Add(service.options.TemporarySourceTTL))
+	session.Scope = SourceArtifactScopeTemporary
 	session.Artifacts = append(session.Artifacts, SourceArtifactRef{
 		ID:        "source",
 		Scope:     SourceArtifactScopeTemporary,
@@ -627,9 +629,9 @@ func (service *Service) recoverExpiredTemporarySource(id string) (TemporarySourc
 }
 
 func (service *Service) loadTemporarySourceMetadata(id string) (TemporarySourceSession, error) {
-	cleanID := strings.TrimSpace(id)
-	if cleanID == "" {
-		return TemporarySourceSession{}, ErrTemporarySourceNotFound
+	cleanID, err := temporarySourcePathID(id)
+	if err != nil {
+		return TemporarySourceSession{}, err
 	}
 	metadataBytes, err := os.ReadFile(filepath.Join(service.options.TemporarySourceDataDir, cleanID, temporarySourceMetadataFilename))
 	if err != nil {
@@ -645,7 +647,23 @@ func (service *Service) loadTemporarySourceMetadata(id string) (TemporarySourceS
 	if strings.TrimSpace(session.ID) == "" {
 		return TemporarySourceSession{}, ErrTemporarySourceNotFound
 	}
+	if _, err := temporarySourcePathID(session.ID); err != nil {
+		return TemporarySourceSession{}, err
+	}
+	session.Scope = SourceArtifactScopeTemporary
+	session.SourceOwner = SourceOwnerTemporary
+	if session.TemporarySourceID == "" {
+		session.TemporarySourceID = session.ID
+	}
 	return cloneTemporarySourceSession(session), nil
+}
+
+func temporarySourcePathID(id string) (string, error) {
+	cleanID := strings.TrimSpace(id)
+	if cleanID == "" || cleanID != safeDataPathID(cleanID) {
+		return "", ErrTemporarySourceNotFound
+	}
+	return cleanID, nil
 }
 
 func (service *Service) loadTemporarySourceMetadataSessions() []TemporarySourceSession {
@@ -695,6 +713,10 @@ func (service *Service) temporarySourceHasActiveJob(id string) bool {
 }
 
 func (service *Service) removeTemporaryGeneratedAudio(session TemporarySourceSession) (int64, error) {
+	cleanID, err := temporarySourcePathID(session.ID)
+	if err != nil {
+		return 0, err
+	}
 	var removed int64
 	service.mu.Lock()
 	for jobID, job := range service.jobs {
@@ -709,10 +731,10 @@ func (service *Service) removeTemporaryGeneratedAudio(session TemporarySourceSes
 	}
 	service.mu.Unlock()
 	for _, dir := range []string{
-		filepath.Join(service.options.TemporaryAudioDir, session.ID),
-		filepath.Join(service.options.TemporaryProgressDir, session.ID),
-		filepath.Join(service.options.ProgressDataDir, safeDataPathID(progressTargetForTemporarySource(session.ID))),
-		filepath.Join(service.options.PlaybackSessionDir, safeDataPathID(progressTargetForTemporarySource(session.ID))),
+		filepath.Join(service.options.TemporaryAudioDir, cleanID),
+		filepath.Join(service.options.TemporaryProgressDir, cleanID),
+		filepath.Join(service.options.ProgressDataDir, safeDataPathID(progressTargetForTemporarySource(cleanID))),
+		filepath.Join(service.options.PlaybackSessionDir, safeDataPathID(progressTargetForTemporarySource(cleanID))),
 	} {
 		removed += directorySize(dir)
 		if err := os.RemoveAll(dir); err != nil {
@@ -723,12 +745,16 @@ func (service *Service) removeTemporaryGeneratedAudio(session TemporarySourceSes
 }
 
 func (service *Service) temporarySourceStorageBytes(id string) temporaryStorageBytes {
-	sourceDir := filepath.Join(service.options.TemporarySourceDataDir, id)
-	artifactDir := filepath.Join(service.options.TemporaryArtifactDir, id)
-	audioDir := filepath.Join(service.options.TemporaryAudioDir, id)
-	progressDir := filepath.Join(service.options.TemporaryProgressDir, id)
-	progressTargetDir := filepath.Join(service.options.ProgressDataDir, safeDataPathID(progressTargetForTemporarySource(id)))
-	playbackDir := filepath.Join(service.options.PlaybackSessionDir, safeDataPathID(progressTargetForTemporarySource(id)))
+	cleanID, err := temporarySourcePathID(id)
+	if err != nil {
+		return temporaryStorageBytes{}
+	}
+	sourceDir := filepath.Join(service.options.TemporarySourceDataDir, cleanID)
+	artifactDir := filepath.Join(service.options.TemporaryArtifactDir, cleanID)
+	audioDir := filepath.Join(service.options.TemporaryAudioDir, cleanID)
+	progressDir := filepath.Join(service.options.TemporaryProgressDir, cleanID)
+	progressTargetDir := filepath.Join(service.options.ProgressDataDir, safeDataPathID(progressTargetForTemporarySource(cleanID)))
+	playbackDir := filepath.Join(service.options.PlaybackSessionDir, safeDataPathID(progressTargetForTemporarySource(cleanID)))
 	bytes := temporaryStorageBytes{
 		source:   directorySize(sourceDir),
 		artifact: directorySize(artifactDir),
@@ -968,9 +994,9 @@ func requestHasTemporaryPromotionMetadata(request TemporarySourcePromotionReques
 }
 
 func (service *Service) getTemporarySource(id string, touch bool) (TemporarySourceSession, error) {
-	cleanID := strings.TrimSpace(id)
-	if cleanID == "" {
-		return TemporarySourceSession{}, ErrTemporarySourceNotFound
+	cleanID, err := temporarySourcePathID(id)
+	if err != nil {
+		return TemporarySourceSession{}, err
 	}
 	service.mu.RLock()
 	session, ok := service.temporary[cleanID]
@@ -990,6 +1016,7 @@ func (service *Service) getTemporarySource(id string, touch bool) (TemporarySour
 		return TemporarySourceSession{}, ErrTemporarySourceExpired
 	}
 	if touch {
+		session.Scope = SourceArtifactScopeTemporary
 		session.LastAccessedAt = now
 		session.ExpiresAt = now.Add(service.options.TemporarySourceTTL)
 		session.UpdatedAt = now
@@ -998,11 +1025,20 @@ func (service *Service) getTemporarySource(id string, touch bool) (TemporarySour
 		service.temporary[session.ID] = cloneTemporarySourceSession(session)
 		service.mu.Unlock()
 	}
+	session.Scope = SourceArtifactScopeTemporary
 	return session, nil
 }
 
 func (service *Service) persistTemporarySource(session TemporarySourceSession) error {
-	outputDir, err := filepath.Abs(filepath.Join(service.options.TemporarySourceDataDir, session.ID))
+	cleanID, err := temporarySourcePathID(session.ID)
+	if err != nil {
+		return err
+	}
+	session.ID = cleanID
+	session.TemporarySourceID = cleanID
+	session.Scope = SourceArtifactScopeTemporary
+	session.SourceOwner = SourceOwnerTemporary
+	outputDir, err := filepath.Abs(filepath.Join(service.options.TemporarySourceDataDir, cleanID))
 	if err != nil {
 		return err
 	}
@@ -1012,7 +1048,7 @@ func (service *Service) persistTemporarySource(session TemporarySourceSession) e
 	if err := writeJSON(filepath.Join(outputDir, temporarySourceMetadataFilename), session); err != nil {
 		return err
 	}
-	artifactDir, err := filepath.Abs(filepath.Join(service.options.TemporaryArtifactDir, session.ID))
+	artifactDir, err := filepath.Abs(filepath.Join(service.options.TemporaryArtifactDir, cleanID))
 	if err != nil {
 		return err
 	}
@@ -1048,6 +1084,14 @@ func (service *Service) reloadTemporarySources() {
 		if err := json.Unmarshal(metadataBytes, &session); err != nil || strings.TrimSpace(session.ID) == "" {
 			continue
 		}
+		if _, err := temporarySourcePathID(session.ID); err != nil {
+			continue
+		}
+		session.Scope = SourceArtifactScopeTemporary
+		session.SourceOwner = SourceOwnerTemporary
+		if session.TemporarySourceID == "" {
+			session.TemporarySourceID = session.ID
+		}
 		if !session.ExpiresAt.IsZero() && !session.ExpiresAt.After(now) {
 			_, _ = service.removeTemporarySource(session, TemporarySourceStateExpired, false)
 			continue
@@ -1060,11 +1104,19 @@ func (service *Service) reloadTemporarySources() {
 }
 
 func (service *Service) removeTemporarySource(session TemporarySourceSession, status TemporarySourceLifecycleState, removeMetadata bool) (int64, error) {
-	bytesBefore := service.temporarySourceStorageBytes(session.ID).total
+	cleanID, err := temporarySourcePathID(session.ID)
+	if err != nil {
+		return 0, err
+	}
+	session.ID = cleanID
+	session.TemporarySourceID = cleanID
+	session.Scope = SourceArtifactScopeTemporary
+	session.SourceOwner = SourceOwnerTemporary
+	bytesBefore := service.temporarySourceStorageBytes(cleanID).total
 	service.mu.Lock()
-	delete(service.temporary, session.ID)
+	delete(service.temporary, cleanID)
 	for jobID, job := range service.jobs {
-		if job.TemporarySourceID == session.ID {
+		if job.TemporarySourceID == cleanID {
 			delete(service.jobs, jobID)
 			if cancel := service.jobCancels[jobID]; cancel != nil {
 				cancel()
@@ -1086,24 +1138,24 @@ func (service *Service) removeTemporarySource(session TemporarySourceSession, st
 		session.Artifacts = nil
 		session.Bookmarks = nil
 		session.PlaybackProgress = nil
-		if err := os.MkdirAll(filepath.Join(service.options.TemporarySourceDataDir, session.ID), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(service.options.TemporarySourceDataDir, cleanID), 0o755); err != nil {
 			return 0, err
 		}
-		_ = writeJSON(filepath.Join(service.options.TemporarySourceDataDir, session.ID, temporarySourceMetadataFilename), session)
+		_ = writeJSON(filepath.Join(service.options.TemporarySourceDataDir, cleanID, temporarySourceMetadataFilename), session)
 	}
 	for _, dir := range []string{
-		filepath.Join(service.options.TemporaryArtifactDir, session.ID),
-		filepath.Join(service.options.TemporaryAudioDir, session.ID),
-		filepath.Join(service.options.TemporaryProgressDir, session.ID),
-		filepath.Join(service.options.ProgressDataDir, safeDataPathID(progressTargetForTemporarySource(session.ID))),
-		filepath.Join(service.options.PlaybackSessionDir, safeDataPathID(progressTargetForTemporarySource(session.ID))),
+		filepath.Join(service.options.TemporaryArtifactDir, cleanID),
+		filepath.Join(service.options.TemporaryAudioDir, cleanID),
+		filepath.Join(service.options.TemporaryProgressDir, cleanID),
+		filepath.Join(service.options.ProgressDataDir, safeDataPathID(progressTargetForTemporarySource(cleanID))),
+		filepath.Join(service.options.PlaybackSessionDir, safeDataPathID(progressTargetForTemporarySource(cleanID))),
 	} {
 		if err := os.RemoveAll(dir); err != nil {
 			return 0, err
 		}
 	}
 	if removeMetadata {
-		if err := os.RemoveAll(filepath.Join(service.options.TemporarySourceDataDir, session.ID)); err != nil {
+		if err := os.RemoveAll(filepath.Join(service.options.TemporarySourceDataDir, cleanID)); err != nil {
 			return 0, err
 		}
 	}
@@ -1230,6 +1282,7 @@ func temporarySessionFromPreparedSource(source PreparedSource, now time.Time, ex
 	return TemporarySourceSession{
 		ID:                          source.TemporarySourceID,
 		TemporarySourceID:           source.TemporarySourceID,
+		Scope:                       SourceArtifactScopeTemporary,
 		SourceOwner:                 SourceOwnerTemporary,
 		Status:                      TemporarySourceStateReviewable,
 		PromotionStatus:             TemporarySourceNotPromoted,

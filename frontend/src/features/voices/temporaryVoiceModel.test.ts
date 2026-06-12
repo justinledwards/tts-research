@@ -155,6 +155,7 @@ function temporarySource(): TemporarySourceSession {
     promotionStatus: "notPromoted",
     sourceName: "Temporary article",
     sourceOwner: "temporary",
+    scope: "temporary",
     status: "previewable",
     temporarySourceId: "temp-1",
     updatedAt: "2026-06-12T11:00:00.000Z",

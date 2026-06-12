@@ -21,23 +21,29 @@ import (
 
 func newService(t *testing.T) *pipeline.Service {
 	t.Helper()
+	enabled := true
+	return newServiceWithTemporarySourcesEnabled(t, &enabled)
+}
 
+func newServiceWithTemporarySourcesEnabled(t *testing.T, temporarySourcesEnabled *bool) *pipeline.Service {
+	t.Helper()
 	return pipeline.NewService(
 		agents.NewVoiceOptimizationAgent(),
 		agents.NewMockTTSAgent(),
 		agents.NewMockVoiceCheckerAgent(),
 		pipeline.Options{
-			MaxRetries:             3,
-			JobDataDir:             t.TempDir(),
-			ProjectDataDir:         t.TempDir(),
-			BookSourceDir:          t.TempDir(),
-			SourcePrepDir:          t.TempDir(),
-			ProgressDataDir:        t.TempDir(),
-			PlaybackSessionDir:     t.TempDir(),
-			TemporarySourceDataDir: t.TempDir(),
-			TemporaryArtifactDir:   t.TempDir(),
-			TemporaryAudioDir:      t.TempDir(),
-			TemporaryProgressDir:   t.TempDir(),
+			MaxRetries:              3,
+			JobDataDir:              t.TempDir(),
+			ProjectDataDir:          t.TempDir(),
+			BookSourceDir:           t.TempDir(),
+			SourcePrepDir:           t.TempDir(),
+			ProgressDataDir:         t.TempDir(),
+			PlaybackSessionDir:      t.TempDir(),
+			TemporarySourceDataDir:  t.TempDir(),
+			TemporaryArtifactDir:    t.TempDir(),
+			TemporaryAudioDir:       t.TempDir(),
+			TemporaryProgressDir:    t.TempDir(),
+			TemporarySourcesEnabled: temporarySourcesEnabled,
 		},
 	)
 }

@@ -95,6 +95,11 @@ func pipelineServiceFromEnv(
 		logger.Error("invalid source URL configuration", "error", err)
 		return nil, err
 	}
+	temporarySourcesEnabled, err := envBoolWithDefault("TEMPORARY_SOURCES_ENABLED", true)
+	if err != nil {
+		logger.Error("invalid temporary source configuration", "error", err)
+		return nil, err
+	}
 	alignmentEnabled, err := envBoolWithDefault("ALIGNMENT_ENABLED", false)
 	if err != nil {
 		logger.Error("invalid alignment configuration", "error", err)
@@ -161,6 +166,8 @@ func pipelineServiceFromEnv(
 		bookPDFRequireTextExtractor,
 		"studioInheritsFromDefault",
 		studioSegmentWorkers == 0 && studioSegmentMaxRunes == 0,
+		"temporarySourcesEnabled",
+		temporarySourcesEnabled,
 	)
 
 	service := pipeline.NewService(
@@ -186,6 +193,7 @@ func pipelineServiceFromEnv(
 			VoiceDataDir:                         envWithDefault("VOICE_DATA_DIR", "./data/voices"),
 			FFMPEGPath:                           envWithDefault("FFMPEG_PATH", "ffmpeg"),
 			SourceURLAllowPrivate:                sourceURLAllowPrivate,
+			TemporarySourcesEnabled:              boolPointer(temporarySourcesEnabled),
 			BookPDFPythonPath:                    envWithDefault("VOICE_BOOK_PDF_PYTHON_PATH", "./.venv/bin/python"),
 			BookPDFExtractorScriptPath:           envWithDefault("VOICE_BOOK_PDF_EXTRACTOR_SCRIPT_PATH", "./adapters/pdf/cli.py"),
 			BookPDFRequireTextExtractor:          bookPDFRequireTextExtractor,
@@ -261,4 +269,8 @@ func pipelineServiceFromEnv(
 	)
 
 	return service, nil
+}
+
+func boolPointer(value bool) *bool {
+	return &value
 }

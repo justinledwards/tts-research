@@ -677,6 +677,7 @@ export interface TemporarySourcePromotionManifest {
 export interface TemporarySourceSession {
   id: string;
   temporarySourceId: string;
+  scope: "temporary";
   sourceOwner: "temporary";
   projectId?: string;
   status: TemporarySourceLifecycleState;
@@ -722,6 +723,7 @@ export interface ProjectSourceEnvelope {
 
 export interface TemporarySourceEnvelope {
   sourceOwner: "temporary";
+  scope: "temporary";
   projectId?: never;
   temporarySourceId: string;
   source: TemporarySourceSession;

@@ -717,6 +717,7 @@ type BookSourceScopeContent struct {
 type TemporarySourceSession struct {
 	ID                          string                         `json:"id"`
 	TemporarySourceID           string                         `json:"temporarySourceId"`
+	Scope                       SourceArtifactScope            `json:"scope"`
 	SourceOwner                 SourceOwner                    `json:"sourceOwner"`
 	ProjectID                   string                         `json:"projectId,omitempty"`
 	Status                      TemporarySourceLifecycleState  `json:"status"`
@@ -762,6 +763,7 @@ type ProjectSourceEnvelope struct {
 
 type TemporarySourceEnvelope struct {
 	SourceOwner       SourceOwner            `json:"sourceOwner"`
+	Scope             SourceArtifactScope    `json:"scope"`
 	ProjectID         string                 `json:"projectId,omitempty"`
 	TemporarySourceID string                 `json:"temporarySourceId"`
 	Source            TemporarySourceSession `json:"source"`

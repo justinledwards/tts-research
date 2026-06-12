@@ -165,6 +165,7 @@ function temporarySession(overrides: Partial<TemporarySourceSession> = {}): Temp
     promotionStatus: "notPromoted",
     sourceName: "Temporary paste",
     sourceOwner: "temporary",
+    scope: "temporary",
     status: "reviewable",
     temporarySourceId: id,
     updatedAt: "2026-06-12T10:00:00Z",

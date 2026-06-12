@@ -211,6 +211,7 @@ const temporarySourceFixture: TemporarySourceSession = {
   promotionStatus: "notPromoted",
   sourceName: "Quick listen",
   sourceOwner: "temporary",
+  scope: "temporary",
   status: "reviewable",
   summary: {
     citationSkipCount: 0,
