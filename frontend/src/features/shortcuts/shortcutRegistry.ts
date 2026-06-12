@@ -1,6 +1,7 @@
 export type ShortcutCategory =
   | "Global"
   | "Navigation"
+  | "Source"
   | "Playback"
   | "Review"
   | "Teleprompt"
@@ -135,6 +136,32 @@ export const SHORTCUT_COMMANDS = [
     description: "Inspect the selected or first active status issue.",
     id: "status.inspectIssue",
     label: "Inspect status issue",
+    scope: "global",
+  },
+  {
+    bindings: [
+      { altKey: true, id: "alt-shift-q", key: "q", label: "Alt+Shift+Q", shiftKey: true },
+      { id: "f7", key: "F7", label: "F7" },
+    ],
+    category: "Source",
+    configurable: true,
+    defaultBindingId: "alt-shift-q",
+    description: "Open Quick Listen for a temporary narration source.",
+    id: "temporary.quickListen",
+    label: "Quick Listen",
+    scope: "global",
+  },
+  {
+    bindings: [
+      { altKey: true, id: "alt-shift-k", key: "k", label: "Alt+Shift+K", shiftKey: true },
+      { altKey: true, id: "alt-shift-s", key: "s", label: "Alt+Shift+S", shiftKey: true },
+    ],
+    category: "Source",
+    configurable: true,
+    defaultBindingId: "alt-shift-k",
+    description: "Keep the active temporary source in the current project.",
+    id: "temporary.keepInProject",
+    label: "Keep temporary source",
     scope: "global",
   },
   {
@@ -942,6 +969,7 @@ export function shortcutCommandsByCategory(preferences: ShortcutPreferences): {
   const categories: ShortcutCategory[] = [
     "Global",
     "Playback",
+    "Source",
     "Review",
     "Teleprompt",
     "Theatre",

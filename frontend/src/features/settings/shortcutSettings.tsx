@@ -108,6 +108,12 @@ function shortcutSettingLabel(commandId: string, fallback: string): string {
   if (commandId === "status.inspectIssue") {
     return "Inspect status issue shortcut";
   }
+  if (commandId === "temporary.quickListen") {
+    return "Quick Listen shortcut";
+  }
+  if (commandId === "temporary.keepInProject") {
+    return "Keep temporary source shortcut";
+  }
   if (commandId === "playback.createListen") {
     return "Create & Listen shortcut";
   }

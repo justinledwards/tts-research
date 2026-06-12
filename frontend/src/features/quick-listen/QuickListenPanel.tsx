@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, SegmentedControl, StatusChip, cx, fieldControlClassName } from "../../design";
 import type {
   BookSource,
@@ -17,11 +17,12 @@ import {
 } from "../intake/sourceTypeModel";
 import { WebsiteExtractionSummary } from "../website-cinema/WebsiteExtractionSummary";
 
-type QuickListenMode = "paste" | "url" | "file" | "recent";
+export type QuickListenMode = "paste" | "url" | "file" | "recent";
 type QuickListenDestination = "review" | "preview";
 
 export interface QuickListenPanelProps {
   error: string | null;
+  initialMode?: QuickListenMode;
   isOpen: boolean;
   isSubmitting: boolean;
   recentSources: TemporarySourceSession[];
@@ -61,6 +62,7 @@ const ACCEPTED_QUICK_LISTEN_FILE_TYPES =
 
 export function QuickListenPanel({
   error,
+  initialMode,
   isOpen,
   isSubmitting,
   recentSources,
@@ -75,7 +77,7 @@ export function QuickListenPanel({
   onExtend,
   onUseRecentSource,
 }: Readonly<QuickListenPanelProps>) {
-  const [mode, setMode] = useState<QuickListenMode>("paste");
+  const [mode, setMode] = useState<QuickListenMode>(initialMode ?? "paste");
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -90,6 +92,17 @@ export function QuickListenPanel({
   const [autoCleanExpired, setAutoCleanExpired] = useState(true);
   const [includeTemporaryDiagnostics, setIncludeTemporaryDiagnostics] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || !initialMode) {
+      return;
+    }
+    setMode(initialMode);
+    setLocalError(null);
+    if (!hasEditedMetadata) {
+      setSourceType(initialMode === "url" ? "webpage" : "document");
+    }
+  }, [hasEditedMetadata, initialMode, isOpen]);
 
   const detection = useMemo(() => {
     const sourceChoice = sourceChoiceForQuickListenMode(mode);

@@ -1,3 +1,15 @@
+## 2026-06-12 12:14 CEST - Commit Temporary Palette Commands
+- [x] Review and stage temporary command package
+- [x] Commit temporary command package
+
+## 2026-06-12 12:02 CEST - Command Palette Temporary Source Commands
+- [x] Inspect command registry and temporary source handlers
+- [x] Add temporary source command metadata and handlers
+- [x] Add shortcut options for temporary workflows
+- [x] Add command palette tests for visibility, ownership, and search
+- [x] Run project checks
+- Validation: focused command-palette/shortcut Vitest passed, frontend typecheck passed, touched-file ESLint passed, and `pnpm check` passed format/lint/type/package/scripts/adapters before failing in existing backend `internal/pipeline` TempDir cleanup for `TestPreparedSourceJobIgnoresUnknownSelectionIDsAndExcludesSkippedBlocks` and `TestPreparedSourceJobDefensivelyExcludesOnDemandSelectedBlocks`.
+
 ## 2026-06-12 11:43 CEST - Command Center Temporary Work Shelf
 - [x] Inspect Command Center routes, activity, reports, and temporary source models
 - [x] Add temporary work shelf UI and actions

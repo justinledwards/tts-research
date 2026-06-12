@@ -61,6 +61,8 @@ describe("shortcut registry", () => {
     expect(shortcutLabelForCommand("review.approve", preferences)).toBe("A");
     expect(shortcutLabelForCommand("status.openActivity", preferences)).toBe("Alt+Shift+A");
     expect(shortcutLabelForCommand("status.inspectIssue", preferences)).toBe("Alt+Shift+I");
+    expect(shortcutLabelForCommand("temporary.quickListen", preferences)).toBe("Alt+Shift+Q");
+    expect(shortcutLabelForCommand("temporary.keepInProject", preferences)).toBe("Alt+Shift+K");
     expect(shortcutLabelForCommand("review.nextIssue", preferences)).toBe("N");
     expect(
       shortcutLabelForCommand(

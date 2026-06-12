@@ -103,6 +103,7 @@ import {
 } from "./api";
 
 import { formatDuration } from "./format";
+import type { QuickListenMode } from "./features/quick-listen";
 import { formatPlaybackClock, playbackTimeLabels } from "./features/playback";
 import {
   activeWordIndexForProgress,
@@ -2735,6 +2736,7 @@ export function App() {
     useState<PreparedSource | null>(null);
   const [selectedPreparedSourceId, setSelectedPreparedSourceId] = useState<string | null>(null);
   const [isQuickListenOpen, setIsQuickListenOpen] = useState(false);
+  const [quickListenInitialMode, setQuickListenInitialMode] = useState<QuickListenMode>("paste");
   const [isCreatingQuickListenSource, setIsCreatingQuickListenSource] = useState(false);
   const [quickListenError, setQuickListenError] = useState<string | null>(null);
   const [hydratingPreparedSourceId, setHydratingPreparedSourceId] = useState<string | null>(null);
@@ -3396,8 +3398,25 @@ export function App() {
   const activeNarrationBookSource = sourceMode === "book" ? selectedBookSource : null;
   const activeNarrationPreparedSource = sourceMode === "fileUrl" ? selectedPreparedSource : null;
   const activeNarrationIsTemporary =
+    activeNarrationBookSource?.sourceOwner === "temporary" ||
+    Boolean(activeNarrationBookSource?.temporarySourceId) ||
     activeNarrationPreparedSource?.sourceOwner === "temporary" ||
     Boolean(activeNarrationPreparedSource?.temporarySourceId);
+  const activeTemporarySourceId =
+    activeNarrationPreparedSource?.temporarySourceId ??
+    activeNarrationBookSource?.temporarySourceId ??
+    null;
+  const activeTemporarySource = useMemo(
+    () =>
+      activeTemporarySourceId
+        ? (temporarySources.find(
+            (source) =>
+              source.id === activeTemporarySourceId ||
+              source.temporarySourceId === activeTemporarySourceId,
+          ) ?? null)
+        : null,
+    [activeTemporarySourceId, temporarySources],
+  );
   const workbenchAudioRestoreSource = useMemo<WorkbenchAudioRestoreSource>(() => {
     if (activeNarrationPreparedSource) {
       return { mode: "prepared", source: activeNarrationPreparedSource };
@@ -6494,6 +6513,68 @@ export function App() {
     [activateTemporarySource, markTemporarySourceExpired],
   );
 
+  const openQuickListenMode = useCallback((mode: QuickListenMode = "paste") => {
+    setQuickListenInitialMode(mode);
+    setQuickListenError(null);
+    setIsQuickListenOpen(true);
+  }, []);
+
+  const handleOpenTemporarySourceInReview = useCallback(
+    async (session: TemporarySourceSession) => {
+      try {
+        activateTemporarySource(await getTemporarySource(session.id), "review");
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Temporary source is no longer available.";
+        markTemporarySourceExpired(session.id, message);
+        setQuickListenError(message);
+      }
+    },
+    [activateTemporarySource, markTemporarySourceExpired],
+  );
+
+  const handleOpenTemporarySourceInPreview = useCallback(
+    async (session: TemporarySourceSession) => {
+      try {
+        activateTemporarySource(await getTemporarySource(session.id), "preview");
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Temporary source is no longer available.";
+        markTemporarySourceExpired(session.id, message);
+        setQuickListenError(message);
+      }
+    },
+    [activateTemporarySource, markTemporarySourceExpired],
+  );
+
+  const handleOpenTemporarySourceCinema = useCallback(
+    async (session: TemporarySourceSession) => {
+      try {
+        const refreshed = await getTemporarySource(session.id);
+        if (temporarySessionPrefersBookCinema(refreshed)) {
+          activateTemporarySource(refreshed, "review");
+          setIsBookCinemaOpen(true);
+          return;
+        }
+        const source = temporarySessionToPreparedSource(refreshed);
+        activateTemporarySource(refreshed, "review");
+        openPreparedSourceCinema(source);
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Temporary source is no longer available.";
+        markTemporarySourceExpired(session.id, message);
+        setQuickListenError(message);
+      }
+    },
+    [activateTemporarySource, markTemporarySourceExpired, openPreparedSourceCinema],
+  );
+
   const refreshActiveTemporarySourceSession = useCallback(
     async (temporarySourceId: string) => {
       try {
@@ -8227,6 +8308,16 @@ export function App() {
           setIsHelpOpen(true);
           return;
         }
+        case "temporary.quickListen": {
+          openQuickListenMode("paste");
+          return;
+        }
+        case "temporary.keepInProject": {
+          if (activeTemporarySource) {
+            handleKeepTemporarySession(activeTemporarySource);
+          }
+          return;
+        }
         default: {
           if (canRunCurrentGenerationAction) {
             createAndListenFromCurrentSourceRef.current();
@@ -8237,9 +8328,12 @@ export function App() {
     [
       canRunCurrentGenerationAction,
       closeCommandPalette,
+      activeTemporarySource,
+      handleKeepTemporarySession,
       inspectNarrationStatusIssueFromShortcut,
       isCommandPaletteOpen,
       openCommandPalette,
+      openQuickListenMode,
       openShortcutCheatSheet,
       openStatusActivityFromShortcut,
     ],
@@ -8527,10 +8621,13 @@ export function App() {
         setBundlePanelMode("import");
         setIsBundlePanelOpen(true);
       },
-      openQuickListen: () => {
-        setQuickListenError(null);
-        setIsQuickListenOpen(true);
-      },
+      openQuickListen: openQuickListenMode,
+      openTemporarySourceCinema: handleOpenTemporarySourceCinema,
+      openTemporarySourceInReview: handleOpenTemporarySourceInReview,
+      openTemporarySourceInPreview: handleOpenTemporarySourceInPreview,
+      keepTemporarySourceInProject: handleKeepTemporarySession,
+      discardTemporarySource: handleDiscardTemporarySource,
+      clearExpiredTemporarySources: handleClearExpiredTemporarySources,
       createAndListenFromCurrentSource,
       handleAddPlaybackBookmark,
       handleResumeProgress,
@@ -8557,6 +8654,9 @@ export function App() {
     projects,
     bookSources,
     preparedSources,
+    activeTemporarySource,
+    temporarySources,
+    temporaryStorageUsage,
     wordHighlightCapabilityReason,
     workspaceStageActionLabel,
   });
@@ -9016,10 +9116,7 @@ export function App() {
             studioMode === "narration" ? "Narration Workbench" : "Voice Cloning Workbench",
         }}
         onCommandPaletteOpen={openCommandPalette}
-        onQuickListenOpen={() => {
-          setQuickListenError(null);
-          setIsQuickListenOpen(true);
-        }}
+        onQuickListenOpen={openQuickListenMode}
         onSettingsOpen={() => {
           setSettingsCommandTarget(null);
           setIsSettingsOpen(true);
@@ -9092,6 +9189,7 @@ export function App() {
         <Suspense fallback={<LazySurfaceFallback label="Loading Quick Listen..." />}>
           <LazyQuickListenPanel
             error={quickListenError}
+            initialMode={quickListenInitialMode}
             isOpen={isQuickListenOpen}
             isSubmitting={isCreatingQuickListenSource}
             recentSources={temporarySources}
@@ -9214,8 +9312,7 @@ export function App() {
             }}
             onOpenQuickListen={() => {
               setIsCommandCenterOpen(false);
-              setQuickListenError(null);
-              setIsQuickListenOpen(true);
+              openQuickListenMode();
             }}
             onOpenVoiceDashboard={() => {
               setIsCommandCenterOpen(false);

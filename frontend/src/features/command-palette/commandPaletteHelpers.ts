@@ -11,10 +11,18 @@ import type {
   WorkspaceCommandTarget,
 } from "../navigation/commands";
 import type { CinemaFocusMode, CinemaSurfaceKind } from "../cinema";
-import type { BookScope, BookSource, PlaybackProgress, PreparedSource } from "../../types";
+import type {
+  BookScope,
+  BookSource,
+  PlaybackProgress,
+  PreparedSource,
+  TemporarySourceSession,
+  TemporaryStorageUsageSummary,
+} from "../../types";
 import type { WorkspaceStageActionId } from "../workspace/stageActions";
 import type { WorkspaceLayoutMode, WorkspaceStage } from "../workspace/model";
 import { COMMAND_CENTER_ROUTES, type CommandCenterRouteId } from "../command-center/model";
+import type { QuickListenMode } from "../quick-listen";
 
 type SourceMode = "book" | "fileUrl" | "text";
 
@@ -54,7 +62,7 @@ export interface CommandPaletteHandlers {
   openDraftSource: () => void;
   openExportCurrent: () => void;
   openImportBundle: () => void;
-  openQuickListen: () => void;
+  openQuickListen: (mode?: QuickListenMode) => void;
   openShortcutCheatSheet: () => void;
   openProject: (projectId: string) => void;
   openSettings: (target: SettingsCommandTarget | null) => void;
@@ -68,6 +76,12 @@ export interface CommandPaletteHandlers {
   openBookSource: (book: BookSource) => void;
   openPreparedSource: (source: PreparedSource) => void | Promise<void>;
   openPreparedSourceCinema: (source: PreparedSource) => void;
+  openTemporarySourceCinema: (source: TemporarySourceSession) => void | Promise<void>;
+  openTemporarySourceInReview: (source: TemporarySourceSession) => void | Promise<void>;
+  openTemporarySourceInPreview: (source: TemporarySourceSession) => void | Promise<void>;
+  keepTemporarySourceInProject: (source: TemporarySourceSession) => void;
+  discardTemporarySource: (source: TemporarySourceSession) => void | Promise<void>;
+  clearExpiredTemporarySources: () => void | Promise<void>;
   openBookmarkProgress: () => void | Promise<void>;
   applyCinemaAdvancedMetadataTarget: (target: CinemaAdvancedCommandTarget) => void;
   applyCinemaFocusMetadataTarget: (target: CinemaFocusCommandTarget) => void;
@@ -96,6 +110,9 @@ export interface CommandPaletteBuildContext {
   projects: { id: string; name: string }[];
   bookSources: BookSource[];
   preparedSources: PreparedSource[];
+  activeTemporarySource: TemporarySourceSession | null;
+  temporarySources: TemporarySourceSession[];
+  temporaryStorageUsage: TemporaryStorageUsageSummary | null;
   wordHighlightCapabilityReason: string | undefined;
   workspaceStageActionLabel: (action: WorkspaceStageActionId) => string;
 }
@@ -117,7 +134,13 @@ export interface CommandPaletteHandlerContext {
   openCommandCenterRoute: (routeId: CommandCenterRouteId) => void;
   openExportCurrent: () => void;
   openImportBundle: () => void;
-  openQuickListen: () => void;
+  openQuickListen: (mode?: QuickListenMode) => void;
+  openTemporarySourceCinema: (source: TemporarySourceSession) => void | Promise<void>;
+  openTemporarySourceInReview: (source: TemporarySourceSession) => void | Promise<void>;
+  openTemporarySourceInPreview: (source: TemporarySourceSession) => void | Promise<void>;
+  keepTemporarySourceInProject: (source: TemporarySourceSession) => void;
+  discardTemporarySource: (source: TemporarySourceSession) => void | Promise<void>;
+  clearExpiredTemporarySources: () => void | Promise<void>;
   createAndListenFromCurrentSource: () => void;
   handleAddPlaybackBookmark: () => void | Promise<void>;
   handleResumeProgress: (progress: PlaybackProgress) => void | Promise<void>;
@@ -153,6 +176,12 @@ export function buildCommandPaletteHandlers({
   openTelepromptTheatreStage,
   openReadingCinema,
   openPreparedSourceCinema,
+  openTemporarySourceCinema,
+  openTemporarySourceInReview,
+  openTemporarySourceInPreview,
+  keepTemporarySourceInProject,
+  discardTemporarySource,
+  clearExpiredTemporarySources,
   openCommandCenterRoute,
   openExportCurrent,
   openImportBundle,
@@ -234,6 +263,24 @@ export function buildCommandPaletteHandlers({
     openPreparedSourceCinema: (source) => {
       openPreparedSourceCinema(source);
     },
+    openTemporarySourceCinema: (source) => {
+      void openTemporarySourceCinema(source);
+    },
+    openTemporarySourceInReview: (source) => {
+      void openTemporarySourceInReview(source);
+    },
+    openTemporarySourceInPreview: (source) => {
+      void openTemporarySourceInPreview(source);
+    },
+    keepTemporarySourceInProject: (source) => {
+      keepTemporarySourceInProject(source);
+    },
+    discardTemporarySource: (source) => {
+      void discardTemporarySource(source);
+    },
+    clearExpiredTemporarySources: () => {
+      void clearExpiredTemporarySources();
+    },
     openProject: (projectId) => {
       setIsBookCinemaOpen(false);
       setPreparedSourceCinemaSourceId(null);
@@ -306,7 +353,7 @@ function preparedSourceCommandEntriesForSource(
   return [
     {
       category: "Source",
-      detail: "Use this prepared source in Review.",
+      detail: "Durable prepared source · Use this source in Review.",
       disabled: !isReady,
       disabledReason,
       id: `source:prepared:${source.id}`,
@@ -320,7 +367,7 @@ function preparedSourceCommandEntriesForSource(
     },
     {
       category: "Source",
-      detail: handlers.resolvePreparedSourceCinemaActionLabel(source),
+      detail: `Durable prepared source · ${handlers.resolvePreparedSourceCinemaActionLabel(source)}`,
       disabled: !isReady,
       disabledReason,
       id: `source:prepared-cinema:${source.id}`,
@@ -351,6 +398,9 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     projects,
     bookSources,
     preparedSources,
+    activeTemporarySource,
+    temporarySources,
+    temporaryStorageUsage,
     wordHighlightCapabilityReason,
     workspaceStageActionLabel,
   } = context;
@@ -426,6 +476,66 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
       },
       section: "Sources",
       title: "Quick Listen",
+    },
+    {
+      category: "Source",
+      detail:
+        "Temporary source · Start a new Quick Listen session through the guided source picker.",
+      id: "temporary-source:new",
+      keywords: [
+        "temporary",
+        "source",
+        "quick listen",
+        "scratch",
+        "paste",
+        "url",
+        "webpage",
+        "file",
+      ],
+      owner: "temporary-source",
+      perform: () => {
+        handlers.openQuickListen("paste");
+      },
+      section: "Sources",
+      title: "New temporary source",
+    },
+    {
+      category: "Source",
+      detail:
+        "Temporary source · Paste scratch text into Quick Listen without saving it to a project.",
+      id: "temporary-source:paste",
+      keywords: ["temporary", "paste", "text", "scratch", "quick listen", "article"],
+      owner: "temporary-source",
+      perform: () => {
+        handlers.openQuickListen("paste");
+      },
+      section: "Sources",
+      title: "Paste text as temporary source",
+    },
+    {
+      category: "Source",
+      detail: "Temporary webpage · Open a URL in Quick Listen without adding a durable source.",
+      id: "temporary-source:open-url",
+      keywords: ["temporary", "url", "webpage", "website", "article", "quick listen", "open"],
+      owner: "temporary-source",
+      perform: () => {
+        handlers.openQuickListen("url");
+      },
+      section: "Sources",
+      title: "Open webpage temporarily",
+    },
+    {
+      category: "Source",
+      detail:
+        "Temporary source · Upload a file into Quick Listen without keeping it in the project.",
+      id: "temporary-source:upload-file",
+      keywords: ["temporary", "upload", "file", "document", "pdf", "epub", "quick listen"],
+      owner: "temporary-source",
+      perform: () => {
+        handlers.openQuickListen("file");
+      },
+      section: "Sources",
+      title: "Upload file temporarily",
     },
     {
       capabilityGate: "tts",
@@ -619,7 +729,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
   }));
   const draftSourceCommand: CommandEntry = {
     category: "Source",
-    detail: "Return to draft text intake.",
+    detail: "Durable draft source · Return to draft text intake.",
     id: "source:text",
     keywords: ["draft", "text", "source"],
     owner: "source",
@@ -633,7 +743,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     category: "Source",
     detail:
       book.status === "ready"
-        ? "Use this book source in Review."
+        ? "Durable book source · Use this source in Review."
         : (book.error ?? "Book source is still preparing."),
     disabled: book.status !== "ready",
     disabledReason:
@@ -650,6 +760,215 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
   const preparedSourceCommandEntries = preparedSources.flatMap((source) =>
     preparedSourceCommandEntriesForSource(source, handlers),
   );
+  const currentTemporaryDisabledReason = activeTemporarySource
+    ? undefined
+    : "Open or select a temporary source first.";
+  const activeTemporaryReady = activeTemporarySource
+    ? temporarySourceCommandReady(activeTemporarySource)
+    : false;
+  const activeTemporaryUnavailableReason =
+    currentTemporaryDisabledReason ??
+    (activeTemporaryReady
+      ? undefined
+      : (activeTemporarySource?.error ?? "This temporary source is not ready."));
+  const temporaryCommandEntries: CommandEntry[] = [
+    {
+      category: "Source",
+      detail: "Temporary source · Reopen the most recent temporary session through Quick Listen.",
+      disabled: temporarySources.length === 0,
+      disabledReason:
+        temporarySources.length === 0 ? "No recent temporary sources are available." : undefined,
+      id: "temporary-source:reopen-recent",
+      keywords: ["temporary", "recent", "reopen", "quick listen", "scratch"],
+      owner: "temporary-source",
+      perform: () => {
+        void handlers.openTemporarySourceInReview(temporarySources[0]);
+      },
+      section: "Sources",
+      title: "Reopen recent temporary source",
+    },
+    {
+      category: "Source",
+      detail:
+        "Temporary source · Promote the active temporary session into a durable project source.",
+      disabled: !activeTemporarySource,
+      disabledReason: currentTemporaryDisabledReason,
+      id: "temporary-source:keep-in-project",
+      keywords: ["temporary", "keep", "promote", "project", "durable", "save"],
+      owner: "temporary-source",
+      perform: () => {
+        if (activeTemporarySource) {
+          handlers.keepTemporarySourceInProject(activeTemporarySource);
+        }
+      },
+      section: "Sources",
+      shortcutCommandId: "temporary.keepInProject",
+      title: "Keep temporary source in project",
+    },
+    {
+      category: "Source",
+      detail:
+        "Temporary source · Discard the active temporary session and its temporary artifacts.",
+      disabled: !activeTemporarySource,
+      disabledReason: currentTemporaryDisabledReason,
+      id: "temporary-source:discard",
+      keywords: ["temporary", "discard", "delete", "remove", "scratch"],
+      owner: "temporary-source",
+      perform: () => {
+        if (activeTemporarySource) {
+          void handlers.discardTemporarySource(activeTemporarySource);
+        }
+      },
+      section: "Sources",
+      title: "Discard temporary source",
+    },
+    {
+      category: "Source",
+      detail: "Temporary storage · Remove expired temporary sessions and cleaned artifacts.",
+      disabled: temporaryExpiredCount(temporarySources, temporaryStorageUsage) === 0,
+      disabledReason:
+        temporaryExpiredCount(temporarySources, temporaryStorageUsage) === 0
+          ? "No expired temporary sources are ready to clear."
+          : undefined,
+      id: "temporary-source:clear-expired",
+      keywords: ["temporary", "expired", "clear", "cleanup", "storage"],
+      owner: "temporary-source",
+      perform: () => {
+        void handlers.clearExpiredTemporarySources();
+      },
+      section: "Sources",
+      title: "Clear expired temporary sources",
+    },
+    {
+      category: "Review",
+      detail: "Temporary source · Open the active temporary session in Review.",
+      disabled: !activeTemporaryReady,
+      disabledReason: activeTemporaryUnavailableReason,
+      id: "temporary-source:open-review",
+      keywords: ["temporary", "review", "open", "article", "scratch"],
+      owner: "temporary-source",
+      perform: () => {
+        if (activeTemporarySource) {
+          void handlers.openTemporarySourceInReview(activeTemporarySource);
+        }
+      },
+      section: "Sources",
+      title: "Open temporary source in Review",
+    },
+    {
+      category: "Playback",
+      detail: "Temporary source · Open the active temporary session in Preview.",
+      disabled: !activeTemporaryReady,
+      disabledReason: activeTemporaryUnavailableReason,
+      id: "temporary-source:open-preview",
+      keywords: ["temporary", "preview", "open", "quick listen"],
+      owner: "temporary-source",
+      perform: () => {
+        if (activeTemporarySource) {
+          void handlers.openTemporarySourceInPreview(activeTemporarySource);
+        }
+      },
+      section: "Sources",
+      title: "Open temporary source in Preview",
+    },
+    {
+      category: "Playback",
+      detail: "Temporary source · Open the active temporary session in Cinema.",
+      disabled: !activeTemporaryReady,
+      disabledReason: activeTemporaryUnavailableReason,
+      id: "temporary-source:open-cinema",
+      keywords: ["temporary", "cinema", "reader", "listen", "quick listen"],
+      owner: "temporary-source",
+      perform: () => {
+        if (activeTemporarySource) {
+          void handlers.openTemporarySourceCinema(activeTemporarySource);
+        }
+      },
+      section: "Sources",
+      title: "Open temporary source in Cinema",
+    },
+    {
+      capabilityGate: "tts",
+      capabilityGated: Boolean(createAndListenCapabilityReason),
+      category: "Playback",
+      detail: "Temporary source · Create narration audio for the active temporary session.",
+      disabled: !activeTemporarySource || !canCreateCurrentSource,
+      disabledReason:
+        currentTemporaryDisabledReason ??
+        createAndListenDisabledReason ??
+        "Open the temporary source in Review before creating audio.",
+      id: "temporary-source:create-audio",
+      keywords: ["temporary", "audio", "create", "quick listen", "generate", "listen"],
+      owner: "temporary-source",
+      perform: () => {
+        handlers.createAndListenFromCurrentSource();
+      },
+      section: "Sources",
+      shortcutCommandId: "temporary.quickListen",
+      title: "Create audio for temporary source",
+    },
+    {
+      capabilityGate: "tts",
+      capabilityGated: Boolean(createAndListenCapabilityReason),
+      category: "Playback",
+      detail: "Temporary source · Retry narration audio for the active temporary session.",
+      disabled: !activeTemporarySource || !canCreateCurrentSource,
+      disabledReason:
+        currentTemporaryDisabledReason ??
+        createAndListenDisabledReason ??
+        "Open the temporary source in Review before retrying audio.",
+      id: "temporary-source:retry-audio",
+      keywords: ["temporary", "retry", "audio", "quick listen", "generate"],
+      owner: "temporary-source",
+      perform: () => {
+        handlers.createAndListenFromCurrentSource();
+      },
+      section: "Sources",
+      title: "Retry temporary audio",
+    },
+    {
+      category: "Source",
+      detail: temporaryStorageDetail(temporarySources, temporaryStorageUsage),
+      id: "temporary-source:show-storage",
+      keywords: ["temporary", "storage", "usage", "sessions", "cleanup"],
+      owner: "temporary-source",
+      perform: () => {
+        handlers.openCommandCenterRoute("temporary");
+      },
+      section: "Sources",
+      title: "Show temporary source storage",
+    },
+  ];
+  const recentTemporarySourceCommandEntries = temporarySources.map<CommandEntry>((source) => {
+    const label = temporarySourceLabel(source);
+    const ready = temporarySourceCommandReady(source);
+    return {
+      category: "Source",
+      detail: `Temporary source · Reopen in Review · ${temporarySourceKindLabel(source)}.`,
+      disabled: !ready,
+      disabledReason: ready ? undefined : (source.error ?? "This temporary source is not ready."),
+      id: `temporary-source:recent:${source.id}`,
+      keywords: [
+        "temporary",
+        "recent",
+        "quick listen",
+        "article",
+        "scratch",
+        "webpage",
+        "url",
+        source.kind,
+        label,
+        source.sourceName,
+        source.sourceUrl ?? "",
+      ],
+      owner: "temporary-source",
+      perform: () => {
+        void handlers.openTemporarySourceInReview(source);
+      },
+      section: "Sources",
+      title: `Temporary: ${label}`,
+    };
+  });
   const openCurrentCinemaCommand: CommandEntry = {
     category: "Playback",
     detail: "Open the current narration or selected book in Cinema.",
@@ -767,6 +1086,8 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     draftSourceCommand,
     ...bookSourceCommandEntries,
     ...preparedSourceCommandEntries,
+    ...temporaryCommandEntries,
+    ...recentTemporarySourceCommandEntries,
     openCurrentCinemaCommand,
     openCinemaTheatreCommand,
     exitTheatreCommand,
@@ -785,4 +1106,47 @@ function commandCenterRouteCategory(routeId: CommandCenterRouteId): CommandEntry
     return "Source";
   }
   return "Project";
+}
+
+function temporarySourceCommandReady(source: TemporarySourceSession): boolean {
+  return source.status !== "expired" && source.status !== "discarded" && source.status !== "failed";
+}
+
+function temporaryExpiredCount(
+  sources: readonly TemporarySourceSession[],
+  usage: TemporaryStorageUsageSummary | null,
+): number {
+  return usage?.expiredCount ?? sources.filter((source) => source.status === "expired").length;
+}
+
+function temporarySourceLabel(source: TemporarySourceSession): string {
+  const title = source.title?.trim();
+  if (title) {
+    return title;
+  }
+  return source.sourceName;
+}
+
+function temporarySourceKindLabel(source: TemporarySourceSession): string {
+  if (source.kind === "url") {
+    return "Temporary webpage";
+  }
+  if (source.kind === "text") {
+    return "Temporary pasted text";
+  }
+  return "Temporary file";
+}
+
+function temporaryStorageDetail(
+  sources: readonly TemporarySourceSession[],
+  usage: TemporaryStorageUsageSummary | null,
+): string {
+  if (!usage) {
+    return `Temporary storage · ${String(sources.length)} recent source${
+      sources.length === 1 ? "" : "s"
+    } in this app session.`;
+  }
+  return `Temporary storage · ${String(usage.temporaryCount)} session${
+    usage.temporaryCount === 1 ? "" : "s"
+  }, ${String(usage.expiredCount)} expired.`;
 }
