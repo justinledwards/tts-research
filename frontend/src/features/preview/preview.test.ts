@@ -1,17 +1,18 @@
-import { describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
 import { createRunConfiguration } from "../../runConfig";
 import type { RunMode, VoiceJob } from "../../types";
-import { RunPlannerSummaryPanel } from "../run-config/RunPlannerSummaryPanel";
-import { buildRunPlannerSummary, compareRunPlannerSummaries } from "../run-config/runConfigSteps";
+import { resolveAudioGenerationPipelineModel } from "../playback/audioGenerationPipeline";
+import { generatedAudioLifecycleFromJob } from "../playback/generatedAudioLifecycle";
 import {
   buildCanonicalPreviewSpeechPlan,
   previewSpeechPlanJobTextIsStale,
   type RevisionBlock,
 } from "../revision";
-import { resolveAudioGenerationPipelineModel } from "../playback/audioGenerationPipeline";
-import { generatedAudioLifecycleFromJob } from "../playback/generatedAudioLifecycle";
+import { RunPlannerSummaryPanel } from "../run-config/RunPlannerSummaryPanel";
+import { buildRunPlannerSummary, compareRunPlannerSummaries } from "../run-config/runConfigSteps";
+import { GlobalPreviewPlayer } from "./GlobalPreviewPlayer";
 import {
   buildPreviewComparisonModel,
   buildPreviewQueue,
@@ -29,7 +30,6 @@ import {
   type PreviewComparisonChoice,
   type PreviewComparisonOption,
 } from "./index";
-import { GlobalPreviewPlayer } from "./GlobalPreviewPlayer";
 
 const blocks: RevisionBlock[] = [
   block({ id: "a", index: 1, label: "Intro", segmentCount: 1, spokenText: "Hello world." }),
@@ -356,6 +356,22 @@ describe("preview readiness model", () => {
     expect(model.canOpenTeleprompt).toBe(false);
     expect(model.createDisabledReason).toBe("Choose or prepare a source before creating audio.");
     expect(model.rows.find((row) => row.id === "source")).toMatchObject({
+      status: "blocked",
+    });
+  });
+
+  it("uses temporary-source blocked copy for disabled Preview actions", () => {
+    const model = resolvePreviewReadinessModel(
+      readinessInput({ hasSource: false, isTemporarySource: true }),
+    );
+
+    expect(model.canCreate).toBe(false);
+    expect(model.canOpenTeleprompt).toBe(false);
+    expect(model.createDisabledReason).toBe(
+      "This temporary source is not ready for review or audio.",
+    );
+    expect(model.rows.find((row) => row.id === "source")).toMatchObject({
+      detail: "This temporary source is not ready for review or audio.",
       status: "blocked",
     });
   });

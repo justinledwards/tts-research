@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import { shouldShowGlobalPreviewPlayer } from "./playbackSurfaceRules";
 
 describe("playback surface rules", () => {
-  it("keeps the floating preview player out of the redesigned Preview stage", () => {
-    expect(shouldShowGlobalPreviewPlayer({ owner: "preview", stage: "preview" })).toBe(false);
+  it("shows the floating preview player for Review and Preview stages", () => {
+    expect(shouldShowGlobalPreviewPlayer({ owner: "preview", stage: "preview" })).toBe(true);
     expect(shouldShowGlobalPreviewPlayer({ owner: "preview", stage: "review" })).toBe(true);
   });
 
   it("hides the floating preview player behind dedicated playback surfaces", () => {
+    expect(shouldShowGlobalPreviewPlayer({ owner: "preview", stage: "teleprompt" })).toBe(false);
+    expect(shouldShowGlobalPreviewPlayer({ owner: "preview", stage: "theatre" })).toBe(false);
     expect(
       shouldShowGlobalPreviewPlayer({
         isCinemaOpen: true,

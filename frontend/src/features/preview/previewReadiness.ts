@@ -1,9 +1,10 @@
-import {
-  generatedAudioLifecycleDescriptor,
-  type GeneratedAudioLifecycleState,
-} from "../playback/generatedAudioLifecycle";
-import type { AudioGenerationPipelineModel } from "../playback/audioGenerationPipeline";
 import { OPERATIONAL_RECOVERY_LABELS } from "../operational-status";
+import type { AudioGenerationPipelineModel } from "../playback/audioGenerationPipeline";
+import {
+  type GeneratedAudioLifecycleState,
+  generatedAudioLifecycleDescriptor,
+} from "../playback/generatedAudioLifecycle";
+import { TEMPORARY_SOURCE_COPY } from "../temporary-source-copy";
 
 export type PreviewReadinessRowId =
   | "audition"
@@ -170,8 +171,11 @@ function resolveSourceReadiness(input: PreviewReadinessModelInput): PreviewReadi
     };
   }
   if (!input.hasSource) {
+    const detail = input.isTemporarySource
+      ? TEMPORARY_SOURCE_COPY.errors.notReady
+      : "Choose or prepare a source before creating audio.";
     return {
-      detail: "Choose or prepare a source before creating audio.",
+      detail,
       id: "source",
       label: "Source",
       status: "blocked",

@@ -7126,6 +7126,21 @@ export function App() {
 
   const handleConfirmPreparedReadiness = useCallback(
     async (source: PreparedSource, request: SourceReadinessConfirmationRequest) => {
+      if (source.sourceOwner === "temporary" && source.temporarySourceId) {
+        const session = await confirmTemporarySourceReadiness(source.temporarySourceId, request);
+        const confirmed = temporarySessionToPreparedSource(session);
+        setTemporarySources((currentSources) => [
+          session,
+          ...currentSources.filter((item) => item.id !== session.id),
+        ]);
+        setActiveTemporaryPreparedSource(confirmed);
+        setSelectedPreparedSourceId(confirmed.id);
+        setSourceMode("fileUrl");
+        if (confirmed.speechText) {
+          setText(confirmed.speechText);
+        }
+        return confirmed;
+      }
       const confirmed = await confirmPreparedSourceReadiness(source.id, request);
       setPreparedSources((currentSources) => [
         confirmed,
@@ -9749,7 +9764,7 @@ export function App() {
             isPlaybackActive={isPlaybackActive}
             generatedAudioLifecycle={generatedAudioLifecycle}
             job={job}
-            mode="comparison-only"
+            mode={contentMode === "preview" ? "full" : "comparison-only"}
             playbackControls={playbackControls}
             playbackCursorSec={playbackCursorSec}
             placement={workspaceOverlay.previewPlacement}
@@ -17492,6 +17507,9 @@ function narrationReviewSourceLabel(
   selectedPreparedSource: PreparedSource | null,
   selectedBookSource: BookSource | null,
 ): string {
+  if (selectedPreparedSource?.sourceOwner === "temporary") {
+    return `Temporary source: ${selectedPreparedSource.title ?? selectedPreparedSource.sourceName}`;
+  }
   if (selectedPreparedSource?.title) {
     return selectedPreparedSource.title;
   }

@@ -2163,3 +2163,15 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Review Quick Listen no-project contract diff
 - [x] Stage scoped work package files
 - [x] Commit scoped work package
+
+## 2026-06-12 23:17 CEST - Temporary Review Preview Parity
+- [x] Map temporary Review and Preview readiness paths
+- [x] Implement session-scoped temporary readiness, notes, overrides, and audio parity
+- [x] Add focused regression coverage and screenshot evidence hooks
+- [x] Run project checks
+- Validation: focused frontend preview/playback/API tests, frontend typecheck, `pnpm check`, and `pnpm e2e:temporary-sources` passed. `pnpm e2e:workspace-flow` failed on an unstable/hidden teleprompt preset click, `pnpm e2e:ui-actions` failed after a long replay when its temporary backend port refused connection, and `pnpm e2e:golden-minute` now finds the global preview player/Open Cinema path but fails later waiting for the Teleprompt Theatre play/pause control.
+
+## 2026-06-13 00:09 CEST - Commit Temporary Review Preview Parity
+- [ ] Review scoped work package diff
+- [x] Stage scoped work package files
+- [ ] Commit scoped work package
