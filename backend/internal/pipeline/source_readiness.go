@@ -237,6 +237,19 @@ func bookReadinessStructureLabel(book BookSource) string {
 }
 
 func preparedReadinessConfidence(source PreparedSource) string {
+	if confidence := metadataValueString(source.Metadata, "extractionConfidence"); confidence != "" {
+		return confidence
+	}
+	if supportedFile, ok := source.Metadata["supportedFile"].(map[string]any); ok {
+		if confidence := metadataValueString(supportedFile, "extractionConfidence"); confidence != "" {
+			return confidence
+		}
+	}
+	if supportedFile, ok := source.Metadata["supportedFile"].(map[string]string); ok {
+		if confidence := strings.TrimSpace(supportedFile["extractionConfidence"]); confidence != "" {
+			return confidence
+		}
+	}
 	if source.Status != PreparedSourceStatusReady || source.BlockCount == 0 {
 		return "low"
 	}

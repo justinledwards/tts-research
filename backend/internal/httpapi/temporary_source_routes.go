@@ -3,13 +3,29 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
 )
+
+const temporarySourceUploadMaxBytes int64 = 2 * 1024 * 1024
+
+var temporarySourceSupportedFileExtensions = map[string]string{
+	".csv":      "text/csv",
+	".htm":      "text/html",
+	".html":     "text/html",
+	".json":     "application/json",
+	".log":      "text/plain",
+	".markdown": "text/markdown",
+	".md":       "text/markdown",
+	".text":     "text/plain",
+	".txt":      "text/plain",
+}
 
 func registerTemporarySourceRoutes(app *fiber.App, service *pipeline.Service) {
 	app.Use("/api/temporary-sources", func(ctx fiber.Ctx) error {
@@ -34,11 +50,15 @@ func registerTemporarySourceRoutes(app *fiber.App, service *pipeline.Service) {
 			if err != nil {
 				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("unable to read temporary source file"))
 			}
+			contentType, err := validateTemporarySourceUpload(fileHeader.Filename, fileHeader.Header.Get("Content-Type"), int64(len(data)))
+			if err != nil {
+				return temporarySourceError(ctx, err)
+			}
 			source, err := service.CreateTemporarySource(ctx.Context(), pipeline.CreateTemporarySourceRequest{
 				Kind:              pipeline.PreparedSourceKindFile,
 				Text:              string(data),
 				SourceName:        firstNonEmpty(ctx.FormValue("sourceName"), fileHeader.Filename),
-				SourceContentType: fileHeader.Header.Get("Content-Type"),
+				SourceContentType: contentType,
 				SourceBytes:       int64(len(data)),
 				MarkdownParseMode: ctx.FormValue("markdownParseMode"),
 			})
@@ -142,6 +162,30 @@ func registerTemporarySourceRoutes(app *fiber.App, service *pipeline.Service) {
 	})
 }
 
+func validateTemporarySourceUpload(filename string, contentType string, size int64) (string, error) {
+	extension := strings.ToLower(filepath.Ext(strings.TrimSpace(filename)))
+	normalizedContentType := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+	expectedContentType, ok := temporarySourceSupportedFileExtensions[extension]
+	if !ok {
+		return "", fmt.Errorf("%w: choose a supported file such as TXT, Markdown, HTML, CSV, JSON, or LOG", pipeline.ErrTemporarySourceUnsupportedFile)
+	}
+	if size <= 0 {
+		return "", fmt.Errorf("%w: supported file is empty", pipeline.ErrEmptyText)
+	}
+	if size > temporarySourceUploadMaxBytes {
+		return "", fmt.Errorf("%w: supported file must be 2 MB or smaller", pipeline.ErrTemporarySourceUnsupportedFile)
+	}
+	if normalizedContentType == "" || normalizedContentType == "application/octet-stream" {
+		return expectedContentType, nil
+	}
+	if strings.HasPrefix(normalizedContentType, "text/") ||
+		normalizedContentType == "application/json" ||
+		normalizedContentType == "application/x-ndjson" {
+		return normalizedContentType, nil
+	}
+	return "", fmt.Errorf("%w: content type %q is not supported for temporary narration", pipeline.ErrTemporarySourceUnsupportedFile, normalizedContentType)
+}
+
 func temporarySourceEnvelope(source pipeline.TemporarySourceSession) pipeline.TemporarySourceEnvelope {
 	return pipeline.TemporarySourceEnvelope{
 		SourceOwner:       pipeline.SourceOwnerTemporary,
@@ -158,6 +202,7 @@ func temporarySourceError(ctx fiber.Ctx, err error) error {
 		return notFound(ctx, err)
 	}
 	if errors.Is(err, pipeline.ErrEmptyText) ||
+		errors.Is(err, pipeline.ErrTemporarySourceUnsupportedFile) ||
 		errors.Is(err, pipeline.ErrVoiceNotFound) ||
 		errors.Is(err, pipeline.ErrSpeechPolicyProfileNotFound) {
 		return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))

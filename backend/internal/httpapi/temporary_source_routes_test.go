@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"testing"
+	"time"
 
 	httpapi "github.com/justinedwards/tts-research/backend/internal/httpapi"
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
@@ -187,6 +188,76 @@ func TestTemporarySourceRouteAcceptsMultipartFile(t *testing.T) {
 	temporary := envelope.Source
 	if temporary.Kind != string(pipeline.PreparedSourceKindFile) || temporary.SourceName != "upload.md" {
 		t.Fatalf("temporary = %#v, want file-backed upload", temporary)
+	}
+	if temporary.SourceReadiness == nil ||
+		temporary.SourceReadiness.Confidence != "high" ||
+		temporary.SourceReadiness.State != pipeline.SourceReadinessStateNeedsMetadata {
+		t.Fatalf("readiness = %#v, want high-confidence supported file needing metadata", temporary.SourceReadiness)
+	}
+	supportedFile, ok := temporary.Metadata["supportedFile"].(map[string]any)
+	if !ok || supportedFile["extractionConfidence"] != "high" || supportedFile["filename"] != "upload.md" {
+		t.Fatalf("supported file metadata = %#v, want extraction confidence and filename", temporary.Metadata["supportedFile"])
+	}
+}
+
+func TestTemporarySourceRouteRejectsUnsupportedMultipartFileWithoutProjectArtifacts(t *testing.T) {
+	service := newService(t)
+	app := httpapi.NewRouter(service)
+
+	preparedBefore, err := service.ListProjectPreparedSources("default")
+	if err != nil {
+		t.Fatalf("ListProjectPreparedSources(before) returned error: %v", err)
+	}
+	booksBefore, err := service.ListProjectBookSources("default")
+	if err != nil {
+		t.Fatalf("ListProjectBookSources(before) returned error: %v", err)
+	}
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "upload.pdf")
+	if err != nil {
+		t.Fatalf("CreateFormFile returned error: %v", err)
+	}
+	if _, err := part.Write([]byte("%PDF unsupported temporary source")); err != nil {
+		t.Fatalf("write multipart file returned error: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close multipart writer returned error: %v", err)
+	}
+
+	request, err := http.NewRequest(http.MethodPost, "/api/temporary-sources", &body)
+	if err != nil {
+		t.Fatalf("NewRequest returned error: %v", err)
+	}
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusBadRequest {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("status = %d, want %d, body = %s", response.StatusCode, http.StatusBadRequest, payload)
+	}
+	payload, _ := io.ReadAll(response.Body)
+	if !bytes.Contains(payload, []byte("temporary source file is not supported")) {
+		t.Fatalf("payload = %s, want unsupported file error", payload)
+	}
+
+	preparedAfter, err := service.ListProjectPreparedSources("default")
+	if err != nil {
+		t.Fatalf("ListProjectPreparedSources(after) returned error: %v", err)
+	}
+	booksAfter, err := service.ListProjectBookSources("default")
+	if err != nil {
+		t.Fatalf("ListProjectBookSources(after) returned error: %v", err)
+	}
+	if len(preparedAfter) != len(preparedBefore) || len(booksAfter) != len(booksBefore) {
+		t.Fatalf("unsupported temporary file mutated project sources: prepared %d->%d books %d->%d", len(preparedBefore), len(preparedAfter), len(booksBefore), len(booksAfter))
+	}
+	if summary := service.TemporaryStorageUsageSummary(time.Now().UTC()); summary.TemporaryCount != 0 {
+		t.Fatalf("temporary storage summary = %#v, want no temporary artifacts", summary)
 	}
 }
 

@@ -64,8 +64,10 @@ export interface QuickListenPanelProps {
 }
 
 const ACCEPTED_QUICK_LISTEN_FILE_TYPES =
-  ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm,.pdf,.epub,.docx,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/tiff,image/webp";
+  ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm,text/plain,text/markdown,text/csv,text/html,application/json";
+const QUICK_LISTEN_FILE_MAX_BYTES = 2 * 1024 * 1024;
 
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export function QuickListenPanel({
   error,
   initialMode,
@@ -140,6 +142,7 @@ export function QuickListenPanel({
   const effectiveTitle =
     title.trim() || detection.title || sourceNameForTemporaryInput(mode, file, url);
   const effectiveLanguage = language.trim() || detection.language || "en-US";
+  const fileSupport = useMemo(() => temporaryFileSupport(file), [file]);
   const confirmation = {
     language: effectiveLanguage,
     sourceType,
@@ -175,10 +178,8 @@ export function QuickListenPanel({
         setLocalError("Choose or drop a supported document before starting Quick Listen.");
         return;
       }
-      if (!quickListenFileLooksSupported(file)) {
-        setLocalError(
-          "Temporary source does not support that file type yet. Choose a supported file or paste text.",
-        );
+      if (!fileSupport.supported) {
+        setLocalError(fileSupport.reason);
         return;
       }
       void onCreateFromFile(file, markdownParseMode, confirmation, destination);
@@ -222,6 +223,7 @@ export function QuickListenPanel({
           <div className="flex flex-wrap gap-2 text-xs">
             <StatusChip tone="metadata">{TEMPORARY_SOURCE_COPY.terms.temporarySource}</StatusChip>
             <StatusChip tone="success">Local-first when possible</StatusChip>
+            <StatusChip tone="metadata">Generated temporary audio</StatusChip>
             <StatusChip tone="warning">
               {TEMPORARY_SOURCE_COPY.terms.expiresAfterInactivity}
               {` · about ${expiryHours.toString()} hours`}
@@ -264,7 +266,7 @@ export function QuickListenPanel({
           <div className="mt-4 grid gap-4">
             {mode === "paste" ? (
               <label className="grid gap-2">
-                <span className="text-sm font-semibold">Paste text</span>
+                <span className="text-sm font-semibold">Temporary source text</span>
                 <textarea
                   className={cx(
                     fieldControlClassName,
@@ -279,6 +281,13 @@ export function QuickListenPanel({
                   placeholder="Paste the article, note, or excerpt you want narrated now."
                   value={text}
                 />
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <StatusChip tone="metadata">Temporary source</StatusChip>
+                  <StatusChip tone={text.trim().length >= 12 ? "success" : "warning"}>
+                    {text.trim().length >= 12 ? "Ready for review" : "Needs source text"}
+                  </StatusChip>
+                  <span className="vs-muted">{countWordsForDisplay(text)} words</span>
+                </div>
               </label>
             ) : null}
 
@@ -315,63 +324,85 @@ export function QuickListenPanel({
             ) : null}
 
             {mode === "file" ? (
-              <button
-                className="grid w-full gap-3 rounded-md border border-dashed p-5 text-left vs-border vs-surface sm:p-4"
-                onClick={() => {
-                  fileInputRef.current?.click();
-                }}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  const dropped = event.dataTransfer.files.item(0);
-                  setFile(dropped);
-                  if (dropped && !hasEditedMetadata) {
-                    setTitle(titleFromFileName(dropped.name));
-                    setSourceType(sourceTypeForQuickFile(dropped.name));
-                  }
-                  setLocalError(null);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
+              <div className="grid gap-3">
+                <button
+                  className="grid w-full gap-3 rounded-md border border-dashed p-5 text-left vs-border vs-surface sm:p-4"
+                  onClick={() => {
                     fileInputRef.current?.click();
-                  }
-                }}
-                type="button"
-              >
-                <input
-                  accept={ACCEPTED_QUICK_LISTEN_FILE_TYPES}
-                  className="sr-only"
-                  onChange={(event) => {
-                    const selected = event.currentTarget.files?.[0] ?? null;
-                    setFile(selected);
-                    if (selected && !hasEditedMetadata) {
-                      setTitle(titleFromFileName(selected.name));
-                      setSourceType(sourceTypeForQuickFile(selected.name));
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const dropped = event.dataTransfer.files.item(0);
+                    setFile(dropped);
+                    if (dropped && !hasEditedMetadata) {
+                      setTitle(titleFromFileName(dropped.name));
+                      setSourceType(sourceTypeForQuickFile(dropped.name));
                     }
                     setLocalError(null);
                   }}
-                  ref={fileInputRef}
-                  type="file"
-                />
-                <div>
-                  <p className="text-sm font-semibold">Drop file</p>
-                  <p className="vs-muted mt-1 text-sm leading-6">
-                    Documents, text, markdown, webpages, PDFs, EPUB, DOCX, and common image formats
-                    can start as temporary narration.
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      fileInputRef.current?.click();
+                    }
+                  }}
+                  type="button"
+                >
+                  <input
+                    accept={ACCEPTED_QUICK_LISTEN_FILE_TYPES}
+                    className="sr-only"
+                    onChange={(event) => {
+                      const selected = event.currentTarget.files?.[0] ?? null;
+                      setFile(selected);
+                      if (selected && !hasEditedMetadata) {
+                        setTitle(titleFromFileName(selected.name));
+                        setSourceType(sourceTypeForQuickFile(selected.name));
+                      }
+                      setLocalError(null);
+                    }}
+                    ref={fileInputRef}
+                    type="file"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold">Supported file</p>
+                    <p className="vs-muted mt-1 text-sm leading-6">
+                      Drop TXT, Markdown, HTML, CSV, JSON, or LOG files up to 2 MB. Uploaded file
+                      bytes and extracted source text stay temporary.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex min-h-12 items-center justify-center rounded-md border border-[var(--vs-action-secondary-border)] bg-[var(--vs-action-secondary-bg)] px-4 text-sm font-semibold text-[var(--vs-action-secondary-text)] shadow-sm sm:min-h-9 sm:px-3">
+                      Choose file
+                    </span>
+                    <span className="min-w-0 truncate text-sm font-semibold">
+                      {file?.name ?? "No file selected"}
+                    </span>
+                  </div>
+                </button>
+                <div className="grid gap-2 rounded-md border p-3 text-sm leading-6 vs-border vs-surface">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusChip tone="metadata">Supported file</StatusChip>
+                    <StatusChip tone={fileSupport.supported ? "success" : "warning"}>
+                      {fileSupport.supported ? "Ready for extraction" : "Unsupported file"}
+                    </StatusChip>
+                    {file ? (
+                      <StatusChip tone="metadata">{fileSupport.confidence} confidence</StatusChip>
+                    ) : null}
+                  </div>
+                  <p
+                    className={
+                      fileSupport.supported ? "vs-muted" : "text-[var(--vs-status-warning)]"
+                    }
+                  >
+                    {file
+                      ? fileSupport.detail
+                      : "Choose a supported file to preview readiness and extraction confidence."}
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex min-h-12 items-center justify-center rounded-md border border-[var(--vs-action-secondary-border)] bg-[var(--vs-action-secondary-bg)] px-4 text-sm font-semibold text-[var(--vs-action-secondary-text)] shadow-sm sm:min-h-9 sm:px-3">
-                    Choose file
-                  </span>
-                  <span className="min-w-0 truncate text-sm font-semibold">
-                    {file?.name ?? "No file selected"}
-                  </span>
-                </div>
-              </button>
+              </div>
             ) : null}
 
             {mode === "recent" ? null : (
@@ -474,7 +505,8 @@ export function QuickListenPanel({
               <p className="font-semibold">Temporary source boundary</p>
               <p className="vs-muted mt-1">
                 {TEMPORARY_SOURCE_COPY.launcher.boundaryDetail}{" "}
-                {TEMPORARY_SOURCE_COPY.privacy.localFirst}
+                {TEMPORARY_SOURCE_COPY.privacy.localFirst} Provider-backed generation sends request
+                text and voice settings to the selected provider.
               </p>
             </div>
 
@@ -513,10 +545,10 @@ export function QuickListenPanel({
             >
               {isSubmitting ? "Starting..." : "Create quick preview"}
             </Button>
-            {mode === "url" ? (
+            {mode === "recent" ? null : (
               <Button
                 className="min-h-12 sm:min-h-10"
-                data-testid="ui-action-quick-listen-url-open-cinema"
+                data-testid={`ui-action-quick-listen-${mode}-open-cinema`}
                 disabled={isSubmitting}
                 onClick={() => {
                   submit("cinema");
@@ -524,9 +556,9 @@ export function QuickListenPanel({
                 size="md"
                 variant="primary"
               >
-                {isSubmitting ? "Opening..." : "Open Website Cinema"}
+                {isSubmitting ? "Opening..." : openCinemaLabel(mode, file)}
               </Button>
-            ) : null}
+            )}
           </div>
         </footer>
       </section>
@@ -869,10 +901,20 @@ function sourceTypeForQuickFile(value: string): IntakeSourceType {
   if (extension === "html" || extension === "htm") {
     return "webpage";
   }
-  if (extension === "epub" || extension === "pdf" || extension === "docx") {
-    return "book";
-  }
   return "document";
+}
+
+function openCinemaLabel(mode: QuickListenMode, file: File | null): string {
+  if (mode === "url") {
+    return "Open Website Cinema";
+  }
+  if (mode === "file" && file && sourceTypeForQuickFile(file.name) === "webpage") {
+    return "Open Document Cinema";
+  }
+  if (mode === "file") {
+    return "Open Document Cinema";
+  }
+  return "Open Document Cinema";
 }
 
 export function temporarySessionToPreparedSource(source: TemporarySourceSession): PreparedSource {
@@ -1006,9 +1048,56 @@ function temporaryBookWordSpans(text: string): BookSourceWordSpan[] {
   return spans;
 }
 
-function quickListenFileLooksSupported(file: File): boolean {
+interface TemporaryFileSupport {
+  confidence: "high" | "medium" | "low";
+  detail: string;
+  reason: string;
+  supported: boolean;
+}
+
+export function temporaryFileSupport(file: File | null): TemporaryFileSupport {
+  if (!file) {
+    return {
+      confidence: "low",
+      detail: "Choose a supported file to preview readiness and extraction confidence.",
+      reason: "Choose or drop a supported file before starting Quick Listen.",
+      supported: false,
+    };
+  }
   const extension = file.name.toLowerCase().split(".").pop() ?? "";
-  return QUICK_LISTEN_SUPPORTED_EXTENSIONS.has(extension);
+  if (!QUICK_LISTEN_SUPPORTED_EXTENSIONS.has(extension)) {
+    return {
+      confidence: "low",
+      detail:
+        "Unsupported file error state. Quick Listen supports TXT, Markdown, HTML, CSV, JSON, and LOG files for temporary narration.",
+      reason:
+        "Temporary source does not support that file type yet. Choose a supported file or paste text.",
+      supported: false,
+    };
+  }
+  if (file.size <= 0) {
+    return {
+      confidence: "low",
+      detail: "Supported file is empty. Add temporary source text or choose another file.",
+      reason: "Supported file is empty. Choose a file with temporary source text.",
+      supported: false,
+    };
+  }
+  if (file.size > QUICK_LISTEN_FILE_MAX_BYTES) {
+    return {
+      confidence: "low",
+      detail: `Supported file is ${formatBytes(file.size)}, above the 2 MB temporary narration limit.`,
+      reason: "Supported file must be 2 MB or smaller for Quick Listen.",
+      supported: false,
+    };
+  }
+  const confidence = extension === "html" || extension === "htm" ? "medium" : "high";
+  return {
+    confidence,
+    detail: `${formatBytes(file.size)} ${extension.toUpperCase()} file. Extraction confidence is ${confidence}; readiness will be confirmed before Review or Preview opens.`,
+    reason: "",
+    supported: true,
+  };
 }
 
 function expiryDurationHours(duration: TemporarySourceBehaviorSettings["expiryDuration"]): number {
@@ -1031,17 +1120,12 @@ const QUICK_LISTEN_SUPPORTED_EXTENSIONS = new Set([
   "json",
   "html",
   "htm",
-  "pdf",
-  "epub",
-  "docx",
-  "png",
-  "jpg",
-  "jpeg",
-  "tif",
-  "tiff",
-  "bmp",
-  "webp",
 ]);
+
+function countWordsForDisplay(value: string): number {
+  const matches = value.trim().match(/\S+/g);
+  return matches?.length ?? 0;
+}
 
 function formatExpiry(value: string): string {
   const expiresAt = new Date(value);

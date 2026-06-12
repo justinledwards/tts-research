@@ -5,6 +5,7 @@ import type { TemporarySourceSession } from "../../types";
 import { websiteExtractionQuality } from "../website-cinema";
 import {
   QuickListenPanel,
+  temporaryFileSupport,
   temporarySessionPrefersBookCinema,
   temporarySessionToBookSource,
   temporarySessionToPreparedSource,
@@ -131,6 +132,68 @@ describe("temporarySessionToPreparedSource", () => {
     expect(markup).toContain('data-testid="ui-action-quick-listen-url-open-cinema"');
     expect(markup).toContain("Open Website Cinema");
     expect(markup).toContain("Source URL");
+  });
+
+  it("renders paste and file temporary source copy and direct cinema actions", () => {
+    const pasteMarkup = renderToStaticMarkup(
+      createElement(QuickListenPanel, {
+        error: null,
+        initialMode: "paste",
+        isOpen: true,
+        isSubmitting: false,
+        recentSources: [],
+        onCleanup: () => Promise.resolve(),
+        onClearExpired: () => Promise.resolve(),
+        onClose: () => null,
+        onCreateFromFile: () => Promise.resolve(),
+        onCreateFromText: () => Promise.resolve(),
+        onCreateFromUrl: () => Promise.resolve(),
+        onDiscard: () => Promise.resolve(),
+        onExtend: () => Promise.resolve(),
+        onUseRecentSource: () => Promise.resolve(),
+      }),
+    );
+    expect(pasteMarkup).toContain("Temporary source text");
+    expect(pasteMarkup).toContain('data-testid="ui-action-quick-listen-paste-open-cinema"');
+    expect(pasteMarkup).toContain("Generated temporary audio");
+    expect(pasteMarkup).toContain("request text and voice settings");
+
+    const fileMarkup = renderToStaticMarkup(
+      createElement(QuickListenPanel, {
+        error: null,
+        initialMode: "file",
+        isOpen: true,
+        isSubmitting: false,
+        recentSources: [],
+        onCleanup: () => Promise.resolve(),
+        onClearExpired: () => Promise.resolve(),
+        onClose: () => null,
+        onCreateFromFile: () => Promise.resolve(),
+        onCreateFromText: () => Promise.resolve(),
+        onCreateFromUrl: () => Promise.resolve(),
+        onDiscard: () => Promise.resolve(),
+        onExtend: () => Promise.resolve(),
+        onUseRecentSource: () => Promise.resolve(),
+      }),
+    );
+    expect(fileMarkup).toContain("Supported file");
+    expect(fileMarkup).toContain('data-testid="ui-action-quick-listen-file-open-cinema"');
+    expect(fileMarkup).toContain("TXT, Markdown, HTML, CSV, JSON, or LOG");
+  });
+
+  it("classifies supported and unsupported temporary files before upload", () => {
+    const supported = temporaryFileSupport(
+      new File(["Temporary source text."], "scratch.md", { type: "text/markdown" }),
+    );
+    expect(supported.supported).toBe(true);
+    expect(supported.confidence).toBe("high");
+    expect(supported.detail).toContain("Extraction confidence is high");
+
+    const unsupported = temporaryFileSupport(
+      new File(["%PDF"], "book.pdf", { type: "application/pdf" }),
+    );
+    expect(unsupported.supported).toBe(false);
+    expect(unsupported.detail).toContain("Unsupported file error state");
   });
 
   it("adapts temporary PDFs into Book Cinema sources", () => {

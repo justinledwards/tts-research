@@ -1,3 +1,16 @@
+## 2026-06-12 23:06 CEST - Commit Temporary Paste and File Narration
+- [x] Review and stage temporary paste/file narration files
+- [x] Commit temporary paste/file narration work package
+- Validation: pre-commit `pnpm check` passed format/lint/type/package/script/adapter/backend packages until existing backend `internal/pipeline` TempDir cleanup failed in `TestPreparedSourceJobDefensivelyExcludesOnDemandSelectedBlocks`; committed with prior `pnpm validate:local` pass and focused checks.
+
+## 2026-06-12 22:51 CEST - Temporary Pasted Text and File Narration
+- [x] Inspect existing temporary paste, file, review, preview, and cinema flows
+- [x] Add backend temporary paste and supported file source handling
+- [x] Add QuickListenPanel paste/dropzone and temporary route UI states
+- [x] Add focused regression and screenshot evidence coverage
+- [x] Run project checks
+- Validation: focused temporary source HTTP route tests passed; focused QuickListenPanel Vitest passed; frontend typecheck passed; `pnpm e2e:temporary-sources` passed and refreshed responsive/teleprompt/context/command evidence; `pnpm validate:local` passed. `pnpm e2e:workspace-flow` failed waiting for visible/stable `ui-action-teleprompt-preset-largeText`; `pnpm e2e:book-cinema` passed Markdown and Website import/narration before failing waiting for the `Intake` button in the later Book Cinema UX path.
+
 ## 2026-06-12 22:18 CEST - Temporary Webpage Narration Cinema
 - [x] Inspect existing temporary source, Quick Listen, and Cinema flows
 - [x] Add backend webpage temporary source extraction and readiness states

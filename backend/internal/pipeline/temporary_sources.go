@@ -156,6 +156,15 @@ func (service *Service) CreateTemporarySource(ctx context.Context, request Creat
 			metadata["webpage"] = webpage
 		}
 	}
+	if kind == PreparedSourceKindFile {
+		metadata["supportedFile"] = temporarySupportedFileMetadata(
+			sourceName,
+			contentType,
+			sourceBytes,
+			countWords(sourceText),
+			len(preprocessed.Blocks),
+		)
+	}
 	metadata["preprocessorId"] = preprocessed.PreprocessorID
 	metadata["preprocessorVersion"] = preprocessed.PreprocessorVersion
 	metadata["sourceFormat"] = preprocessed.SourceFormat
@@ -1363,6 +1372,27 @@ func temporaryWebpageMetadata(
 		}
 	}
 	return webpage
+}
+
+func temporarySupportedFileMetadata(
+	sourceName string,
+	contentType string,
+	sourceBytes int64,
+	wordCount int,
+	blockCount int,
+) map[string]any {
+	confidence := "medium"
+	if wordCount > 0 && blockCount > 0 {
+		confidence = "high"
+	}
+	return map[string]any{
+		"filename":             sourceName,
+		"contentType":          contentType,
+		"sourceBytes":          sourceBytes,
+		"extractionConfidence": confidence,
+		"wordCount":            wordCount,
+		"narrationBlocks":      blockCount,
+	}
 }
 
 func preparedSourceFromTemporarySession(session TemporarySourceSession) PreparedSource {
