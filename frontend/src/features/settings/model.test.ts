@@ -49,7 +49,7 @@ describe("settings metadata", () => {
       "temporarySource",
     ]);
     expect(settingsScopeAppliesTo("session")).toContain("current run");
-    expect(settingsScopeAppliesTo("temporarySource")).toContain("until discarded or promoted");
+    expect(settingsScopeAppliesTo("temporarySource")).toContain("until expiry");
     expect(settingsScopeAppliesTo("source")).toContain("selected source");
     expect(settingsScopeAppliesTo("project")).toContain("project");
     expect(settingsScopeAppliesTo("machine")).toContain("local runtime");
@@ -121,7 +121,7 @@ describe("settings metadata", () => {
         },
         {
           after: "Unchanged by preset",
-          before: "Saved to this temporary session",
+          before: "Kept with this temporary source",
           fieldId: "temporarySourceBehavior",
           preserved: true,
         },

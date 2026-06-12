@@ -248,7 +248,7 @@ describe("CinemaInspectorDock", () => {
         diagnostics: [],
         originLabel: "https://example.test/story",
         policyLabel: "Session override",
-        promotionItems: ["Extracted source", "Policy pin"],
+        promotionItems: ["Temporary source text", "Project source pin"],
         pronunciationCount: 0,
         recentPositionCount: 0,
         repairNotes: [],
@@ -335,7 +335,7 @@ describe("CinemaInspectorDock", () => {
       />,
     );
     expect(policy).toContain("Promotion");
-    expect(policy).toContain("Extracted source, Policy pin");
+    expect(policy).toContain("Temporary source text, Project source pin");
   });
 
   it("shows pinned inspector panels as badges instead of selected tabs", () => {

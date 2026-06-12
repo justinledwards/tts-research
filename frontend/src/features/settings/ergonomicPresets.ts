@@ -353,7 +353,7 @@ export function buildErgonomicPresetChangeSet(
       },
       {
         after: "Unchanged by preset",
-        before: "Saved to this temporary session",
+        before: "Kept with this temporary source",
         fieldId: "temporarySourceBehavior",
         preserved: true,
       },

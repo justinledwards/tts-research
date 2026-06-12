@@ -65,11 +65,9 @@ describe("privacy model", () => {
     expect(boundary.status).toBe("Session-owned");
     expect(boundary.summary).toContain("session-owned content");
     expect(boundary.facts.map((fact) => fact.value).join(" ")).toContain(
-      "Saved to this temporary session",
+      "Kept with this temporary source",
     );
-    expect(boundary.facts.map((fact) => fact.value).join(" ")).toContain(
-      "sent to provider for generation",
-    );
+    expect(boundary.facts.map((fact) => fact.value).join(" ")).toContain("can send request text");
     expect(boundary.excluded).toContain(
       "project source pins unless the temporary source is promoted",
     );

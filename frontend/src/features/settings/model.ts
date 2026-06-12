@@ -192,7 +192,7 @@ export const SETTINGS_SCOPE_META: Record<SettingsScope, SettingsScopeMeta> = {
     shortLabel: "Source",
   },
   temporarySource: {
-    appliesTo: "Applies to this temporary source until discarded or promoted.",
+    appliesTo: "Applies to this temporary source until expiry, discard, or Keep in project.",
     badgeClassName:
       "border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]",
     description: "Session-owned source content, extraction results, and generated temporary audio.",
@@ -223,7 +223,7 @@ export const SETTINGS_PRECEDENCE: readonly {
   },
   {
     description:
-      "Session-owned source behavior kept only until the temporary source is discarded or promoted.",
+      "Session-owned source behavior kept only until the temporary source expires, is discarded, or is kept in project.",
     label: "Temporary source",
     scope: "temporarySource",
   },
@@ -273,8 +273,7 @@ export const SETTINGS_RESET_META: Record<
     label: "Reset source override",
   },
   temporarySourceCleanup: {
-    description:
-      "Delete when discarded, clear expired sessions, or keep in project through promotion.",
+    description: "Discard temporary source, Clear expired temporary work, or Keep in project.",
     label: "Clean up temporary source",
   },
 };
@@ -554,7 +553,7 @@ export const SETTINGS_FIELD_META: SettingsFieldMeta[] = [
   },
   {
     description:
-      "Controls expiry, cleanup, generated temporary audio, return context, webpage extraction, and promotion behavior.",
+      "Controls expiry, cleanup, generated temporary audio, return context, webpage extraction, and Keep in project behavior.",
     group: "sources",
     id: "temporarySourceBehavior",
     label: "Temporary source behavior",

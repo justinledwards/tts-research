@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { StatusChipTone } from "../../design";
 import { operationalIssueTone, type OperationalStatusIssue } from "../operational-status";
 import type { WorkspaceStage, WorkspaceStageStatus } from "../workspace";
+import { TEMPORARY_SOURCE_COPY } from "../temporary-source-copy";
 import { ContextPanel } from "./ContextPanel";
 import {
   buildContextPanelTabs,
@@ -1212,7 +1213,7 @@ function temporaryReviewStatusLabel(reviewEditCount: number): string {
 }
 
 function promotionItemsLabel(items: readonly string[]): string {
-  return items.length > 0 ? items.join(", ") : "Extracted source";
+  return items.length > 0 ? items.join(", ") : TEMPORARY_SOURCE_COPY.promotion.extractedSource;
 }
 
 function WorkspaceInspectorCollapsedSummary({

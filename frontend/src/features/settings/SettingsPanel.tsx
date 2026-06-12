@@ -41,6 +41,7 @@ import {
   providerRuntimePrivacyBoundary,
   temporarySourcePrivacyBoundary,
 } from "../privacy";
+import { TEMPORARY_SOURCE_COPY } from "../temporary-source-copy";
 import type { UiMemoryPreferenceId, UiMemoryState } from "../preferences";
 import {
   UiMemoryPreferences,
@@ -2188,11 +2189,11 @@ function TemporarySourceBehaviorPanel({
             <ScopeBadge scope="temporarySource" />
           </h4>
           <p className="vs-muted mt-1 text-xs leading-5">
-            Saved to this temporary session until discarded or kept in project. Presets do not
-            promote these choices into project defaults.
+            Applies to this temporary source until expiry, Discard temporary source, or Keep in
+            project. Presets do not promote these choices into project defaults.
           </p>
         </div>
-        <StatusChip tone="warning">Deleted when discarded</StatusChip>
+        <StatusChip tone="warning">{TEMPORARY_SOURCE_COPY.terms.expiresAfterInactivity}</StatusChip>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
@@ -2215,7 +2216,7 @@ function TemporarySourceBehaviorPanel({
           ))}
         </TemporarySelect>
         <TemporarySelect
-          detail="Open new temporary sources in the selected surface after creation."
+          detail="Open new temporary sources in the selected surface after creation without adding them to project history."
           label="Default destination after creation"
           testId="settings-temporary-destination"
           value={settings.defaultDestination}
@@ -2273,8 +2274,8 @@ function TemporarySourceBehaviorPanel({
         <Toggle
           checked={settings.autoClean}
           data-testid="settings-temporary-auto-clean"
-          detail="Expired temporary sessions and artifacts are eligible for cleanup without changing project sources."
-          label="Auto-clean expired temporary work"
+          detail="Expired temporary sources and generated temporary audio are eligible for cleanup without changing project sources."
+          label={TEMPORARY_SOURCE_COPY.terms.clearExpiredTemporaryWork}
           onChange={(checked) => {
             patchSettings({ autoClean: checked });
           }}
@@ -2282,7 +2283,7 @@ function TemporarySourceBehaviorPanel({
         <Toggle
           checked={settings.askBeforeDiscardingAudio}
           data-testid="settings-temporary-confirm-audio-discard"
-          detail="Ask before discarding generated temporary audio from this temporary session."
+          detail="Ask before discarding generated temporary audio from this temporary source."
           label="Ask before discarding generated temporary audio"
           onChange={(checked) => {
             patchSettings({ askBeforeDiscardingAudio: checked });
@@ -2291,8 +2292,8 @@ function TemporarySourceBehaviorPanel({
         <Toggle
           checked={settings.includeGeneratedAudioOnPromotion}
           data-testid="settings-temporary-promote-audio"
-          detail="When enabled, generated audio may be included when the temporary source is kept in project."
-          label="Include generated audio during promotion"
+          detail="When enabled, generated temporary audio may be included when the temporary source is kept in project."
+          label={TEMPORARY_SOURCE_COPY.terms.promoteWithAudio}
           onChange={(checked) => {
             patchSettings({ includeGeneratedAudioOnPromotion: checked });
           }}
@@ -2303,7 +2304,8 @@ function TemporarySourceBehaviorPanel({
         <p className="font-semibold">Reset and cleanup stay separate</p>
         <p className="vs-muted leading-5">
           Reset UI memory clears preferences stored on this machine for panels and return context.
-          It does not delete temporary source content; choose discard or temporary cleanup for that.
+          It does not delete temporary source content; choose Discard temporary source or Clear
+          expired temporary work for that.
         </p>
       </Panel>
 

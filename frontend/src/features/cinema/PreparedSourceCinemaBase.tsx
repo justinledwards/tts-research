@@ -30,6 +30,7 @@ import type {
 } from "../../types";
 import { HeaderContextSummary } from "../header";
 import { ExitIcon, SettingsIcon } from "../navigation";
+import { TEMPORARY_SOURCE_COPY } from "../temporary-source-copy";
 import { useReadAlongLiveStatus } from "../accessibility";
 import { LazyPanelFallback } from "../performance";
 import { generatedAudioLifecycleFromJob } from "../playback";
@@ -763,7 +764,7 @@ export function PreparedSourceCinemaOverlay({
             {isTemporarySource ? (
               <Button
                 disabled={!onKeepTemporarySource || source.temporarySourceId === undefined}
-                disabledReason="This temporary source cannot be promoted yet."
+                disabledReason="This temporary source cannot be kept in project yet."
                 onClick={
                   onKeepTemporarySource
                     ? () => {
@@ -774,13 +775,13 @@ export function PreparedSourceCinemaOverlay({
                 size="md"
                 variant="primary"
               >
-                Keep as project source
+                {TEMPORARY_SOURCE_COPY.actions.keep}
               </Button>
             ) : null}
             {isTemporarySource ? (
               <Button
                 disabled={!onKeepTemporarySource || source.temporarySourceId === undefined}
-                disabledReason="This temporary source cannot be promoted yet."
+                disabledReason="This temporary source cannot be kept in project yet."
                 onClick={
                   onKeepTemporarySource
                     ? () => {
@@ -803,7 +804,7 @@ export function PreparedSourceCinemaOverlay({
             {isTemporarySource ? (
               <Button
                 disabled={!onDiscardTemporarySource}
-                disabledReason="Discard is unavailable for this temporary source."
+                disabledReason="Discard temporary source is unavailable here."
                 onClick={
                   onDiscardTemporarySource
                     ? () => {
@@ -814,7 +815,7 @@ export function PreparedSourceCinemaOverlay({
                 size="md"
                 variant="secondary"
               >
-                Discard temporary source
+                {TEMPORARY_SOURCE_COPY.actions.discard}
               </Button>
             ) : null}
             {isTemporarySource && job?.audioUrl ? (
@@ -2246,8 +2247,8 @@ function PreparedSourceCinemaMobileSheet({
             children: (
               <div className="grid gap-3 text-sm">
                 <p className="rounded-md border p-3 leading-6 vs-border vs-surface vs-muted">
-                  Discard removes this temporary session and its session-scoped work. Keep it first
-                  if the source should become durable.
+                  Discard temporary source removes this temporary source and its session-scoped
+                  work. Keep in project first if the source should become durable.
                 </p>
                 <Button
                   data-testid="ui-action-prepared-cinema-mobile-discard-temporary"
@@ -2263,7 +2264,7 @@ function PreparedSourceCinemaMobileSheet({
               </div>
             ),
             id: "discard" as const,
-            label: "Discard",
+            label: TEMPORARY_SOURCE_COPY.actions.discard,
           },
         ]
       : []),
@@ -2835,15 +2836,15 @@ function temporaryPromotionItems({
   hasTiming: boolean;
   reviewEditCount: number;
 }>): string[] {
-  const items = ["Extracted source"];
+  const items: string[] = [TEMPORARY_SOURCE_COPY.promotion.extractedSource];
   if (reviewEditCount > 0) {
     items.push("Review edits");
   }
   if (hasPolicy) {
-    items.push("Policy pin");
+    items.push(TEMPORARY_SOURCE_COPY.promotion.sourcePin);
   }
   if (hasAudio) {
-    items.push("Generated audio");
+    items.push(TEMPORARY_SOURCE_COPY.promotion.generatedAudio);
   }
   if (hasTiming) {
     items.push("Timing maps");

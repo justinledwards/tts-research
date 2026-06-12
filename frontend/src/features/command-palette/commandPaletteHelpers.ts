@@ -23,6 +23,7 @@ import type { WorkspaceStageActionId } from "../workspace/stageActions";
 import type { WorkspaceLayoutMode, WorkspaceStage } from "../workspace/model";
 import { COMMAND_CENTER_ROUTES, type CommandCenterRouteId } from "../command-center/model";
 import type { QuickListenMode } from "../quick-listen";
+import { TEMPORARY_SOURCE_COPY } from "../temporary-source-copy";
 
 type SourceMode = "book" | "fileUrl" | "text";
 
@@ -459,7 +460,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     {
       category: "Source",
       detail:
-        "Start temporary narration from pasted text, a URL, a file, or a recent temporary source.",
+        "Start temporary narration from pasted text, a URL, a file, or a recent temporary source without creating project history.",
       id: "quick-listen:open",
       keywords: [
         "quick listen",
@@ -479,8 +480,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     },
     {
       category: "Source",
-      detail:
-        "Temporary source · Start a new Quick Listen session through the guided source picker.",
+      detail: "Temporary source · Start Quick Listen without creating a durable project source.",
       id: "temporary-source:new",
       keywords: [
         "temporary",
@@ -502,7 +502,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     {
       category: "Source",
       detail:
-        "Temporary source · Paste scratch text into Quick Listen without saving it to a project.",
+        "Temporary source · Paste scratch text into Quick Listen without adding it to project history.",
       id: "temporary-source:paste",
       keywords: ["temporary", "paste", "text", "scratch", "quick listen", "article"],
       owner: "temporary-source",
@@ -514,7 +514,8 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     },
     {
       category: "Source",
-      detail: "Temporary webpage · Open a URL in Quick Listen without adding a durable source.",
+      detail:
+        "Temporary webpage · Open a URL in Quick Listen without adding a durable project source.",
       id: "temporary-source:open-url",
       keywords: ["temporary", "url", "webpage", "website", "article", "quick listen", "open"],
       owner: "temporary-source",
@@ -527,7 +528,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     {
       category: "Source",
       detail:
-        "Temporary source · Upload a file into Quick Listen without keeping it in the project.",
+        "Temporary source · Upload a file into Quick Listen without adding it to project history.",
       id: "temporary-source:upload-file",
       keywords: ["temporary", "upload", "file", "document", "pdf", "epub", "quick listen"],
       owner: "temporary-source",
@@ -762,7 +763,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
   );
   const currentTemporaryDisabledReason = activeTemporarySource
     ? undefined
-    : "Open or select a temporary source first.";
+    : TEMPORARY_SOURCE_COPY.empty.noSession;
   const activeTemporaryReady = activeTemporarySource
     ? temporarySourceCommandReady(activeTemporarySource)
     : false;
@@ -774,10 +775,11 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
   const temporaryCommandEntries: CommandEntry[] = [
     {
       category: "Source",
-      detail: "Temporary source · Reopen the most recent temporary session through Quick Listen.",
+      detail:
+        "Temporary source · Reopen the most recent temporary session before it expires after inactivity.",
       disabled: temporarySources.length === 0,
       disabledReason:
-        temporarySources.length === 0 ? "No recent temporary sources are available." : undefined,
+        temporarySources.length === 0 ? TEMPORARY_SOURCE_COPY.empty.noTemporarySources : undefined,
       id: "temporary-source:reopen-recent",
       keywords: ["temporary", "recent", "reopen", "quick listen", "scratch"],
       owner: "temporary-source",
@@ -789,12 +791,11 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     },
     {
       category: "Source",
-      detail:
-        "Temporary source · Promote the active temporary session into a durable project source.",
+      detail: "Temporary source · Keep the active temporary source as durable project history.",
       disabled: !activeTemporarySource,
       disabledReason: currentTemporaryDisabledReason,
       id: "temporary-source:keep-in-project",
-      keywords: ["temporary", "keep", "promote", "project", "durable", "save"],
+      keywords: ["temporary", "keep", "promote", "project", "durable"],
       owner: "temporary-source",
       perform: () => {
         if (activeTemporarySource) {
@@ -808,7 +809,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     {
       category: "Source",
       detail:
-        "Temporary source · Discard the active temporary session and its temporary artifacts.",
+        "Temporary source · Discard temporary source text, generated temporary audio, and session artifacts. Project sources are unchanged.",
       disabled: !activeTemporarySource,
       disabledReason: currentTemporaryDisabledReason,
       id: "temporary-source:discard",
@@ -824,11 +825,12 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     },
     {
       category: "Source",
-      detail: "Temporary storage · Remove expired temporary sessions and cleaned artifacts.",
+      detail:
+        "Temporary storage · Clear expired temporary work after inactivity. Project sources are unchanged.",
       disabled: temporaryExpiredCount(temporarySources, temporaryStorageUsage) === 0,
       disabledReason:
         temporaryExpiredCount(temporarySources, temporaryStorageUsage) === 0
-          ? "No expired temporary sources are ready to clear."
+          ? TEMPORARY_SOURCE_COPY.empty.noExpired
           : undefined,
       id: "temporary-source:clear-expired",
       keywords: ["temporary", "expired", "clear", "cleanup", "storage"],
@@ -837,7 +839,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
         void handlers.clearExpiredTemporarySources();
       },
       section: "Sources",
-      title: "Clear expired temporary sources",
+      title: TEMPORARY_SOURCE_COPY.actions.clearExpired,
     },
     {
       category: "Review",
@@ -891,7 +893,8 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
       capabilityGate: "tts",
       capabilityGated: Boolean(createAndListenCapabilityReason),
       category: "Playback",
-      detail: "Temporary source · Create narration audio for the active temporary session.",
+      detail:
+        "Temporary source · Create generated temporary audio for the active temporary session.",
       disabled: !activeTemporarySource || !canCreateCurrentSource,
       disabledReason:
         currentTemporaryDisabledReason ??

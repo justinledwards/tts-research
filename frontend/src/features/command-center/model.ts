@@ -45,10 +45,10 @@ export const COMMAND_CENTER_ROUTES: readonly CommandCenterRouteDefinition[] = [
   {
     id: "temporary",
     label: "Temporary Work",
-    detail: "Recent unsaved sessions",
+    detail: "Recent temporary sources",
     headline: "Recent temporary work without project clutter",
     description:
-      "Find temporary sources before expiry, reopen recent work, promote useful sessions into a project, or discard throwaway artifacts.",
+      "Find temporary sources before expiry, reopen recent work, Keep in project for durable history, or Discard temporary source.",
   },
   {
     id: "assets",

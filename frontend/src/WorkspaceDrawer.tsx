@@ -21,6 +21,7 @@ import {
   visibleCommandCenterJobs,
   visibleTemporaryCommandCenterJobs,
 } from "./features/command-center";
+import { TEMPORARY_SOURCE_COPY } from "./features/temporary-source-copy";
 import {
   buildHealthReport,
   type HealthReport,
@@ -649,8 +650,8 @@ export function WorkspaceDrawer({
                     ) : (
                       <div className="grid gap-3 rounded-md border p-4 vs-border vs-surface">
                         <EmptyDrawerText>
-                          No saved projects yet. Create a project when you want a separate library,
-                          or start temporary narration without saving anything.
+                          No projects yet. Create a durable project when you want a separate
+                          library, or start Quick Listen as a temporary source.
                         </EmptyDrawerText>
                         <div className="flex flex-wrap gap-2">
                           <button
@@ -873,7 +874,7 @@ function TemporaryWorkShelf({
   const filters: readonly { id: TemporaryWorkFilter; label: string }[] = [
     { id: "all", label: "All" },
     { id: "active", label: "Active" },
-    { id: "generatedAudio", label: "Generated audio" },
+    { id: "generatedAudio", label: TEMPORARY_SOURCE_COPY.terms.generatedTemporaryAudio },
     { id: "failed", label: "Failed" },
     { id: "expired", label: "Expired" },
     { id: "promoted", label: "Promoted" },
@@ -882,17 +883,17 @@ function TemporaryWorkShelf({
     <div className="grid gap-4">
       <div className="grid gap-3 md:grid-cols-4">
         <WorkspaceDashboardSummary
-          detail={`${formatBytes(storageUsage?.totalBytes ?? 0)} across recent temporary sessions`}
+          detail={`${formatBytes(storageUsage?.totalBytes ?? 0)} across recent temporary sources`}
           label="Storage usage"
           value={formatBytes(storageUsage?.totalBytes ?? 0)}
         />
         <WorkspaceDashboardSummary
-          detail={`${(storageUsage?.expiredCount ?? 0).toString()} expired session(s) can be cleared`}
+          detail={`${(storageUsage?.expiredCount ?? 0).toString()} expired temporary source(s) can be cleared`}
           label="Expiry"
           value={`${totalSessions.toString()} recent`}
         />
         <WorkspaceDashboardSummary
-          detail={`${formatBytes(storageUsage?.audioBytes ?? 0)} generated or preview audio`}
+          detail={`${formatBytes(storageUsage?.audioBytes ?? 0)} generated temporary audio`}
           label="Temporary audio"
           value={formatBytes(storageUsage?.audioBytes ?? 0)}
         />
@@ -935,10 +936,7 @@ function TemporaryWorkShelf({
             />
           ))
         ) : (
-          <EmptyDrawerText>
-            No temporary sessions match this filter. Start Quick Listen to create temporary work
-            without adding anything to the project library.
-          </EmptyDrawerText>
+          <EmptyDrawerText>{TEMPORARY_SOURCE_COPY.empty.recovery}</EmptyDrawerText>
         )}
       </div>
     </div>
@@ -964,11 +962,11 @@ function TemporarySourceCard({
   const isDiscarded = session.status === "discarded";
   const isPromoted = session.status === "promoted" || session.promotionStatus === "promoted";
   const reopenDisabledReason = isDiscarded
-    ? "Temporary source was discarded. Start Quick Listen again to create a new temporary session."
+    ? TEMPORARY_SOURCE_COPY.errors.discardedCannotOpen
     : undefined;
   let keepDisabledReason: string | undefined;
   if (isDiscarded) {
-    keepDisabledReason = "Temporary source was discarded and cannot be kept in a project.";
+    keepDisabledReason = TEMPORARY_SOURCE_COPY.errors.discardedCannotKeep;
   } else if (isPromoted) {
     keepDisabledReason = "Temporary source is already kept in a project.";
   }
@@ -977,7 +975,7 @@ function TemporarySourceCard({
     discardDisabledReason = "Temporary source was already discarded.";
   } else if (isPromoted) {
     discardDisabledReason =
-      "Temporary source is already kept in a project, so discard is unavailable here.";
+      "Temporary source is already kept in a project, so Discard temporary source is unavailable here.";
   }
   const expiryWarning = temporaryExpiryWarning(session.expiresAt);
   return (
@@ -1042,7 +1040,7 @@ function TemporarySourceCard({
             title={keepDisabledReason}
             type="button"
           >
-            Keep in Project
+            {TEMPORARY_SOURCE_COPY.actions.keep}
           </button>
           <button
             className="min-h-11 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-surface-primary)] px-3 text-xs font-semibold text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)] disabled:opacity-50 sm:h-9 sm:min-h-0"
@@ -1057,7 +1055,7 @@ function TemporarySourceCard({
             title={discardDisabledReason}
             type="button"
           >
-            Discard
+            {TEMPORARY_SOURCE_COPY.actions.discard}
           </button>
         </div>
       </div>
@@ -1191,7 +1189,7 @@ function CommandCenterOverview({
             Assets
           </OverviewRouteButton>
           <OverviewRouteButton
-            detail="Reopen, promote, discard, or clean temporary sessions."
+            detail="Reopen, Keep in project, Discard temporary source, or Clear expired temporary work."
             onClick={onOpenTemporary}
           >
             Temporary Work

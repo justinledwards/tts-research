@@ -325,7 +325,7 @@ describe("Command Center", () => {
       <WorkspaceDrawer {...emptyProps} activeSection="reports" />,
     );
 
-    expect(projectsMarkup).toContain("No saved projects yet");
+    expect(projectsMarkup).toContain("No projects yet");
     expect(projectsMarkup).toContain('data-testid="ui-action-empty-workspace-quick-listen"');
     expect(projectsMarkup).toContain("Quick Listen");
     expect(projectsMarkup).toContain("No generated audio is attached to the current project yet.");

@@ -565,6 +565,7 @@ import {
   temporarySessionToBookSource,
   temporarySessionToPreparedSource,
 } from "./features/quick-listen";
+import { TEMPORARY_SOURCE_COPY } from "./features/temporary-source-copy";
 
 type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
 
@@ -6998,7 +6999,7 @@ export function App() {
         const message =
           caughtError instanceof Error
             ? caughtError.message
-            : "Unable to keep temporary source in the project.";
+            : TEMPORARY_SOURCE_COPY.errors.keepFailed;
         setTemporaryPromotionError(message);
         if (origin === "book") {
           setBookSourceError(message);
@@ -10611,8 +10612,8 @@ function TemporaryPromotionDialog({
       .reduce((total, artifact) => total + (artifact.bytes ?? 0), 0) ?? 0;
   const generatedAudioLabel =
     generatedArtifactBytes > 0
-      ? `Generated audio (${formatBytes(generatedArtifactBytes)})`
-      : "Generated audio";
+      ? `${TEMPORARY_SOURCE_COPY.terms.generatedTemporaryAudio} (${formatBytes(generatedArtifactBytes)})`
+      : TEMPORARY_SOURCE_COPY.terms.generatedTemporaryAudio;
   const hasGeneratedAudio =
     session?.artifacts.some((artifact) => artifact.kind === "generatedAudio") ?? false;
   const hasTimingMaps = session?.artifacts.some((artifact) => artifact.kind === "timing") ?? false;
@@ -10624,6 +10625,7 @@ function TemporaryPromotionDialog({
   const canSubmit =
     title.trim().length > 0 &&
     (projectMode === "existing" ? projectId.trim().length > 0 : newProjectName.trim().length > 0);
+  const submitLabel = temporaryPromotionSubmitLabel(Boolean(keep.generatedAudio));
 
   const setKeepFlag = (key: keyof TemporarySourcePromotionKeep, value: boolean) => {
     setKeep((current) => ({ ...current, [key]: value }));
@@ -10639,15 +10641,12 @@ function TemporaryPromotionDialog({
       >
         <div className="flex flex-col gap-1 border-b pb-4 vs-border">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--vs-action-primary)]">
-            Temporary source
+            {TEMPORARY_SOURCE_COPY.terms.temporarySource}
           </p>
           <h2 className="text-xl font-semibold" id="temporary-promotion-title">
-            Keep in project
+            {TEMPORARY_SOURCE_COPY.promotion.title}
           </h2>
-          <p className="vs-muted text-sm">
-            Choose exactly what becomes durable project history. Temporary cache paths and local
-            file details are not copied.
-          </p>
+          <p className="vs-muted text-sm">{TEMPORARY_SOURCE_COPY.promotion.subtitle}</p>
         </div>
 
         <div className="grid gap-5 py-5 md:grid-cols-[1fr_1fr]">
@@ -10737,8 +10736,14 @@ function TemporaryPromotionDialog({
 
           <div className="grid gap-3">
             <fieldset className="grid gap-2">
-              <legend className="text-sm font-semibold">What to keep</legend>
-              <PromotionKeepCheckbox checked disabled label="Extracted source" />
+              <legend className="text-sm font-semibold">
+                {TEMPORARY_SOURCE_COPY.promotion.manifestIntro}
+              </legend>
+              <PromotionKeepCheckbox
+                checked
+                disabled
+                label={TEMPORARY_SOURCE_COPY.promotion.extractedSource}
+              />
               <PromotionKeepCheckbox
                 checked={Boolean(keep.reviewEdits)}
                 label="Review edits"
@@ -10748,14 +10753,14 @@ function TemporaryPromotionDialog({
               />
               <PromotionKeepCheckbox
                 checked={Boolean(keep.lexiconOverrides)}
-                label="Pronunciation/session lexicon overrides"
+                label={TEMPORARY_SOURCE_COPY.promotion.sessionLexicon}
                 onChange={(checked) => {
                   setKeepFlag("lexiconOverrides", checked);
                 }}
               />
               <PromotionKeepCheckbox
                 checked={Boolean(keep.policySourcePin)}
-                label="Policy source pin"
+                label={TEMPORARY_SOURCE_COPY.promotion.sourcePin}
                 onChange={(checked) => {
                   setKeepFlag("policySourcePin", checked);
                 }}
@@ -10809,7 +10814,7 @@ function TemporaryPromotionDialog({
                 type="checkbox"
               />
               <span>
-                Keep both if the title or source URL already exists.
+                Keep both project sources if the title or source URL already exists.
                 <span className="block vs-muted">
                   Leave unchecked to stop and resolve duplicate project history first.
                 </span>
@@ -10853,7 +10858,7 @@ function TemporaryPromotionDialog({
             type="button"
             variant="primary"
           >
-            {isSubmitting ? "Keeping..." : "Keep in project"}
+            {isSubmitting ? "Keeping..." : submitLabel}
           </Button>
         </div>
       </section>
@@ -10885,6 +10890,13 @@ function PromotionKeepCheckbox({
       {label}
     </label>
   );
+}
+
+function temporaryPromotionSubmitLabel(includeGeneratedAudio: boolean): string {
+  if (includeGeneratedAudio) {
+    return TEMPORARY_SOURCE_COPY.promotion.submitWithAudio;
+  }
+  return TEMPORARY_SOURCE_COPY.promotion.submitSourceOnly;
 }
 
 function NarrationRailMini({
@@ -11028,15 +11040,15 @@ function temporaryWorkspacePromotionItems({
   hasPolicy: boolean;
   reviewEditCount: number;
 }>): string[] {
-  const items = ["Extracted source"];
+  const items: string[] = [TEMPORARY_SOURCE_COPY.promotion.extractedSource];
   if (reviewEditCount > 0) {
     items.push("Review edits");
   }
   if (hasPolicy) {
-    items.push("Policy pin");
+    items.push(TEMPORARY_SOURCE_COPY.promotion.sourcePin);
   }
   if (artifactKinds.has("generatedAudio")) {
-    items.push("Generated audio");
+    items.push(TEMPORARY_SOURCE_COPY.promotion.generatedAudio);
   }
   if (artifactKinds.has("timing")) {
     items.push("Timing maps");

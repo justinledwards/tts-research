@@ -6,6 +6,7 @@ import {
   type ReaderOutlineItem,
   type ReaderRecentPositionItem,
 } from "../reader-navigation";
+import { TEMPORARY_SOURCE_COPY } from "../temporary-source-copy";
 import { buildContextPanelTabs, type ContextPanelSectionKind } from "../context-panel";
 import {
   readAlongRuntimeDebugRows,
@@ -456,5 +457,5 @@ function diagnosticsLabel(diagnostics?: readonly string[]): string {
 }
 
 function promotionItemsLabel(items: readonly string[]): string {
-  return items.length > 0 ? items.join(", ") : "Extracted source";
+  return items.length > 0 ? items.join(", ") : TEMPORARY_SOURCE_COPY.promotion.extractedSource;
 }

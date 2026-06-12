@@ -11,6 +11,11 @@ Users have two distinct intents:
 
 Project-owned sources remain durable and appear in project history. Temporary sources remain disposable, scoped to their own session, and appear in project history only after explicit promotion.
 
+Product copy and UI labels for this lifecycle are governed by
+`docs/temporary-source-copy-guide.md`. UI actions should say `Keep in project`,
+`Discard temporary source`, `Generated temporary audio`, and `Clear expired temporary work` rather
+than using ambiguous save, discard, history, or promotion labels outside the promotion manifest.
+
 ## Schema
 
 All source envelopes carry ownership:

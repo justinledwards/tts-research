@@ -612,7 +612,7 @@ export function RevisionPanel({
                   size="sm"
                   variant="ghost"
                 >
-                  Discard
+                  Discard temporary source
                 </Button>
               </>
             ) : null}

@@ -44,6 +44,7 @@ import {
   type CinemaMobilePanelSpec,
   type CinemaTransportModel,
 } from "../cinema";
+import { TEMPORARY_SOURCE_COPY } from "../temporary-source-copy";
 import type { UiMemoryCinemaState } from "../preferences";
 import {
   BOOK_SOURCE_ACCEPT,
@@ -4465,15 +4466,15 @@ function temporaryPromotionItems({
   hasTiming: boolean;
   reviewEditCount: number;
 }>): string[] {
-  const items = ["Extracted source"];
+  const items: string[] = [TEMPORARY_SOURCE_COPY.promotion.extractedSource];
   if (reviewEditCount > 0) {
     items.push("Review edits");
   }
   if (hasPolicy) {
-    items.push("Policy pin");
+    items.push(TEMPORARY_SOURCE_COPY.promotion.sourcePin);
   }
   if (hasAudio) {
-    items.push("Generated audio");
+    items.push(TEMPORARY_SOURCE_COPY.promotion.generatedAudio);
   }
   if (hasTiming) {
     items.push("Timing maps");

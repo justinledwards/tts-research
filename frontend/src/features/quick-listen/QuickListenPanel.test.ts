@@ -33,7 +33,9 @@ describe("temporarySessionToPreparedSource", () => {
 
     expect(markup).toContain('data-testid="quick-listen-temporary-source-temp-book-1"');
     expect(markup).toContain('data-testid="ui-action-quick-listen-temporary-open-temp-book-1"');
-    expect(markup).toContain("Temporary source expired. Extend the session before reopening it.");
+    expect(markup).toContain(
+      "Temporary source expired after inactivity. Extend expiry before reopening it.",
+    );
     expect(markup).toContain('data-testid="ui-action-quick-listen-temporary-discard-temp-book-1"');
   });
 

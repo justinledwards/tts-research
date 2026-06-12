@@ -1,3 +1,15 @@
+## 2026-06-12 16:39 CEST - Commit Temporary Source Trust Copy
+- [x] Review and stage temporary source trust copy files
+- [x] Commit temporary source trust copy package
+
+## 2026-06-12 16:24 CEST - Temporary Source Trust Copy
+- [x] Inventory temporary-source copy surfaces
+- [x] Add language system guide and string catalog
+- [x] Align temporary-source UI copy with persistence scope
+- [x] Add tests for copy guardrails
+- [x] Run project checks
+- Validation: focused frontend Vitest for temporary copy, Quick Listen, command palette, settings, privacy, Cinema, Inspector, and Workspace Drawer passed; frontend typecheck passed; full `pnpm check` passed with existing Biome warning/info output in adapter/scripts files.
+
 ## 2026-06-12 15:57 CEST - Screenshot Evidence Hardening
 - [x] Map failed screenshot surfaces to existing E2E scripts
 - [x] Add stable action ids and accessible tab ids

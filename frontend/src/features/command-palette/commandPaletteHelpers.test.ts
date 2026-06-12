@@ -55,7 +55,7 @@ describe("command palette helpers", () => {
       "Open or select a temporary source first.",
     );
     expect(commandDisabledReason(entryById(entries, "temporary-source:reopen-recent"))).toBe(
-      "No recent temporary sources are available.",
+      "No temporary sources are available in this app session.",
     );
     expect(entryById(entries, "temporary-source:keep-in-project").shortcutCommandId).toBe(
       "temporary.keepInProject",

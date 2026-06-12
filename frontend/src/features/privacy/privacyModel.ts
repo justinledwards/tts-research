@@ -71,8 +71,8 @@ export const PROJECT_EXPORT_INCLUDED_ITEMS = [
 
 export const TEMPORARY_SOURCE_INCLUDED_ITEMS = [
   "URL fetch request and extracted readable text, when the temporary source comes from a webpage",
-  "pasted text or uploaded file extraction output saved to this temporary session",
-  "generated temporary audio saved to this temporary session until discarded",
+  "pasted text or uploaded file extraction output kept in this temporary source until expiry or discard",
+  "generated temporary audio kept in this temporary source until expiry, discard, or Keep in project",
   "temporary return context used to reopen Review, Preview, or Cinema",
 ] as const;
 
@@ -167,35 +167,34 @@ export function temporarySourcePrivacyBoundary(): PrivacyBoundary {
     facts: [
       {
         label: "Temporary content",
-        value:
-          "Saved to this temporary session with extraction results and deleted when discarded.",
+        value: "Kept with this temporary source until expiry or Discard temporary source.",
       },
       {
-        label: "Promotion",
+        label: "Keep in project",
         value:
-          "Kept in project only after promotion; temporary settings do not become project defaults.",
+          "Keep in project creates a durable project source; temporary settings do not become project defaults.",
       },
       {
         label: "URL fetching",
         value:
-          "URL content is fetched by the local backend, then local extraction saves readable text to this temporary session.",
+          "URL content is fetched by the local backend, then local extraction keeps readable text in this temporary source.",
       },
       {
         label: "Generation",
         value:
-          "Local TTS stays on this machine; provider-backed TTS is sent to provider for generation.",
+          "Local TTS stays on this machine; provider-backed TTS can send request text, voice settings, and run configuration to the configured provider.",
       },
       {
-        label: "Generated audio",
+        label: "Generated temporary audio",
         value:
-          "Saved to this temporary session by default, optionally included when the source is kept in project, and deleted when discarded.",
+          "Kept in this temporary source by default, optionally included with Promote with audio, and deleted by Discard temporary source.",
       },
     ],
     id: "temporary-source",
     included: TEMPORARY_SOURCE_INCLUDED_ITEMS,
     status: "Session-owned",
     summary:
-      "Temporary sources are session-owned content with artifacts; they are not durable project source pins until promoted.",
+      "Temporary sources are session-owned content with artifacts; they are not durable project source pins until Keep in project.",
     title: "Temporary Source Boundary",
     tone: "warning",
   };

@@ -106,7 +106,11 @@ export const TEMPORARY_ACTION_INVENTORY: readonly TemporaryActionInventoryItem[]
     "Keep in project",
     "Promote useful temporary work to durable project material.",
   ),
-  item("discard", "Discard", "Remove throwaway temporary source data and artifacts."),
+  item(
+    "discard",
+    "Discard temporary source",
+    "Remove throwaway temporary source data and artifacts.",
+  ),
   item(
     "extend-expiry",
     "Extend expiry",
@@ -370,13 +374,13 @@ function disabledReasonForAction(actionId: TemporaryActionId): string {
       return "Add paste text, a supported file, or a URL before creating a temporary source.";
     }
     case "discard": {
-      return "Discard is unavailable after this temporary source is already discarded or promoted.";
+      return "Discard temporary source is unavailable after this temporary source is already discarded or kept in project.";
     }
     case "extend-expiry": {
-      return "Extend expiry is unavailable after this temporary source is discarded, expired, or promoted.";
+      return "Extend expiry is unavailable after this temporary source is discarded, expired, or kept in project.";
     }
     case "keep-in-project": {
-      return "Keep in project is available after temporary source work exists to save.";
+      return "Keep in project is available after temporary source work exists to make durable.";
     }
     case "open-theatre-cinema": {
       return "Create audio or select a ready source before opening Theatre or Cinema.";

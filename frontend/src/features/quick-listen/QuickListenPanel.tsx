@@ -19,6 +19,7 @@ import {
   DEFAULT_TEMPORARY_SOURCE_BEHAVIOR,
   type TemporarySourceBehaviorSettings,
 } from "../settings/model";
+import { TEMPORARY_SOURCE_COPY } from "../temporary-source-copy";
 import { WebsiteExtractionSummary } from "../website-cinema/WebsiteExtractionSummary";
 
 export type QuickListenMode = "paste" | "url" | "file" | "recent";
@@ -467,10 +468,8 @@ export function QuickListenPanel({
             <div className="rounded-md border p-3 text-sm leading-6 vs-border vs-surface">
               <p className="font-semibold">Temporary source boundary</p>
               <p className="vs-muted mt-1">
-                Quick Listen does not create a durable project source. Generated files and progress
-                stay tied to this temporary session until it expires, is discarded, or is promoted.
-                Promotion keeps a project copy without deleting this session unless you choose to
-                clean it.
+                {TEMPORARY_SOURCE_COPY.launcher.boundaryDetail}{" "}
+                {TEMPORARY_SOURCE_COPY.privacy.localFirst}
               </p>
             </div>
 
@@ -484,7 +483,7 @@ export function QuickListenPanel({
 
         <footer className="grid gap-3 border-t p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] vs-border sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:pb-4">
           <p className="vs-muted max-w-sm text-xs leading-5">
-            Keep in project appears after there is useful temporary work to save.
+            {TEMPORARY_SOURCE_COPY.launcher.keepHint}
           </p>
           <div className="grid gap-2 sm:flex sm:flex-wrap">
             <Button
@@ -556,7 +555,7 @@ function TemporaryStorageControls({
           size="sm"
           variant="secondary"
         >
-          Clear expired
+          {TEMPORARY_SOURCE_COPY.actions.clearExpired}
         </Button>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
@@ -644,7 +643,7 @@ function RecentTemporarySources({
   if (sources.length === 0) {
     return (
       <p className="vs-muted rounded-md border p-4 text-sm vs-border vs-surface">
-        Recent temporary sources appear here after you start Quick Listen in this app session.
+        {TEMPORARY_SOURCE_COPY.launcher.noRecent}
       </p>
     );
   }
@@ -680,9 +679,7 @@ function TemporarySourceRow({
   onUseRecentSource,
 }: Readonly<TemporarySourceRowProps>) {
   const openDisabledReason =
-    source.status === "expired"
-      ? "Temporary source expired. Extend the session before reopening it."
-      : undefined;
+    source.status === "expired" ? TEMPORARY_SOURCE_COPY.errors.expiredCannotOpen : undefined;
   return (
     <div
       className="grid gap-2 rounded-md border p-3 vs-border vs-surface sm:grid-cols-[minmax(0,1fr)_auto]"
@@ -743,9 +740,7 @@ function TemporarySourceRow({
           onClick={() => {
             if (
               askBeforeAudioDiscard &&
-              !globalThis.confirm(
-                "Remove generated audio for this temporary session? Extracted source text and review state will remain.",
-              )
+              !globalThis.confirm(TEMPORARY_SOURCE_COPY.confirmation.removeGeneratedAudio)
             ) {
               return;
             }
@@ -754,17 +749,13 @@ function TemporarySourceRow({
           size="sm"
           variant="secondary"
         >
-          Audio only
+          {TEMPORARY_SOURCE_COPY.actions.generatedAudioOnly}
         </Button>
         <Button
           data-testid={`ui-action-quick-listen-temporary-clean-artifacts-${source.id}`}
           data-ui-action-owner="temporary-source"
           onClick={() => {
-            if (
-              !globalThis.confirm(
-                "Remove all temporary artifacts for this session? Recovery metadata will remain, but source text, audio, timing, bookmarks, and progress will be cleaned.",
-              )
-            ) {
+            if (!globalThis.confirm(TEMPORARY_SOURCE_COPY.confirmation.removeAllArtifacts)) {
               return;
             }
             void onCleanup(source, "removeAllTemporaryArtifacts");
@@ -772,17 +763,13 @@ function TemporarySourceRow({
           size="sm"
           variant="secondary"
         >
-          Artifacts
+          {TEMPORARY_SOURCE_COPY.actions.removeTemporaryArtifacts}
         </Button>
         <Button
           data-testid={`ui-action-quick-listen-temporary-discard-${source.id}`}
           data-ui-action-owner="temporary-source"
           onClick={() => {
-            if (
-              !globalThis.confirm(
-                "Discard this temporary session now? This removes temporary source data, generated audio, timing, bookmarks, progress, and diagnostics.",
-              )
-            ) {
+            if (!globalThis.confirm(TEMPORARY_SOURCE_COPY.confirmation.discard)) {
               return;
             }
             void onDiscard(source);
@@ -790,7 +777,7 @@ function TemporarySourceRow({
           size="sm"
           variant="secondary"
         >
-          Discard
+          {TEMPORARY_SOURCE_COPY.actions.discard}
         </Button>
       </div>
     </div>

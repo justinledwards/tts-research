@@ -24,7 +24,7 @@ describe("temporary surface complexity budget", () => {
       "Quick Listen",
       "Create temporary source",
       "Keep in project",
-      "Discard",
+      "Discard temporary source",
       "Extend expiry",
       "Re-extract",
       "Create audio",
@@ -78,8 +78,8 @@ describe("temporary surface complexity budget", () => {
 
   it("allows intentional secondary duplication across the shelf and Cinema More", () => {
     const issues = auditTemporaryActionPlacements([
-      placement("discard", "Discard", "temporary-source-header", "primary"),
-      placement("discard", "Discard", "command-center-shelf", "secondary", {
+      placement("discard", "Discard temporary source", "temporary-source-header", "primary"),
+      placement("discard", "Discard temporary source", "command-center-shelf", "secondary", {
         duplicateReason: "Management shelf repeats the active temporary session action.",
       }),
       placement("discard", "Discard temporary source", "cinema-more", "secondary", {
@@ -94,7 +94,7 @@ describe("temporary surface complexity budget", () => {
     const issues = auditTemporaryActionPlacements([
       placement("clear-expired", "Clear expired temporary sources", "workbench", "secondary"),
       placement("keep-in-project", "Keep in project", "command-palette", "secondary"),
-      placement("discard", "Discard", "temporary-source-header", "secondary", {
+      placement("discard", "Discard temporary source", "temporary-source-header", "secondary", {
         disabled: true,
       }),
     ]);
@@ -109,7 +109,7 @@ describe("temporary surface complexity budget", () => {
   });
 
   it("publishes disabled-action copy for recoverable temporary states", () => {
-    expect(temporaryDisabledReasonFor("keep-in-project")).toContain("work exists to save");
+    expect(temporaryDisabledReasonFor("keep-in-project")).toContain("work exists to make durable");
     expect(temporaryDisabledReasonFor("retry-audio")).toContain("generation fails");
     expect(temporaryDisabledReasonFor("clear-expired")).toBe(
       "No expired temporary sources are ready to clear.",

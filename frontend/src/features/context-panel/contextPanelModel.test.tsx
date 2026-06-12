@@ -388,7 +388,7 @@ describe("context panel inspector contract", () => {
       expiryLabel: "Expires Jun 12, 2026, 1:40 PM",
       originLabel: "Pasted text",
       policyLabel: "Session override",
-      promotionItems: ["Extracted source", "Policy pin"],
+      promotionItems: ["Temporary source text", "Project source pin"],
       pronunciationCount: 0,
       recentPositionCount: 0,
       repairNoteCount: 0,
@@ -467,7 +467,7 @@ describe("context panel inspector contract", () => {
       />,
     );
     expect(policy).toContain("Promotion");
-    expect(policy).toContain("Extracted source, Policy pin");
+    expect(policy).toContain("Temporary source text, Project source pin");
   });
 });
 
