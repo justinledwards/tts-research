@@ -39,7 +39,7 @@ describe("command palette helpers", () => {
     expect(newTemporarySourceCommand).toMatchObject({
       category: "Source",
       owner: "temporary-source",
-      title: "New temporary source",
+      title: "Temporary source · Start Quick Listen",
     });
     expect(newTemporarySourceCommand.detail).toContain("Temporary source");
     expect(entries.find((entry) => entry.id === "temporary-source:paste")).toMatchObject({
@@ -62,6 +62,20 @@ describe("command palette helpers", () => {
     );
     expect(entryById(entries, "temporary-source:create-audio").shortcutCommandId).toBe(
       "temporary.quickListen",
+    );
+  });
+
+  it("hides Quick Listen commands when temporarySources.quickListen is disabled", () => {
+    const entries = buildCommandEntries(buildContext({ quickListenEnabled: false }));
+    const entryIds = entries.map((entry) => entry.id);
+
+    expect(entryIds).not.toContain("quick-listen:open");
+    expect(entryIds).not.toContain("temporary-source:new");
+    expect(entryIds).not.toContain("temporary-source:paste");
+    expect(entryIds).not.toContain("temporary-source:open-url");
+    expect(entryIds).not.toContain("temporary-source:upload-file");
+    expect(searchCommandEntries(entries, "quick listen").map((entry) => entry.id)).not.toContain(
+      "quick-listen:open",
     );
   });
 

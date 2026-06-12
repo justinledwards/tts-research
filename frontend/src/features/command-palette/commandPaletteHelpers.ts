@@ -112,6 +112,7 @@ export interface CommandPaletteBuildContext {
   bookSources: BookSource[];
   preparedSources: PreparedSource[];
   activeTemporarySource: TemporarySourceSession | null;
+  quickListenEnabled?: boolean;
   temporarySources: TemporarySourceSession[];
   temporaryStorageUsage: TemporaryStorageUsageSummary | null;
   wordHighlightCapabilityReason: string | undefined;
@@ -400,11 +401,97 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     bookSources,
     preparedSources,
     activeTemporarySource,
+    quickListenEnabled = true,
     temporarySources,
     temporaryStorageUsage,
     wordHighlightCapabilityReason,
     workspaceStageActionLabel,
   } = context;
+  const quickListenCommandEntries: CommandEntry[] = quickListenEnabled
+    ? [
+        {
+          category: "Source",
+          detail:
+            "Start temporary narration from pasted text, a URL, a file, or a recent temporary source without creating project history.",
+          id: "quick-listen:open",
+          keywords: [
+            "quick listen",
+            "read this now",
+            "temporary",
+            "without saving",
+            "paste",
+            "url",
+            "file",
+          ],
+          owner: "quick-listen",
+          perform: () => {
+            handlers.openQuickListen();
+          },
+          section: "Sources",
+          title: "Quick Listen",
+        },
+        {
+          category: "Source",
+          detail: "Temporary source · Start Quick Listen.",
+          id: "temporary-source:new",
+          keywords: [
+            "temporary",
+            "source",
+            "quick listen",
+            "scratch",
+            "paste",
+            "url",
+            "webpage",
+            "file",
+          ],
+          owner: "temporary-source",
+          perform: () => {
+            handlers.openQuickListen("paste");
+          },
+          section: "Sources",
+          title: "Temporary source · Start Quick Listen",
+        },
+        {
+          category: "Source",
+          detail:
+            "Temporary source · Paste scratch text into Quick Listen without adding it to project history.",
+          id: "temporary-source:paste",
+          keywords: ["temporary", "paste", "text", "scratch", "quick listen", "article"],
+          owner: "temporary-source",
+          perform: () => {
+            handlers.openQuickListen("paste");
+          },
+          section: "Sources",
+          title: "Paste text as temporary source",
+        },
+        {
+          category: "Source",
+          detail:
+            "Temporary webpage · Open a URL in Quick Listen without adding a durable project source.",
+          id: "temporary-source:open-url",
+          keywords: ["temporary", "url", "webpage", "website", "article", "quick listen", "open"],
+          owner: "temporary-source",
+          perform: () => {
+            handlers.openQuickListen("url");
+          },
+          section: "Sources",
+          title: "Open webpage temporarily",
+        },
+        {
+          category: "Source",
+          detail:
+            "Temporary source · Upload a file into Quick Listen without adding it to project history.",
+          id: "temporary-source:upload-file",
+          keywords: ["temporary", "upload", "file", "document", "pdf", "epub", "quick listen"],
+          owner: "temporary-source",
+          perform: () => {
+            handlers.openQuickListen("file");
+          },
+          section: "Sources",
+          title: "Upload file temporarily",
+        },
+      ]
+    : [];
   const coreCommandEntries: CommandEntry[] = [
     {
       category: "Navigation",
@@ -457,87 +544,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
       shortcutCommandId: "help.open",
       title: "Open help",
     },
-    {
-      category: "Source",
-      detail:
-        "Start temporary narration from pasted text, a URL, a file, or a recent temporary source without creating project history.",
-      id: "quick-listen:open",
-      keywords: [
-        "quick listen",
-        "read this now",
-        "temporary",
-        "without saving",
-        "paste",
-        "url",
-        "file",
-      ],
-      owner: "quick-listen",
-      perform: () => {
-        handlers.openQuickListen();
-      },
-      section: "Sources",
-      title: "Quick Listen",
-    },
-    {
-      category: "Source",
-      detail: "Temporary source · Start Quick Listen without creating a durable project source.",
-      id: "temporary-source:new",
-      keywords: [
-        "temporary",
-        "source",
-        "quick listen",
-        "scratch",
-        "paste",
-        "url",
-        "webpage",
-        "file",
-      ],
-      owner: "temporary-source",
-      perform: () => {
-        handlers.openQuickListen("paste");
-      },
-      section: "Sources",
-      title: "New temporary source",
-    },
-    {
-      category: "Source",
-      detail:
-        "Temporary source · Paste scratch text into Quick Listen without adding it to project history.",
-      id: "temporary-source:paste",
-      keywords: ["temporary", "paste", "text", "scratch", "quick listen", "article"],
-      owner: "temporary-source",
-      perform: () => {
-        handlers.openQuickListen("paste");
-      },
-      section: "Sources",
-      title: "Paste text as temporary source",
-    },
-    {
-      category: "Source",
-      detail:
-        "Temporary webpage · Open a URL in Quick Listen without adding a durable project source.",
-      id: "temporary-source:open-url",
-      keywords: ["temporary", "url", "webpage", "website", "article", "quick listen", "open"],
-      owner: "temporary-source",
-      perform: () => {
-        handlers.openQuickListen("url");
-      },
-      section: "Sources",
-      title: "Open webpage temporarily",
-    },
-    {
-      category: "Source",
-      detail:
-        "Temporary source · Upload a file into Quick Listen without adding it to project history.",
-      id: "temporary-source:upload-file",
-      keywords: ["temporary", "upload", "file", "document", "pdf", "epub", "quick listen"],
-      owner: "temporary-source",
-      perform: () => {
-        handlers.openQuickListen("file");
-      },
-      section: "Sources",
-      title: "Upload file temporarily",
-    },
+    ...quickListenCommandEntries,
     {
       capabilityGate: "tts",
       capabilityGated: Boolean(createAndListenCapabilityReason),

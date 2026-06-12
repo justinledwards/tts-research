@@ -2106,3 +2106,17 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Add settings deep links from palette and context guide
 - [x] Run project checks
 - Validation: focused frontend settings/privacy/navigation/help/command-palette tests passed; full `pnpm check` passed.
+
+## 2026-06-12 17:36 CEST - Quick Listen No-Project Contract
+- [x] Inspect temporary-source backend and Quick Listen frontend paths
+- [x] Enforce no-project temporary-source creation contract
+- [x] Update Quick Listen entry points, copy, and feature flag behavior
+- [x] Add focused regression coverage
+- [x] Capture screenshot evidence with requested E2E flows
+- [x] Run project checks
+- Validation: focused backend temporary-source route tests, focused frontend API/shell/drawer/command-palette/Quick Listen tests, focused frontend typecheck, `pnpm check`, `pnpm e2e:temporary-sources`, and `pnpm e2e:responsive-snapshots` passed. Focused UI action scenarios passed; full `pnpm e2e:ui-actions` was attempted but the local runner killed or timed out before producing a final summary.
+
+## 2026-06-12 20:48 CEST - Commit Quick Listen No-Project Contract
+- [x] Review Quick Listen no-project contract diff
+- [x] Stage scoped work package files
+- [x] Commit scoped work package

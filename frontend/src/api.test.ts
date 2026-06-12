@@ -143,31 +143,40 @@ describe("API errors", () => {
       requests.push({ url: fetchInputUrl(input), init });
       return Promise.resolve(
         Response.json({
-          id: "temp-1",
-          temporarySourceId: "temp-1",
           sourceOwner: "temporary",
-          status: "reviewable",
-          promotionStatus: "notPromoted",
-          kind: "url",
-          sourceName: "https://example.com/story",
-          wordCount: 10,
-          artifacts: [],
-          createdAt: "2026-06-11T17:00:00Z",
-          lastAccessedAt: "2026-06-11T17:00:00Z",
-          expiresAt: "2026-06-12T17:00:00Z",
-          updatedAt: "2026-06-11T17:00:00Z",
+          temporarySourceId: "temp-1",
+          source: {
+            id: "temp-1",
+            temporarySourceId: "temp-1",
+            sourceOwner: "temporary",
+            status: "reviewable",
+            promotionStatus: "notPromoted",
+            kind: "url",
+            sourceName: "https://example.com/story",
+            wordCount: 10,
+            artifacts: [],
+            createdAt: "2026-06-11T17:00:00Z",
+            lastAccessedAt: "2026-06-11T17:00:00Z",
+            expiresAt: "2026-06-12T17:00:00Z",
+            updatedAt: "2026-06-11T17:00:00Z",
+          },
         }),
       );
     };
 
     try {
-      await createTemporarySource({
+      const source = await createTemporarySource({
         kind: "url",
         markdownParseMode: "strict",
         sourceName: "https://example.com/story",
         url: "https://example.com/story",
       });
 
+      expect(source).toMatchObject({
+        id: "temp-1",
+        sourceOwner: "temporary",
+        temporarySourceId: "temp-1",
+      });
       expect(requests[0]?.url).toBe("/api/temporary-sources");
       expect(requests[0]?.init?.method).toBe("POST");
       expect(requests[0]?.init?.headers).toEqual({ "Content-Type": "application/json" });

@@ -164,7 +164,7 @@ export function QuickListenPanel({
     if (mode === "url") {
       const trimmedUrl = url.trim();
       if (!/^https?:\/\/\S+\.\S+/.test(trimmedUrl)) {
-        setLocalError("Enter a full http or https URL.");
+        setLocalError("Temporary source needs a full http or https URL.");
         return;
       }
       void onCreateFromUrl(trimmedUrl, markdownParseMode, confirmation, destination);
@@ -176,7 +176,9 @@ export function QuickListenPanel({
         return;
       }
       if (!quickListenFileLooksSupported(file)) {
-        setLocalError("That file type is not supported for Quick Listen yet.");
+        setLocalError(
+          "Temporary source does not support that file type yet. Choose a supported file or paste text.",
+        );
         return;
       }
       void onCreateFromFile(file, markdownParseMode, confirmation, destination);
@@ -205,12 +207,12 @@ export function QuickListenPanel({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="vs-muted text-xs font-semibold uppercase tracking-wide">
-                Temporary narration
+                {TEMPORARY_SOURCE_COPY.terms.temporarySource}
               </p>
               <h2 className="mt-1 text-xl font-semibold">Quick Listen</h2>
               <p className="vs-muted mt-1 max-w-xl text-sm leading-6">
-                Read this now without making a project source. You can keep it in a project after
-                the review is useful.
+                Quick Listen creates temporary source work, not a durable project source. Use Keep
+                in project only when this temporary source should become durable.
               </p>
             </div>
             <Button onClick={onClose} size="sm" variant="secondary">
@@ -218,9 +220,12 @@ export function QuickListenPanel({
             </Button>
           </div>
           <div className="flex flex-wrap gap-2 text-xs">
-            <StatusChip tone="metadata">Temporary</StatusChip>
+            <StatusChip tone="metadata">{TEMPORARY_SOURCE_COPY.terms.temporarySource}</StatusChip>
             <StatusChip tone="success">Local-first when possible</StatusChip>
-            <StatusChip tone="warning">Expires after about {expiryHours} hours</StatusChip>
+            <StatusChip tone="warning">
+              {TEMPORARY_SOURCE_COPY.terms.expiresAfterInactivity}
+              {` · about ${expiryHours.toString()} hours`}
+            </StatusChip>
           </div>
           <TemporaryStorageControls
             askBeforeAudioDiscard={askBeforeAudioDiscard}

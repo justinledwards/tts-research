@@ -125,6 +125,7 @@ export function WorkspaceDrawer({
   onOpenSettings,
   onOpenIntake,
   onOpenQuickListen,
+  quickListenEnabled = true,
   onOpenVoiceDashboard,
   onOpenVoiceCloning,
   onClearExpiredTemporarySources,
@@ -200,6 +201,7 @@ export function WorkspaceDrawer({
   onOpenSettings: (target?: SettingsCommandTarget | null) => void;
   onOpenIntake: () => void;
   onOpenQuickListen: () => void;
+  quickListenEnabled?: boolean;
   onOpenVoiceDashboard: () => void;
   onOpenVoiceCloning: () => void;
   onClearExpiredTemporarySources: () => Promise<void>;
@@ -650,18 +652,22 @@ export function WorkspaceDrawer({
                     ) : (
                       <div className="grid gap-3 rounded-md border p-4 vs-border vs-surface">
                         <EmptyDrawerText>
-                          No projects yet. Create a durable project when you want a separate
-                          library, or start Quick Listen as a temporary source.
+                          No projects yet. Create a durable project when you want a separate library
+                          {quickListenEnabled
+                            ? ", or start Quick Listen as a temporary source."
+                            : "."}
                         </EmptyDrawerText>
                         <div className="flex flex-wrap gap-2">
-                          <button
-                            className="h-9 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] vs-accent-bg"
-                            data-testid="ui-action-empty-workspace-quick-listen"
-                            onClick={onOpenQuickListen}
-                            type="button"
-                          >
-                            Quick Listen
-                          </button>
+                          {quickListenEnabled ? (
+                            <button
+                              className="h-9 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] vs-accent-bg"
+                              data-testid="ui-action-empty-workspace-quick-listen"
+                              onClick={onOpenQuickListen}
+                              type="button"
+                            >
+                              Quick Listen
+                            </button>
+                          ) : null}
                           <button
                             className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
                             onClick={() => {
@@ -697,13 +703,15 @@ export function WorkspaceDrawer({
                     >
                       Clear Expired
                     </button>
-                    <button
-                      className="h-9 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] vs-accent-bg"
-                      onClick={onOpenQuickListen}
-                      type="button"
-                    >
-                      Quick Listen
-                    </button>
+                    {quickListenEnabled ? (
+                      <button
+                        className="h-9 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] vs-accent-bg"
+                        onClick={onOpenQuickListen}
+                        type="button"
+                      >
+                        Quick Listen
+                      </button>
+                    ) : null}
                   </div>
                 }
                 id="command-center-temporary"

@@ -566,6 +566,7 @@ import {
   temporarySessionToPreparedSource,
 } from "./features/quick-listen";
 import { TEMPORARY_SOURCE_COPY } from "./features/temporary-source-copy";
+import { quickListenDisabledReason, studioFeatureFlags } from "./features/featureFlags";
 
 type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
 
@@ -2761,6 +2762,7 @@ export function App() {
   const [quickListenInitialMode, setQuickListenInitialMode] = useState<QuickListenMode>("paste");
   const [isCreatingQuickListenSource, setIsCreatingQuickListenSource] = useState(false);
   const [quickListenError, setQuickListenError] = useState<string | null>(null);
+  const quickListenEnabled = studioFeatureFlags.temporarySources.quickListen;
   const [hydratingPreparedSourceId, setHydratingPreparedSourceId] = useState<string | null>(null);
   const [isPreparingSource, setIsPreparingSource] = useState(false);
   const [sourcePrepError, setSourcePrepError] = useState<string | null>(null);
@@ -6394,6 +6396,13 @@ export function App() {
       confirmation?: SourceReadinessConfirmationRequest,
       destination: "review" | "preview" = "review",
     ) => {
+      if (!quickListenEnabled) {
+        const message = quickListenDisabledReason();
+        setQuickListenError(message);
+        setSourcePrepError(message);
+        announceAssertive(message);
+        return;
+      }
       setIsCreatingQuickListenSource(true);
       setQuickListenError(null);
       setSourcePrepError(null);
@@ -6431,7 +6440,13 @@ export function App() {
         setIsCreatingQuickListenSource(false);
       }
     },
-    [activateTemporarySource, announceAssertive, announcePolite, refreshTemporaryStorageUsage],
+    [
+      activateTemporarySource,
+      announceAssertive,
+      announcePolite,
+      quickListenEnabled,
+      refreshTemporaryStorageUsage,
+    ],
   );
 
   const handleRerunWebsiteExtraction = useCallback(
@@ -6606,11 +6621,20 @@ export function App() {
     [activateTemporarySource, markTemporarySourceExpired],
   );
 
-  const openQuickListenMode = useCallback((mode: QuickListenMode = "paste") => {
-    setQuickListenInitialMode(mode);
-    setQuickListenError(null);
-    setIsQuickListenOpen(true);
-  }, []);
+  const openQuickListenMode = useCallback(
+    (mode: QuickListenMode = "paste") => {
+      if (!quickListenEnabled) {
+        const message = quickListenDisabledReason();
+        setQuickListenError(message);
+        announceAssertive(message);
+        return;
+      }
+      setQuickListenInitialMode(mode);
+      setQuickListenError(null);
+      setIsQuickListenOpen(true);
+    },
+    [announceAssertive, quickListenEnabled],
+  );
 
   const handleOpenTemporarySourceInReview = useCallback(
     async (session: TemporarySourceSession) => {
@@ -8775,6 +8799,7 @@ export function App() {
     bookSources,
     preparedSources,
     activeTemporarySource,
+    quickListenEnabled,
     temporarySources,
     temporaryStorageUsage,
     wordHighlightCapabilityReason,
@@ -9237,6 +9262,7 @@ export function App() {
         }}
         onCommandPaletteOpen={openCommandPalette}
         onQuickListenOpen={openQuickListenMode}
+        quickListenEnabled={quickListenEnabled}
         onSettingsOpen={() => {
           setSettingsCommandTarget(null);
           setIsSettingsOpen(true);
@@ -9305,7 +9331,7 @@ export function App() {
           />
         </Suspense>
       ) : null}
-      {isQuickListenOpen ? (
+      {quickListenEnabled && isQuickListenOpen ? (
         <Suspense fallback={<LazySurfaceFallback label="Loading Quick Listen..." />}>
           <LazyQuickListenPanel
             error={quickListenError}
@@ -9436,6 +9462,7 @@ export function App() {
               setIsCommandCenterOpen(false);
               openQuickListenMode();
             }}
+            quickListenEnabled={quickListenEnabled}
             onOpenVoiceDashboard={() => {
               setIsCommandCenterOpen(false);
               setIsVoiceDashboardOpen(true);

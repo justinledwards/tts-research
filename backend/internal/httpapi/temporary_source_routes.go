@@ -38,7 +38,7 @@ func registerTemporarySourceRoutes(app *fiber.App, service *pipeline.Service) {
 			if err != nil {
 				return temporarySourceError(ctx, err)
 			}
-			return ctx.Status(fiber.StatusCreated).JSON(source)
+			return ctx.Status(fiber.StatusCreated).JSON(temporarySourceEnvelope(source))
 		}
 		var request pipeline.CreateTemporarySourceRequest
 		if err := json.Unmarshal(ctx.Body(), &request); err != nil {
@@ -48,7 +48,7 @@ func registerTemporarySourceRoutes(app *fiber.App, service *pipeline.Service) {
 		if err != nil {
 			return temporarySourceError(ctx, err)
 		}
-		return ctx.Status(fiber.StatusCreated).JSON(source)
+		return ctx.Status(fiber.StatusCreated).JSON(temporarySourceEnvelope(source))
 	})
 
 	app.Get("/api/temporary-sources/storage/summary", func(ctx fiber.Ctx) error {
@@ -133,6 +133,14 @@ func registerTemporarySourceRoutes(app *fiber.App, service *pipeline.Service) {
 		}
 		return ctx.Status(fiber.StatusCreated).JSON(source)
 	})
+}
+
+func temporarySourceEnvelope(source pipeline.TemporarySourceSession) pipeline.TemporarySourceEnvelope {
+	return pipeline.TemporarySourceEnvelope{
+		SourceOwner:       pipeline.SourceOwnerTemporary,
+		TemporarySourceID: source.TemporarySourceID,
+		Source:            source,
+	}
 }
 
 func temporarySourceError(ctx fiber.Ctx, err error) error {

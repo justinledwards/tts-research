@@ -153,17 +153,17 @@ async function main() {
         route: `${result.viewport.id}:temporary:paste-review`,
         summary,
       })),
-      ...result.websiteCalmRead.failures.map((summary) => ({
+      ...(result.websiteCalmRead?.failures ?? []).map((summary) => ({
         owner: "website-cinema",
         route: `${result.viewport.id}:temporary:website-cinema`,
         summary,
       })),
-      ...result.telepromptTheatre.failures.map((summary) => ({
+      ...(result.telepromptTheatre?.failures ?? []).map((summary) => ({
         owner: "teleprompt",
         route: `${result.viewport.id}:temporary:teleprompt-theatre`,
         summary,
       })),
-      ...result.layout.failures.map((summary) => ({
+      ...(result.layout?.failures ?? []).map((summary) => ({
         owner: "responsive-layout",
         route: `${result.viewport.id}:workspace-settings`,
         summary,

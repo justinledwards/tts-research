@@ -338,6 +338,24 @@ describe("Command Center", () => {
     expect(reportsMarkup).toContain("GPU telemetry unavailable");
     expect(reportsMarkup).toContain("Open Expert Diagnostics");
   });
+
+  it("hides empty workspace Quick Listen when temporarySources.quickListen is disabled", () => {
+    const markup = renderToStaticMarkup(
+      <WorkspaceDrawer
+        {...props()}
+        activeSection="projects"
+        bookSources={[]}
+        preparedSources={[]}
+        projectJobs={[]}
+        projects={[]}
+        quickListenEnabled={false}
+      />,
+    );
+
+    expect(markup).toContain("No projects yet");
+    expect(markup).not.toContain('data-testid="ui-action-empty-workspace-quick-listen"');
+    expect(markup).not.toContain("start Quick Listen as a temporary source");
+  });
 });
 
 function props(): Parameters<typeof WorkspaceDrawer>[0] {

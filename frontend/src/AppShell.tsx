@@ -45,6 +45,7 @@ export function TopProductBar({
   onWorkspaceDisclosurePinChange,
   onWorkspaceLayoutModeChange,
   onCommandCenterOpen,
+  quickListenEnabled = true,
   onQuickListenOpen,
 }: Readonly<{
   commandPaletteShortcutLabel: string;
@@ -62,6 +63,7 @@ export function TopProductBar({
   onWorkspaceDisclosurePinChange: (panelId: WorkspaceDisclosurePanelId, pinned: boolean) => void;
   onWorkspaceLayoutModeChange: (mode: WorkspaceLayoutMode) => void;
   onCommandCenterOpen: () => void;
+  quickListenEnabled?: boolean;
   onQuickListenOpen: () => void;
 }>) {
   return (
@@ -116,20 +118,22 @@ export function TopProductBar({
           onDisclosurePinChange={onWorkspaceDisclosurePinChange}
           onLayoutModeChange={onWorkspaceLayoutModeChange}
         />
-        <Button
-          aria-label="Open Quick Listen"
-          className="gap-2 px-3"
-          data-command-id="quick-listen:open"
-          data-testid="ui-action-quick-listen-open"
-          data-ui-action-owner="quick-listen"
-          onClick={onQuickListenOpen}
-          size="md"
-          title="Quick Listen"
-          variant="primary"
-        >
-          <ListenIcon />
-          <span className="hidden xl:inline">Quick Listen</span>
-        </Button>
+        {quickListenEnabled ? (
+          <Button
+            aria-label="Open Quick Listen"
+            className="gap-2 px-3"
+            data-command-id="quick-listen:open"
+            data-testid="ui-action-quick-listen-open"
+            data-ui-action-owner="quick-listen"
+            onClick={onQuickListenOpen}
+            size="md"
+            title="Quick Listen"
+            variant="primary"
+          >
+            <ListenIcon />
+            <span className="hidden xl:inline">Quick Listen</span>
+          </Button>
+        ) : null}
         <Button
           aria-label="Open command palette"
           className="gap-2 px-3"
@@ -181,19 +185,21 @@ export function TopProductBar({
           onDisclosurePinChange={onWorkspaceDisclosurePinChange}
           onLayoutModeChange={onWorkspaceLayoutModeChange}
         />
-        <Button
-          aria-label="Open Quick Listen"
-          className="text-[var(--vs-action-primary)]"
-          data-command-id="quick-listen:open"
-          data-testid="ui-action-quick-listen-open"
-          data-ui-action-owner="quick-listen"
-          onClick={onQuickListenOpen}
-          size="icon"
-          title="Quick Listen"
-          variant="secondary"
-        >
-          <ListenIcon />
-        </Button>
+        {quickListenEnabled ? (
+          <Button
+            aria-label="Open Quick Listen"
+            className="text-[var(--vs-action-primary)]"
+            data-command-id="quick-listen:open"
+            data-testid="ui-action-quick-listen-open"
+            data-ui-action-owner="quick-listen"
+            onClick={onQuickListenOpen}
+            size="icon"
+            title="Quick Listen"
+            variant="secondary"
+          >
+            <ListenIcon />
+          </Button>
+        ) : null}
         <Button
           aria-label="Open command palette"
           className="text-[var(--vs-action-primary)]"

@@ -94,4 +94,35 @@ describe("TopProductBar", () => {
     expect(markup).not.toContain("Generating");
     expect(markup).not.toContain(">idle</");
   });
+
+  it("hides Quick Listen shell actions when temporarySources.quickListen is disabled", () => {
+    const markup = renderToStaticMarkup(
+      <TopProductBar
+        commandPaletteShortcutLabel="Ctrl+K"
+        runConfiguration={createRunConfiguration("checkedMaster")}
+        settingsShortcutLabel="Ctrl+,"
+        studioMode="narration"
+        workContext={{
+          chapterName: "Full source",
+          projectName: "Designing High Function Cockpits",
+          workspaceLabel: "Narration Workbench",
+        }}
+        workspaceCustomLayout={DEFAULT_WORKSPACE_CUSTOM_LAYOUT}
+        workspaceDisclosurePins={DEFAULT_WORKSPACE_DISCLOSURE_PINS}
+        workspaceLayoutMode="balanced"
+        onCommandCenterOpen={() => null}
+        onCommandPaletteOpen={() => null}
+        onQuickListenOpen={() => null}
+        onSettingsOpen={() => null}
+        onStudioModeChange={() => null}
+        onWorkspaceCustomLayoutChange={() => null}
+        onWorkspaceDisclosurePinChange={() => null}
+        onWorkspaceLayoutModeChange={() => null}
+        quickListenEnabled={false}
+      />,
+    );
+
+    expect(markup).not.toContain('data-testid="ui-action-quick-listen-open"');
+    expect(markup).not.toContain('aria-label="Open Quick Listen"');
+  });
 });

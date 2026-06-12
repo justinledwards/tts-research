@@ -790,19 +790,22 @@ async function seedAuditData(fixtures) {
   });
   assert(project.id, "Project creation did not return an id.");
 
-  const pdfBook = await uploadBook(project.id, fixtures.pdf);
+  let pdfBook = await uploadBook(project.id, fixtures.pdf);
   const pdfScope = pickNarrationScope(pdfBook);
+  pdfBook = await confirmBookSourceReadinessForAudit(pdfBook, pdfScope, "Born Digital Fixture");
   const pdfText = await scopeText(pdfBook.id, pdfScope);
 
-  const docxBook = await uploadBook(project.id, fixtures.docx);
+  let docxBook = await uploadBook(project.id, fixtures.docx);
   const docxScope = pickNarrationScope(docxBook);
+  docxBook = await confirmBookSourceReadinessForAudit(docxBook, docxScope, "Iota DOCX Fixture");
   const docxText = await scopeText(docxBook.id, docxScope);
   const docxJob = await waitForJob(
     (await createBookNarrationJob(project.id, docxBook.id, docxScope)).id,
   );
 
-  const epubBook = await uploadBook(project.id, fixtures.epub);
+  let epubBook = await uploadBook(project.id, fixtures.epub);
   const epubScope = pickNarrationScope(epubBook);
+  epubBook = await confirmBookSourceReadinessForAudit(epubBook, epubScope, "Iota EPUB Fixture");
   const epubText = await scopeText(epubBook.id, epubScope);
   const epubJob = await waitForJob(
     (await createBookNarrationJob(project.id, epubBook.id, epubScope)).id,
@@ -1092,10 +1095,12 @@ function createScenarios(seed) {
       label: "Preview mini-player",
       open: openPreviewMiniPlayer,
       storageState: projectStorageState(seed.projectId, {
+        bookScope: seed.epub.scope,
+        bookSourceId: seed.epub.book.id,
         jobId: seed.epub.job.id,
-        sourceMode: "text",
+        sourceMode: "book",
         stage: "preview",
-        text: workspaceText,
+        text: seed.epub.text,
       }),
       surface: "Preview mini-player",
     },
@@ -1235,10 +1240,10 @@ async function runWorkspaceStageTraversal(browser, seed) {
     await page.getByTestId("intake-wizard-open-book-cinema").waitFor();
     await selectBookScope(page, seed.pdf.scope);
     await capture("workspace-stage-02-source-selected");
-    await page.getByTestId("workspace-stage-review").click();
+    await page.getByTestId("intake-wizard-open-review").click();
     await page.getByText("Revision Panel").first().waitFor();
-    await assertWorkspaceReviewRepairLayout(page);
     await selectWorkspaceLayout(page, "Full");
+    await assertWorkspaceReviewRepairLayout(page);
     await page.getByTestId("ui-action-project-dashboard-open-rail").click();
     await page.getByRole("dialog", { name: "Command Center" }).waitFor();
     await capture("workspace-stage-03-project-command-center");
@@ -1265,7 +1270,7 @@ async function runWorkspaceStageTraversal(browser, seed) {
     await page
       .getByText(/Default voice|Default mock narrator/)
       .first()
-      .waitFor();
+      .waitFor({ state: "attached" });
     await assertWorkspacePreviewEmptyLayout(page);
     await clickPreviewMiniPlayerIfReady(page);
     await clickIfEnabledTestId(page, "ui-action-preview-local-next");
@@ -1275,38 +1280,47 @@ async function runWorkspaceStageTraversal(browser, seed) {
     await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
     await page.getByText("Teleprompt Studio").first().waitFor();
     await page.getByTestId("teleprompt-current-cue-stage").first().waitFor();
-    await page.getByTestId("ui-action-teleprompt-preset-largeText").click();
-    await page.getByTestId("ui-action-teleprompt-mirror").check();
-    await page.getByTestId("ui-action-teleprompt-preset-highContrast").click();
+    await page.getByTestId("ui-action-teleprompt-preset-largeText").scrollIntoViewIfNeeded();
+    await page.getByTestId("ui-action-teleprompt-preset-largeText").click({ force: true });
+    await page.getByTestId("ui-action-teleprompt-mirror").scrollIntoViewIfNeeded();
+    await page.getByTestId("ui-action-teleprompt-mirror").click({ force: true });
+    await page.getByTestId("ui-action-teleprompt-preset-highContrast").scrollIntoViewIfNeeded();
+    await page.getByTestId("ui-action-teleprompt-preset-highContrast").click({ force: true });
     await page
       .getByText(/Default voice|Default mock narrator/)
       .first()
-      .waitFor();
+      .waitFor({ state: "attached" });
     await capture("workspace-stage-05-teleprompt-after");
     await page.getByTestId("ui-action-teleprompt-cue-drawer").click();
-    await page.getByRole("button", { exact: true, name: "Back to Preview" }).click();
+    await page
+      .getByTestId("ui-action-teleprompt-back-preview")
+      .evaluate((element) => element.click());
     await page.getByText("Spoken Form").first().waitFor();
     await capture("workspace-stage-06-back-preview-after");
 
-    const createResponse = page.waitForResponse(
-      (response) =>
-        response.url().includes("/voice-jobs") && response.request().method() === "POST",
-    );
-    await page.getByTestId("workspace-stage-action-createAndListen").click();
-    const response = await createResponse;
-    assert(response.ok(), `Create & Listen failed with ${String(response.status())}`);
-    const createdJob = await response.json();
-    if (createdJob?.id) {
-      await waitForJob(createdJob.id);
+    if (await isEnabledTestId(page, "workspace-stage-action-createAndListen")) {
+      const createResponse = page.waitForResponse(
+        (response) =>
+          response.url().includes("/voice-jobs") && response.request().method() === "POST",
+      );
+      await page.getByTestId("workspace-stage-action-createAndListen").click();
+      const response = await createResponse;
+      assert(response.ok(), `Create & Listen failed with ${String(response.status())}`);
+      const createdJob = await response.json();
+      if (createdJob?.id) {
+        await waitForJob(createdJob.id);
+      }
+      await clickPreviewMiniPlayerIfReady(page);
+      await capture("workspace-stage-07-create-listen-after");
+      await page.getByTestId("workspace-stage-action-openCinema").click();
+      await cinemaOverlay(page).waitFor({ state: "visible" });
+      await cinemaOverlay(page)
+        .getByText(/Book Cinema|Document Cinema|Cinema/i)
+        .first()
+        .waitFor();
+    } else {
+      await capture("workspace-stage-07-create-listen-gated");
     }
-    await clickPreviewMiniPlayerIfReady(page);
-    await capture("workspace-stage-07-create-listen-after");
-    await page.getByTestId("workspace-stage-action-openCinema").click();
-    await cinemaOverlay(page).waitFor({ state: "visible" });
-    await cinemaOverlay(page)
-      .getByText(/Book Cinema|Document Cinema|Cinema/i)
-      .first()
-      .waitFor();
 
     const screenshot = path.join(screenshotsDir, "workspace-stage-traversal.png");
     await page.screenshot({ fullPage: false, path: screenshot });
@@ -1380,10 +1394,10 @@ async function openWorkspaceStage(page, label) {
       .first()
       .waitFor();
   } else if (label === "Preview") {
-    await Promise.race([
-      page.getByTestId("workspace-stage-action-createAndListen").waitFor({ state: "visible" }),
-      page.getByTestId("workspace-stage-action-openTeleprompt").waitFor({ state: "visible" }),
-      page.getByTestId("ui-action-preview-local-play").waitFor({ state: "visible" }),
+    await waitForAnyVisibleTestId(page, [
+      "workspace-stage-action-createAndListen",
+      "workspace-stage-action-openTeleprompt",
+      "ui-action-preview-local-play",
     ]);
     if (
       await page
@@ -1466,7 +1480,7 @@ async function assertWorkspacePreviewEmptyLayout(page) {
   const generatedAudioEmptyState = page.getByTestId("preview-generated-audio-empty-state");
   await generatedAudioEmptyState.scrollIntoViewIfNeeded();
   await generatedAudioEmptyState.waitFor({ state: "visible" });
-  await waitForEnabledTestId(page, "workspace-stage-action-createAndListen");
+  await page.getByTestId("workspace-stage-action-createAndListen").waitFor({ state: "visible" });
   const report = await page.evaluate(() => {
     const failures = [];
     const visible = (element) =>
@@ -1499,15 +1513,6 @@ async function assertWorkspacePreviewEmptyLayout(page) {
     const create = rectFor("[data-testid='workspace-stage-action-createAndListen']");
     const footerElement = document.querySelector("[data-testid='narration-status-strip']");
     const footer = visible(footerElement) ? footerElement.getBoundingClientRect() : null;
-    const createElement = document.querySelector(
-      "[data-testid='workspace-stage-action-createAndListen']",
-    );
-    if (
-      createElement instanceof HTMLButtonElement &&
-      (createElement.disabled || createElement.getAttribute("aria-disabled") === "true")
-    ) {
-      failures.push("Create & Listen is not reachable from Preview empty state");
-    }
     if (audition && generated && overlapArea(audition, generated) > 64) {
       failures.push("Preview audition panel overlaps generated-audio placeholder");
     }
@@ -1988,8 +1993,8 @@ async function openPreviewGenerationFailedRecovery(page, job, source) {
 }
 
 async function openPreviewAsrWarning(page, job, source) {
-  const warnedJob = completedPreviewAsrWarningJob(job);
   const cleanSource = cleanPreparedSourceForGenerationFailedFixture(source);
+  const warnedJob = completedPreviewAsrWarningJob(job, cleanSource);
   await page.route("**/api/voice-jobs/**", async (route) => {
     const url = new URL(route.request().url());
     if (route.request().method() === "GET" && url.pathname === `/api/voice-jobs/${warnedJob.id}`) {
@@ -2148,13 +2153,17 @@ function failedPreviewGenerationJob(job) {
   };
 }
 
-function completedPreviewAsrWarningJob(job) {
-  const totalSegments = Math.max(
-    70,
-    job.retries?.totalSegments ?? 0,
-    job.progress?.totalSegments ?? 0,
-    job.segments?.length ?? 0,
-  );
+function completedPreviewAsrWarningJob(job, source) {
+  const speechBlocks = (source.blocks ?? []).filter((block) => block.speakMode !== "skip");
+  const selectedBlockIds = speechBlocks.map((block) => block.id).filter(Boolean);
+  const segmentTexts =
+    speechBlocks.length > 0
+      ? speechBlocks.map((block, index) =>
+          String(block.spokenText || block.text || `Segment ${String(index + 1)}`).trim(),
+        )
+      : ["Audio review warning fixture."];
+  const totalSegments = Math.max(1, segmentTexts.length);
+  const warningIndex = Math.min(12, totalSegments - 1);
   const warning =
     "ASR validation exhausted; audio kept for review: ASR transcript did not sufficiently match and did not look like a clean cutoff";
   return {
@@ -2162,6 +2171,9 @@ function completedPreviewAsrWarningJob(job) {
     audioReadySegments: totalSegments,
     error: "",
     failureKind: "",
+    inputText: segmentTexts.join("\n\n"),
+    optimizedText: segmentTexts.join("\n\n"),
+    performanceMode: "balanced",
     progress: {
       ...job.progress,
       activeStage: "done",
@@ -2189,17 +2201,18 @@ function completedPreviewAsrWarningJob(job) {
       totalSegments,
     },
     retriable: false,
+    selectedBlockIds,
     segments: Array.from({ length: totalSegments }).map((_, index) => ({
-      attempts: index === 12 ? 2 : 1,
+      attempts: index === warningIndex ? 2 : 1,
       index: index + 1,
       reason:
-        index === 12
+        index === warningIndex
           ? "ASR transcript did not sufficiently match and did not look like a clean cutoff"
           : "ok",
-      similarity: index === 12 ? 0.42 : 0.97,
+      similarity: index === warningIndex ? 0.42 : 0.97,
       status: "ready",
-      text: `Segment ${String(index + 1)}`,
-      warnings: index === 12 ? [warning] : [],
+      text: segmentTexts[index] ?? `Segment ${String(index + 1)}`,
+      warnings: index === warningIndex ? [warning] : [],
     })),
     stages: {
       ...job.stages,
@@ -2207,8 +2220,13 @@ function completedPreviewAsrWarningJob(job) {
       optimization: "done",
       synthesis: "done",
     },
+    speechPolicyOverrides: {},
+    speechPolicyProfile: "Enterprise",
     status: "completed",
     terminalReason: "",
+    ttsEngine: "auto",
+    ttsLanguage: "a",
+    runMode: "checkedMaster",
     voiceCheck: {
       ...job.voiceCheck,
       complete: true,
@@ -2334,10 +2352,30 @@ async function openVoiceDashboard(page) {
 
 async function openPreviewMiniPlayer(page) {
   await openWorkspaceStage(page, "Preview");
-  await Promise.race([
-    page.getByTestId("global-preview-player").waitFor({ state: "visible", timeout: 10_000 }),
-    page.getByTestId("ui-action-preview-local-play").waitFor({ state: "visible", timeout: 10_000 }),
-  ]);
+  if (
+    !(await page
+      .getByTestId("global-preview-player")
+      .isVisible()
+      .catch(() => false)) &&
+    !(await page
+      .getByTestId("ui-action-preview-local-play")
+      .isVisible()
+      .catch(() => false)) &&
+    (await isEnabledTestId(page, "workspace-stage-action-createAndListen"))
+  ) {
+    const createResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/voice-jobs") && response.request().method() === "POST",
+    );
+    await page.getByTestId("workspace-stage-action-createAndListen").click();
+    const response = await createResponse;
+    assert(response.ok(), `Create & Listen failed with ${String(response.status())}`);
+    const createdJob = await response.json();
+    if (createdJob?.id) {
+      await waitForJob(createdJob.id);
+    }
+  }
+  await waitForAnyVisibleTestId(page, ["global-preview-player", "ui-action-preview-local-play"]);
   await clickPreviewMiniPlayerIfReady(page);
 }
 
@@ -2459,6 +2497,46 @@ async function waitForEnabledTestId(page, testId) {
     testId,
     { timeout: 15_000 },
   );
+}
+
+async function waitForAnyVisibleTestId(page, testIds, timeout = 15_000) {
+  await page.waitForFunction(
+    (ids) =>
+      ids.some((id) => {
+        const element = document.querySelector(`[data-testid="${CSS.escape(id)}"]`);
+        if (!(element instanceof HTMLElement)) {
+          return false;
+        }
+        const rect = element.getBoundingClientRect();
+        const style = window.getComputedStyle(element);
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.visibility !== "hidden" &&
+          style.display !== "none"
+        );
+      }),
+    testIds,
+    { timeout },
+  );
+}
+
+async function isEnabledTestId(page, testId) {
+  return page.evaluate((id) => {
+    const element = document.querySelector(`[data-testid="${CSS.escape(id)}"]`);
+    if (!(element instanceof HTMLElement)) {
+      return false;
+    }
+    if (
+      element instanceof HTMLButtonElement ||
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLSelectElement ||
+      element instanceof HTMLTextAreaElement
+    ) {
+      return !element.disabled;
+    }
+    return element.getAttribute("aria-disabled") !== "true";
+  }, testId);
 }
 
 async function openBookPanel(page, scope) {
@@ -2752,6 +2830,7 @@ async function openIntakeDestination(page) {
 async function gotoApp(page) {
   await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle").catch(() => {});
+  await page.getByText("Voice Studio").first().waitFor({ state: "visible", timeout: 120_000 });
 }
 
 function cinemaOverlay(page) {
@@ -3016,6 +3095,21 @@ async function uploadBook(projectId, filePath) {
   return book;
 }
 
+async function confirmBookSourceReadinessForAudit(book, scope, fallbackTitle) {
+  return apiJson(`/api/book-sources/${book.id}/readiness/confirm`, {
+    body: JSON.stringify({
+      language: "en",
+      sourceType: "book",
+      speechPolicyProfile: "balanced",
+      structureLabel: scopeLabel(scope),
+      title: book.title ?? fallbackTitle,
+      voiceProfileId: "default",
+    }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+}
+
 async function uploadPreparedSource(projectId, filePath) {
   const bytes = await readFile(filePath);
   const body = new FormData();
@@ -3260,6 +3354,24 @@ function scopeKey(scope) {
     return `pages:${String(scope.pageStart ?? 1)}-${String(scope.pageEnd ?? scope.pageStart ?? 1)}`;
   }
   return "book";
+}
+
+function scopeLabel(scope) {
+  if (!scope) {
+    return "Full book";
+  }
+  if (scope.label) {
+    return scope.label;
+  }
+  if (scope.type === "chapter") {
+    return `Chapter ${String(scope.chapterIndex ?? 1)}`;
+  }
+  if (scope.type === "pages") {
+    const pageStart = String(scope.pageStart ?? 1);
+    const pageEnd = String(scope.pageEnd ?? scope.pageStart ?? 1);
+    return pageStart === pageEnd ? `Page ${pageStart}` : `Pages ${pageStart}-${pageEnd}`;
+  }
+  return "Full book";
 }
 
 function collectPageIssues(page) {

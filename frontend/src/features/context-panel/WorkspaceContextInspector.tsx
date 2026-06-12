@@ -190,7 +190,9 @@ export function WorkspaceContextInspector({
       }),
     [contextTargets, fallbackTarget, pinned, pinnedTarget, selectedTarget, stage],
   );
-  const resolvedTargetTab = contextPanelTabForWorkspaceInspectorTarget(resolvedTarget.target);
+  const resolvedTargetTab = resolvedTarget.invalidPinnedTarget
+    ? "overview"
+    : workspaceInspectorPreferredTab(resolvedTarget.target, stage);
   const [activeContextTab, setActiveContextTab] = useState<ContextPanelTabId>(resolvedTargetTab);
 
   useEffect(() => {
@@ -305,8 +307,24 @@ function workspaceInspectorSections({
   }
 >): readonly ContextPanelSectionInput[] {
   const stageSections = () =>
-    workspaceInspectorStageSections({
-      audio,
+    withWorkspaceInspectorFallbackSections(
+      workspaceInspectorStageSections({
+        audio,
+        diagnostics,
+        history,
+        policy,
+        review,
+        source,
+        stage,
+        status,
+        teleprompt,
+        temporary,
+        voice,
+      }),
+      { diagnostics, history, policy, review, source, stage, status, teleprompt },
+    );
+  const targetSections = (sections: readonly ContextPanelSectionInput[]) =>
+    withWorkspaceInspectorFallbackSections(sections, {
       diagnostics,
       history,
       policy,
@@ -315,66 +333,117 @@ function workspaceInspectorSections({
       stage,
       status,
       teleprompt,
-      temporary,
-      voice,
     });
   if (resolvedTarget.invalidPinnedTarget) {
-    return [invalidPinnedTargetSection(resolvedTarget.invalidPinnedTarget), ...stageSections()];
+    return targetSections([
+      invalidPinnedTargetSection(resolvedTarget.invalidPinnedTarget),
+      ...stageSections(),
+    ]);
   }
   switch (resolvedTarget.target.kind) {
     case "cue": {
       const cue = contextTargets.cues.find((item) => item.id === resolvedTarget.target.id);
       return cue
-        ? [
+        ? targetSections([
             cueDetailSection(cue),
             policySection(policy, review.policyContent),
             ...temporaryWorkspaceSections(temporary),
-          ]
+          ])
         : stageSections();
     }
     case "issue": {
       const issue = contextTargets.issues.find((item) => item.id === resolvedTarget.target.id);
       return issue
-        ? issueInspectorSections({
-            audio,
-            diagnostics,
-            diagnosticsContent: review.diagnosticsContent,
-            issue,
-            stage,
-          })
+        ? targetSections(
+            issueInspectorSections({
+              audio,
+              diagnostics,
+              diagnosticsContent: review.diagnosticsContent,
+              issue,
+              stage,
+            }),
+          )
         : stageSections();
     }
     case "job": {
       const job = contextTargets.jobs.find((item) => item.id === resolvedTarget.target.id);
       return job
-        ? [
+        ? targetSections([
             jobDetailSection(job),
             queueSection(audio),
             diagnosticsSection(diagnostics, review.diagnosticsContent),
             ...temporaryWorkspaceSections(temporary),
-          ]
+          ])
         : stageSections();
     }
     case "source": {
-      return [
+      return targetSections([
         sourceSection(source, stage),
         ...(source.importConfidence ? [importConfidenceSection(source.importConfidence)] : []),
         ...temporaryWorkspaceSections(temporary),
-      ];
+      ]);
     }
     case "stage": {
       return stageSections();
     }
     case "voice": {
-      return [
+      return targetSections([
         voiceSection(voice),
         policySection(policy, review.policyContent),
         ...temporaryWorkspaceSections(temporary),
-      ];
+      ]);
     }
   }
   const exhaustive: never = resolvedTarget.target;
   return exhaustive;
+}
+
+function workspaceInspectorPreferredTab(
+  target: WorkspaceInspectorTarget,
+  stage: WorkspaceStage,
+): ContextPanelTabId {
+  if (target.kind === "stage" && stage === "review") {
+    return "review";
+  }
+  return contextPanelTabForWorkspaceInspectorTarget(target);
+}
+
+function withWorkspaceInspectorFallbackSections(
+  sections: readonly ContextPanelSectionInput[],
+  {
+    diagnostics,
+    history,
+    policy,
+    review,
+    source,
+    stage,
+    status,
+    teleprompt,
+  }: Readonly<
+    Pick<
+      WorkspaceContextInspectorProps,
+      "diagnostics" | "history" | "policy" | "review" | "source" | "stage" | "status" | "teleprompt"
+    >
+  >,
+): readonly ContextPanelSectionInput[] {
+  const existingTabs = new Set(sections.map((section) => section.tabId));
+  const fallbackSections: ContextPanelSectionInput[] = [];
+  if (!existingTabs.has("overview")) {
+    fallbackSections.push(sourceSection(source, stage));
+  }
+  if (!existingTabs.has("review")) {
+    fallbackSections.push(reviewSection(review, stage, status, teleprompt));
+  }
+  if (!existingTabs.has("policy")) {
+    fallbackSections.push(policySection(policy, review.policyContent));
+  }
+  if (!existingTabs.has("diagnostics")) {
+    fallbackSections.push(diagnosticsSection(diagnostics, review.diagnosticsContent));
+  }
+  if (!existingTabs.has("history")) {
+    fallbackSections.push(historySection(history, teleprompt, stage));
+  }
+  return [...sections, ...fallbackSections];
 }
 
 function issueInspectorSections({

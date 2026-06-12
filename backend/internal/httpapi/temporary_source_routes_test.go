@@ -16,6 +16,15 @@ func TestTemporarySourceRoutesCreateGenerateArtifactsAndPromote(t *testing.T) {
 	service := newService(t)
 	app := httpapi.NewRouter(service)
 
+	preparedBefore, err := service.ListProjectPreparedSources("default")
+	if err != nil {
+		t.Fatalf("ListProjectPreparedSources(before) returned error: %v", err)
+	}
+	booksBefore, err := service.ListProjectBookSources("default")
+	if err != nil {
+		t.Fatalf("ListProjectBookSources(before) returned error: %v", err)
+	}
+
 	createRequest, err := http.NewRequest(
 		http.MethodPost,
 		"/api/temporary-sources",
@@ -34,12 +43,30 @@ func TestTemporarySourceRoutesCreateGenerateArtifactsAndPromote(t *testing.T) {
 		payload, _ := io.ReadAll(createResponse.Body)
 		t.Fatalf("create status = %d, want %d, body = %s", createResponse.StatusCode, http.StatusCreated, payload)
 	}
-	var temporary pipeline.TemporarySourceSession
-	if err := json.NewDecoder(createResponse.Body).Decode(&temporary); err != nil {
+	var envelope pipeline.TemporarySourceEnvelope
+	if err := json.NewDecoder(createResponse.Body).Decode(&envelope); err != nil {
 		t.Fatalf("decode temporary source: %v", err)
 	}
+	if envelope.SourceOwner != pipeline.SourceOwnerTemporary || envelope.TemporarySourceID == "" {
+		t.Fatalf("envelope = %#v, want temporary source envelope", envelope)
+	}
+	temporary := envelope.Source
 	if temporary.ProjectID != "" {
 		t.Fatalf("temporary project id = %q, want empty", temporary.ProjectID)
+	}
+	if temporary.SourceOwner != pipeline.SourceOwnerTemporary || temporary.TemporarySourceID != temporary.ID {
+		t.Fatalf("temporary = %#v, want source owner and temporary id metadata", temporary)
+	}
+	preparedAfter, err := service.ListProjectPreparedSources("default")
+	if err != nil {
+		t.Fatalf("ListProjectPreparedSources(after) returned error: %v", err)
+	}
+	booksAfter, err := service.ListProjectBookSources("default")
+	if err != nil {
+		t.Fatalf("ListProjectBookSources(after) returned error: %v", err)
+	}
+	if len(preparedAfter) != len(preparedBefore) || len(booksAfter) != len(booksBefore) {
+		t.Fatalf("temporary creation mutated project sources: prepared %d->%d books %d->%d", len(preparedBefore), len(preparedAfter), len(booksBefore), len(booksAfter))
 	}
 
 	jobRequest, err := http.NewRequest(
@@ -149,10 +176,11 @@ func TestTemporarySourceRouteAcceptsMultipartFile(t *testing.T) {
 		payload, _ := io.ReadAll(response.Body)
 		t.Fatalf("status = %d, want %d, body = %s", response.StatusCode, http.StatusCreated, payload)
 	}
-	var temporary pipeline.TemporarySourceSession
-	if err := json.NewDecoder(response.Body).Decode(&temporary); err != nil {
+	var envelope pipeline.TemporarySourceEnvelope
+	if err := json.NewDecoder(response.Body).Decode(&envelope); err != nil {
 		t.Fatalf("decode temporary source: %v", err)
 	}
+	temporary := envelope.Source
 	if temporary.Kind != string(pipeline.PreparedSourceKindFile) || temporary.SourceName != "upload.md" {
 		t.Fatalf("temporary = %#v, want file-backed upload", temporary)
 	}

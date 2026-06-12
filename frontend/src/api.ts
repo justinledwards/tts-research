@@ -41,6 +41,7 @@ import type {
   TemporarySourcePromotionRequest,
   TemporarySourceCleanupRequest,
   TemporarySourceCleanupResult,
+  TemporarySourceEnvelope,
   TemporarySourceSession,
   TemporaryStorageUsageSummary,
   TokenTimingArtifact,
@@ -740,7 +741,8 @@ export async function createTemporarySource(
   if (!response.ok) {
     throw await apiError(response);
   }
-  return response.json() as Promise<TemporarySourceSession>;
+  const payload = (await response.json()) as TemporarySourceEnvelope | TemporarySourceSession;
+  return "source" in payload ? payload.source : payload;
 }
 
 export async function getTemporarySource(id: string): Promise<TemporarySourceSession> {
