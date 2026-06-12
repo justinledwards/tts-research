@@ -407,6 +407,17 @@ import {
   type WorkspaceStage,
 } from "./features/workspace/model";
 import {
+  confirmTemporaryVoiceCloneConsent,
+  effectiveTemporaryVoiceSelection,
+  loadTemporaryVoiceState,
+  recordTemporaryVoiceAudition,
+  saveTemporaryVoiceState,
+  savedProfileTemporaryVoiceSelection,
+  selectTemporaryVoiceForSource,
+  type TemporaryVoiceSelection,
+  type TemporaryVoiceState,
+} from "./features/voices";
+import {
   DEFAULT_WORKSPACE_DISCLOSURE_PINS,
   resolveWorkspaceDisclosure,
   workspaceDisclosureRails,
@@ -2732,6 +2743,9 @@ export function App() {
     useState<TemporaryStorageUsageSummary | null>(null);
   const [temporarySourceBehavior, setTemporarySourceBehavior] =
     useState<TemporarySourceBehaviorSettings>(DEFAULT_TEMPORARY_SOURCE_BEHAVIOR);
+  const [temporaryVoiceState, setTemporaryVoiceState] = useState<TemporaryVoiceState>(() =>
+    loadTemporaryVoiceState(activeProjectId),
+  );
   const [pendingTemporaryPromotion, setPendingTemporaryPromotion] =
     useState<PendingTemporaryPromotion | null>(null);
   const [temporaryPromotionError, setTemporaryPromotionError] = useState<string | null>(null);
@@ -3424,6 +3438,10 @@ export function App() {
         : null,
     [activeTemporarySourceId, temporarySources],
   );
+  const activeTemporaryVoiceSelection = useMemo(
+    () => effectiveTemporaryVoiceSelection(temporaryVoiceState, activeTemporarySourceId),
+    [activeTemporarySourceId, temporaryVoiceState],
+  );
   const workspaceTemporaryInspector = useMemo(
     () => (activeTemporarySource ? workspaceTemporaryInspectorModel(activeTemporarySource) : null),
     [activeTemporarySource],
@@ -3462,13 +3480,16 @@ export function App() {
         speechPolicyProfile,
         JSON.stringify(compactSpeechPolicyOverrides(speechPolicyOverrides)),
         selectedVoiceProfileId,
+        activeNarrationIsTemporary ? JSON.stringify(activeTemporaryVoiceSelection) : "",
         runConfiguration.runMode,
         runConfiguration.ttsEngine,
       ].join("|"),
     [
       activeNarrationBookSource?.id,
       activeNarrationPreparedSource?.id,
+      activeNarrationIsTemporary,
       activeProjectId,
+      activeTemporaryVoiceSelection,
       effectiveBookScope,
       runConfiguration.runMode,
       runConfiguration.ttsEngine,
@@ -3663,6 +3684,12 @@ export function App() {
       withWorkspaceSpeechPolicyProfile(currentContext, speechPolicyProfile),
     );
   }, [speechPolicyProfile]);
+  useEffect(() => {
+    setTemporaryVoiceState(loadTemporaryVoiceState(activeProjectId));
+  }, [activeProjectId]);
+  useEffect(() => {
+    saveTemporaryVoiceState(activeProjectId, temporaryVoiceState);
+  }, [activeProjectId, temporaryVoiceState]);
   const latestProgress = (() => {
     const unfinishedProgress = projectProgress.find((progress) => !progress.finished);
     if (unfinishedProgress) {
@@ -5009,6 +5036,44 @@ export function App() {
     });
   }, [selectWorkspaceInspectorTarget]);
 
+  const useVoiceProfileForTemporarySource = useCallback(
+    (profileId: string) => {
+      if (!activeTemporarySourceId) {
+        return;
+      }
+      const profile = voiceProfiles.find((item) => item.id === profileId);
+      if (!profile) {
+        return;
+      }
+      setTemporaryVoiceState((currentState) =>
+        selectTemporaryVoiceForSource(
+          currentState,
+          activeTemporarySourceId,
+          savedProfileTemporaryVoiceSelection(profile),
+        ),
+      );
+      selectWorkspaceInspectorTarget({
+        id: profile.id,
+        kind: "voice",
+        label: `${profile.name} (temporary)`,
+      });
+    },
+    [activeTemporarySourceId, selectWorkspaceInspectorTarget, voiceProfiles],
+  );
+
+  const confirmTemporaryCloneConsent = useCallback((temporarySourceId: string) => {
+    if (!temporarySourceId.trim()) {
+      return;
+    }
+    setTemporaryVoiceState((currentState) =>
+      confirmTemporaryVoiceCloneConsent(currentState, {
+        confirmedAt: new Date().toISOString(),
+        provenanceSummary: "Temporary media provenance confirmed for Voice Studio reference use.",
+        temporarySourceId,
+      }),
+    );
+  }, []);
+
   const handleSpeechPolicyProfileChange = useCallback(
     async (profile: string) => {
       const normalizedProfile = normalizeSpeechPolicyProfile(profile);
@@ -5189,6 +5254,22 @@ export function App() {
     setSelectedKokoroVoiceId(nextVoiceId);
     localStorage.setItem(KOKORO_VOICE_STORAGE_KEY, nextVoiceId);
   }, []);
+
+  const saveTemporaryVoicePreferenceToProject = useCallback(
+    (selection: TemporaryVoiceSelection) => {
+      if (selection.kind === "saved-profile" && selection.voiceProfileId) {
+        selectVoiceProfile(selection.voiceProfileId);
+        return;
+      }
+      if (selection.kind === "provider" && selection.providerVoiceId) {
+        selectKokoroVoice(selection.providerVoiceId);
+        clearVoiceProfileSelection();
+        return;
+      }
+      clearVoiceProfileSelection();
+    },
+    [clearVoiceProfileSelection, selectKokoroVoice, selectVoiceProfile],
+  );
 
   const resetPlaybackSurface = useCallback(() => {
     setPlaybackCursorSec(0);
@@ -8148,20 +8229,28 @@ export function App() {
     const selectedProviderVoice = isSupertonicRun
       ? (runConfiguration.engineOptions.voiceStyle ?? "M1")
       : selectedKokoroVoice?.id;
+    const effectiveProviderVoice =
+      activeNarrationIsTemporary && activeTemporaryVoiceSelection.kind === "provider"
+        ? activeTemporaryVoiceSelection.providerVoiceId
+        : selectedProviderVoice;
     const selectedProviderLanguage = isSupertonicRun
       ? resolveSupertonicLanguage(runConfiguration.engineOptions.lang, preparedSource)
       : selectedKokoroVoice?.langCode;
+    const requestedVoiceProfileId =
+      activeNarrationIsTemporary && activeTemporaryVoiceSelection.kind === "saved-profile"
+        ? (activeTemporaryVoiceSelection.voiceProfileId ?? "")
+        : selectedVoiceProfileId;
     const voiceProfileIdForRequest = voiceProfiles.some(
-      (profile) => profile.id === selectedVoiceProfileId,
+      (profile) => profile.id === requestedVoiceProfileId,
     )
-      ? selectedVoiceProfileId
+      ? requestedVoiceProfileId
       : "";
     const request: CreateVoiceJobRequest = buildCreateVoiceJobRequest(
       sourceText,
       runConfiguration,
       voiceProfileIdForRequest,
       activeProjectId,
-      selectedProviderVoice,
+      effectiveProviderVoice,
       selectedProviderLanguage,
     );
     request.locale = resolveRunLocale(runConfiguration);
@@ -8174,14 +8263,33 @@ export function App() {
     const request = buildVoiceJobRequest(sampleText);
     request.projectId = activeProject?.id ?? activeProjectId;
     try {
-      return await createVoicePreview(request);
+      const preview = await createVoicePreview(request);
+      recordTemporaryAudition(sampleText, "played");
+      return preview;
     } catch (caughtError) {
+      recordTemporaryAudition(sampleText, "failed");
       if (isApiNotFoundError(caughtError)) {
         void refreshProjects();
         throw new Error(PREVIEW_AUDITION_NOT_FOUND_MESSAGE);
       }
       throw caughtError;
     }
+  }
+
+  function recordTemporaryAudition(sampleText: string, result: "failed" | "played") {
+    if (!activeTemporarySourceId) {
+      return;
+    }
+    setTemporaryVoiceState((currentState) =>
+      recordTemporaryVoiceAudition(currentState, {
+        createdAt: new Date().toISOString(),
+        id: `audition-${activeTemporarySourceId}-${Date.now().toString()}`,
+        result,
+        sample: sampleText,
+        selection: activeTemporaryVoiceSelection,
+        temporarySourceId: activeTemporarySourceId,
+      }),
+    );
   }
 
   const submissionDependencies: SubmissionDependencies = {
@@ -9380,10 +9488,14 @@ export function App() {
             profiles={voiceProfiles}
             researchModules={researchModules}
             selectedProfileId={selectedVoiceProfileId}
+            temporarySourceId={activeTemporarySourceId}
+            temporarySources={temporarySources}
+            temporaryVoiceState={temporaryVoiceState}
             ttsEngines={ttsEngines}
             onBuildArtifact={handleBuildVoiceProfileArtifact}
             onCancelProfileSource={handleCancelVoiceProfileSource}
             onCancelProfileTarget={handleCancelVoiceProfileTarget}
+            onConfirmTemporaryCloneConsent={confirmTemporaryCloneConsent}
             onClose={() => {
               setIsVoiceDashboardOpen(false);
             }}
@@ -9394,7 +9506,9 @@ export function App() {
               setIsVoiceDashboardOpen(false);
               handleStudioModeChange("voiceCloning");
             }}
+            onSaveTemporaryVoicePreference={saveTemporaryVoicePreferenceToProject}
             onSelectProfile={selectVoiceProfile}
+            onUseProfileForTemporarySource={useVoiceProfileForTemporarySource}
           />
         </Suspense>
       ) : null}

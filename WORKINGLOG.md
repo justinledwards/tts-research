@@ -1955,6 +1955,15 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Add migration notes for unchanged project source behavior
 - [x] Run project checks
 
+## 2026-06-12 13:00 CEST - Temporary Voice Usage
+- [x] Map voice dashboard, temporary source, and cloning flows
+- [x] Add temporary voice selection and audition state
+- [x] Add dashboard temporary usage and save-to-project behavior
+- [x] Add consent/provenance gate for cloning from temporary media
+- [x] Add regressions for no accidental voice asset creation
+- [x] Run project checks
+- Validation: `pnpm check` passed; lint still reports existing non-failing Biome warnings/infos in unrelated files.
+
 - [x] Add skipped and summarized Markdown fixtures
 - [x] Enforce wrong-visible-block failures
 - [x] Run focused and project validation

@@ -5,6 +5,7 @@ import { PrivacyBoundaryPanel, PRIVACY_NOTICES, privacyBoundaryCatalog } from ".
 import { useReaderModalLifecycle } from "../reader-accessibility";
 import type {
   ResearchModuleDiagnostics,
+  TemporarySourceSession,
   TTSEngineDiagnostics,
   VoiceProfile,
   VoiceProfileSource,
@@ -25,6 +26,12 @@ import {
   voiceSourceCancelDisabledReason,
 } from "./VoiceProfileDashboardHelpers";
 import { buildVoiceProfileDashboardModel } from "./voiceProfileModel";
+import {
+  buildTemporaryVoiceDashboardModel,
+  type TemporaryVoiceDashboardModel,
+  type TemporaryVoiceSelection,
+  type TemporaryVoiceState,
+} from "./temporaryVoiceModel";
 
 type MaybePromise = Promise<void> | void;
 
@@ -37,14 +44,20 @@ export interface VoiceProfileDashboardProps {
   profiles: VoiceProfile[];
   researchModules: ResearchModuleDiagnostics[];
   selectedProfileId: string;
+  temporarySourceId: string | null;
+  temporarySources: TemporarySourceSession[];
+  temporaryVoiceState: TemporaryVoiceState;
   ttsEngines: TTSEngineDiagnostics[];
   onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
   onCancelProfileSource: (sourceId: string) => Promise<void>;
   onCancelProfileTarget: (profileId: string, targetId: string) => Promise<void>;
+  onConfirmTemporaryCloneConsent: (temporarySourceId: string) => void;
   onClose: () => void;
   onDeleteProfile: (id: string) => MaybePromise;
   onOpenVoiceCloning: () => void;
+  onSaveTemporaryVoicePreference: (selection: TemporaryVoiceSelection) => void;
   onSelectProfile: (id: string) => void;
+  onUseProfileForTemporarySource: (profileId: string) => void;
 }
 
 export function VoiceProfileDashboard({
@@ -56,14 +69,20 @@ export function VoiceProfileDashboard({
   profiles,
   researchModules,
   selectedProfileId,
+  temporarySourceId,
+  temporarySources,
+  temporaryVoiceState,
   ttsEngines,
   onBuildArtifact,
   onCancelProfileSource,
   onCancelProfileTarget,
+  onConfirmTemporaryCloneConsent,
   onClose,
   onDeleteProfile,
   onOpenVoiceCloning,
+  onSaveTemporaryVoicePreference,
   onSelectProfile,
+  onUseProfileForTemporarySource,
 }: Readonly<VoiceProfileDashboardProps>) {
   const dialogRef = useRef<HTMLElement | null>(null);
   useReaderModalLifecycle(dialogRef, { closeOnEscape: true, isOpen: true, onClose });
@@ -82,6 +101,17 @@ export function VoiceProfileDashboard({
   const diagnosticItems = useMemo(
     () => buildVoiceDiagnostics({ diagnostics, modules: researchModules }),
     [diagnostics, researchModules],
+  );
+  const temporaryVoiceModel = useMemo(
+    () =>
+      buildTemporaryVoiceDashboardModel({
+        activeTemporarySourceId: temporarySourceId,
+        profiles,
+        state: temporaryVoiceState,
+        temporarySources,
+        ttsEngines,
+      }),
+    [profiles, temporarySourceId, temporarySources, temporaryVoiceState, ttsEngines],
   );
   const selectedProfile = model.selectedProfile;
   const selectedArtifacts = Object.entries(selectedProfile?.cloneArtifacts ?? {});
@@ -183,6 +213,9 @@ export function VoiceProfileDashboard({
                       onConfirmingDeleteChange={setConfirmingDeleteId}
                       onDeleteProfile={onDeleteProfile}
                       onSelectProfile={onSelectProfile}
+                      onUseTemporarySource={
+                        temporarySourceId ? onUseProfileForTemporarySource : undefined
+                      }
                     />
                   ))}
                   {model.profiles.length === 0 ? (
@@ -230,6 +263,14 @@ export function VoiceProfileDashboard({
                 boundaries={privacyBoundaryCatalog.voiceProfile}
                 compact
                 title="Voice data boundary"
+              />
+
+              <TemporaryVoiceUsagePanel
+                activeTemporarySourceId={temporarySourceId}
+                model={temporaryVoiceModel}
+                onConfirmTemporaryCloneConsent={onConfirmTemporaryCloneConsent}
+                onOpenVoiceCloning={onOpenVoiceCloning}
+                onSaveTemporaryVoicePreference={onSaveTemporaryVoicePreference}
               />
 
               <Panel title="Selected Voice">
@@ -346,4 +387,158 @@ export function VoiceProfileDashboard({
       </aside>
     </div>
   );
+}
+
+function TemporaryVoiceUsagePanel({
+  activeTemporarySourceId,
+  model,
+  onConfirmTemporaryCloneConsent,
+  onOpenVoiceCloning,
+  onSaveTemporaryVoicePreference,
+}: Readonly<{
+  activeTemporarySourceId: string | null;
+  model: TemporaryVoiceDashboardModel;
+  onConfirmTemporaryCloneConsent: (temporarySourceId: string) => void;
+  onOpenVoiceCloning: () => void;
+  onSaveTemporaryVoicePreference: (selection: TemporaryVoiceSelection) => void;
+}>) {
+  const activeUsage = activeTemporarySourceId
+    ? model.activeUsage.find((usage) => usage.temporarySourceId === activeTemporarySourceId)
+    : null;
+  return (
+    <Panel title="Temporary Voice Usage">
+      <div className="grid gap-3 p-3">
+        <DetailFact
+          label="Temporary sessions using voices"
+          value={formatLocaleNumber(model.activeUsage.length)}
+        />
+        {activeUsage ? (
+          <>
+            <div className="rounded-md border p-3 vs-border vs-surface">
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                <p
+                  className="min-w-0 truncate text-sm font-semibold"
+                  title={activeUsage.sessionLabel}
+                >
+                  {activeUsage.sessionLabel}
+                </p>
+                <StatusChip tone="metadata">Session scoped</StatusChip>
+              </div>
+              <p className="vs-muted mt-2 text-xs leading-5">
+                {activeUsage.currentSelection.label} · {activeUsage.currentSelection.kind}
+              </p>
+              <p className="vs-muted mt-1 text-xs">
+                {formatLocaleNumber(activeUsage.auditionCount)} audition
+                {activeUsage.auditionCount === 1 ? "" : "s"}
+                {activeUsage.lastAuditionAt
+                  ? ` · latest ${formatTimestamp(activeUsage.lastAuditionAt)}`
+                  : ""}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  data-testid="ui-action-voice-dashboard-save-temporary-preference"
+                  data-ui-action-surface="Workspace"
+                  onClick={() => {
+                    onSaveTemporaryVoicePreference(activeUsage.currentSelection);
+                  }}
+                  size="sm"
+                  variant="primary"
+                >
+                  Save voice preference to project
+                </Button>
+                <Button
+                  data-testid="ui-action-voice-dashboard-open-cloning-from-temporary"
+                  data-ui-action-surface="Workspace"
+                  onClick={onOpenVoiceCloning}
+                  size="sm"
+                  variant="secondary"
+                >
+                  Start in Voice Studio
+                </Button>
+              </div>
+            </div>
+            {model.cloneConsentRequired ? (
+              <div className="rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] p-3 text-sm text-[var(--vs-status-warning)]">
+                <p className="font-semibold">Temporary media needs consent before cloning</p>
+                <p className="mt-1 text-xs leading-5">
+                  Using this session as reference media requires explicit provenance confirmation in
+                  Voice Studio.
+                </p>
+                <Button
+                  data-testid="ui-action-voice-dashboard-confirm-temporary-clone-consent"
+                  data-ui-action-surface="Workspace"
+                  onClick={() => {
+                    onConfirmTemporaryCloneConsent(activeTemporarySourceId ?? "");
+                  }}
+                  size="sm"
+                  variant="secondary"
+                >
+                  Confirm provenance gate
+                </Button>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <EmptyState>No active temporary source is using a session voice.</EmptyState>
+        )}
+
+        <div className="grid gap-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+            Audition history for current session
+          </p>
+          {model.auditionHistory.map((audition) => (
+            <div className="rounded-md border p-3 vs-border vs-surface" key={audition.id}>
+              <div className="flex min-w-0 items-center justify-between gap-2">
+                <p className="truncate text-sm font-semibold" title={audition.selection.label}>
+                  {audition.selection.label}
+                </p>
+                <StatusChip tone={audition.result === "failed" ? "danger" : "success"}>
+                  {audition.result}
+                </StatusChip>
+              </div>
+              <p className="vs-muted mt-1 truncate text-xs" title={audition.sample}>
+                {audition.sample || "Preview sample"}
+              </p>
+            </div>
+          ))}
+          {model.auditionHistory.length === 0 ? (
+            <EmptyState>No temporary auditions have been recorded for this session.</EmptyState>
+          ) : null}
+        </div>
+
+        <div className="grid gap-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+            Temporary provider diagnostics
+          </p>
+          {model.diagnostics.map((item) => (
+            <div className="rounded-md border p-3 vs-border vs-surface" key={item.id}>
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <p className="text-sm font-semibold">{item.label}</p>
+                <StatusChip tone={temporaryDiagnosticTone(item.status)}>{item.status}</StatusChip>
+              </div>
+              <p className="vs-muted mt-2 text-xs leading-5">{item.detail}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function formatTimestamp(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString();
+}
+
+function temporaryDiagnosticTone(status: "attention" | "ready" | "warning") {
+  if (status === "attention") {
+    return "danger" as const;
+  }
+  if (status === "ready") {
+    return "success" as const;
+  }
+  return "warning" as const;
 }

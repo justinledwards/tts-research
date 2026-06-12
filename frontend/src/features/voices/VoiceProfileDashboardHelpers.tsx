@@ -49,6 +49,7 @@ export function VoiceProfileRow({
   onConfirmingDeleteChange,
   onDeleteProfile,
   onSelectProfile,
+  onUseTemporarySource,
 }: Readonly<{
   confirmingDeleteId: string | null;
   profile: VoiceProfileSummary;
@@ -56,6 +57,7 @@ export function VoiceProfileRow({
   onConfirmingDeleteChange: (id: string | null) => void;
   onDeleteProfile: (id: string) => MaybePromise;
   onSelectProfile: (id: string) => void;
+  onUseTemporarySource?: (id: string) => void;
 }>) {
   const isConfirming = confirmingDeleteId === profile.id;
   return (
@@ -114,6 +116,19 @@ export function VoiceProfileRow({
           >
             {selected ? "Selected" : "Use"}
           </Button>
+          {onUseTemporarySource ? (
+            <Button
+              data-testid={`ui-action-voice-dashboard-use-temporary-${profile.id}`}
+              data-ui-action-surface="Workspace"
+              onClick={() => {
+                onUseTemporarySource(profile.id);
+              }}
+              size="sm"
+              variant="secondary"
+            >
+              Use for temporary
+            </Button>
+          ) : null}
           <Button
             data-testid={`ui-action-voice-dashboard-delete-${profile.id}`}
             data-ui-action-surface="Workspace"
