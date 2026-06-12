@@ -781,7 +781,7 @@ function commandCenterRouteCategory(routeId: CommandCenterRouteId): CommandEntry
   if (routeId === "activity" || routeId === "reports") {
     return "Diagnostics";
   }
-  if (routeId === "assets") {
+  if (routeId === "assets" || routeId === "temporary") {
     return "Source";
   }
   return "Project";

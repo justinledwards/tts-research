@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { formatDuration } from "./format";
 import { commandCenterRouteDefinition, type CommandCenterRouteId } from "./features/command-center";
-import type { VoiceJob, VoiceProfile, VoiceProfileSource, VoiceProject } from "./types";
+import type {
+  TemporarySourceSession,
+  VoiceJob,
+  VoiceProfile,
+  VoiceProfileSource,
+  VoiceProject,
+} from "./types";
 import type { CancellableActivitySummary } from "./voiceStudioViewModels";
 
 export type CommandCenterSectionId = CommandCenterRouteId;
@@ -108,6 +114,8 @@ type BuildWorkspaceActivitySummariesInput = Readonly<{
   onCancelProfileTarget: (profileId: string, targetId: string) => Promise<void>;
   profileSource: VoiceProfileSource | null;
   profiles: VoiceProfile[];
+  temporaryJobs?: readonly VoiceJob[];
+  temporarySources?: readonly TemporarySourceSession[];
 }>;
 
 export function buildWorkspaceActivitySummaries({
@@ -119,39 +127,133 @@ export function buildWorkspaceActivitySummaries({
   onCancelProfileTarget,
   profileSource,
   profiles,
+  temporaryJobs = [],
+  temporarySources = [],
 }: BuildWorkspaceActivitySummariesInput): WorkspaceActivitySummary[] {
   const activities: WorkspaceActivitySummary[] = [];
 
-  if (job && !isTerminalJobStatus(job.status)) {
-    activities.push({
-      cancelLabel: "Cancel Run",
-      canCancel: true,
-      detail:
-        `${job.progress.message || "Narration is running."} ${job.progress.detail || ""}`.trim(),
-      id: `job:${job.id}`,
-      label: "Narration pipeline",
-      onCancel: () => {
-        void onCancelJob();
-      },
-      status: "running",
-    });
+  if (job && !job.temporarySourceId && !isTerminalJobStatus(job.status)) {
+    activities.push(projectJobActivity(job, onCancelJob));
+  }
+
+  for (const temporaryJob of temporaryJobs) {
+    if (isTerminalJobStatus(temporaryJob.status)) {
+      continue;
+    }
+    activities.push(
+      temporaryJobActivity({
+        activeJob: job,
+        onCancelJob,
+        temporaryJob,
+        temporarySources,
+      }),
+    );
   }
 
   if (profileSource && isActiveProfileSource(profileSource)) {
-    const isCanceling = cancelingProfileSourceId === profileSource.id;
-    activities.push({
-      cancelLabel: isCanceling ? "Cancelling..." : "Cancel Analysis",
-      canCancel: !isCanceling,
-      detail: `${profileSource.sourceFile} · ${profileSource.progressMessage || profileSource.status}`,
-      id: `source:${profileSource.id}`,
-      label: "Voice source analysis",
-      onCancel: () => {
-        void onCancelProfileSource(profileSource.id);
-      },
-      status: "running",
-    });
+    activities.push(
+      profileSourceActivity({
+        cancelingProfileSourceId,
+        onCancelProfileSource,
+        profileSource,
+      }),
+    );
   }
 
+  activities.push(
+    ...cloneTargetActivities({
+      cancelingTargetKey,
+      onCancelProfileTarget,
+      profiles,
+    }),
+  );
+  return activities;
+}
+
+function projectJobActivity(
+  job: VoiceJob,
+  onCancelJob: () => Promise<void>,
+): WorkspaceActivitySummary {
+  return {
+    cancelLabel: "Cancel Run",
+    canCancel: true,
+    detail:
+      `${job.progress.message || "Narration is running."} ${job.progress.detail || ""}`.trim(),
+    id: `job:${job.id}`,
+    label: "Narration pipeline",
+    onCancel: () => {
+      void onCancelJob();
+    },
+    status: "running",
+  };
+}
+
+function temporaryJobActivity({
+  activeJob,
+  onCancelJob,
+  temporaryJob,
+  temporarySources,
+}: Readonly<{
+  activeJob: VoiceJob | null;
+  onCancelJob: () => Promise<void>;
+  temporaryJob: VoiceJob;
+  temporarySources: readonly TemporarySourceSession[];
+}>): WorkspaceActivitySummary {
+  const source = temporarySources.find(
+    (item) =>
+      item.id === temporaryJob.temporarySourceId ||
+      item.temporarySourceId === temporaryJob.temporarySourceId,
+  );
+  const sourceLabel =
+    source?.title ?? source?.sourceName ?? temporaryJob.temporarySourceId ?? "Temporary source";
+  return {
+    cancelLabel: "Cancel Temporary Run",
+    canCancel: activeJob?.id === temporaryJob.id,
+    detail: `${sourceLabel} · ${temporaryJob.progress.message || temporaryJob.status} ${
+      temporaryJob.progress.detail || ""
+    }`.trim(),
+    id: `temporary-job:${temporaryJob.id}`,
+    label: "Temporary Source narration",
+    onCancel: () => {
+      void onCancelJob();
+    },
+    status: "running",
+  };
+}
+
+function profileSourceActivity({
+  cancelingProfileSourceId,
+  onCancelProfileSource,
+  profileSource,
+}: Readonly<{
+  cancelingProfileSourceId: string | null;
+  onCancelProfileSource: (sourceId: string) => Promise<void>;
+  profileSource: VoiceProfileSource;
+}>): WorkspaceActivitySummary {
+  const isCanceling = cancelingProfileSourceId === profileSource.id;
+  return {
+    cancelLabel: isCanceling ? "Cancelling..." : "Cancel Analysis",
+    canCancel: !isCanceling,
+    detail: `${profileSource.sourceFile} · ${profileSource.progressMessage || profileSource.status}`,
+    id: `source:${profileSource.id}`,
+    label: "Voice source analysis",
+    onCancel: () => {
+      void onCancelProfileSource(profileSource.id);
+    },
+    status: "running",
+  };
+}
+
+function cloneTargetActivities({
+  cancelingTargetKey,
+  onCancelProfileTarget,
+  profiles,
+}: Readonly<{
+  cancelingTargetKey: string | null;
+  onCancelProfileTarget: (profileId: string, targetId: string) => Promise<void>;
+  profiles: VoiceProfile[];
+}>): WorkspaceActivitySummary[] {
+  const activities: WorkspaceActivitySummary[] = [];
   for (const profile of profiles) {
     for (const [targetId, target] of Object.entries(profile.cloneTargets ?? {})) {
       const artifact = profile.cloneArtifacts?.[targetId];

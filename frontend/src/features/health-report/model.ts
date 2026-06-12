@@ -7,6 +7,8 @@ import type {
   SourceReadiness,
   SystemMetrics,
   TTSEngineDiagnostics,
+  TemporarySourceSession,
+  TemporaryStorageUsageSummary,
   VoiceJob,
 } from "../../types";
 import type { NarrationStatusChip } from "../status-strip";
@@ -63,6 +65,9 @@ export interface HealthReport {
   readonly sourceExtraction: SourceExtractionHealthReport;
   readonly statusChips: readonly HealthReportCard[];
   readonly storage: HealthReportCard;
+  readonly temporaryCleanup: HealthReportCard;
+  readonly temporaryDiagnostics: HealthReportCard;
+  readonly temporaryStorage: HealthReportCard;
 }
 
 export interface HealthReportInput {
@@ -80,6 +85,9 @@ export interface HealthReportInput {
   readonly selectedPreparedSource?: PreparedSource | null;
   readonly sourceFallbackLabel?: string | null;
   readonly statusChips?: readonly NarrationStatusChip[];
+  readonly temporaryJobs?: readonly VoiceJob[];
+  readonly temporarySources?: readonly TemporarySourceSession[];
+  readonly temporaryStorageUsage?: TemporaryStorageUsageSummary | null;
   readonly ttsEngineError: string | null;
   readonly ttsEngines: readonly TTSEngineDiagnostics[];
 }
@@ -91,6 +99,12 @@ export function buildHealthReport(input: HealthReportInput): HealthReport {
   const storage = storageHealth(input.projectStorage, input.projectStorageError);
   const backend = backendHealth(input.metrics, input.metricsError);
   const job = jobHealth(input.job, input.projectJobs);
+  const temporaryStorage = temporaryStorageHealth(input.temporaryStorageUsage ?? null);
+  const temporaryDiagnostics = temporaryDiagnosticsHealth(
+    input.temporarySources ?? [],
+    input.temporaryJobs ?? [],
+  );
+  const temporaryCleanup = temporaryCleanupHealth(input.temporaryStorageUsage ?? null);
   const statusChips = (input.statusChips ?? []).map((chip) => statusChipHealth(chip));
   const hasBlockingStatus = (input.statusChips ?? []).some((chip) => chip.issue.blocksCurrentStage);
   const canNarrateNow =
@@ -113,6 +127,9 @@ export function buildHealthReport(input: HealthReportInput): HealthReport {
     sourceExtraction,
     statusChips,
     storage,
+    temporaryCleanup,
+    temporaryDiagnostics,
+    temporaryStorage,
   };
   const diagnosticSummary = diagnosticSummaryForReport(report, input, generatedAt);
   return { ...report, diagnosticSummary };
@@ -397,6 +414,96 @@ function storageHealth(
   };
 }
 
+function temporaryStorageHealth(usage: TemporaryStorageUsageSummary | null): HealthReportCard {
+  if (!usage) {
+    return {
+      detail:
+        "Temporary storage summary loads when Quick Listen or Command Center checks recent sessions.",
+      facts: [],
+      label: "Temporary storage",
+      tone: "neutral",
+      value: "Pending",
+    };
+  }
+  return {
+    detail: `${formatHealthBytes(usage.totalBytes)} across ${usage.temporaryCount.toLocaleString()} temporary session(s).`,
+    facts: [
+      { label: "Source data", value: formatHealthBytes(usage.sourceBytes) },
+      { label: "Generated audio", value: formatHealthBytes(usage.audioBytes) },
+      { label: "Artifacts", value: formatHealthBytes(usage.artifactBytes) },
+      { label: "Progress", value: formatHealthBytes(usage.progressBytes) },
+      { label: "Updated", value: usage.updatedAt },
+    ],
+    label: "Temporary storage",
+    tone: usage.expiredCount > 0 || usage.generatingCount > 0 ? "warning" : "success",
+    value: formatHealthBytes(usage.totalBytes),
+  };
+}
+
+function temporaryDiagnosticsHealth(
+  sources: readonly TemporarySourceSession[],
+  jobs: readonly VoiceJob[],
+): HealthReportCard {
+  const failedSources = sources.filter(
+    (source) => source.status === "failed" || source.sourceReadiness?.state === "failed",
+  );
+  const failedJobs = jobs.filter((job) => job.status === "failed");
+  if (failedSources.length > 0 || failedJobs.length > 0) {
+    return {
+      detail: `${failedSources.length.toLocaleString()} failed extraction(s), ${failedJobs.length.toLocaleString()} failed generation job(s).`,
+      facts: [
+        ...failedSources.slice(0, 3).map((source) => ({
+          label: source.title ?? source.sourceName,
+          value: source.error ?? source.sourceReadiness?.detail ?? "Extraction failed",
+        })),
+        ...failedJobs.slice(0, 3).map((job) => ({
+          label: job.temporarySourceId ?? job.id,
+          value: job.error ?? job.progress.detail,
+        })),
+      ],
+      label: "Temporary diagnostics",
+      tone: "danger",
+      value: "Needs recovery",
+    };
+  }
+  return {
+    detail:
+      sources.length > 0
+        ? "No failed temporary extraction or generation diagnostics are currently recorded."
+        : "No temporary sessions are recorded in this app session.",
+    facts: [{ label: "Temporary jobs", value: jobs.length.toLocaleString() }],
+    label: "Temporary diagnostics",
+    tone: "success",
+    value: "Clean",
+  };
+}
+
+function temporaryCleanupHealth(usage: TemporaryStorageUsageSummary | null): HealthReportCard {
+  if (!usage) {
+    return {
+      detail: "Cleanup report is pending until temporary storage usage has loaded.",
+      facts: [],
+      label: "Temporary cleanup",
+      tone: "neutral",
+      value: "Pending",
+    };
+  }
+  return {
+    detail:
+      usage.expiredCount > 0
+        ? `${usage.expiredCount.toLocaleString()} expired temporary session(s) can be cleared.`
+        : "No expired temporary sessions need cleanup.",
+    facts: [
+      { label: "Expired", value: usage.expiredCount.toLocaleString() },
+      { label: "Generating", value: usage.generatingCount.toLocaleString() },
+      { label: "Sessions", value: usage.temporaryCount.toLocaleString() },
+    ],
+    label: "Temporary cleanup",
+    tone: usage.expiredCount > 0 ? "warning" : "success",
+    value: usage.expiredCount > 0 ? "Cleanup available" : "Current",
+  };
+}
+
 function backendHealth(
   metrics: SystemMetrics | null,
   metricsError: string | null,
@@ -558,6 +665,9 @@ function diagnosticSummaryForReport(
     report.sourceExtraction,
     report.job,
     report.storage,
+    report.temporaryStorage,
+    report.temporaryDiagnostics,
+    report.temporaryCleanup,
     report.backend,
   ];
   const text = [
@@ -601,6 +711,17 @@ function diagnosticSummaryForReport(
       ...cardJSON(report.storage),
       directories: input.projectStorage?.directories ?? null,
       downloads: input.projectStorage?.downloads ?? [],
+    },
+    temporary: {
+      cleanup: cardJSON(report.temporaryCleanup),
+      diagnostics: cardJSON(report.temporaryDiagnostics),
+      jobs: (input.temporaryJobs ?? []).map((temporaryJob) => ({
+        id: temporaryJob.id,
+        status: temporaryJob.status,
+        temporarySourceId: temporaryJob.temporarySourceId ?? null,
+      })),
+      storage: cardJSON(report.temporaryStorage),
+      usage: input.temporaryStorageUsage ?? null,
     },
   };
   return { generatedAt, json, text };

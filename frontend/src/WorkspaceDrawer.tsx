@@ -14,6 +14,8 @@ import type {
   SpeechPolicyProfile,
   SystemMetrics,
   TTSEngineDiagnostics,
+  TemporarySourceSession,
+  TemporaryStorageUsageSummary,
   VoiceJob,
   VoiceProfile,
   VoiceProfileSource,
@@ -29,8 +31,13 @@ import type { SettingsCommandTarget } from "./features/settings/model";
 import {
   COMMAND_CENTER_ROUTES,
   commandCenterGeneratedAudioState,
+  filterTemporaryWorkSessions,
   sortCommandCenterProjects,
+  temporarySessionAudioReadiness,
+  temporarySessionStorageUsage,
   visibleCommandCenterJobs,
+  visibleTemporaryCommandCenterJobs,
+  type TemporaryWorkFilter,
 } from "./features/command-center";
 import {
   buildSourceAssetModels,
@@ -104,6 +111,8 @@ export function WorkspaceDrawer({
   cancelingTargetKey,
   ttsEngineError,
   ttsEngines,
+  temporarySources,
+  temporaryStorageUsage,
   onCreateProject,
   onCancelJob,
   onCancelProfileSource,
@@ -117,6 +126,10 @@ export function WorkspaceDrawer({
   onOpenQuickListen,
   onOpenVoiceDashboard,
   onOpenVoiceCloning,
+  onClearExpiredTemporarySources,
+  onDiscardTemporarySource,
+  onKeepTemporarySource,
+  onOpenTemporarySource,
   onRenameProject,
   onRenameBookSource,
   onRenamePreparedSource,
@@ -173,6 +186,8 @@ export function WorkspaceDrawer({
   cancelingTargetKey: string | null;
   ttsEngineError: string | null;
   ttsEngines: TTSEngineDiagnostics[];
+  temporarySources: TemporarySourceSession[];
+  temporaryStorageUsage: TemporaryStorageUsageSummary | null;
   onCreateProject: (name: string) => Promise<void>;
   onCancelJob: () => Promise<void>;
   onCancelProfileSource: (sourceId: string) => Promise<void>;
@@ -186,6 +201,10 @@ export function WorkspaceDrawer({
   onOpenQuickListen: () => void;
   onOpenVoiceDashboard: () => void;
   onOpenVoiceCloning: () => void;
+  onClearExpiredTemporarySources: () => Promise<void>;
+  onDiscardTemporarySource: (session: TemporarySourceSession) => Promise<void>;
+  onKeepTemporarySource: (session: TemporarySourceSession) => void;
+  onOpenTemporarySource: (session: TemporarySourceSession) => Promise<void>;
   onRenameProject: (id: string, name: string) => Promise<void>;
   onRenameBookSource: (id: string, name: string) => Promise<void>;
   onRenamePreparedSource: (id: string, name: string) => Promise<void>;
@@ -216,10 +235,19 @@ export function WorkspaceDrawer({
   const [localActiveSection, setLocalActiveSection] = useState<CommandCenterSectionId>("overview");
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [inspectedAssetKey, setInspectedAssetKey] = useState<string | null>(null);
+  const [temporaryWorkFilter, setTemporaryWorkFilter] = useState<TemporaryWorkFilter>("all");
   const effectiveActiveSection = activeSection ?? localActiveSection;
   const visibleJobs = useMemo(
     () => visibleCommandCenterJobs({ activeProjectId, job, projectJobs }),
     [activeProjectId, job, projectJobs],
+  );
+  const temporaryJobs = useMemo(
+    () => visibleTemporaryCommandCenterJobs({ job, projectJobs }),
+    [job, projectJobs],
+  );
+  const visibleTemporarySources = useMemo(
+    () => filterTemporaryWorkSessions(temporarySources, temporaryWorkFilter),
+    [temporarySources, temporaryWorkFilter],
   );
   const reportBookSource = useMemo(
     () =>
@@ -253,6 +281,9 @@ export function WorkspaceDrawer({
         sourceFallbackLabel:
           !reportBookSource && !reportPreparedSource ? sourceFallbackLabel : null,
         statusChips: narrationStatusModel.chips,
+        temporaryJobs,
+        temporarySources,
+        temporaryStorageUsage,
         ttsEngineError,
         ttsEngines,
       }),
@@ -270,6 +301,9 @@ export function WorkspaceDrawer({
       reportPreparedSource,
       selectedEngineId,
       sourceFallbackLabel,
+      temporaryJobs,
+      temporarySources,
+      temporaryStorageUsage,
       ttsEngineError,
       ttsEngines,
       visibleJobs,
@@ -338,6 +372,8 @@ export function WorkspaceDrawer({
       onCancelProfileTarget,
       profileSource,
       profiles,
+      temporaryJobs,
+      temporarySources,
     });
     if (!bundleActivity) {
       return baseActivities;
@@ -356,6 +392,8 @@ export function WorkspaceDrawer({
     onCancelProfileTarget,
     profileSource,
     profiles,
+    temporaryJobs,
+    temporarySources,
   ]);
 
   if (!isOpen) {
@@ -386,8 +424,16 @@ export function WorkspaceDrawer({
     importsExports: "",
     overview: "",
     projects: projects.length.toString(),
+    temporary: temporarySources.length > 0 ? temporarySources.length.toString() : "",
     reports:
-      metrics || metricsError || projectStorage || projectStorageError || bundleReport ? "1" : "",
+      metrics ||
+      metricsError ||
+      projectStorage ||
+      projectStorageError ||
+      temporaryStorageUsage ||
+      bundleReport
+        ? "1"
+        : "",
   };
 
   const setActiveSection = (section: CommandCenterSectionId) => {
@@ -520,6 +566,8 @@ export function WorkspaceDrawer({
                 projectsCount={projects.length}
                 providerStatus={providerStatus}
                 selectedProfile={selectedProfile}
+                temporaryCount={temporarySources.length}
+                temporaryStorageUsage={temporaryStorageUsage}
                 onExportOpen={onExportOpen}
                 onImportOpen={onImportOpen}
                 onOpenActivity={() => {
@@ -533,6 +581,9 @@ export function WorkspaceDrawer({
                 }}
                 onOpenReports={() => {
                   setActiveSection("reports");
+                }}
+                onOpenTemporary={() => {
+                  setActiveSection("temporary");
                 }}
               />
             ) : null}
@@ -628,6 +679,46 @@ export function WorkspaceDrawer({
                     onDeleteVoiceJob={onDeleteVoiceJob}
                   />
                 </div>
+              </WorkspaceSection>
+            ) : null}
+
+            {effectiveActiveSection === "temporary" ? (
+              <WorkspaceSection
+                actions={
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
+                      disabled={(temporaryStorageUsage?.expiredCount ?? 0) === 0}
+                      onClick={() => {
+                        void onClearExpiredTemporarySources();
+                      }}
+                      type="button"
+                    >
+                      Clear Expired
+                    </button>
+                    <button
+                      className="h-9 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] vs-accent-bg"
+                      onClick={onOpenQuickListen}
+                      type="button"
+                    >
+                      Quick Listen
+                    </button>
+                  </div>
+                }
+                id="command-center-temporary"
+                title="Temporary Work"
+              >
+                <TemporaryWorkShelf
+                  activeFilter={temporaryWorkFilter}
+                  jobs={temporaryJobs}
+                  sessions={visibleTemporarySources}
+                  totalSessions={temporarySources.length}
+                  storageUsage={temporaryStorageUsage}
+                  onDiscard={onDiscardTemporarySource}
+                  onFilterChange={setTemporaryWorkFilter}
+                  onKeep={onKeepTemporarySource}
+                  onOpen={onOpenTemporarySource}
+                />
               </WorkspaceSection>
             ) : null}
 
@@ -758,6 +849,208 @@ export function WorkspaceDrawer({
   );
 }
 
+function TemporaryWorkShelf({
+  activeFilter,
+  jobs,
+  sessions,
+  storageUsage,
+  totalSessions,
+  onDiscard,
+  onFilterChange,
+  onKeep,
+  onOpen,
+}: Readonly<{
+  activeFilter: TemporaryWorkFilter;
+  jobs: VoiceJob[];
+  sessions: TemporarySourceSession[];
+  storageUsage: TemporaryStorageUsageSummary | null;
+  totalSessions: number;
+  onDiscard: (session: TemporarySourceSession) => Promise<void>;
+  onFilterChange: (filter: TemporaryWorkFilter) => void;
+  onKeep: (session: TemporarySourceSession) => void;
+  onOpen: (session: TemporarySourceSession) => Promise<void>;
+}>) {
+  const filters: readonly { id: TemporaryWorkFilter; label: string }[] = [
+    { id: "all", label: "All" },
+    { id: "active", label: "Active" },
+    { id: "generatedAudio", label: "Generated audio" },
+    { id: "failed", label: "Failed" },
+    { id: "expired", label: "Expired" },
+    { id: "promoted", label: "Promoted" },
+  ];
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-3 md:grid-cols-4">
+        <WorkspaceDashboardSummary
+          detail={`${formatBytes(storageUsage?.totalBytes ?? 0)} across recent temporary sessions`}
+          label="Storage usage"
+          value={formatBytes(storageUsage?.totalBytes ?? 0)}
+        />
+        <WorkspaceDashboardSummary
+          detail={`${(storageUsage?.expiredCount ?? 0).toString()} expired session(s) can be cleared`}
+          label="Expiry"
+          value={`${totalSessions.toString()} recent`}
+        />
+        <WorkspaceDashboardSummary
+          detail={`${formatBytes(storageUsage?.audioBytes ?? 0)} generated or preview audio`}
+          label="Temporary audio"
+          value={formatBytes(storageUsage?.audioBytes ?? 0)}
+        />
+        <WorkspaceDashboardSummary
+          detail={`${jobs.filter((item) => item.status === "failed").length.toString()} failed temporary job(s)`}
+          label="Job diagnostics"
+          value={`${jobs.length.toString()} job(s)`}
+        />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {filters.map((filter) => (
+          <button
+            aria-pressed={activeFilter === filter.id}
+            className={`h-8 rounded-md border px-3 text-xs font-semibold ${
+              activeFilter === filter.id
+                ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)]"
+                : "hover:bg-[var(--vs-raised)] vs-border"
+            }`}
+            key={filter.id}
+            onClick={() => {
+              onFilterChange(filter.id);
+            }}
+            type="button"
+          >
+            {filter.label}
+          </button>
+        ))}
+      </div>
+      <div className="grid gap-3">
+        {sessions.length > 0 ? (
+          sessions.map((session) => (
+            <TemporarySourceCard
+              jobs={jobs}
+              key={session.id}
+              session={session}
+              storageUsage={temporarySessionStorageUsage(session, storageUsage?.sessions)}
+              onDiscard={onDiscard}
+              onKeep={onKeep}
+              onOpen={onOpen}
+            />
+          ))
+        ) : (
+          <EmptyDrawerText>
+            No temporary sessions match this filter. Start Quick Listen to create temporary work
+            without adding anything to the project library.
+          </EmptyDrawerText>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TemporarySourceCard({
+  jobs,
+  session,
+  storageUsage,
+  onDiscard,
+  onKeep,
+  onOpen,
+}: Readonly<{
+  jobs: VoiceJob[];
+  session: TemporarySourceSession;
+  storageUsage: ReturnType<typeof temporarySessionStorageUsage>;
+  onDiscard: (session: TemporarySourceSession) => Promise<void>;
+  onKeep: (session: TemporarySourceSession) => void;
+  onOpen: (session: TemporarySourceSession) => Promise<void>;
+}>) {
+  const audioReadiness = temporarySessionAudioReadiness(session, jobs);
+  const isDiscarded = session.status === "discarded";
+  const isPromoted = session.status === "promoted" || session.promotionStatus === "promoted";
+  return (
+    <article className="grid gap-3 rounded-md border p-4 vs-management-surface">
+      <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <p
+              className="min-w-0 truncate text-sm font-semibold"
+              title={temporarySessionTitle(session)}
+            >
+              {temporarySessionTitle(session)}
+            </p>
+            <StatusPill>Temporary Source</StatusPill>
+            <StatusPill>{session.status}</StatusPill>
+          </div>
+          <p className="vs-muted mt-1 break-words text-xs leading-5">
+            {temporarySourceTypeLabel(session)} · expires {formatDate(session.expiresAt)} · last
+            opened {formatDate(session.lastAccessedAt)}
+          </p>
+          {session.error || session.sourceReadiness?.state === "failed" ? (
+            <p className="mt-2 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] px-3 py-2 text-xs text-[var(--vs-status-danger)]">
+              {session.error ?? session.sourceReadiness?.detail ?? "Temporary source failed."}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-2 md:justify-end">
+          <button
+            className="h-9 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50 vs-accent-bg"
+            disabled={isDiscarded}
+            onClick={() => {
+              void onOpen(session);
+            }}
+            type="button"
+          >
+            Reopen
+          </button>
+          <button
+            className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
+            disabled={isDiscarded || isPromoted}
+            onClick={() => {
+              onKeep(session);
+            }}
+            type="button"
+          >
+            Keep in Project
+          </button>
+          <button
+            className="h-9 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-surface-primary)] px-3 text-xs font-semibold text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)] disabled:opacity-50"
+            disabled={isDiscarded || isPromoted}
+            onClick={() => {
+              void onDiscard(session);
+            }}
+            type="button"
+          >
+            Discard
+          </button>
+        </div>
+      </div>
+      <DetailGrid
+        rows={[
+          ["Source type", temporarySourceTypeLabel(session)],
+          ["Audio readiness", audioReadiness],
+          ["Storage", formatBytes(storageUsage?.bytes ?? 0)],
+          ["Artifacts", session.artifacts.length.toLocaleString()],
+          ["Words", session.wordCount.toLocaleString()],
+          ["Promotion", session.promotionStatus],
+        ]}
+      />
+    </article>
+  );
+}
+
+function temporarySessionTitle(session: TemporarySourceSession): string {
+  return session.title ?? session.sourceName;
+}
+
+function temporarySourceTypeLabel(session: TemporarySourceSession): string {
+  if (session.sourceUrl) {
+    return "Webpage";
+  }
+  if (session.sourceContentType?.includes("pdf") || session.kind === "pdf") {
+    return "PDF";
+  }
+  if (session.kind === "file" || session.sourceBytes) {
+    return "File";
+  }
+  return session.kind === "text" ? "Pasted text" : session.kind;
+}
+
 function CommandCenterOverview({
   activityCount,
   activeProjectName,
@@ -770,12 +1063,15 @@ function CommandCenterOverview({
   projectsCount,
   providerStatus,
   selectedProfile,
+  temporaryCount,
+  temporaryStorageUsage,
   onExportOpen,
   onImportOpen,
   onOpenActivity,
   onOpenAssets,
   onOpenProjects,
   onOpenReports,
+  onOpenTemporary,
 }: Readonly<{
   activityCount: number;
   activeProjectName: string;
@@ -788,12 +1084,15 @@ function CommandCenterOverview({
   projectsCount: number;
   providerStatus: string;
   selectedProfile: VoiceProfile | null;
+  temporaryCount: number;
+  temporaryStorageUsage: TemporaryStorageUsageSummary | null;
   onExportOpen: () => void;
   onImportOpen: () => void;
   onOpenActivity: () => void;
   onOpenAssets: () => void;
   onOpenProjects: () => void;
   onOpenReports: () => void;
+  onOpenTemporary: () => void;
 }>) {
   return (
     <div className="grid gap-4">
@@ -814,10 +1113,15 @@ function CommandCenterOverview({
           label="Voice"
           value={selectedProfile?.name ?? "Default"}
         />
+        <OverviewStat
+          detail={`${formatBytes(temporaryStorageUsage?.totalBytes ?? 0)} temporary storage`}
+          label="Temporary work"
+          value={temporaryCount > 0 ? `${temporaryCount.toString()} recent` : "None"}
+        />
       </div>
       <div className="grid gap-3 rounded-md border p-4 vs-management-surface">
         <p className="text-sm font-semibold">Management routes</p>
-        <div className="grid gap-2 md:grid-cols-3">
+        <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-4">
           <OverviewRouteButton
             detail="Open, rename, export, or protect projects."
             onClick={onOpenProjects}
@@ -829,6 +1133,12 @@ function CommandCenterOverview({
             onClick={onOpenAssets}
           >
             Assets
+          </OverviewRouteButton>
+          <OverviewRouteButton
+            detail="Reopen, promote, discard, or clean temporary sessions."
+            onClick={onOpenTemporary}
+          >
+            Temporary Work
           </OverviewRouteButton>
           <OverviewRouteButton
             detail={
@@ -1948,6 +2258,9 @@ function HealthReportsPanel({
     report.sourceExtraction,
     report.job,
     report.storage,
+    report.temporaryStorage,
+    report.temporaryDiagnostics,
+    report.temporaryCleanup,
     report.backend,
   ];
   const failedGeneration =

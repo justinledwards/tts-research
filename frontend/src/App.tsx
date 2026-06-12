@@ -6719,6 +6719,23 @@ export function App() {
     [],
   );
 
+  const handleKeepTemporarySession = useCallback((session: TemporarySourceSession) => {
+    setTemporaryPromotionError(null);
+    if (temporarySessionPrefersBookCinema(session)) {
+      setPendingTemporaryPromotion({
+        origin: "book",
+        source: temporarySessionToBookSource(session),
+        titleOverride: session.title ?? session.sourceName,
+      });
+      return;
+    }
+    setPendingTemporaryPromotion({
+      origin: "prepared",
+      source: temporarySessionToPreparedSource(session),
+      titleOverride: session.title ?? session.sourceName,
+    });
+  }, []);
+
   const handleConfirmTemporaryPromotion = useCallback(
     async (request: {
       conflictResolution?: "error" | "keepBoth";
@@ -9160,9 +9177,12 @@ export function App() {
             cancelingTargetKey={cancelingTargetKey}
             ttsEngineError={ttsEngineError}
             ttsEngines={ttsEngines}
+            temporarySources={temporarySources}
+            temporaryStorageUsage={temporaryStorageUsage}
             onCancelJob={handleCancelVoiceJob}
             onCancelProfileSource={handleCancelVoiceProfileSource}
             onCancelProfileTarget={handleCancelVoiceProfileTarget}
+            onClearExpiredTemporarySources={handleClearExpiredTemporarySources}
             onDeleteProject={handleDeleteProject}
             onCreateProject={handleCreateProject}
             onClose={() => {
@@ -9204,6 +9224,12 @@ export function App() {
             onOpenVoiceCloning={() => {
               setIsCommandCenterOpen(false);
               handleStudioModeChange("voiceCloning");
+            }}
+            onDiscardTemporarySource={handleDiscardTemporarySource}
+            onKeepTemporarySource={handleKeepTemporarySession}
+            onOpenTemporarySource={async (session) => {
+              setIsCommandCenterOpen(false);
+              await handleUseTemporarySource(session);
             }}
             onRenameProject={handleRenameProject}
             onRenameBookSource={handleRenameBookSourceAsset}

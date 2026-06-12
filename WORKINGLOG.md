@@ -1,3 +1,10 @@
+## 2026-06-12 11:43 CEST - Command Center Temporary Work Shelf
+- [x] Inspect Command Center routes, activity, reports, and temporary source models
+- [x] Add temporary work shelf UI and actions
+- [x] Integrate temporary jobs and reports
+- [x] Run project checks
+- Validation: focused frontend typecheck and Command Center/health-report tests passed; `pnpm check` passed format/lint/type/package/script/adapter/backend/frontend stages with existing Biome warning/info output in adapter/scripts files.
+
 ## 2026-06-12 11:37 CEST - Commit Temporary Cleanup Package
 - [x] Review temporary cleanup diff
 - [x] Stage temporary cleanup files

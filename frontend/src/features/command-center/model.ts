@@ -1,8 +1,14 @@
-import type { VoiceJob, VoiceProject } from "../../types";
+import type {
+  TemporarySourceSession,
+  TemporaryStorageUsageSession,
+  VoiceJob,
+  VoiceProject,
+} from "../../types";
 
 export const COMMAND_CENTER_ROUTE_IDS = [
   "overview",
   "projects",
+  "temporary",
   "assets",
   "activity",
   "importsExports",
@@ -35,6 +41,14 @@ export const COMMAND_CENTER_ROUTES: readonly CommandCenterRouteDefinition[] = [
     headline: "Project library and generated audio",
     description:
       "Open, rename, export, or protect projects from one stable command surface without disturbing the current workbench.",
+  },
+  {
+    id: "temporary",
+    label: "Temporary Work",
+    detail: "Recent unsaved sessions",
+    headline: "Recent temporary work without project clutter",
+    description:
+      "Find temporary sources before expiry, reopen recent work, promote useful sessions into a project, or discard throwaway artifacts.",
   },
   {
     id: "assets",
@@ -118,6 +132,103 @@ export function visibleCommandCenterJobs({
   return uniqueJobs.sort((left, right) => dateValue(right.updatedAt) - dateValue(left.updatedAt));
 }
 
+export function visibleTemporaryCommandCenterJobs({
+  job,
+  projectJobs,
+}: Readonly<{
+  job: VoiceJob | null;
+  projectJobs: readonly VoiceJob[];
+}>): VoiceJob[] {
+  const candidates = [...(job?.temporarySourceId ? [job] : []), ...projectJobs].filter((item) =>
+    Boolean(item.temporarySourceId),
+  );
+  const seen = new Set<string>();
+  const uniqueJobs = candidates.filter((item) => {
+    if (seen.has(item.id)) {
+      return false;
+    }
+    seen.add(item.id);
+    return true;
+  });
+  // eslint-disable-next-line unicorn/no-array-sort
+  return uniqueJobs.sort((left, right) => dateValue(right.updatedAt) - dateValue(left.updatedAt));
+}
+
+export type TemporaryWorkFilter =
+  | "all"
+  | "active"
+  | "generatedAudio"
+  | "failed"
+  | "expired"
+  | "promoted";
+
+export function filterTemporaryWorkSessions(
+  sessions: readonly TemporarySourceSession[],
+  filter: TemporaryWorkFilter,
+): TemporarySourceSession[] {
+  const filtered = sessions.filter((session) => {
+    if (filter === "active") {
+      return !["discarded", "expired", "promoted"].includes(session.status);
+    }
+    if (filter === "generatedAudio") {
+      return hasTemporaryGeneratedAudio(session);
+    }
+    if (filter === "failed") {
+      return session.status === "failed" || session.sourceReadiness?.state === "failed";
+    }
+    if (filter === "expired") {
+      return session.status === "expired";
+    }
+    if (filter === "promoted") {
+      return session.status === "promoted" || session.promotionStatus === "promoted";
+    }
+    return true;
+  });
+  // eslint-disable-next-line unicorn/no-array-sort
+  return [...filtered].sort(
+    (left, right) => dateValue(right.lastAccessedAt) - dateValue(left.lastAccessedAt),
+  );
+}
+
+export function temporarySessionStorageUsage(
+  session: TemporarySourceSession,
+  usageSessions: readonly TemporaryStorageUsageSession[] = [],
+): TemporaryStorageUsageSession | null {
+  return (
+    usageSessions.find(
+      (usage) =>
+        usage.temporarySourceId === session.id ||
+        usage.temporarySourceId === session.temporarySourceId,
+    ) ?? null
+  );
+}
+
+export function temporarySessionAudioReadiness(
+  session: TemporarySourceSession,
+  jobs: readonly VoiceJob[] = [],
+): string {
+  const sessionJobs = jobs.filter(
+    (item) =>
+      item.temporarySourceId === session.id || item.temporarySourceId === session.temporarySourceId,
+  );
+  if (sessionJobs.some((item) => item.status === "failed")) {
+    return "Failed";
+  }
+  if (sessionJobs.some((item) => isActiveJobStatus(item.status))) {
+    return "Generating";
+  }
+  if (sessionJobs.some((item) => item.status === "completed")) {
+    return "Ready";
+  }
+  if (hasTemporaryGeneratedAudio(session)) {
+    return "Ready";
+  }
+  if (session.status === "generating") {
+    return "Generating";
+  }
+  return "No audio";
+}
+
 export function commandCenterGeneratedAudioState(jobs: readonly VoiceJob[]): string {
   if (jobs.length === 0) {
     return "No audio";
@@ -141,6 +252,12 @@ function isActiveJobStatus(status: string): boolean {
     status === "synthesizing" ||
     status === "checking" ||
     status === "retrying"
+  );
+}
+
+function hasTemporaryGeneratedAudio(session: TemporarySourceSession): boolean {
+  return session.artifacts.some(
+    (artifact) => artifact.kind === "generatedAudio" || artifact.kind === "previewAudio",
   );
 }
 

@@ -27,6 +27,7 @@ describe("command palette helpers", () => {
     });
 
     expect(entries.map((entry) => entry.id)).toContain("command-center:activity");
+    expect(entries.map((entry) => entry.id)).toContain("command-center:temporary");
     expect(entries.map((entry) => entry.id)).toContain("command-center:importsExports");
     expect(entries.map((entry) => entry.id)).toContain("command-center:reports");
     expect(entries.map((entry) => entry.id)).toContain("bundle:import");
@@ -38,6 +39,10 @@ describe("command palette helpers", () => {
     expect(entries.find((entry) => entry.id === "command-center:activity")).toMatchObject({
       category: "Diagnostics",
       title: "Open Activity",
+    });
+    expect(entries.find((entry) => entry.id === "command-center:temporary")).toMatchObject({
+      category: "Source",
+      title: "Open Temporary Work",
     });
   });
 });
