@@ -1,3 +1,15 @@
+## 2026-06-12 15:35 CEST - Commit Temporary Surface Budget
+- [x] Review and stage temporary surface budget files
+- [x] Commit temporary surface budget package
+
+## 2026-06-12 15:26 CEST - Temporary Surface Complexity Budget
+- [x] Inventory temporary source actions and current surfaces
+- [x] Add surface ownership and complexity budget rules
+- [x] Add duplicate-label and disabled-action guardrails
+- [x] Add E2E or focused surface complexity tests
+- [x] Run project checks
+- Validation: focused temporary surface budget Vitest passed, frontend typecheck passed, touched-file ESLint passed, and `pnpm check` passed format/lint/type/package/scripts/adapters before failing in existing backend `internal/pipeline` TempDir cleanup for `TestPreparedSourceJobIgnoresUnknownSelectionIDsAndExcludesSkippedBlocks`.
+
 ## 2026-06-12 13:28 CEST - Premium Responsive Temporary Source Experience
 - [x] Inspect temporary source responsive surfaces and tests
 - [x] Refine mobile Quick Listen and Cinema temporary actions

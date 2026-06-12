@@ -20,6 +20,10 @@ export interface SurfaceComplexityMetrics {
   readonly primaryActions: number;
   readonly reachableDrawersSheets: number;
   readonly sourceIdentitySummaries?: number;
+  readonly temporaryActions?: number;
+  readonly temporaryDiagnosticsDefaultVisible?: number;
+  readonly temporaryPrimaryActions?: number;
+  readonly temporaryPromotionPrimaryActions?: number;
   readonly visibleBadges?: number;
   readonly visibleActions: number;
 }
@@ -43,6 +47,10 @@ export interface SurfaceComplexityBudget {
   readonly maxPrimaryActions: number;
   readonly maxReachableDrawersSheets: number;
   readonly maxSourceIdentitySummaries?: number;
+  readonly maxTemporaryActions?: number;
+  readonly maxTemporaryDiagnosticsDefaultVisible?: number;
+  readonly maxTemporaryPrimaryActions?: number;
+  readonly maxTemporaryPromotionPrimaryActions?: number;
   readonly maxVisibleBadges?: number;
   readonly maxVisibleActions: number;
   readonly notes: readonly string[];
@@ -149,6 +157,10 @@ export const SURFACE_COMPLEXITY_BUDGETS = {
     maxPrimaryPlaybackGroups: 1,
     maxReachableDrawersSheets: 4,
     maxSourceIdentitySummaries: 1,
+    maxTemporaryActions: 2,
+    maxTemporaryDiagnosticsDefaultVisible: 0,
+    maxTemporaryPrimaryActions: 0,
+    maxTemporaryPromotionPrimaryActions: 0,
     maxVisibleActions: 16,
     maxVisibleBadges: 2,
     notes: [
@@ -167,6 +179,10 @@ export const SURFACE_COMPLEXITY_BUDGETS = {
     maxPanelsOpenByDefault: 12,
     maxPrimaryActions: 26,
     maxReachableDrawersSheets: 10,
+    maxTemporaryActions: 5,
+    maxTemporaryDiagnosticsDefaultVisible: 0,
+    maxTemporaryPrimaryActions: 2,
+    maxTemporaryPromotionPrimaryActions: 0,
     maxVisibleActions: 68,
     notes: ["Review may expose batch actions, but one review action group remains primary."],
     tier: "dense",
@@ -181,6 +197,10 @@ export const SURFACE_COMPLEXITY_BUDGETS = {
     maxPanelsOpenByDefault: 10,
     maxPrimaryActions: 12,
     maxReachableDrawersSheets: 6,
+    maxTemporaryActions: 5,
+    maxTemporaryDiagnosticsDefaultVisible: 0,
+    maxTemporaryPrimaryActions: 1,
+    maxTemporaryPromotionPrimaryActions: 0,
     maxVisibleActions: 40,
     notes: ["Quick settings should expose common settings; expert groups own deeper controls."],
     tier: "standard",
@@ -225,6 +245,10 @@ export const SURFACE_COMPLEXITY_BUDGETS = {
     maxPanelsOpenByDefault: 12,
     maxPrimaryActions: 26,
     maxReachableDrawersSheets: 10,
+    maxTemporaryActions: 8,
+    maxTemporaryDiagnosticsDefaultVisible: 0,
+    maxTemporaryPrimaryActions: 3,
+    maxTemporaryPromotionPrimaryActions: 1,
     maxVisibleActions: 68,
     notes: ["Workspace can coordinate surfaces, but hidden rails must not become required paths."],
     tier: "dense",
@@ -248,6 +272,7 @@ export const SURFACE_COMPLEXITY_SCENARIO_BUDGETS = {
   "voice-dashboard": SURFACE_COMPLEXITY_BUDGETS.commandPalette,
   "website-cinema": SURFACE_COMPLEXITY_BUDGETS.websiteReadCalm,
   "website-cinema-calm-read": SURFACE_COMPLEXITY_BUDGETS.websiteReadCalm,
+  "website-cinema-temporary-read": SURFACE_COMPLEXITY_BUDGETS.websiteReadCalm,
   "workspace-intake": SURFACE_COMPLEXITY_BUDGETS.workspace,
   "workspace-preview": SURFACE_COMPLEXITY_BUDGETS.workspace,
   "workspace-review": SURFACE_COMPLEXITY_BUDGETS.reviewWorkspace,
@@ -327,6 +352,30 @@ export function evaluateSurfaceComplexity(
     "expandedPolicySourceDetails",
     metrics.expandedPolicySourceDetails,
     budget.maxExpandedPolicySourceDetails,
+  );
+  appendOptionalResult(
+    results,
+    "temporaryActions",
+    metrics.temporaryActions,
+    budget.maxTemporaryActions,
+  );
+  appendOptionalResult(
+    results,
+    "temporaryPrimaryActions",
+    metrics.temporaryPrimaryActions,
+    budget.maxTemporaryPrimaryActions,
+  );
+  appendOptionalResult(
+    results,
+    "temporaryPromotionPrimaryActions",
+    metrics.temporaryPromotionPrimaryActions,
+    budget.maxTemporaryPromotionPrimaryActions,
+  );
+  appendOptionalResult(
+    results,
+    "temporaryDiagnosticsDefaultVisible",
+    metrics.temporaryDiagnosticsDefaultVisible,
+    budget.maxTemporaryDiagnosticsDefaultVisible,
   );
   return results;
 }
