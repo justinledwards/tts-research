@@ -141,7 +141,9 @@ export function buildCinemaTemporaryInspectorSections(
             ["Origin", model.originLabel],
             ["Provenance", model.contract.provenanceLabel],
             ["Session", model.contract.temporarySourceId ?? "Temporary session"],
+            ["Expiry policy", TEMPORARY_SOURCE_COPY.terms.expiresAfterInactivity],
             ["Expiry", model.contract.expiryLabel],
+            ["Status", model.contract.statusLabel],
             ["Artifacts", artifactCountLabel(model.artifactCount)],
           ]}
           notes={model.warnings?.map((warning) => ["Warning", warning])}
@@ -164,6 +166,7 @@ export function buildCinemaTemporaryInspectorSections(
           }
           facts={[
             ["Block status", temporaryReviewStatusLabel(model.reviewEditCount)],
+            ["Review scope", TEMPORARY_SOURCE_COPY.terms.sessionOnlyReviewNote],
             ["Review edits", model.reviewEditCount.toLocaleString()],
             ["Repair notes", (model.repairNotes?.length ?? 0).toLocaleString()],
             ["Warnings", (model.warnings?.length ?? 0).toLocaleString()],
@@ -197,6 +200,7 @@ export function buildCinemaTemporaryInspectorSections(
             ["Skipped content", model.skippedCount.toLocaleString()],
             ["Audio", model.audioStatus],
             ["Timing", model.timingConfidence],
+            ["Promotion boundary", "No local cache paths are included"],
           ]}
           notes={model.diagnostics?.map((diagnostic) => ["Diagnostic", diagnostic])}
         />
@@ -213,6 +217,7 @@ export function buildCinemaTemporaryInspectorSections(
         <TemporaryFacts
           facts={[
             ["Session policy", model.policyLabel],
+            ["Source pin preview", TEMPORARY_SOURCE_COPY.promotion.sourcePin],
             ["Temporary policy", "Applies only while this session exists"],
             ["Promotion defaults", "Project defaults are considered only when keeping the source"],
           ]}
@@ -257,8 +262,11 @@ export function buildCinemaTemporaryInspectorSections(
               : undefined
           }
           facts={[
+            ["Action", TEMPORARY_SOURCE_COPY.terms.keepInProject],
             ["Keeps", "A durable project copy"],
+            ["Promotion status", model.contract.statusLabel],
             ["Temporary session", "Remains temporary until discarded or expired"],
+            ["Discard action", TEMPORARY_SOURCE_COPY.terms.discardTemporarySource],
             ["Available artifacts", promotionItemsLabel(model.promotionItems)],
           ]}
           notes={model.promotionItems.map((item) => ["Can keep", item])}

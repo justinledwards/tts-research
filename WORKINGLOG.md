@@ -1,3 +1,10 @@
+## 2026-06-13 12:12 CEST - Inspector Temporary Source Tabs
+- [x] Inspect context panel and Cinema inspector tab model
+- [x] Add temporary source overview, diagnostics, policy, history, and promotion coverage
+- [x] Add focused regression coverage
+- [x] Run project checks
+- Validation: frontend focused test entrypoints passed; frontend typecheck passed; `git diff --check` passed; `pnpm e2e:context-panel` passed. `pnpm e2e:surface-complexity` failed in the existing UI action audit review gate. `pnpm validate:ux-final` passed Teleprompt memory, read-along sync, accessibility, responsive snapshots, command palette, and context panel, then failed on existing UI Action Audit / More menu inventory blockers; final report written to `output/final-ux-gates/latest/final-ux-summary.md`.
+
 ## 2026-06-13 11:43 CEST - Commit Temporary Theatre Continuity
 - [x] Review and stage temporary Theatre continuity files
 - [x] Commit temporary Theatre continuity work package

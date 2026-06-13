@@ -283,6 +283,7 @@ describe("CinemaInspectorDock", () => {
     );
     expect(overview).toContain("Temporary source");
     expect(overview).toContain("Temporary Story");
+    expect(overview).toContain("Expires after inactivity");
     expect(overview).toContain("Expires Jun 12, 2026, 1:40 PM");
 
     const review = renderToStaticMarkup(
@@ -296,6 +297,7 @@ describe("CinemaInspectorDock", () => {
         onPinnedPanelChange={() => null}
       />,
     );
+    expect(review).toContain("Session-only review note");
     expect(review).toContain("No review edits or repair notes exist");
 
     const diagnostics = renderToStaticMarkup(
@@ -309,6 +311,7 @@ describe("CinemaInspectorDock", () => {
         onPinnedPanelChange={() => null}
       />,
     );
+    expect(diagnostics).toContain("No local cache paths are included");
     expect(diagnostics).toContain("No generated audio, skipped content, timing map");
 
     const history = renderToStaticMarkup(
@@ -336,6 +339,8 @@ describe("CinemaInspectorDock", () => {
       />,
     );
     expect(policy).toContain("Promotion");
+    expect(policy).toContain("Keep in project");
+    expect(policy).toContain("Discard temporary source");
     expect(policy).toContain("Temporary source text, Project source pin");
   });
 

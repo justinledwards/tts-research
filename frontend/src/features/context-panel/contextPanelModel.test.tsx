@@ -7,6 +7,7 @@ import {
   WorkspaceContextInspector,
   type WorkspaceContextInspectorProps,
 } from "./WorkspaceContextInspector";
+import { CONTEXT_PANEL_TAB_META } from "./contextPanelTabs";
 import {
   resolveWorkspaceInspectorTarget,
   type WorkspaceInspectorContextTargets,
@@ -89,6 +90,21 @@ describe("context panel inspector contract", () => {
     ]);
 
     expect(tabs[0]?.sections.map((section) => section.title)).toEqual(["Blocker", "Source"]);
+  });
+
+  it("publishes empty-state copy for every canonical inspector tab", () => {
+    expect(Object.values(CONTEXT_PANEL_TAB_META).map((tab) => tab.id)).toEqual([
+      "diagnostics",
+      "history",
+      "overview",
+      "policy",
+      "review",
+    ]);
+    for (const tab of Object.values(CONTEXT_PANEL_TAB_META)) {
+      expect(tab.emptyState.length).toBeGreaterThan(0);
+      expect(tab.detail.length).toBeGreaterThan(0);
+      expect(tab.keywords.length).toBeGreaterThan(0);
+    }
   });
 
   it("renders a collapsed inspector affordance without section chrome", () => {
@@ -413,6 +429,7 @@ describe("context panel inspector contract", () => {
       />,
     );
     expect(overview).toContain("Temporary Draft");
+    expect(overview).toContain("Expires after inactivity");
     expect(overview).toContain("Expires Jun 12, 2026, 1:40 PM");
 
     const review = renderToStaticMarkup(
@@ -424,6 +441,7 @@ describe("context panel inspector contract", () => {
         })}
       />,
     );
+    expect(review).toContain("Session-only review note");
     expect(review).toContain("No review edits or repair notes exist");
 
     const diagnostics = renderToStaticMarkup(
@@ -444,6 +462,7 @@ describe("context panel inspector contract", () => {
         })}
       />,
     );
+    expect(diagnostics).toContain("No local cache paths are included");
     expect(diagnostics).toContain("No generated audio, skipped content, timing map");
 
     const history = renderToStaticMarkup(
@@ -467,6 +486,8 @@ describe("context panel inspector contract", () => {
       />,
     );
     expect(policy).toContain("Promotion");
+    expect(policy).toContain("Keep in project");
+    expect(policy).toContain("Discard temporary source");
     expect(policy).toContain("Temporary source text, Project source pin");
   });
 });

@@ -742,7 +742,13 @@ function temporaryWorkspaceSections(
             { label: "Title", value: temporary.title },
             { label: "Origin", value: temporary.originLabel },
             { label: "Session", value: temporary.sessionId },
+            {
+              label: "Expiry policy",
+              tone: "metadata",
+              value: TEMPORARY_SOURCE_COPY.terms.expiresAfterInactivity,
+            },
             { label: "Expiry", tone: "warning", value: temporary.expiryLabel },
+            { label: "Status", value: temporary.statusLabel },
             { label: "Artifacts", value: artifactCountLabel(temporary.artifactCount) },
           ]}
           notes={temporary.warnings?.map((warning) => ({
@@ -764,6 +770,7 @@ function temporaryWorkspaceSections(
         <SourceInspectorSection
           facts={[
             { label: "Block status", value: temporaryReviewStatusLabel(temporary.reviewEditCount) },
+            { label: "Review scope", value: TEMPORARY_SOURCE_COPY.terms.sessionOnlyReviewNote },
             { label: "Review edits", value: temporary.reviewEditCount.toLocaleString() },
             { label: "Repair notes", value: temporary.repairNoteCount.toLocaleString() },
             { label: "Warnings", value: temporary.warningCount.toLocaleString() },
@@ -798,6 +805,7 @@ function temporaryWorkspaceSections(
             { label: "Skipped content", value: temporary.skippedCount.toLocaleString() },
             { label: "Audio", value: temporary.audioStatus },
             { label: "Timing", value: temporary.timingConfidence },
+            { label: "Promotion boundary", value: "No local cache paths are included" },
           ]}
           notes={
             temporary.audioStatus === "No generated audio" && temporary.skippedCount === 0
@@ -851,6 +859,7 @@ function temporaryWorkspaceSections(
         <PolicyInspectorSection
           facts={[
             { label: "Session policy", value: temporary.policyLabel },
+            { label: "Source pin preview", value: TEMPORARY_SOURCE_COPY.promotion.sourcePin },
             { label: "Temporary policy", value: "Applies only while this session exists" },
             {
               label: "Promotion defaults",
@@ -869,8 +878,14 @@ function temporaryWorkspaceSections(
       children: (
         <PolicyInspectorSection
           facts={[
+            { label: "Action", value: TEMPORARY_SOURCE_COPY.terms.keepInProject },
             { label: "Keeps", value: "A durable project copy" },
+            { label: "Promotion status", value: temporary.statusLabel },
             { label: "Temporary session", value: "Remains temporary until discarded or expired" },
+            {
+              label: "Discard action",
+              value: TEMPORARY_SOURCE_COPY.terms.discardTemporarySource,
+            },
             { label: "Available artifacts", value: promotionItemsLabel(temporary.promotionItems) },
           ]}
           notes={temporary.promotionItems.map((item) => ({
