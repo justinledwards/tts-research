@@ -2257,6 +2257,7 @@ function TemporarySourceBehaviorPanel({
         <Toggle
           checked={settings.returnContextMemory !== "forgetOnClose"}
           data-testid="settings-temporary-remember-session"
+          data-ui-action-destructive="false"
           detail="Keeps return position, bookmarks, and progress for temporary sources until they expire or you clear them. Temporary work is not project history."
           label="Remember temporary work for this session"
           onChange={(checked) => {
@@ -2302,6 +2303,7 @@ function TemporarySourceBehaviorPanel({
               (option) => option.value === settings.webpageExtractionMode,
             )?.detail ?? ""
           }
+          destructive={false}
           label="Default temporary webpage extraction"
           testId="settings-temporary-webpage-extraction"
           value={settings.webpageExtractionMode}
@@ -2416,6 +2418,7 @@ function TemporarySourceBehaviorPanel({
 
 function TemporarySelect({
   children,
+  destructive,
   detail,
   label,
   testId,
@@ -2423,6 +2426,7 @@ function TemporarySelect({
   onChange,
 }: Readonly<{
   children: ReactNode;
+  destructive?: boolean;
   detail: string;
   label: string;
   testId: string;
@@ -2438,6 +2442,7 @@ function TemporarySelect({
       <select
         className={`${fieldControlClassName} min-w-0`}
         data-testid={testId}
+        data-ui-action-destructive={destructive === undefined ? undefined : String(destructive)}
         onChange={(event) => {
           onChange(event.currentTarget.value);
         }}

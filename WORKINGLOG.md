@@ -2280,3 +2280,13 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] add or update responsive regression coverage
 - [x] run local review commands
 - Validation: focused frontend QuickListen, Settings, Cinema, Theatre, and temporary surface budget tests passed; frontend typecheck, format, lint, and diff check passed. `pnpm e2e:responsive-snapshots` passed. `pnpm e2e:surface-complexity` failed because the upstream UI action audit exited nonzero before budget evaluation; its generated inventory still showed Cinema More actions for Book, Document, and Website surfaces. `pnpm validate:ux-final` passed responsive, command palette, context panel, accessibility, readalong sync, and teleprompt memory gates, then failed on existing UI action audit timeout waiting for `preview-generation-cockpit` and the derived More-menu gate.
+
+## 2026-06-13 18:24 CEST - Stable Action Evidence Surfaces
+
+- [x] reproduce action inventory, stage traversal, and evidence failures
+- [x] add stable ids, owners, disabled reasons, and fixture coverage
+- [x] update review/evidence tests and artifacts
+- [x] fix temporary dashboard card null artifact handling
+- [x] clarify non-destructive temporary behavior settings metadata
+- [x] run local review commands
+- Validation: `pnpm check`, `pnpm e2e:workspace-flow`, and `pnpm e2e:surface-complexity` passed. `pnpm e2e:ui-actions` refreshed 28 scenarios, 39 screenshots, and 63 temporary-source actions with zero metadata, disabled-reason, or destructive-confirmation findings, then failed on existing activation/duplicate findings plus two Preview inventory timeouts. `REVIEW_ALLOW_DIRTY=1 pnpm review:local` reran checks and hit a transient backend `internal/pipeline` TempDir cleanup failure; isolated `go test ./internal/pipeline` passed.

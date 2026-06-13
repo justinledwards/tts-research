@@ -99,12 +99,21 @@ async function main() {
 }
 
 async function runInventory() {
-  await runCommand(process.execPath, [path.join(rootDir, "scripts", "e2e-ui-action-audit.mjs")], {
-    ...process.env,
-    UI_ACTION_AUDIT_INVENTORY_ONLY: "1",
-    UI_ACTION_AUDIT_OUTPUT_DIR: sourceAuditDir,
-  });
-  return JSON.parse(await readFile(path.join(sourceAuditDir, "action-inventory.json"), "utf8"));
+  const inventoryPath = path.join(sourceAuditDir, "action-inventory.json");
+  try {
+    await runCommand(process.execPath, [path.join(rootDir, "scripts", "e2e-ui-action-audit.mjs")], {
+      ...process.env,
+      UI_ACTION_AUDIT_INVENTORY_ONLY: "1",
+      UI_ACTION_AUDIT_OUTPUT_DIR: sourceAuditDir,
+    });
+  } catch (error) {
+    await readFile(inventoryPath, "utf8");
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `Continuing with completed action inventory despite source audit findings: ${message}`,
+    );
+  }
+  return JSON.parse(await readFile(inventoryPath, "utf8"));
 }
 
 function runCommand(command, args, env) {

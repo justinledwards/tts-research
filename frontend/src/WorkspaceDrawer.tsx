@@ -1096,6 +1096,7 @@ function TemporarySourceCard({
           </button>
           <button
             className="min-h-11 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-surface-primary)] px-3 text-xs font-semibold text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)] disabled:opacity-50 sm:h-9 sm:min-h-0"
+            data-confirm={TEMPORARY_SOURCE_COPY.confirmation.discard}
             data-disabled-reason={discardDisabledReason}
             data-testid={`ui-action-temporary-source-discard-${session.id}`}
             data-ui-action-owner="temporary-source"
@@ -1116,7 +1117,10 @@ function TemporarySourceCard({
           ["Source type", temporarySourceTypeLabel(session)],
           ["Audio readiness", audioReadiness],
           ["Storage", formatBytes(storageUsage?.bytes ?? 0)],
-          ["Artifacts", session.artifacts.length.toLocaleString()],
+          [
+            "Artifacts",
+            (Array.isArray(session.artifacts) ? session.artifacts.length : 0).toLocaleString(),
+          ],
           ["Words", session.wordCount.toLocaleString()],
           ["Promotion", session.promotionStatus],
         ]}

@@ -256,7 +256,8 @@ function isActiveJobStatus(status: string): boolean {
 }
 
 function hasTemporaryGeneratedAudio(session: TemporarySourceSession): boolean {
-  return session.artifacts.some(
+  const artifacts = Array.isArray(session.artifacts) ? session.artifacts : [];
+  return artifacts.some(
     (artifact) => artifact.kind === "generatedAudio" || artifact.kind === "previewAudio",
   );
 }

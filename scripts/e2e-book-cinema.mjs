@@ -563,7 +563,7 @@ async function runWorkspaceFlowUX(browser, projectId) {
     await page.getByTestId("preview-generated-audio-empty-state").waitFor();
     await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
     await page.getByText("Teleprompt Studio").first().waitFor();
-    await page.getByTestId("ui-action-teleprompt-preset-largeText").click();
+    await clickTelepromptDisplayPreset(page, "ui-action-teleprompt-preset-largeText");
     await page.getByTestId("ui-action-teleprompt-mirror").check();
     await page.waitForFunction(() =>
       /Default voice|Default mock narrator|Default Kokoro|Heart \(af_heart\)/i.test(
@@ -620,6 +620,18 @@ async function runWorkspaceFlowUX(browser, projectId) {
   } finally {
     await context.close();
   }
+}
+
+async function clickTelepromptDisplayPreset(page, testId) {
+  const presetMenu = page.locator("[data-teleprompt-preset-menu='display']").first();
+  await presetMenu.evaluate((element) => {
+    if (element instanceof HTMLDetailsElement) {
+      element.open = true;
+    }
+  });
+  const preset = page.getByTestId(testId);
+  await preset.scrollIntoViewIfNeeded();
+  await preset.click();
 }
 
 async function exerciseFirstRunDemoPath(page, screenshots) {

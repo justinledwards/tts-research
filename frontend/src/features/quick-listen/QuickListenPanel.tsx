@@ -744,6 +744,7 @@ function TemporarySourceRow({
       className="grid gap-2 rounded-md border p-3 vs-border vs-surface sm:grid-cols-[minmax(0,1fr)_auto]"
       data-temporary-source-session-id={source.id}
       data-testid={`quick-listen-temporary-source-${source.id}`}
+      data-ui-action-surface="Quick Listen"
     >
       <div className="min-w-0">
         <div className="mb-2 flex flex-wrap gap-2">
@@ -772,6 +773,7 @@ function TemporarySourceRow({
           className="col-span-2 sm:col-span-auto"
           data-testid={`ui-action-quick-listen-temporary-open-${source.id}`}
           data-ui-action-owner="temporary-source"
+          data-ui-action-surface="Quick Listen"
           disabledReason={openDisabledReason}
           disabled={source.status === "expired"}
           onClick={() => {
@@ -787,6 +789,7 @@ function TemporarySourceRow({
           className="min-w-0"
           data-testid={`ui-action-quick-listen-temporary-extend-${source.id}`}
           data-ui-action-owner="temporary-source"
+          data-ui-action-surface="Quick Listen"
           onClick={() => {
             void onExtend(source, expiryHours);
           }}
@@ -797,8 +800,10 @@ function TemporarySourceRow({
         </Button>
         <Button
           className="min-w-0"
+          data-confirm={TEMPORARY_SOURCE_COPY.confirmation.removeGeneratedAudio}
           data-testid={`ui-action-quick-listen-temporary-clean-audio-${source.id}`}
           data-ui-action-owner="temporary-source"
+          data-ui-action-surface="Quick Listen"
           onClick={() => {
             if (
               askBeforeAudioDiscard &&
@@ -815,8 +820,10 @@ function TemporarySourceRow({
         </Button>
         <Button
           className="min-w-0"
+          data-confirm={TEMPORARY_SOURCE_COPY.confirmation.removeAllArtifacts}
           data-testid={`ui-action-quick-listen-temporary-clean-artifacts-${source.id}`}
           data-ui-action-owner="temporary-source"
+          data-ui-action-surface="Quick Listen"
           onClick={() => {
             if (!globalThis.confirm(TEMPORARY_SOURCE_COPY.confirmation.removeAllArtifacts)) {
               return;
@@ -830,8 +837,10 @@ function TemporarySourceRow({
         </Button>
         <Button
           className="col-span-2 min-w-0 sm:col-span-auto"
+          data-confirm={TEMPORARY_SOURCE_COPY.confirmation.discard}
           data-testid={`ui-action-quick-listen-temporary-discard-${source.id}`}
           data-ui-action-owner="temporary-source"
+          data-ui-action-surface="Quick Listen"
           onClick={() => {
             if (!globalThis.confirm(TEMPORARY_SOURCE_COPY.confirmation.discard)) {
               return;

@@ -25,10 +25,10 @@ export const TEMPORARY_SOURCE_COPY = {
     clearExpired: "Clear expired temporary work",
     discard: "Discard temporary source",
     extendExpiry: "Extend expiry",
-    generatedAudioOnly: "Generated audio only",
+    generatedAudioOnly: "Remove generated temporary audio",
     keep: "Keep in project",
     open: "Open temporary source",
-    removeTemporaryArtifacts: "Temporary artifacts",
+    removeTemporaryArtifacts: "Remove temporary artifacts",
   },
   confirmation: {
     clearExpired:

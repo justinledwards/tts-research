@@ -414,18 +414,17 @@ async function runScenarioBatches({
   const workersToStart = clampWorkerCount(Math.min(rawWorkerLimit, scenarioPlan.length));
   const results = Array(scenarioPlan.length);
   let nextIndex = 0;
-  let failure;
   const runWorker = async () => {
     const browser = await chromium.launch({ headless: process.env.E2E_HEADLESS !== "0" });
     try {
-      while (!failure && nextIndex < scenarioPlan.length) {
+      while (nextIndex < scenarioPlan.length) {
         const planIndex = nextIndex++;
         const plan = scenarioPlan[planIndex];
         if (!plan) {
           continue;
         }
         const scenarioStartedAt = Date.now();
-        const scenarioResult = await runScenarioTask(browser, plan.scenario, {
+        const scenarioResult = await runScenarioTaskSafely(browser, plan.scenario, {
           inventoryOnly: inventoryMode,
           maxActions: actionLimit,
         });
@@ -437,27 +436,50 @@ async function runScenarioBatches({
           index: plan.index,
           replayResults: scenarioResult.results.length,
           scenarioId: plan.scenario.id,
-          status: "completed",
+          status: scenarioResult.status ?? "completed",
         };
         results[plan.index] = {
           ...scenarioResult,
           durationMs,
         };
       }
-    } catch (error) {
-      if (!failure) {
-        failure = error;
-      }
-      throw error;
     } finally {
       await browser.close();
     }
   };
   await Promise.all(Array.from({ length: workersToStart }, runWorker));
-  if (failure) {
-    throw failure;
-  }
   return results;
+}
+
+async function runScenarioTaskSafely(browser, scenario, options) {
+  try {
+    return await runScenarioTask(browser, scenario, options);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const screenshot = path.join(screenshotsDir, `${scenario.id}-inventory-failure.png`);
+    return {
+      actions: [],
+      results: [
+        {
+          actionId: `scenario:${scenario.id}`,
+          activationMode: "inventory",
+          error: message,
+          label: scenario.label,
+          outcome: "scenario inventory failed",
+          passed: false,
+          reason: message,
+          scenarioId: scenario.id,
+          screenshot,
+          status: "failed",
+          surface: scenario.surface,
+        },
+      ],
+      screenshots: [screenshot],
+      scenarioId: scenario.id,
+      status: "failed",
+      surfaceComplexity: null,
+    };
+  }
 }
 
 async function runScenarioTask(browser, scenario, options) {
@@ -555,6 +577,398 @@ async function installProviderProfileRoutes(page) {
       status: 200,
     });
   });
+}
+
+async function installTemporarySourceFixtureRoutes(page) {
+  const fixtures = temporarySourceFixtures();
+  const sourceById = new Map(fixtures.sources.map((source) => [source.id, source]));
+  const envelopeFor = (source) => ({
+    projectId: "",
+    scope: "temporary",
+    source,
+    sourceOwner: "temporary",
+    temporarySourceId: source.temporarySourceId,
+  });
+  await page.route("**/api/temporary-sources", async (route) => {
+    const method = route.request().method();
+    if (method === "GET") {
+      await route.fulfill({
+        body: JSON.stringify(fixtures.sources.map(envelopeFor)),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.route("**/api/temporary-sources/jobs", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify(fixtures.jobs),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.route("**/api/temporary-sources/storage/summary", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify(fixtures.storage),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.route("**/api/temporary-sources/*/cleanup", async (route) => {
+    const id = temporarySourceIdFromPath(route.request().url());
+    const source = sourceById.get(id) ?? fixtures.sources[0];
+    const payload = JSON.parse(route.request().postData() || "{}");
+    const action = payload.action ?? "discardNow";
+    const updatedSource =
+      action === "removeGeneratedAudioOnly"
+        ? {
+            ...source,
+            status: "stale",
+            title: `${source.title} · audio removed`,
+            updatedAt: "2026-06-13T10:05:00Z",
+          }
+        : action === "extendSession"
+          ? {
+              ...source,
+              expiresAt: "2099-01-08T00:00:00Z",
+              updatedAt: "2026-06-13T10:05:00Z",
+            }
+          : null;
+    await route.fulfill({
+      body: JSON.stringify({
+        action,
+        bytesRemoved: 0,
+        message:
+          action === "removeAllTemporaryArtifacts"
+            ? "Temporary artifacts were removed. Project sources are unchanged."
+            : "Temporary source fixture cleanup completed. Project sources are unchanged.",
+        source: updatedSource,
+        status: updatedSource?.status ?? "expired",
+        temporarySourceId: source.id,
+      }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.route("**/api/source-preps/*/speech-policy/preview", async (route) => {
+    const sourceId = sourcePrepIdFromPath(route.request().url());
+    const source = sourceById.get(sourceId);
+    await route.fulfill({
+      body: JSON.stringify(
+        source ? temporaryPreparedSourceFixture(source) : { error: "source not found" },
+      ),
+      contentType: "application/json",
+      status: source ? 200 : 404,
+    });
+  });
+  await page.route("**/api/temporary-sources/*/reopen", async (route) => {
+    const id = temporarySourceIdFromPath(route.request().url());
+    const source = sourceById.get(id);
+    await route.fulfill({
+      body: JSON.stringify(source ? envelopeFor(source) : { error: "temporary fixture not found" }),
+      contentType: "application/json",
+      status: source ? 200 : 404,
+    });
+  });
+  await page.route("**/api/temporary-sources/*/promote", async (route) => {
+    const id = temporarySourceIdFromPath(route.request().url());
+    await route.fulfill({
+      body: JSON.stringify({
+        id: `promoted-${id}`,
+        projectId: "default",
+        sourceName: "Promoted temporary fixture",
+        status: "ready",
+        temporarySourceId: "",
+        title: "Promoted temporary fixture",
+      }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.route("**/api/temporary-sources/*", async (route) => {
+    const method = route.request().method();
+    const pathname = new URL(route.request().url()).pathname;
+    if (
+      pathname.endsWith("/jobs") ||
+      pathname.endsWith("/storage/summary") ||
+      pathname.endsWith("/cleanup") ||
+      pathname.endsWith("/reopen") ||
+      pathname.endsWith("/promote")
+    ) {
+      await route.fallback();
+      return;
+    }
+    const id = temporarySourceIdFromPath(route.request().url());
+    const source = sourceById.get(id);
+    if (method === "GET" || method === "POST") {
+      if (source) {
+        await route.fulfill({
+          body: JSON.stringify(envelopeFor(source)),
+          contentType: "application/json",
+          status: 200,
+        });
+        return;
+      }
+      await route.fulfill({
+        body: JSON.stringify({ error: "temporary source fixture not found" }),
+        contentType: "application/json",
+        status: 404,
+      });
+      return;
+    }
+    if (method === "DELETE") {
+      await route.fulfill({ status: 204 });
+      return;
+    }
+    await route.fallback();
+  });
+}
+
+function temporarySourceIdFromPath(url) {
+  const pathname = new URL(url).pathname;
+  const match = pathname.match(/\/api\/temporary-sources\/([^/]+)/);
+  return decodeURIComponent(match?.[1] ?? "");
+}
+
+function sourcePrepIdFromPath(url) {
+  const pathname = new URL(url).pathname;
+  const match = pathname.match(/\/api\/source-preps\/([^/]+)/);
+  return decodeURIComponent(match?.[1] ?? "");
+}
+
+function temporaryPreparedSourceFixture(source) {
+  return {
+    ...source,
+    projectId: "",
+    sourceOwner: "temporary",
+    status: "ready",
+    temporarySourceId: source.id,
+  };
+}
+
+function temporarySourceFixtures() {
+  const sources = [
+    temporarySourceFixture({
+      id: "temp-article",
+      kind: "text",
+      sourceName: "Temporary Article Fixture",
+      status: "previewable",
+      title: "Temporary Article Fixture",
+    }),
+    temporarySourceFixture({
+      id: "temp-url",
+      kind: "url",
+      sourceContentType: "text/html",
+      sourceName: "Temporary Webpage Fixture",
+      sourceUrl: "https://example.test/temporary-evidence",
+      status: "previewable",
+      title: "Temporary Webpage Fixture",
+    }),
+    temporarySourceFixture({
+      id: "temp-file",
+      kind: "file",
+      sourceBytes: 1024,
+      sourceContentType: "text/markdown",
+      sourceName: "temporary-fixture.md",
+      status: "reviewable",
+      title: "Temporary File Fixture",
+    }),
+    temporarySourceFixture({
+      id: "temp-audio-ready",
+      artifacts: [
+        {
+          bytes: 4096,
+          createdAt: "2026-06-13T10:00:00Z",
+          expiresAt: "2099-01-01T00:00:00Z",
+          id: "audio",
+          kind: "audio",
+          scope: "temporary",
+          url: "/api/temporary-sources/temp-audio-ready/artifacts/audio",
+        },
+      ],
+      kind: "text",
+      sourceName: "Temporary Audio Ready Fixture",
+      status: "audio_ready",
+      title: "Temporary Audio Ready Fixture",
+    }),
+    temporarySourceFixture({
+      error: "Provider unavailable for temporary generation.",
+      id: "temp-failed",
+      kind: "text",
+      sourceName: "Temporary Failed Fixture",
+      sourceReadiness: {
+        detail: "Provider unavailable for temporary generation.",
+        failureStage: "policyPreparation",
+        retryAction: "Retry temporary generation",
+        state: "failed",
+      },
+      status: "failed",
+      title: "Temporary Failed Fixture",
+    }),
+    temporarySourceFixture({
+      error:
+        "This temporary source expired. Recovery metadata remains, but generated artifacts were cleaned.",
+      expiresAt: "2020-01-01T00:00:00Z",
+      id: "temp-expired",
+      kind: "text",
+      sourceName: "Temporary Expired Fixture",
+      status: "expired",
+      title: "Temporary Expired Fixture",
+    }),
+    temporarySourceFixture({
+      id: "temp-promoted",
+      kind: "text",
+      promotedProjectId: "project-fixture",
+      promotedSourceId: "source-promoted-fixture",
+      promotionStatus: "promoted",
+      sourceName: "Temporary Promoted Fixture",
+      status: "promoted",
+      title: "Temporary Promoted Fixture",
+    }),
+  ];
+  const jobs = [
+    temporaryVoiceJobFixture({
+      id: "job-temp-audio-ready",
+      status: "completed",
+      temporarySourceId: "temp-audio-ready",
+    }),
+    temporaryVoiceJobFixture({
+      error: "Provider unavailable for temporary generation.",
+      id: "job-temp-failed",
+      status: "failed",
+      temporarySourceId: "temp-failed",
+    }),
+  ];
+  const sourceBytes = sources.reduce((total, source) => total + (source.sourceBytes || 2048), 0);
+  const audioBytes = 4096;
+  return {
+    jobs,
+    sources,
+    storage: {
+      artifactBytes: audioBytes,
+      artifactTypeBytes: { audio: audioBytes },
+      audioBytes,
+      expiredCount: sources.filter((source) => source.status === "expired").length,
+      generatingCount: sources.filter((source) => source.status === "generating").length,
+      progressBytes: 256,
+      sessions: sources.map((source) => ({
+        audioBytes: source.id === "temp-audio-ready" ? audioBytes : 0,
+        bytes: (source.sourceBytes || 2048) + (source.id === "temp-audio-ready" ? audioBytes : 0),
+        sourceBytes: source.sourceBytes || 2048,
+        status: source.status,
+        temporarySourceId: source.id,
+        title: source.title,
+      })),
+      sourceBytes,
+      temporaryCount: sources.length,
+      totalBytes: sourceBytes + audioBytes + 256,
+      updatedAt: "2026-06-13T10:00:00Z",
+    },
+  };
+}
+
+function temporarySourceFixture(overrides = {}) {
+  const id = overrides.id ?? "temp-article";
+  const now = "2026-06-13T10:00:00Z";
+  const expiresAt = overrides.expiresAt ?? "2099-01-01T00:00:00Z";
+  const title = overrides.title ?? "Temporary Article Fixture";
+  const text =
+    "Temporary narration fixture text for action evidence. It stays session scoped until a reviewer explicitly keeps it in a project.";
+  return {
+    artifacts: [
+      {
+        bytes: 2048,
+        createdAt: now,
+        expiresAt,
+        id: "source",
+        kind: "extraction",
+        scope: "temporary",
+        url: `/api/temporary-sources/${id}/artifacts`,
+      },
+      ...(overrides.artifacts ?? []),
+    ],
+    blockCount: 1,
+    blocks: [
+      {
+        endOffset: text.length,
+        id: `${id}-block-1`,
+        index: 0,
+        kind: "body",
+        segments: [{ endOffset: text.length, index: 0, startOffset: 0, text }],
+        speechPolicy: {
+          explanation: "Fixture block is spoken by default.",
+          mode: "speak",
+          profile: "default",
+        },
+        sourceText: text,
+        speakMode: "speak",
+        spokenText: text,
+        startOffset: 0,
+        text,
+      },
+    ],
+    bookmarks: [],
+    createdAt: now,
+    error: overrides.error ?? "",
+    expiresAt,
+    id,
+    kind: overrides.kind ?? "text",
+    lastAccessedAt: now,
+    metadata: {
+      fixture: "ui-action-audit-temporary-source",
+      ownership: "temporary",
+      ...(overrides.metadata ?? {}),
+    },
+    playbackProgress: { currentTimeMs: 0, durationMs: 0, updatedAt: now },
+    projectId: "",
+    promotedProjectId: overrides.promotedProjectId ?? "",
+    promotedSourceId: overrides.promotedSourceId ?? "",
+    promotionStatus: overrides.promotionStatus ?? "notPromoted",
+    reviewNotes: ["Fixture review note remains temporary until Keep in project."],
+    scope: "temporary",
+    segmentCount: overrides.status === "audio_ready" ? 1 : 0,
+    sourceBytes: overrides.sourceBytes ?? text.length,
+    sourceContentType: overrides.sourceContentType ?? "text/plain",
+    sourceName: overrides.sourceName ?? title,
+    sourceOwner: "temporary",
+    sourceReadiness: overrides.sourceReadiness ?? {
+      confidence: "high",
+      detail: "Temporary source fixture is ready for review.",
+      sourceType: overrides.kind === "url" ? "webpage" : "document",
+      state: "ready",
+      structureLabel: "Article",
+      title,
+    },
+    sourceSpeechPolicyProfile: "default",
+    sourceSpeechPolicyOverrides: {},
+    sourceUrl: overrides.sourceUrl ?? "",
+    speechText: text,
+    status: overrides.status ?? "previewable",
+    temporarySourceId: id,
+    text,
+    title,
+    updatedAt: now,
+    warnings: [],
+    wordCount: 17,
+  };
+}
+
+function temporaryVoiceJobFixture({ error = "", id, status, temporarySourceId }) {
+  return {
+    bookSourceId: "",
+    createdAt: "2026-06-13T10:00:00Z",
+    durationMs: status === "completed" ? 1200 : 0,
+    error,
+    id,
+    preparedSourceId: "",
+    progress: status === "completed" ? 1 : 0,
+    progressTargetId: `temporary-source:${temporarySourceId}`,
+    scope: "temporary",
+    status,
+    temporarySourceId,
+    updatedAt: "2026-06-13T10:00:00Z",
+  };
 }
 
 async function inventoryScenario(browser, scenario) {
@@ -1078,6 +1492,30 @@ function createScenarios(seed) {
       surface: "Command Center",
     },
     {
+      description: "Command Center Temporary Work shelf with deterministic temporary fixtures.",
+      id: "command-center-temporary-work",
+      label: "Command Center Temporary Work",
+      open: openCommandCenterTemporaryWork,
+      storageState: projectStorageState(seed.projectId, {
+        sourceMode: "text",
+        stage: "review",
+        text: workspaceText,
+      }),
+      surface: "Command Center",
+    },
+    {
+      description: "Quick Listen recent temporary sources with active and blocked fixture states.",
+      id: "quick-listen-temporary-recent",
+      label: "Quick Listen temporary recent",
+      open: openQuickListenTemporaryRecent,
+      storageState: projectStorageState(seed.projectId, {
+        sourceMode: "text",
+        stage: "intake",
+        text: workspaceText,
+      }),
+      surface: "Quick Listen",
+    },
+    {
       description: "Voice dashboard opened from the workspace rail.",
       id: "voice-dashboard",
       label: "Voice dashboard",
@@ -1280,12 +1718,18 @@ async function runWorkspaceStageTraversal(browser, seed) {
     await page.getByRole("button", { exact: true, name: "Open Teleprompt" }).click();
     await page.getByText("Teleprompt Studio").first().waitFor();
     await page.getByTestId("teleprompt-current-cue-stage").first().waitFor();
+    const presetMenu = page.locator("[data-teleprompt-preset-menu='display']").first();
+    await presetMenu.evaluate((element) => {
+      if (element instanceof HTMLDetailsElement) {
+        element.open = true;
+      }
+    });
     await page.getByTestId("ui-action-teleprompt-preset-largeText").scrollIntoViewIfNeeded();
-    await page.getByTestId("ui-action-teleprompt-preset-largeText").click({ force: true });
+    await page.getByTestId("ui-action-teleprompt-preset-largeText").click();
     await page.getByTestId("ui-action-teleprompt-mirror").scrollIntoViewIfNeeded();
-    await page.getByTestId("ui-action-teleprompt-mirror").click({ force: true });
+    await page.getByTestId("ui-action-teleprompt-mirror").click();
     await page.getByTestId("ui-action-teleprompt-preset-highContrast").scrollIntoViewIfNeeded();
-    await page.getByTestId("ui-action-teleprompt-preset-highContrast").click({ force: true });
+    await page.getByTestId("ui-action-teleprompt-preset-highContrast").click();
     await page
       .getByText(/Default voice|Default mock narrator/)
       .first()
@@ -2341,6 +2785,25 @@ async function openProjectDashboard(page) {
   await selectWorkspaceLayout(page, "Full");
   await page.getByTestId("ui-action-project-dashboard-open-rail").click();
   await page.getByRole("dialog", { name: "Command Center" }).waitFor();
+}
+
+async function openCommandCenterTemporaryWork(page) {
+  await installTemporarySourceFixtureRoutes(page);
+  await openProjectDashboard(page);
+  await page.getByTestId("ui-action-command-center-section-temporary").click();
+  await page.getByTestId("temporary-source-card-temp-article").waitFor({ state: "visible" });
+}
+
+async function openQuickListenTemporaryRecent(page) {
+  await installTemporarySourceFixtureRoutes(page);
+  await gotoApp(page);
+  await page.getByTestId("ui-action-quick-listen-open").filter({ visible: true }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Quick Listen" });
+  await dialog.waitFor({ state: "visible" });
+  await dialog.getByRole("button", { name: "Recent" }).click();
+  await page.getByTestId("quick-listen-temporary-source-temp-article").waitFor({
+    state: "visible",
+  });
 }
 
 async function openVoiceDashboard(page) {
@@ -3553,7 +4016,8 @@ function summarizeGateFindings({
   const duplicateGroupsByCategory = (category) =>
     classifiedDuplicates.filter((duplicate) => duplicate.classification?.category === category);
   const requiredSurfaces = [
-    "Workspace Intake",
+    "Workspace",
+    "Intake",
     "Review",
     "Preview",
     "Teleprompt",
@@ -3561,17 +4025,15 @@ function summarizeGateFindings({
     "Document Cinema",
     "Website Cinema",
     "Settings",
-    "UI Memory",
-    "Speech Policy",
-    "Preview mini-player",
+    "Command Palette",
     "Command Center",
-    "Voice dashboard",
-    "Command palette",
-    "Mobile/narrow More sheet",
+    "Voice Dashboard",
+    "UI Memory",
   ];
   const normalizedSurfaces = new Set(
     [
       ...actions.map((action) => normalizeSurface(action.surface)),
+      ...results.map((result) => normalizeSurface(result.surface)),
       ...scenarios.map((scenario) => normalizeSurface(scenario.surface)),
       ...scenarios.map((scenario) => normalizeSurface(scenario.label)),
     ].filter(Boolean),

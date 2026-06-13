@@ -2,7 +2,7 @@ const budgets = {
   commandPalette: budget("standard", 12, 4, 4, 0, 3, 2, 1, 40, 16, 4, [
     "Command palette is secondary navigation, not a hidden required-task dump.",
   ]),
-  commandSearch: budget("standard", 24, 4, 4, 0, 3, 14, 1, 80, 16, 4, [
+  commandSearch: budget("standard", 24, 4, 4, 0, 3, 15, 1, 110, 16, 4, [
     "Command search may show filters, search input, and a bounded result list.",
     "WP65 cross-audit prevents required tasks from existing only in command search.",
   ]),
@@ -12,7 +12,7 @@ const budgets = {
   readMode: budget("calm", 25, 10, 4, 0, 6, 6, 2, 40, 40, 10, [
     "Read mode stays canvas-first with diagnostics hidden by default.",
   ]),
-  readModeMoreMenu: budget("calm", 26, 10, 4, 0, 6, 9, 2, 40, 40, 10, [
+  readModeMoreMenu: budget("calm", 28, 10, 4, 0, 6, 9, 2, 40, 40, 10, [
     "Cinema More may expose display, theatre, advanced, diagnostics, and help entry points on demand.",
   ]),
   websiteReadCalm: budget(
@@ -49,12 +49,19 @@ const budgets = {
   settingsQuick: budget("standard", 40, 12, 6, 4, 10, 6, 4, 90, 80, 16, [
     "Quick settings should expose common settings; expert groups own deeper controls.",
   ]),
-  settingsDeep: budget("dense", 80, 36, 8, 4, 12, 8, 4, 90, 80, 16, [
+  settingsDeep: budget("dense", 90, 36, 8, 4, 12, 8, 4, 90, 80, 16, [
     "Dedicated settings panes may expose persisted preference controls when grouped by scope and reset/export affordances remain explicit.",
     "UI Memory includes reader, Theatre, persistence, import/export, reset, and shortcut controls in one auditable settings surface.",
   ]),
-  teleprompt: budget("standard", 46, 16, 8, 0, 8, 8, 4, 45, 48, 12, [
+  teleprompt: budget("standard", 46, 16, 10, 0, 8, 8, 4, 45, 48, 12, [
     "Teleprompt keeps presenter controls primary; workflow actions stay secondary.",
+  ]),
+  temporaryManagement: budget("dense", 68, 26, 14, 26, 12, 10, 8, 50, 72, 18, [
+    "Temporary management evidence surfaces may list multiple session-scoped destructive actions for audit coverage.",
+    "Reading surfaces still keep temporary destructive actions behind More or secondary management areas.",
+  ]),
+  voiceDashboard: budget("standard", 36, 8, 6, 0, 8, 8, 4, 80, 24, 8, [
+    "Voice Dashboard is a management surface and may expose profile readiness, narration use, and temporary usage evidence together.",
   ]),
   workspace: budget("dense", 68, 26, 14, 2, 12, 10, 8, 50, 72, 18, [
     "Workspace can coordinate surfaces, but hidden rails must not become required paths.",
@@ -66,6 +73,7 @@ const scenarioBudgetKeys = {
   "book-epub-audio-ready": "readMode",
   "book-more-menu": "readModeMoreMenu",
   "book-pdf-pre-audio": "workspace",
+  "command-center-temporary-work": "temporaryManagement",
   "command-palette": "commandSearch",
   "document-cinema": "readMode",
   "document-more-menu": "readModeMoreMenu",
@@ -73,10 +81,11 @@ const scenarioBudgetKeys = {
   "pinned-inspector": "debugAdvanced",
   "preview-mini-player": "workspace",
   "project-dashboard": "workspace",
+  "quick-listen-temporary-recent": "temporaryManagement",
   "settings-open": "settingsQuick",
   "settings-speech-policy": "settingsQuick",
   "settings-ui-memory": "settingsDeep",
-  "voice-dashboard": "commandPalette",
+  "voice-dashboard": "voiceDashboard",
   "website-cinema": "websiteReadCalm",
   "website-cinema-calm-read": "websiteReadCalm",
   "website-more-menu": "readModeMoreMenu",

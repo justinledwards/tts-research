@@ -5,11 +5,9 @@ import {
   behaviorKeyFor,
   classifyAction,
   classifyOutcome,
-  cssString,
   disabledReasonForLocator,
   expectedTransitionFor,
   groupedActions,
-  isAlreadyActiveAction,
   isAuditRelevantRequest,
   isDestructiveLabel,
   isLocatorDisabled,
@@ -170,6 +168,12 @@ export async function buildActionInventory(page, scenario) {
           intentionallyNoOpReason:
             element.getAttribute("data-ui-noop-reason") ??
             element.getAttribute("data-noop-reason") ??
+            null,
+          explicitDestructive:
+            element.getAttribute("data-ui-action-destructive") ??
+            element
+              .closest("[data-ui-action-destructive]")
+              ?.getAttribute("data-ui-action-destructive") ??
             null,
           operatorAdvanced:
             element.getAttribute("data-ui-action-advanced") === "true" ||
@@ -501,10 +505,23 @@ export async function buildActionInventory(page, scenario) {
     const accessibleName =
       rawAction.accessibleName || rawAction.label || visibleLabel || "Unlabeled control";
     const label = accessibleName || visibleLabel || "Unlabeled control";
-    const actionClass = rawAction.disabled
+    const inferredActionClass = rawAction.disabled
       ? "disabled"
       : classifyAction({ label, role: rawAction.role, tagName: rawAction.tagName });
-    const destructive = actionClass === "destructive" || isDestructiveLabel(label);
+    const explicitDestructive = rawAction.explicitDestructive;
+    const destructive =
+      explicitDestructive === "true"
+        ? true
+        : explicitDestructive === "false"
+          ? false
+          : inferredActionClass === "destructive" || isDestructiveLabel(label);
+    const actionClass = rawAction.disabled
+      ? "disabled"
+      : destructive
+        ? "destructive"
+        : explicitDestructive === "false" && inferredActionClass === "destructive"
+          ? "settings"
+          : inferredActionClass;
     const fingerprint = [
       rawAction.surface,
       rawAction.role ?? rawAction.tagName,
