@@ -10,6 +10,26 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import JSZip from "jszip";
 import {
+  buildCommandMoreCrossAudit,
+  renderCommandMoreCrossAuditMarkdown,
+} from "./command-more-cross-audit.mjs";
+import {
+  complexityActionsFor,
+  isPrimaryComplexityAction,
+  isReachableDrawerSheetAction,
+} from "./e2e-surface-complexity-budget-helpers.mjs";
+import {
+  CINEMA_MORE_ACTION_BUDGETS,
+  CINEMA_MORE_PRIMARY_LABELS,
+  CINEMA_MORE_REQUIRED_SECTIONS,
+  parseProviderProfileArg,
+  providerProfileEngines,
+  providerProfileSummary,
+  resolveProviderProfile,
+  UI_ACTION_AUDIT_SEVERITIES,
+  UI_ACTION_AUDIT_THRESHOLDS,
+} from "./e2e-ui-action-audit-config.mjs";
+import {
   buildActionInventory,
   exerciseAction,
   summarizeDuplicates,
@@ -24,26 +44,6 @@ import {
   classifyDuplicateGroups,
   summarizeDuplicateClassifications,
 } from "./ui-action-duplicate-waivers.mjs";
-import {
-  buildCommandMoreCrossAudit,
-  renderCommandMoreCrossAuditMarkdown,
-} from "./command-more-cross-audit.mjs";
-import {
-  complexityActionsFor,
-  isPrimaryComplexityAction,
-  isReachableDrawerSheetAction,
-} from "./e2e-surface-complexity-budget-helpers.mjs";
-import {
-  CINEMA_MORE_ACTION_BUDGETS,
-  CINEMA_MORE_PRIMARY_LABELS,
-  CINEMA_MORE_REQUIRED_SECTIONS,
-  UI_ACTION_AUDIT_SEVERITIES,
-  UI_ACTION_AUDIT_THRESHOLDS,
-  parseProviderProfileArg,
-  providerProfileEngines,
-  providerProfileSummary,
-  resolveProviderProfile,
-} from "./e2e-ui-action-audit-config.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outputDir =
@@ -2629,8 +2629,16 @@ async function assertCinemaMoreMenu(page, overlay, surface) {
       const visiblePrimarySet = new Set(visiblePrimaryLabels);
       const expectedPrimarySet = new Set(context.primaryLabels);
       const expectedCommandIds = new Map([
+        ["open-inspector", "cinema:source:inspector"],
+        ["source-details", "cinema:source:details"],
+        ["create-audio", "cinema:audio:create"],
+        ["retry-audio", "cinema:audio:retry"],
         ["reader-settings", "settings:field:readerPreferences"],
         ["theatre-mode", "cinema:theatre:open"],
+        ["return-review", "cinema:workflow:return-review"],
+        ["return-preview", "cinema:workflow:return-preview"],
+        ["keep-temporary-source", "cinema:temporary:keep"],
+        ["discard-temporary-source", "cinema:temporary:discard"],
         ["policy-internals", "cinema:advanced:policy-internals"],
         ["source-internals", "cinema:advanced:source-internals"],
         ["diagnostics", "cinema:advanced:diagnostics"],

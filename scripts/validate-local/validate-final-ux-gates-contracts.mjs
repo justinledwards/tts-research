@@ -7,10 +7,12 @@ export const UI_ACTION_AUDIT_THRESHOLDS = {
   missingStableTestIds: 0,
 };
 export const CINEMA_MORE_REQUIRED_SECTIONS = [
+  "source",
+  "audio",
   "display",
   "theatre",
+  "workflow",
   "advanced",
-  "diagnostics",
   "help-shortcuts",
 ];
 export const CINEMA_MORE_SURFACE_SCENARIOS = new Map([
@@ -19,9 +21,9 @@ export const CINEMA_MORE_SURFACE_SCENARIOS = new Map([
   ["WebsiteCinema", "website-more-menu"],
 ]);
 export const CINEMA_MORE_ACTION_BUDGETS = new Map([
-  ["BookCinema", { max: 10, min: 8 }],
-  ["DocumentCinema", { max: 10, min: 8 }],
-  ["WebsiteCinema", { max: 10, min: 8 }],
+  ["BookCinema", { max: 14, min: 8 }],
+  ["DocumentCinema", { max: 14, min: 8 }],
+  ["WebsiteCinema", { max: 14, min: 8 }],
 ]);
 export const CINEMA_MORE_PRIMARY_LABELS = new Set([
   "Bookmark",

@@ -1,7 +1,7 @@
 import type { ContextPanelTabId } from "../context-panel/contextPanelTabs";
 import {
-  CINEMA_ADVANCED_MODE_ACTIONS,
   activeCinemaAdvancedModeAction,
+  CINEMA_ADVANCED_MODE_ACTIONS,
   type CinemaAdvancedModeAction,
   type CinemaAdvancedModeId,
 } from "./cinemaAdvancedMode";
@@ -10,8 +10,12 @@ import type { CinemaFocusMode } from "./model";
 export const CINEMA_MORE_MENU_ID = "cinema-more-menu";
 
 export const CINEMA_MORE_SECTION_IDS = [
+  "source",
+  "audio",
   "display",
   "theatre",
+  "workflow",
+  "temporary",
   "advanced",
   "diagnostics",
   "help-shortcuts",
@@ -20,30 +24,46 @@ export const CINEMA_MORE_SECTION_IDS = [
 export type CinemaMoreSectionId = (typeof CINEMA_MORE_SECTION_IDS)[number];
 
 export type CinemaMoreDisplayActionId = "reader-settings";
+export type CinemaMoreSourceActionId = "open-inspector" | "source-details";
+export type CinemaMoreAudioActionId = "create-audio" | "retry-audio";
+export type CinemaMoreWorkflowActionId = "return-review" | "return-preview";
+export type CinemaMoreTemporaryActionId = "keep-temporary-source" | "discard-temporary-source";
 
 export type CinemaMoreTheatreActionId = "theatre-mode";
 
 export type CinemaMoreNavigationActionId = "command-palette" | "keyboard-shortcuts" | "help-guide";
 
 export type CinemaMoreActionId =
+  | CinemaMoreAudioActionId
   | CinemaAdvancedModeId
   | CinemaMoreDisplayActionId
   | CinemaMoreTheatreActionId
-  | CinemaMoreNavigationActionId;
+  | CinemaMoreNavigationActionId
+  | CinemaMoreSourceActionId
+  | CinemaMoreTemporaryActionId
+  | CinemaMoreWorkflowActionId;
 
 export type CinemaMoreActionKind =
   | "advanced"
+  | "audio"
   | "diagnostics"
   | "display"
   | "help-shortcuts"
+  | "source"
+  | "temporary"
+  | "workflow"
   | "theatre";
 
 export type CinemaMoreActionOwner =
   | "cinema-advanced"
+  | "cinema-audio"
   | "cinema-diagnostics"
   | "cinema-display"
   | "cinema-help"
-  | "cinema-theatre";
+  | "cinema-source"
+  | "cinema-temporary-source"
+  | "cinema-theatre"
+  | "cinema-workflow";
 
 interface CinemaMoreActionBase {
   readonly commandId: string;
@@ -66,6 +86,34 @@ export interface CinemaMoreDisplayAction extends CinemaMoreActionBase {
   readonly kind: "display";
   readonly owner: "cinema-display";
   readonly sectionId: "display";
+}
+
+export interface CinemaMoreSourceAction extends CinemaMoreActionBase {
+  readonly id: CinemaMoreSourceActionId;
+  readonly kind: "source";
+  readonly owner: "cinema-source";
+  readonly sectionId: "source";
+}
+
+export interface CinemaMoreAudioAction extends CinemaMoreActionBase {
+  readonly id: CinemaMoreAudioActionId;
+  readonly kind: "audio";
+  readonly owner: "cinema-audio";
+  readonly sectionId: "audio";
+}
+
+export interface CinemaMoreWorkflowAction extends CinemaMoreActionBase {
+  readonly id: CinemaMoreWorkflowActionId;
+  readonly kind: "workflow";
+  readonly owner: "cinema-workflow";
+  readonly sectionId: "workflow";
+}
+
+export interface CinemaMoreTemporaryAction extends CinemaMoreActionBase {
+  readonly id: CinemaMoreTemporaryActionId;
+  readonly kind: "temporary";
+  readonly owner: "cinema-temporary-source";
+  readonly sectionId: "temporary";
 }
 
 export interface CinemaMoreTheatreAction extends CinemaMoreActionBase {
@@ -105,10 +153,14 @@ export interface CinemaMoreNavigationAction extends CinemaMoreActionBase {
 }
 
 export type CinemaMoreAction =
+  | CinemaMoreAudioAction
   | CinemaMoreAdvancedAction
   | CinemaMoreDiagnosticsAction
   | CinemaMoreDisplayAction
   | CinemaMoreNavigationAction
+  | CinemaMoreSourceAction
+  | CinemaMoreTemporaryAction
+  | CinemaMoreWorkflowAction
   | CinemaMoreTheatreAction;
 
 export type CinemaMoreOperatorAction = CinemaMoreAdvancedAction | CinemaMoreDiagnosticsAction;
@@ -121,6 +173,16 @@ export interface CinemaMoreSection {
 
 export const CINEMA_MORE_SECTIONS: readonly CinemaMoreSection[] = [
   {
+    detail: "Inspector, source summary, and provenance actions.",
+    id: "source",
+    label: "Source",
+  },
+  {
+    detail: "Generated audio creation and recovery.",
+    id: "audio",
+    label: "Audio",
+  },
+  {
     detail: "Reader display and canvas controls.",
     id: "display",
     label: "Display",
@@ -129,6 +191,16 @@ export const CINEMA_MORE_SECTIONS: readonly CinemaMoreSection[] = [
     detail: "Reader-first theatre and fullscreen controls.",
     id: "theatre",
     label: "Theatre",
+  },
+  {
+    detail: "Return to Review or Preview without crowding Read mode.",
+    id: "workflow",
+    label: "Workflow",
+  },
+  {
+    detail: "Session-only temporary source actions.",
+    id: "temporary",
+    label: "Temporary source",
   },
   {
     detail: "Source, policy, and extraction internals.",
@@ -144,6 +216,115 @@ export const CINEMA_MORE_SECTIONS: readonly CinemaMoreSection[] = [
     detail: "Shared command, shortcut, and workflow help.",
     id: "help-shortcuts",
     label: "Help/Shortcuts",
+  },
+] as const;
+
+const CINEMA_MORE_SOURCE_ACTIONS: readonly CinemaMoreSourceAction[] = [
+  {
+    commandId: "cinema:source:inspector",
+    detail: "Open the Cinema Inspector for source, policy, and extraction context.",
+    id: "open-inspector",
+    keywords: ["inspector", "source", "context", "details"],
+    kind: "source",
+    label: "Open Inspector",
+    owner: "cinema-source",
+    reason: "Inspector access stays available from More on narrow surfaces.",
+    sectionId: "source",
+    testId: "ui-action-cinema-more-open-inspector",
+  },
+  {
+    commandId: "cinema:source:details",
+    detail: "Show source details and provenance for this Cinema source.",
+    id: "source-details",
+    keywords: ["source", "details", "provenance", "metadata"],
+    kind: "source",
+    label: "Source details",
+    owner: "cinema-source",
+    reason: "Source details are discoverable without adding another Read-mode control.",
+    sectionId: "source",
+    testId: "ui-action-cinema-more-source-details",
+  },
+] as const;
+
+const CINEMA_MORE_AUDIO_ACTIONS: readonly CinemaMoreAudioAction[] = [
+  {
+    commandId: "cinema:audio:create",
+    detail: "Create generated audio for the active Cinema source.",
+    id: "create-audio",
+    keywords: ["audio", "create", "generate", "temporary"],
+    kind: "audio",
+    label: "Create audio",
+    owner: "cinema-audio",
+    reason: "Audio generation is available from More when the current source can be narrated.",
+    sectionId: "audio",
+    testId: "ui-action-cinema-more-create-audio",
+  },
+  {
+    commandId: "cinema:audio:retry",
+    detail: "Retry generated audio for the active Cinema source.",
+    id: "retry-audio",
+    keywords: ["audio", "retry", "recover", "generation"],
+    kind: "audio",
+    label: "Retry audio",
+    owner: "cinema-audio",
+    reason:
+      "Retry stays contextual to audio recovery instead of becoming a permanent header action.",
+    sectionId: "audio",
+    testId: "ui-action-cinema-more-retry-audio",
+  },
+] as const;
+
+const CINEMA_MORE_WORKFLOW_ACTIONS: readonly CinemaMoreWorkflowAction[] = [
+  {
+    commandId: "cinema:workflow:return-review",
+    detail: "Return to Review for the active source.",
+    id: "return-review",
+    keywords: ["review", "return", "workflow"],
+    kind: "workflow",
+    label: "Return to Review",
+    owner: "cinema-workflow",
+    reason: "Review return is a contextual workflow action for mobile Cinema.",
+    sectionId: "workflow",
+    testId: "ui-action-cinema-more-return-review",
+  },
+  {
+    commandId: "cinema:workflow:return-preview",
+    detail: "Return to Preview for the active source.",
+    id: "return-preview",
+    keywords: ["preview", "return", "workflow"],
+    kind: "workflow",
+    label: "Return to Preview",
+    owner: "cinema-workflow",
+    reason: "Preview return is a contextual workflow action for mobile Cinema.",
+    sectionId: "workflow",
+    testId: "ui-action-cinema-more-return-preview",
+  },
+] as const;
+
+const CINEMA_MORE_TEMPORARY_ACTIONS: readonly CinemaMoreTemporaryAction[] = [
+  {
+    commandId: "cinema:temporary:keep",
+    detail: "Keep this temporary source in the project.",
+    id: "keep-temporary-source",
+    keywords: ["temporary", "keep", "project", "promote"],
+    kind: "temporary",
+    label: "Keep in project",
+    owner: "cinema-temporary-source",
+    reason: "Keeping a temporary source must be an explicit user action.",
+    sectionId: "temporary",
+    testId: "ui-action-cinema-more-keep-temporary-source",
+  },
+  {
+    commandId: "cinema:temporary:discard",
+    detail: "Discard only this temporary source and its session-scoped artifacts.",
+    id: "discard-temporary-source",
+    keywords: ["temporary", "discard", "cleanup"],
+    kind: "temporary",
+    label: "Discard temporary source",
+    owner: "cinema-temporary-source",
+    reason: "Discard uses temporary cleanup and does not delete project sources.",
+    sectionId: "temporary",
+    testId: "ui-action-cinema-more-discard-temporary-source",
   },
 ] as const;
 
@@ -224,8 +405,12 @@ const CINEMA_MORE_NAVIGATION_ACTIONS: readonly CinemaMoreNavigationAction[] = [
 ] as const;
 
 export const CINEMA_MORE_ACTIONS: readonly CinemaMoreAction[] = [
+  ...CINEMA_MORE_SOURCE_ACTIONS,
+  ...CINEMA_MORE_AUDIO_ACTIONS,
   ...CINEMA_MORE_DISPLAY_ACTIONS,
   ...CINEMA_MORE_THEATRE_ACTIONS,
+  ...CINEMA_MORE_WORKFLOW_ACTIONS,
+  ...CINEMA_MORE_TEMPORARY_ACTIONS,
   ...CINEMA_ADVANCED_MODE_ACTIONS.map((action): CinemaMoreOperatorAction => {
     const baseAction = {
       advancedAction: action,
@@ -271,21 +456,56 @@ export interface CinemaMoreActionBudget {
 }
 
 export const CINEMA_MORE_ACTION_BUDGETS: Readonly<Record<string, CinemaMoreActionBudget>> = {
-  BookCinema: { max: 10, min: 8 },
-  DocumentCinema: { max: 10, min: 8 },
-  WebsiteCinema: { max: 10, min: 8 },
+  BookCinema: { max: 14, min: 8 },
+  DocumentCinema: { max: 14, min: 8 },
+  WebsiteCinema: { max: 14, min: 8 },
   "Mobile/narrow More sheet": { max: 6, min: 3 },
 };
+
+export interface CinemaMoreContextInput {
+  readonly audioAction?: "create" | "retry" | "none";
+  readonly includeDiagnostics?: boolean;
+  readonly includeTemporaryActions?: boolean;
+}
+
+export function cinemaMoreActionsForContext({
+  audioAction = "none",
+  includeDiagnostics = false,
+  includeTemporaryActions = false,
+}: CinemaMoreContextInput): readonly CinemaMoreAction[] {
+  return CINEMA_MORE_ACTIONS.filter((action) => {
+    if (action.id === "create-audio") {
+      return audioAction === "create";
+    }
+    if (action.id === "retry-audio") {
+      return audioAction === "retry";
+    }
+    if (action.kind === "temporary") {
+      return includeTemporaryActions;
+    }
+    if (action.kind === "diagnostics") {
+      return includeDiagnostics;
+    }
+    if (action.id === "help-guide") {
+      return includeDiagnostics;
+    }
+    return true;
+  });
+}
 
 export function cinemaMoreActionsBySection(
   actions: readonly CinemaMoreAction[],
 ): Record<CinemaMoreSectionId, CinemaMoreAction[]> {
   const groups: Record<CinemaMoreSectionId, CinemaMoreAction[]> = {
     advanced: [],
+    audio: [],
     diagnostics: [],
     display: [],
     "help-shortcuts": [],
+    source: [],
+    temporary: [],
     theatre: [],
+    workflow: [],
   };
   for (const action of actions) {
     groups[action.sectionId].push(action);

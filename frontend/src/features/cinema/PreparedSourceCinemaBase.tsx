@@ -17,10 +17,10 @@ import { looksLikeMermaidDiagram } from "../../markdownModel";
 import { hasSpeechPolicyOverrides } from "../../speechPolicy";
 import type {
   CustomSpeechPolicyProfile,
+  HighlightMap,
   NarrationBlock,
   PlaybackProgress,
   PreparedSource,
-  HighlightMap,
   SourceSpeechPolicyUpdateRequest,
   SpeechPolicyDefinition,
   SpeechPolicyOverrides,
@@ -28,49 +28,48 @@ import type {
   ThemeName,
   VoiceJob,
 } from "../../types";
+import { useReadAlongLiveStatus } from "../accessibility";
 import { HeaderContextSummary } from "../header";
 import { ExitIcon, SettingsIcon } from "../navigation";
-import { TEMPORARY_SOURCE_COPY } from "../temporary-source-copy";
-import { useReadAlongLiveStatus } from "../accessibility";
 import { LazyPanelFallback } from "../performance";
 import { generatedAudioLifecycleFromJob } from "../playback";
 import { PolicyScopeSummary, policyScopeSummary, SourcePolicyPinEditor } from "../policy";
 import type { UiMemoryCinemaState } from "../preferences";
 import {
   AlignmentDiagnosticsPanel,
+  type AlignmentRepairContext,
   AlignmentRepairEditor,
+  type AlignmentRepairMap,
   alignmentRepairMapStaleness,
   buildReadAlongSyncDebugSnapshot,
   effectiveReadAlongPreferences,
-  type HighlightMapV2,
   evaluatePreparedSourceReadAlongInvariant,
+  type HighlightMapV2,
   HighlightRenderer,
   parseAlignmentRepairMap,
+  type ReadAlongCueRole,
+  type ReadAlongHighlightMotion,
+  type ReadAlongHighlightStyle,
+  type ReadAlongHighlightVisualMode,
+  type ReadAlongPreferences,
+  type ReadAlongScrollFollow,
+  type ReadAlongTimingState,
   ReadAlongWordScheduler,
-  readAlongCalibrationOffsetMs,
-  readAlongAudioElementForJob,
-  readAlongInvariantStatusLabel,
   readAlongAnchorForBlock,
   readAlongAnchorForWord,
+  readAlongAudioElementForJob,
+  readAlongCalibrationOffsetMs,
+  readAlongInvariantStatusLabel,
   readAlongPreferenceDataAttributes,
   readAlongShouldHighlightBlock,
   readAlongShouldHighlightWord,
   readAlongTimingStateFromRuntime,
   readAlongVisualModeFromRuntime,
   resolveReadAlongRuntimeSnapshot,
+  type SyncDebugSourceLocator,
   scrollReadAlongAnchor,
   serializeAlignmentRepairMap,
-  type AlignmentRepairContext,
-  type AlignmentRepairMap,
-  type ReadAlongHighlightMotion,
-  type ReadAlongHighlightStyle,
-  type ReadAlongHighlightVisualMode,
-  type ReadAlongPreferences,
-  type ReadAlongScrollFollow,
-  type ReadAlongCueRole,
-  type ReadAlongTimingState,
   type WordTimeline,
-  type SyncDebugSourceLocator,
   wordTimelineFromPreparedSourceHighlightMapV2,
   wordTimelineFromPreparedSourceLegacyHighlightMap,
 } from "../readalong";
@@ -87,11 +86,6 @@ import {
   useReaderModalLifecycle,
 } from "../reader-accessibility";
 import {
-  applyReaderTypographyPreset,
-  readingSurfaceClassName,
-  readingSurfaceDataAttributes,
-} from "../reading-surface";
-import {
   playbackProgressForBookmark,
   type ReaderBookmarkItem,
   type ReaderOutlineItem,
@@ -100,11 +94,17 @@ import {
   readerBookmarksFromProgress,
   readerRecentPositionsFromProgress,
 } from "../reader-navigation";
+import {
+  applyReaderTypographyPreset,
+  readingSurfaceClassName,
+  readingSurfaceDataAttributes,
+} from "../reading-surface";
 import { ReaderSettingsPopover } from "../settings/ReaderSettingsPopover";
 import {
   preparedSourceLifecycleEnvelope,
   sourceSelectorOption,
 } from "../source-lifecycle/sourceSelectors";
+import { TEMPORARY_SOURCE_COPY } from "../temporary-source-copy";
 import { WebsiteExtractionReview } from "../website-cinema/WebsiteExtractionReview";
 import {
   WebsiteExtractionSummary,
@@ -114,10 +114,6 @@ import {
 import { useCinemaFocusController } from "./CinemaFocusController";
 import { CinemaFocusModeToolbar } from "./CinemaFocusModeToolbar";
 import { CinemaInspectorDock } from "./CinemaInspectorDock";
-import {
-  cinemaContractFromPreparedSource,
-  filterCinemaHistoryProgress,
-} from "./cinemaTemporarySource";
 import {
   buildCinemaCurrentReadingSection,
   buildCinemaInspectorPanels,
@@ -132,18 +128,23 @@ import {
   returnFocusToCinemaReaderCanvas,
 } from "./CinemaMobileSheet";
 import { CinemaShell } from "./CinemaShell";
-import {
-  PreparedSourceCinemaAudioBarsIcon,
-  PreparedSourceCinemaTransport,
-} from "./PreparedSourceCinemaTransport";
-import { MoreIcon } from "./PreparedSourceCinemaTransportHelpers";
 import { CinemaTheatreChrome, useCinemaTheatreController } from "./CinemaTheatre";
+import { cinemaMoreActionsForContext } from "./cinemaMoreActions";
+import {
+  cinemaContractFromPreparedSource,
+  filterCinemaHistoryProgress,
+} from "./cinemaTemporarySource";
 import {
   type CinemaRendererLifecycleState,
   cinemaRendererLifecycleDetail,
   deriveCinemaPlaybackState,
   deriveCinemaReadinessDisplay,
 } from "./model";
+import {
+  PreparedSourceCinemaAudioBarsIcon,
+  PreparedSourceCinemaTransport,
+} from "./PreparedSourceCinemaTransport";
+import { MoreIcon } from "./PreparedSourceCinemaTransportHelpers";
 import { PreparedSourcePolicyNotes } from "./policy-notes/PreparedSourcePolicyNotes";
 import {
   isPreparedSourceMarkdownDocument,
@@ -151,10 +152,10 @@ import {
   type PreparedSourceCinemaOutlineItem,
   type PreparedSourceCinemaTextSize,
   preparedSourceCinemaActiveBlock,
+  preparedSourceCinemaDomain,
   preparedSourceCinemaJobMatchesSource,
   preparedSourceCinemaKind,
   preparedSourceCinemaLabel,
-  preparedSourceCinemaDomain,
   preparedSourceCinemaMetrics,
   preparedSourceCinemaOutline,
   preparedSourceCinemaPrimaryBlocks,
@@ -1089,6 +1090,20 @@ export function PreparedSourceCinemaOverlay({
     cinemaFocus.setMode("inspect");
     cinemaFocus.setActivePanelId("overview");
   };
+  const cinemaMoreActions = useMemo(() => {
+    let audioAction: "create" | "none" | "retry" = "none";
+    if (job && playbackState === "degraded") {
+      audioAction = "retry";
+    } else if (canCreateAudio) {
+      audioAction = "create";
+    }
+
+    return cinemaMoreActionsForContext({
+      audioAction,
+      includeDiagnostics: cinemaFocus.mode === "debug",
+      includeTemporaryActions: isTemporarySource,
+    });
+  }, [canCreateAudio, cinemaFocus.mode, isTemporarySource, job, playbackState]);
 
   useEffect(() => {
     if (websiteReadModeCalm) {
@@ -1316,6 +1331,7 @@ export function PreparedSourceCinemaOverlay({
               )}
               <div className="hidden min-w-[17rem] shrink-0 lg:block">
                 <CinemaFocusModeToolbar
+                  actions={cinemaMoreActions}
                   activePanelId={cinemaFocus.activePanelId}
                   mode={cinemaFocus.mode}
                   onAdvancedAction={(action) => {
@@ -1323,16 +1339,45 @@ export function PreparedSourceCinemaOverlay({
                     cinemaFocus.setActivePanelId(action.panelId);
                   }}
                   onCommandPalette={onCommandPaletteOpen}
+                  onCreateAudio={() => {
+                    onCreateAudio(source);
+                  }}
+                  onDiscardTemporarySource={
+                    isTemporarySource && onDiscardTemporarySource
+                      ? () => {
+                          onDiscardTemporarySource(source);
+                        }
+                      : undefined
+                  }
                   onHelpGuide={onHelpOpen}
+                  onKeepTemporarySource={
+                    isTemporarySource && onKeepTemporarySource
+                      ? () => {
+                          onKeepTemporarySource(source);
+                        }
+                      : undefined
+                  }
                   onKeyboardShortcuts={onShortcutCheatSheetOpen}
                   onMenuOpen={() => {
                     setSettingsOpen(false);
                   }}
                   onModeChange={cinemaFocus.setMode}
+                  onOpenInspector={() => {
+                    cinemaFocus.setMode("inspect");
+                    cinemaFocus.setActivePanelId("overview");
+                  }}
+                  onReturnPreview={onClose}
+                  onReturnReview={onClose}
                   onReaderSettings={() => {
                     setSettingsOpen(true);
                   }}
+                  onSourceDetails={() => {
+                    cinemaFocus.setMode("inspect");
+                    cinemaFocus.setActivePanelId("overview");
+                  }}
                   onTheatreMode={handleTheatreMode}
+                  sourceOwner={source.sourceOwner}
+                  temporarySourceId={source.temporarySourceId}
                 />
               </div>
             </div>
@@ -2241,7 +2286,7 @@ function PreparedSourceCinemaMobileSheet({
               </div>
             ),
             id: "keep" as const,
-            label: "Keep",
+            label: TEMPORARY_SOURCE_COPY.actions.keep,
           },
           {
             children: (

@@ -23,6 +23,7 @@ export {
   activeCinemaMoreAction,
   cinemaMoreAction,
   cinemaMoreActionsBySection,
+  cinemaMoreActionsForContext,
   isCinemaMoreOperatorAction,
   type CinemaMoreAction,
   type CinemaMoreActionBudget,

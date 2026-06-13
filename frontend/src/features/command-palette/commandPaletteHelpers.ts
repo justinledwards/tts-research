@@ -1,16 +1,3 @@
-import {
-  createAndListenScopeLabel,
-  type CreateAndListenScope,
-} from "../playback/workspacePlaybackActions";
-import type { CommandEntry, CommandMetadata } from "./commandRegistry";
-import type {
-  CinemaAdvancedCommandTarget,
-  CinemaFocusCommandTarget,
-  HelpCommandTarget,
-  SettingsCommandTarget,
-  WorkspaceCommandTarget,
-} from "../navigation/commands";
-import type { CinemaFocusMode, CinemaSurfaceKind } from "../cinema";
 import type {
   BookScope,
   BookSource,
@@ -19,11 +6,24 @@ import type {
   TemporarySourceSession,
   TemporaryStorageUsageSummary,
 } from "../../types";
-import type { WorkspaceStageActionId } from "../workspace/stageActions";
-import type { WorkspaceLayoutMode, WorkspaceStage } from "../workspace/model";
+import type { CinemaFocusMode, CinemaSurfaceKind } from "../cinema";
 import { COMMAND_CENTER_ROUTES, type CommandCenterRouteId } from "../command-center/model";
+import type {
+  CinemaAdvancedCommandTarget,
+  CinemaFocusCommandTarget,
+  HelpCommandTarget,
+  SettingsCommandTarget,
+  WorkspaceCommandTarget,
+} from "../navigation/commands";
+import {
+  type CreateAndListenScope,
+  createAndListenScopeLabel,
+} from "../playback/workspacePlaybackActions";
 import type { QuickListenMode } from "../quick-listen";
 import { TEMPORARY_SOURCE_COPY } from "../temporary-source-copy";
+import type { WorkspaceLayoutMode, WorkspaceStage } from "../workspace/model";
+import type { WorkspaceStageActionId } from "../workspace/stageActions";
+import type { CommandEntry, CommandMetadata } from "./commandRegistry";
 
 type SourceMode = "book" | "fileUrl" | "text";
 
@@ -993,6 +993,75 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     section: "Cinema",
     title: "Open current Cinema",
   };
+  const cinemaContextDisabledReason = activeCinemaSurfaceKind
+    ? undefined
+    : "Open Book, Document, or Website Cinema first.";
+  const openCinemaInspectorCommand: CommandEntry = {
+    category: "Navigation",
+    detail: "Open the Cinema Inspector for source, policy, and extraction context.",
+    disabled: !activeCinemaSurfaceKind,
+    disabledReason: cinemaContextDisabledReason,
+    id: "cinema:source:inspector",
+    keywords: ["cinema", "inspector", "source", "details"],
+    owner: "cinema-source",
+    perform: () => {
+      if (activeCinemaSurfaceKind) {
+        handlers.applyCinemaFocusMetadataTarget({ mode: "inspect" });
+      }
+    },
+    section: "Cinema",
+    title: "Open Cinema Inspector",
+  };
+  const sourceDetailsCommand: CommandEntry = {
+    category: "Navigation",
+    detail: "Show source details and provenance for the active Cinema source.",
+    disabled: !activeCinemaSurfaceKind,
+    disabledReason: cinemaContextDisabledReason,
+    id: "cinema:source:details",
+    keywords: ["cinema", "source", "details", "provenance"],
+    owner: "cinema-source",
+    perform: () => {
+      if (activeCinemaSurfaceKind) {
+        handlers.applyCinemaFocusMetadataTarget({ mode: "inspect" });
+      }
+    },
+    section: "Cinema",
+    title: "Cinema source details",
+  };
+  const createCinemaAudioCommand: CommandEntry = {
+    capabilityGate: "tts",
+    capabilityGated: Boolean(createAndListenCapabilityReason),
+    category: "Playback",
+    detail: "Create generated audio for the active Cinema source.",
+    disabled: !canCreateCurrentSource,
+    disabledReason:
+      createAndListenDisabledReason ?? "Open a narratable source before creating audio.",
+    id: "cinema:audio:create",
+    keywords: ["cinema", "audio", "create", "generate", "listen"],
+    owner: "cinema-audio",
+    perform: () => {
+      handlers.createAndListenFromCurrentSource();
+    },
+    section: "Cinema",
+    title: "Create Cinema audio",
+  };
+  const retryCinemaAudioCommand: CommandEntry = {
+    capabilityGate: "tts",
+    capabilityGated: Boolean(createAndListenCapabilityReason),
+    category: "Playback",
+    detail: "Retry generated audio for the active Cinema source.",
+    disabled: !canCreateCurrentSource,
+    disabledReason:
+      createAndListenDisabledReason ?? "Open a narratable source before retrying audio.",
+    id: "cinema:audio:retry",
+    keywords: ["cinema", "audio", "retry", "recover", "generate"],
+    owner: "cinema-audio",
+    perform: () => {
+      handlers.createAndListenFromCurrentSource();
+    },
+    section: "Cinema",
+    title: "Retry Cinema audio",
+  };
   const cinemaTheatreDisabledReason = activeCinemaSurfaceKind
     ? undefined
     : "Open Book, Document, or Website Cinema first.";
@@ -1037,6 +1106,38 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     },
     section: "Cinema",
     title: "Toggle Theatre controls",
+  };
+  const returnToReviewCommand: CommandEntry = {
+    category: "Navigation",
+    detail: "Return to Review for the active Cinema source.",
+    disabled: !activeCinemaSurfaceKind,
+    disabledReason: cinemaContextDisabledReason,
+    id: "cinema:workflow:return-review",
+    keywords: ["cinema", "review", "return", "workflow"],
+    owner: "cinema-workflow",
+    perform: () => {
+      if (activeCinemaSurfaceKind) {
+        handlers.applyCinemaFocusMetadataTarget({ mode: "review" });
+      }
+    },
+    section: "Cinema",
+    title: "Return to Review",
+  };
+  const returnToPreviewCommand: CommandEntry = {
+    category: "Navigation",
+    detail: "Return to Preview for the active Cinema source.",
+    disabled: !activeCinemaSurfaceKind,
+    disabledReason: cinemaContextDisabledReason,
+    id: "cinema:workflow:return-preview",
+    keywords: ["cinema", "preview", "return", "workflow"],
+    owner: "cinema-workflow",
+    perform: () => {
+      if (activeCinemaSurfaceKind) {
+        handlers.openCurrentCinema();
+      }
+    },
+    section: "Cinema",
+    title: "Return to Preview",
   };
   let bookmarkDisabledReason: string | undefined;
   if (!activeCinemaSurfaceKind) {
@@ -1099,9 +1200,15 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     ...temporaryCommandEntries,
     ...recentTemporarySourceCommandEntries,
     openCurrentCinemaCommand,
+    openCinemaInspectorCommand,
+    sourceDetailsCommand,
+    createCinemaAudioCommand,
+    retryCinemaAudioCommand,
     openCinemaTheatreCommand,
     exitTheatreCommand,
     toggleTheatreControlsCommand,
+    returnToReviewCommand,
+    returnToPreviewCommand,
     bookmarkCurrentCommand,
     ...bookmarkCommandEntries,
     ...recentCommandEntries,

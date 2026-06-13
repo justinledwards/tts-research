@@ -2,14 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Panel } from "../../design";
 import type { CinemaAdvancedModeAction } from "./cinemaAdvancedMode";
 import {
+  activeCinemaMoreAction,
   CINEMA_MORE_ACTIONS,
   CINEMA_MORE_MENU_ID,
   CINEMA_MORE_SECTIONS,
-  activeCinemaMoreAction,
+  type CinemaMoreAction,
+  type CinemaMoreActionId,
+  type CinemaMoreNavigationActionId,
   cinemaMoreActionsBySection,
   isCinemaMoreOperatorAction,
-  type CinemaMoreAction,
-  type CinemaMoreNavigationActionId,
 } from "./cinemaMoreActions";
 import type { CinemaFocusMode, CinemaInspectorPanelId } from "./model";
 
@@ -19,11 +20,112 @@ export interface CinemaMoreMenuProps {
   mode: CinemaFocusMode;
   onAdvancedAction?: (action: CinemaAdvancedModeAction) => void;
   onCommandPalette?: () => void;
+  onCreateAudio?: () => void;
+  onDiscardTemporarySource?: () => void;
   onHelpGuide?: () => void;
+  onKeepTemporarySource?: () => void;
   onKeyboardShortcuts?: () => void;
   onMenuOpen?: () => void;
+  onOpenInspector?: () => void;
+  onReturnPreview?: () => void;
+  onReturnReview?: () => void;
   onReaderSettings?: () => void;
+  onSourceDetails?: () => void;
   onTheatreMode?: () => void;
+  sourceOwner?: string;
+  temporarySourceId?: string | null;
+}
+
+type CinemaMoreHandlerKey =
+  | "onCommandPalette"
+  | "onCreateAudio"
+  | "onDiscardTemporarySource"
+  | "onHelpGuide"
+  | "onKeepTemporarySource"
+  | "onKeyboardShortcuts"
+  | "onOpenInspector"
+  | "onReaderSettings"
+  | "onReturnPreview"
+  | "onReturnReview"
+  | "onSourceDetails"
+  | "onTheatreMode";
+
+type CinemaMoreHandlerAvailability = Record<CinemaMoreHandlerKey, boolean> & {
+  readonly hasAdvancedAction: boolean;
+};
+
+const CINEMA_MORE_HANDLER_REQUIREMENTS: Partial<
+  Record<CinemaMoreActionId, { readonly handler: CinemaMoreHandlerKey; readonly reason: string }>
+> = {
+  "command-palette": {
+    handler: "onCommandPalette",
+    reason: "Command palette is unavailable in this context.",
+  },
+  "create-audio": {
+    handler: "onCreateAudio",
+    reason: "Generated audio is unavailable for this source.",
+  },
+  "discard-temporary-source": {
+    handler: "onDiscardTemporarySource",
+    reason: "Discard temporary source is unavailable here.",
+  },
+  "help-guide": {
+    handler: "onHelpGuide",
+    reason: "Cinema help is unavailable in this context.",
+  },
+  "keep-temporary-source": {
+    handler: "onKeepTemporarySource",
+    reason: "Keep in project is unavailable for this temporary source.",
+  },
+  "keyboard-shortcuts": {
+    handler: "onKeyboardShortcuts",
+    reason: "Keyboard shortcut help is unavailable in this context.",
+  },
+  "open-inspector": {
+    handler: "onOpenInspector",
+    reason: "Inspector is unavailable in this surface.",
+  },
+  "reader-settings": {
+    handler: "onReaderSettings",
+    reason: "Reader settings are unavailable in this surface.",
+  },
+  "retry-audio": {
+    handler: "onCreateAudio",
+    reason: "Generated audio is unavailable for this source.",
+  },
+  "return-preview": {
+    handler: "onReturnPreview",
+    reason: "Preview is unavailable for this source.",
+  },
+  "return-review": {
+    handler: "onReturnReview",
+    reason: "Review is unavailable for this source.",
+  },
+  "source-details": {
+    handler: "onSourceDetails",
+    reason: "Source details are unavailable in this surface.",
+  },
+  "theatre-mode": {
+    handler: "onTheatreMode",
+    reason: "Theatre mode is unavailable in this surface.",
+  },
+};
+
+function disabledReasonForCinemaMoreAction(
+  action: CinemaMoreAction,
+  availability: CinemaMoreHandlerAvailability,
+): string | undefined {
+  if (action.disabledReason) {
+    return action.disabledReason;
+  }
+  if (isCinemaMoreOperatorAction(action) && !availability.hasAdvancedAction) {
+    return "Advanced Cinema actions are unavailable in this surface.";
+  }
+  const requirement = CINEMA_MORE_HANDLER_REQUIREMENTS[action.id];
+  if (requirement && !availability[requirement.handler]) {
+    return requirement.reason;
+  }
+  return undefined;
 }
 
 export function CinemaMoreMenu({
@@ -32,11 +134,20 @@ export function CinemaMoreMenu({
   mode,
   onAdvancedAction,
   onCommandPalette,
+  onCreateAudio,
+  onDiscardTemporarySource,
   onHelpGuide,
+  onKeepTemporarySource,
   onKeyboardShortcuts,
   onMenuOpen,
+  onOpenInspector,
+  onReturnPreview,
+  onReturnReview,
   onReaderSettings,
+  onSourceDetails,
   onTheatreMode,
+  sourceOwner,
+  temporarySourceId,
 }: Readonly<CinemaMoreMenuProps>) {
   const availableActions = actions.filter(Boolean);
   const [open, setOpen] = useState(false);
@@ -48,6 +159,21 @@ export function CinemaMoreMenu({
   const buttonAriaLabel = activeAction
     ? `Cinema More menu. Active operator mode: ${activeAction.label}`
     : "Open Cinema More menu";
+  const handlerAvailability: CinemaMoreHandlerAvailability = {
+    hasAdvancedAction: Boolean(onAdvancedAction),
+    onCommandPalette: Boolean(onCommandPalette),
+    onCreateAudio: Boolean(onCreateAudio),
+    onDiscardTemporarySource: Boolean(onDiscardTemporarySource),
+    onHelpGuide: Boolean(onHelpGuide),
+    onKeepTemporarySource: Boolean(onKeepTemporarySource),
+    onKeyboardShortcuts: Boolean(onKeyboardShortcuts),
+    onOpenInspector: Boolean(onOpenInspector),
+    onReaderSettings: Boolean(onReaderSettings),
+    onReturnPreview: Boolean(onReturnPreview),
+    onReturnReview: Boolean(onReturnReview),
+    onSourceDetails: Boolean(onSourceDetails),
+    onTheatreMode: Boolean(onTheatreMode),
+  };
 
   useEffect(() => {
     if (!open) {
@@ -96,28 +222,7 @@ export function CinemaMoreMenu({
   };
 
   const disabledReasonFor = (action: CinemaMoreAction): string | undefined => {
-    if (action.disabledReason) {
-      return action.disabledReason;
-    }
-    if (isCinemaMoreOperatorAction(action) && !onAdvancedAction) {
-      return "Advanced Cinema actions are unavailable in this surface.";
-    }
-    if (action.id === "reader-settings" && !onReaderSettings) {
-      return "Reader settings are unavailable in this surface.";
-    }
-    if (action.id === "theatre-mode" && !onTheatreMode) {
-      return "Theatre mode is unavailable in this surface.";
-    }
-    if (action.id === "command-palette" && !onCommandPalette) {
-      return "Command palette is unavailable in this context.";
-    }
-    if (action.id === "keyboard-shortcuts" && !onKeyboardShortcuts) {
-      return "Keyboard shortcut help is unavailable in this context.";
-    }
-    if (action.id === "help-guide" && !onHelpGuide) {
-      return "Cinema help is unavailable in this context.";
-    }
-    return undefined;
+    return disabledReasonForCinemaMoreAction(action, handlerAvailability);
   };
 
   const handleAction = (action: CinemaMoreAction) => {
@@ -130,6 +235,42 @@ export function CinemaMoreMenu({
       return;
     }
     switch (action.id) {
+      case "open-inspector": {
+        closeAndReturnFocus();
+        onOpenInspector?.();
+        return;
+      }
+      case "source-details": {
+        closeAndReturnFocus();
+        onSourceDetails?.();
+        return;
+      }
+      case "create-audio":
+      case "retry-audio": {
+        closeAndReturnFocus();
+        onCreateAudio?.();
+        return;
+      }
+      case "keep-temporary-source": {
+        closeAndReturnFocus();
+        onKeepTemporarySource?.();
+        return;
+      }
+      case "discard-temporary-source": {
+        closeAndReturnFocus();
+        onDiscardTemporarySource?.();
+        return;
+      }
+      case "return-review": {
+        closeAndReturnFocus();
+        onReturnReview?.();
+        return;
+      }
+      case "return-preview": {
+        closeAndReturnFocus();
+        onReturnPreview?.();
+        return;
+      }
       case "reader-settings": {
         closeAndReturnFocus();
         onReaderSettings?.();
@@ -318,8 +459,10 @@ export function CinemaMoreMenu({
                       data-cinema-more-section-id={action.sectionId}
                       data-cinema-more-shortcut-hint={action.shortcutHint}
                       data-command-id={commandId}
+                      data-source-owner={sourceOwner}
                       data-shortcut-command-id={action.shortcutCommandId}
                       data-testid={action.testId}
+                      data-temporary-source-id={temporarySourceId ?? undefined}
                       data-ui-action-advanced={operatorAction ? "true" : undefined}
                       data-ui-action-owner={action.owner}
                       data-ui-action-scope={operatorAction ? "operator" : action.kind}

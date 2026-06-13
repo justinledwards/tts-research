@@ -1,3 +1,17 @@
+## 2026-06-13 02:21 CEST - Commit Cinema More Menu Package
+- [x] Review Cinema More package diff
+- [x] Stage intended Cinema More files
+- [x] Fix pre-commit lint findings
+- [x] Preserve operational copy guard with Cinema More action exception
+- [x] Commit Cinema More package
+
+## 2026-06-13 01:05 CEST - Cinema More Menu Temporary Actions
+- [x] Inspect Cinema More menu surfaces and action inventory gates
+- [x] Wire consistent More menu actions for Book, Document, Website, and temporary sources
+- [x] Add focused regression coverage
+- [x] Run project checks
+- Validation: frontend typecheck passed; focused Cinema/command-palette Vitest and final UX gate unit tests passed; `pnpm e2e:command-palette` and `pnpm e2e:responsive-snapshots` passed. `pnpm e2e:ui-actions` and `pnpm validate:ux-final` exercised Book/Document/Website More menu and mobile sheet inventories, then failed later in the existing Preview generation recovery path waiting for `preview-generation-cockpit`. `pnpm e2e:reader-wayfinding` and `pnpm e2e:book-cinema` passed Markdown/Website import narration before hitting the existing `Intake` button timeout in Book Cinema UX.
+
 ## 2026-06-13 01:00 CEST - Commit Temporary Audio Job Package
 - [x] Review and stage temporary audio job files
 - [x] Commit temporary audio job work package

@@ -224,7 +224,7 @@ test("fails when Cinema More omits required information architecture", () => {
   const documents = passingDocuments();
   documents.actionInventory.actions = documents.actionInventory.actions.filter(
     (action) =>
-      !(action.scenarioId === "book-more-menu" && action.cinemaMoreSectionId === "diagnostics"),
+      !(action.scenarioId === "book-more-menu" && action.cinemaMoreSectionId === "source"),
   );
   const result = evaluateFinalUxGates({
     artifactPaths,
@@ -237,7 +237,7 @@ test("fails when Cinema More omits required information architecture", () => {
   const moreGate = result.gates.find((gate) => gate.id === "more-menu-functional");
   assert.equal(result.status, "failed");
   assert.equal(moreGate.status, "failed");
-  assert.match(moreGate.failures.join("\n"), /BookCinema.*diagnostics section/);
+  assert.match(moreGate.failures.join("\n"), /BookCinema.*source section/);
 });
 
 test("fails when Cinema More duplicates visible primary controls without proxy metadata", () => {
@@ -603,6 +603,33 @@ function moreMenuEntries() {
   ];
   const entries = [
     {
+      actionId: "ui-action-cinema-more-open-inspector",
+      cinemaMoreActionId: "open-inspector",
+      cinemaMoreActionKind: "source",
+      cinemaMoreSectionId: "source",
+      commandId: "cinema:source:inspector",
+      label: "Open Inspector",
+      owner: "cinema-source",
+    },
+    {
+      actionId: "ui-action-cinema-more-source-details",
+      cinemaMoreActionId: "source-details",
+      cinemaMoreActionKind: "source",
+      cinemaMoreSectionId: "source",
+      commandId: "cinema:source:details",
+      label: "Source details",
+      owner: "cinema-source",
+    },
+    {
+      actionId: "ui-action-cinema-more-create-audio",
+      cinemaMoreActionId: "create-audio",
+      cinemaMoreActionKind: "audio",
+      cinemaMoreSectionId: "audio",
+      commandId: "cinema:audio:create",
+      label: "Create audio",
+      owner: "cinema-audio",
+    },
+    {
       actionId: "ui-action-cinema-more-reader-settings",
       cinemaMoreActionId: "reader-settings",
       cinemaMoreActionKind: "display",
@@ -621,6 +648,24 @@ function moreMenuEntries() {
       owner: "cinema-theatre",
     },
     {
+      actionId: "ui-action-cinema-more-return-review",
+      cinemaMoreActionId: "return-review",
+      cinemaMoreActionKind: "workflow",
+      cinemaMoreSectionId: "workflow",
+      commandId: "cinema:workflow:return-review",
+      label: "Return to Review",
+      owner: "cinema-workflow",
+    },
+    {
+      actionId: "ui-action-cinema-more-return-preview",
+      cinemaMoreActionId: "return-preview",
+      cinemaMoreActionKind: "workflow",
+      cinemaMoreSectionId: "workflow",
+      commandId: "cinema:workflow:return-preview",
+      label: "Return to Preview",
+      owner: "cinema-workflow",
+    },
+    {
       actionId: "ui-action-cinema-advanced-policy-internals",
       cinemaMoreActionId: "policy-internals",
       cinemaMoreActionKind: "advanced",
@@ -637,33 +682,6 @@ function moreMenuEntries() {
       commandId: "cinema:advanced:source-internals",
       label: "Source internals",
       owner: "cinema-advanced",
-    },
-    {
-      actionId: "ui-action-cinema-advanced-diagnostics",
-      cinemaMoreActionId: "diagnostics",
-      cinemaMoreActionKind: "diagnostics",
-      cinemaMoreSectionId: "diagnostics",
-      commandId: "cinema:advanced:diagnostics",
-      label: "Diagnostics",
-      owner: "cinema-diagnostics",
-    },
-    {
-      actionId: "ui-action-cinema-advanced-timing-map",
-      cinemaMoreActionId: "timing-map",
-      cinemaMoreActionKind: "diagnostics",
-      cinemaMoreSectionId: "diagnostics",
-      commandId: "cinema:advanced:timing-map",
-      label: "Timing map",
-      owner: "cinema-diagnostics",
-    },
-    {
-      actionId: "ui-action-cinema-advanced-alignment-repair",
-      cinemaMoreActionId: "alignment-repair",
-      cinemaMoreActionKind: "diagnostics",
-      cinemaMoreSectionId: "diagnostics",
-      commandId: "cinema:advanced:alignment-repair",
-      label: "Alignment repair",
-      owner: "cinema-diagnostics",
     },
     {
       actionId: "ui-action-cinema-more-command-palette",
@@ -686,17 +704,6 @@ function moreMenuEntries() {
       label: "Keyboard shortcuts",
       owner: "cinema-help",
       shortcutCommandId: "shortcut.cheatsheet",
-    },
-    {
-      actionId: "ui-action-cinema-more-help-guide",
-      cinemaMoreActionId: "help-guide",
-      cinemaMoreActionKind: "help-shortcuts",
-      cinemaMoreSectionId: "help-shortcuts",
-      cinemaMoreShortcutHint: "Shift+F1",
-      commandId: "help:open",
-      label: "Help/guide",
-      owner: "cinema-help",
-      shortcutCommandId: "help.open",
     },
   ];
   return surfaces.flatMap(({ scenarioId, surface }) =>
@@ -731,9 +738,39 @@ function contractCommandsObserved() {
       title: "Reader preferences",
     },
     {
+      id: "cinema:source:inspector",
+      owner: "cinema-source",
+      title: "Open Cinema Inspector",
+    },
+    {
+      id: "cinema:source:details",
+      owner: "cinema-source",
+      title: "Cinema source details",
+    },
+    {
+      id: "cinema:audio:create",
+      owner: "cinema-audio",
+      title: "Create Cinema audio",
+    },
+    {
+      id: "cinema:audio:retry",
+      owner: "cinema-audio",
+      title: "Retry Cinema audio",
+    },
+    {
       id: "cinema:theatre:open",
       owner: "cinema-theatre",
       title: "Open Cinema Theatre",
+    },
+    {
+      id: "cinema:workflow:return-review",
+      owner: "cinema-workflow",
+      title: "Return to Review",
+    },
+    {
+      id: "cinema:workflow:return-preview",
+      owner: "cinema-workflow",
+      title: "Return to Preview",
     },
     {
       id: "cinema:advanced:policy-internals",

@@ -14,12 +14,13 @@ import { CinemaTheatreChrome } from "./CinemaTheatre";
 import { CinemaTransportBar, type CinemaTransportModel } from "./CinemaTransportBar";
 import { cinemaCanvasBudgetFor } from "./canvasBudget";
 import {
-  CINEMA_MORE_ACTIONS,
+  activeCinemaMoreAction,
   CINEMA_MORE_ACTION_BUDGETS,
+  CINEMA_MORE_ACTIONS,
   CINEMA_MORE_REQUIRED_SECTION_IDS,
   CINEMA_MORE_SECTIONS,
-  activeCinemaMoreAction,
   cinemaMoreActionsBySection,
+  cinemaMoreActionsForContext,
 } from "./cinemaMoreActions";
 import {
   buildCinemaLayoutState,
@@ -534,8 +535,12 @@ describe("CinemaFocusModeToolbar", () => {
       expect(grouped[section.id].length).toBeGreaterThan(0);
     }
     expect(CINEMA_MORE_SECTIONS.map((section) => section.id)).toEqual([
+      "source",
+      "audio",
       "display",
       "theatre",
+      "workflow",
+      "temporary",
       "advanced",
       "diagnostics",
       "help-shortcuts",
@@ -544,6 +549,12 @@ describe("CinemaFocusModeToolbar", () => {
       CINEMA_MORE_SECTIONS.map((section) => section.id),
     );
     expect(grouped.display.every((action) => action.owner === "cinema-display")).toBe(true);
+    expect(grouped.source.every((action) => action.owner === "cinema-source")).toBe(true);
+    expect(grouped.audio.every((action) => action.owner === "cinema-audio")).toBe(true);
+    expect(grouped.workflow.every((action) => action.owner === "cinema-workflow")).toBe(true);
+    expect(grouped.temporary.every((action) => action.owner === "cinema-temporary-source")).toBe(
+      true,
+    );
     expect(grouped.theatre.every((action) => action.owner === "cinema-theatre")).toBe(true);
     expect(grouped.advanced.every((action) => action.owner === "cinema-advanced")).toBe(true);
     expect(grouped.diagnostics.every((action) => action.owner === "cinema-diagnostics")).toBe(true);
@@ -551,15 +562,41 @@ describe("CinemaFocusModeToolbar", () => {
     expect(grouped.diagnostics.map((action) => action.id)).toContain("alignment-repair");
     expect(grouped["help-shortcuts"].every((action) => action.shortcutHint)).toBe(true);
     expect(CINEMA_MORE_ACTIONS.map((action) => action.id)).not.toContain("compact-transport");
-    expect(CINEMA_MORE_ACTIONS.length).toBeLessThanOrEqual(
-      CINEMA_MORE_ACTION_BUDGETS.BookCinema.max,
-    );
+    expect(
+      cinemaMoreActionsForContext({
+        audioAction: "create",
+        includeDiagnostics: false,
+        includeTemporaryActions: false,
+      }).length,
+    ).toBeLessThanOrEqual(CINEMA_MORE_ACTION_BUDGETS.BookCinema.max);
     expect(CINEMA_MORE_ACTIONS.length).toBeGreaterThanOrEqual(
       CINEMA_MORE_ACTION_BUDGETS.BookCinema.min,
     );
     expect(activeCinemaMoreAction({ activePanelId: "diagnostics", mode: "debug" })?.label).toBe(
       "Diagnostics",
     );
+  });
+
+  it("keeps temporary and diagnostics More actions contextual", () => {
+    const projectActions = cinemaMoreActionsForContext({
+      audioAction: "create",
+      includeDiagnostics: false,
+      includeTemporaryActions: false,
+    });
+    const temporaryActions = cinemaMoreActionsForContext({
+      audioAction: "retry",
+      includeDiagnostics: true,
+      includeTemporaryActions: true,
+    });
+
+    expect(projectActions.map((action) => action.id)).toContain("create-audio");
+    expect(projectActions.map((action) => action.id)).not.toContain("retry-audio");
+    expect(projectActions.some((action) => action.kind === "temporary")).toBe(false);
+    expect(projectActions.some((action) => action.kind === "diagnostics")).toBe(false);
+    expect(temporaryActions.map((action) => action.id)).toContain("retry-audio");
+    expect(temporaryActions.map((action) => action.id)).toContain("keep-temporary-source");
+    expect(temporaryActions.map((action) => action.id)).toContain("discard-temporary-source");
+    expect(temporaryActions.some((action) => action.kind === "diagnostics")).toBe(true);
   });
 });
 

@@ -1,7 +1,7 @@
-import { workspaceStageActionLabel } from "../workspace/stageActions";
 import type { PlaybackOwner } from "../playback/playbackOwner";
-import type { UiActionClass, UiActionExpectedTransition, UiActionSurface } from "./actionScopes";
+import { workspaceStageActionLabel } from "../workspace/stageActions";
 import type { UiActionMetadata } from "./actionMetadata";
+import type { UiActionClass, UiActionExpectedTransition, UiActionSurface } from "./actionScopes";
 export const STATIC_UI_ACTION_METADATA = [
   action("workspace-open", "Open workspace", "Workspace", "navigation", "menu-or-panel-opened"),
   action("demo-open", "Try the Studio", "Workspace", "navigation", "menu-or-panel-opened"),
@@ -403,6 +403,22 @@ export const STATIC_UI_ACTION_METADATA = [
     ["Open Cinema More menu", "Cinema More menu. Active operator mode: Diagnostics", "Diagnostics"],
   ),
   action(
+    "cinema-more-open-inspector",
+    "Open Inspector",
+    "BookCinema",
+    "navigation",
+    "menu-or-panel-opened",
+  ),
+  action(
+    "cinema-more-source-details",
+    "Source details",
+    "BookCinema",
+    "navigation",
+    "menu-or-panel-opened",
+  ),
+  action("cinema-more-create-audio", "Create audio", "BookCinema", "generation", "state-changed"),
+  action("cinema-more-retry-audio", "Retry audio", "BookCinema", "generation", "state-changed"),
+  action(
     "cinema-more-reader-settings",
     "Reader settings",
     "BookCinema",
@@ -417,6 +433,34 @@ export const STATIC_UI_ACTION_METADATA = [
     "state-changed",
     false,
     ["Theatre/Cinematic mode", "Open Cinema Theatre"],
+  ),
+  action(
+    "cinema-more-return-review",
+    "Return to Review",
+    "BookCinema",
+    "navigation",
+    "state-changed",
+  ),
+  action(
+    "cinema-more-return-preview",
+    "Return to Preview",
+    "BookCinema",
+    "navigation",
+    "state-changed",
+  ),
+  action(
+    "cinema-more-keep-temporary-source",
+    "Keep in project",
+    "BookCinema",
+    "generation",
+    "state-changed",
+  ),
+  action(
+    "cinema-more-discard-temporary-source",
+    "Discard temporary source",
+    "BookCinema",
+    "destructive",
+    "state-changed",
   ),
   action(
     "cinema-more-command-palette",

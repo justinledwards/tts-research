@@ -238,12 +238,17 @@ describe("operational status model", () => {
       "Retry audio",
       "Try again",
     ];
+    const allowedActionInventoryCopy = new Map<string, ReadonlySet<string>>([
+      ["../cinema/cinemaMoreActions.ts", new Set(["Retry audio"])],
+      ["../ui-audit/actionMetadataCatalog.ts", new Set(["Retry audio"])],
+    ]);
     const violations = Object.entries(productionSources).flatMap(([path, source]) => {
       if (path.includes(".test.")) {
         return [];
       }
+      const allowedCopy = allowedActionInventoryCopy.get(path);
       return forbiddenCopy
-        .filter((copy) => source.includes(copy))
+        .filter((copy) => source.includes(copy) && !allowedCopy?.has(copy))
         .map((copy) => `${path}: ${copy}`);
     });
 

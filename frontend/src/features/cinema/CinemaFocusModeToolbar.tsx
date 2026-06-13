@@ -1,35 +1,56 @@
 import { Button } from "../../design";
-import type { CinemaAdvancedModeAction } from "./cinemaAdvancedMode";
 import { CinemaMoreMenu } from "./CinemaMoreMenu";
+import type { CinemaAdvancedModeAction } from "./cinemaAdvancedMode";
+import type { CinemaMoreAction } from "./cinemaMoreActions";
 import {
   CINEMA_PRIMARY_FOCUS_MODES,
-  cinemaFocusModeLabel,
   type CinemaFocusMode,
   type CinemaInspectorPanelId,
+  cinemaFocusModeLabel,
 } from "./model";
 
 export function CinemaFocusModeToolbar({
+  actions,
   activePanelId,
   mode,
   onAdvancedAction,
   onCommandPalette,
+  onCreateAudio,
+  onDiscardTemporarySource,
   onHelpGuide,
+  onKeepTemporarySource,
   onKeyboardShortcuts,
   onMenuOpen,
   onModeChange,
+  onOpenInspector,
+  onReturnPreview,
+  onReturnReview,
   onReaderSettings,
+  onSourceDetails,
   onTheatreMode,
+  sourceOwner,
+  temporarySourceId,
 }: Readonly<{
+  actions?: readonly CinemaMoreAction[];
   activePanelId?: CinemaInspectorPanelId | null;
   mode: CinemaFocusMode;
   onAdvancedAction?: (action: CinemaAdvancedModeAction) => void;
   onCommandPalette?: () => void;
+  onCreateAudio?: () => void;
+  onDiscardTemporarySource?: () => void;
   onHelpGuide?: () => void;
+  onKeepTemporarySource?: () => void;
   onKeyboardShortcuts?: () => void;
   onMenuOpen?: () => void;
   onModeChange: (mode: CinemaFocusMode) => void;
+  onOpenInspector?: () => void;
+  onReturnPreview?: () => void;
+  onReturnReview?: () => void;
   onReaderSettings?: () => void;
+  onSourceDetails?: () => void;
   onTheatreMode?: () => void;
+  sourceOwner?: string;
+  temporarySourceId?: string | null;
 }>) {
   const handleAdvancedAction = (action: CinemaAdvancedModeAction) => {
     if (action.disabledReason) {
@@ -76,15 +97,25 @@ export function CinemaFocusModeToolbar({
         </Button>
       ) : null}
       <CinemaMoreMenu
+        actions={actions}
         activePanelId={activePanelId}
         mode={mode}
         onAdvancedAction={handleAdvancedAction}
         onCommandPalette={onCommandPalette}
+        onCreateAudio={onCreateAudio}
+        onDiscardTemporarySource={onDiscardTemporarySource}
         onHelpGuide={onHelpGuide}
+        onKeepTemporarySource={onKeepTemporarySource}
         onKeyboardShortcuts={onKeyboardShortcuts}
         onMenuOpen={onMenuOpen}
+        onOpenInspector={onOpenInspector}
+        onReturnPreview={onReturnPreview}
+        onReturnReview={onReturnReview}
         onReaderSettings={onReaderSettings}
+        onSourceDetails={onSourceDetails}
         onTheatreMode={onTheatreMode}
+        sourceOwner={sourceOwner}
+        temporarySourceId={temporarySourceId}
       />
     </div>
   );

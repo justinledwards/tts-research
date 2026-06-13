@@ -1,154 +1,22 @@
 import {
-  Suspense,
+  type CSSProperties,
+  type ElementType,
   lazy,
+  type ReactNode,
+  Suspense,
   useCallback,
   useEffect,
   useId,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
-  type ElementType,
-  type ReactNode,
 } from "react";
-import { StatusChip, compactHitTargetClassName, minInteractiveSize } from "../../design";
+import { useAudioWaveformBars } from "../../audioWaveform";
 import { ReaderAccessibilityControls } from "../../components/reader/ReaderAccessibilityControls";
 import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
+import { compactHitTargetClassName, minInteractiveSize, StatusChip } from "../../design";
+import { type HighlightCue, resolveHighlightCue } from "../../highlightMap";
 import { hasSpeechPolicyOverrides } from "../../speechPolicy";
-import {
-  generatedAudioLifecycleFromJob,
-  playbackActionLabel,
-  playbackTimeLabels,
-} from "../playback";
-import { OPERATIONAL_RECOVERY_LABELS } from "../operational-status";
-import {
-  CinemaFocusModeToolbar,
-  CinemaInspectorDock,
-  CinemaMobileSheet,
-  CinemaShell,
-  CinemaTheatreChrome,
-  CinemaTheatreTransport,
-  CinemaTransportBar,
-  ReadAlongInvariantDebugPanel,
-  buildCinemaCurrentReadingSection,
-  buildCinemaInspectorPanels,
-  buildCinemaInspectorSection,
-  buildCinemaTemporaryInspectorSections,
-  buildCinemaWayfindingSection,
-  cinemaContractFromBookSource,
-  deriveCinemaPlaybackState,
-  filterCinemaHistoryProgress,
-  returnFocusToCinemaReaderCanvas,
-  useCinemaFocusController,
-  useCinemaTheatreController,
-  type CinemaMobilePanelSpec,
-  type CinemaTransportModel,
-} from "../cinema";
-import { TEMPORARY_SOURCE_COPY } from "../temporary-source-copy";
-import type { UiMemoryCinemaState } from "../preferences";
-import {
-  BOOK_SOURCE_ACCEPT,
-  bookCinemaLiveAnnouncement,
-  bookCinemaPolicyNotes,
-  bookScopeKey,
-  bookScopeLabel,
-  bookScopeOptions,
-  bookScopeSpans,
-  bookScopeText,
-  bookSourceName,
-  estimateBookWordsPerPage,
-  normalizeBookScopeForBook,
-  paginateBookSpans,
-  resolveBookActiveWordIndex,
-  resolveDefaultBookScope,
-  resolveDisplayedBookActiveWordIndex,
-  resolveBookTimingMapV2WordIndexes,
-  resolveBookTimingCueWordIndexes,
-  visibleBookSpans,
-  type BookCinemaPolicyNote,
-  type BookPage,
-  type BookPaginationResult,
-  type BookScopeOption,
-} from "./model";
-import {
-  bookPageBlocksFromScopeContent,
-  bookPageStructuredBlocks,
-  type BookPageStructuredBlock,
-} from "./pageStructure";
-import { importBookCinemaSources, normalizeBookCinemaImportFiles } from "./bookCinemaImportHelpers";
-import {
-  ReaderWayfindingPanel,
-  playbackProgressForBookmark,
-  readerBookmarksFromProgress,
-  readerOutlineFromBookScopes,
-  readerRecentPositionsFromProgress,
-  type ReaderBookmarkItem,
-  type ReaderOutlineItem,
-  type ReaderRecentPositionItem,
-} from "../reader-navigation";
-import { HeaderContextSummary } from "../header";
-import { PolicyScopeSummary, SourcePolicyPinEditor, policyScopeSummary } from "../policy";
-import { ReaderSettingsPopover } from "../settings/ReaderSettingsPopover";
-import { ExitIcon, SettingsIcon } from "../navigation";
-import { useReadAlongLiveStatus } from "../accessibility";
-import {
-  bookSourceLifecycleEnvelope,
-  sourceSelectorOption,
-} from "../source-lifecycle/sourceSelectors";
-import {
-  READER_LINE_HEIGHT_RATIO,
-  READER_LINE_SPACING_CLASS,
-  READER_MEASURE_CLASS,
-  READER_SEEK_SECONDS,
-  READER_TEXT_SCALE_CLASS,
-  READER_TEXT_SCALE_FONT_PX,
-  normalizeReaderAccessibilitySettings,
-  readerDataAttributes,
-  readerScrollBehavior,
-  useReaderKeyboardControls,
-  useReaderModalLifecycle,
-  type ReaderAccessibilitySettings,
-  type ReaderKeyboardCommand,
-  type ReaderTextScale,
-} from "../reader-accessibility";
-import {
-  applyReaderTypographyPreset,
-  readingSurfaceClassName,
-  readingSurfaceDataAttributes,
-} from "../reading-surface";
-import {
-  recordFrontendDegradedState,
-  recordFrontendMetric,
-  resolveTimingConfidenceDisplay,
-} from "../performance";
-import {
-  alignmentStatusFromReport,
-  buildReadAlongSyncDebugSnapshot,
-  evaluateBookReadAlongInvariant,
-  HighlightRenderer,
-  ReadAlongWordScheduler,
-  ReadAlongResyncController,
-  readAlongAudioElementForJob,
-  readAlongAnchorForWord,
-  readAlongInvariantStatusLabel,
-  effectiveReadAlongPreferences,
-  readAlongCalibrationOffsetMs,
-  readAlongPreferenceDataAttributes,
-  readAlongRuntimeStateLabel,
-  readAlongVisualModeFromRuntime,
-  scrollReadAlongAnchor,
-  wordTimelineFromHighlightMapV2,
-  wordTimelineFromLegacyHighlightMap,
-  type AlignmentStatus,
-  type ReadAlongHighlightStyle,
-  type ReadAlongHighlightVisualMode,
-  type ReadAlongPreferences,
-  type ReadAlongRuntimeSnapshot,
-  type ReadAlongScrollFollow,
-  type SyncDebugSourceLocator,
-  type HighlightMapV2,
-} from "../readalong";
-import { useAudioWaveformBars } from "../../audioWaveform";
 import type {
   BookCinemaDiagnostics,
   BookImportProfile,
@@ -169,13 +37,159 @@ import type {
   ThemeName,
   VoiceJob,
 } from "../../types";
-import { resolveHighlightCue, type HighlightCue } from "../../highlightMap";
+import { useReadAlongLiveStatus } from "../accessibility";
+import {
+  buildCinemaCurrentReadingSection,
+  buildCinemaInspectorPanels,
+  buildCinemaInspectorSection,
+  buildCinemaTemporaryInspectorSections,
+  buildCinemaWayfindingSection,
+  CinemaFocusModeToolbar,
+  CinemaInspectorDock,
+  type CinemaMobilePanelSpec,
+  CinemaMobileSheet,
+  CinemaShell,
+  CinemaTheatreChrome,
+  CinemaTheatreTransport,
+  CinemaTransportBar,
+  type CinemaTransportModel,
+  cinemaContractFromBookSource,
+  cinemaMoreActionsForContext,
+  deriveCinemaPlaybackState,
+  filterCinemaHistoryProgress,
+  ReadAlongInvariantDebugPanel,
+  returnFocusToCinemaReaderCanvas,
+  useCinemaFocusController,
+  useCinemaTheatreController,
+} from "../cinema";
+import { HeaderContextSummary } from "../header";
+import { ExitIcon, SettingsIcon } from "../navigation";
+import { OPERATIONAL_RECOVERY_LABELS } from "../operational-status";
+import {
+  recordFrontendDegradedState,
+  recordFrontendMetric,
+  resolveTimingConfidenceDisplay,
+} from "../performance";
+import {
+  generatedAudioLifecycleFromJob,
+  playbackActionLabel,
+  playbackTimeLabels,
+} from "../playback";
+import { PolicyScopeSummary, policyScopeSummary, SourcePolicyPinEditor } from "../policy";
+import type { UiMemoryCinemaState } from "../preferences";
+import {
+  type AlignmentStatus,
+  alignmentStatusFromReport,
+  buildReadAlongSyncDebugSnapshot,
+  effectiveReadAlongPreferences,
+  evaluateBookReadAlongInvariant,
+  type HighlightMapV2,
+  HighlightRenderer,
+  type ReadAlongHighlightStyle,
+  type ReadAlongHighlightVisualMode,
+  type ReadAlongPreferences,
+  ReadAlongResyncController,
+  type ReadAlongRuntimeSnapshot,
+  type ReadAlongScrollFollow,
+  ReadAlongWordScheduler,
+  readAlongAnchorForWord,
+  readAlongAudioElementForJob,
+  readAlongCalibrationOffsetMs,
+  readAlongInvariantStatusLabel,
+  readAlongPreferenceDataAttributes,
+  readAlongRuntimeStateLabel,
+  readAlongVisualModeFromRuntime,
+  type SyncDebugSourceLocator,
+  scrollReadAlongAnchor,
+  wordTimelineFromHighlightMapV2,
+  wordTimelineFromLegacyHighlightMap,
+} from "../readalong";
+import {
+  normalizeReaderAccessibilitySettings,
+  READER_LINE_HEIGHT_RATIO,
+  READER_LINE_SPACING_CLASS,
+  READER_MEASURE_CLASS,
+  READER_SEEK_SECONDS,
+  READER_TEXT_SCALE_CLASS,
+  READER_TEXT_SCALE_FONT_PX,
+  type ReaderAccessibilitySettings,
+  type ReaderKeyboardCommand,
+  type ReaderTextScale,
+  readerDataAttributes,
+  readerScrollBehavior,
+  useReaderKeyboardControls,
+  useReaderModalLifecycle,
+} from "../reader-accessibility";
+import {
+  playbackProgressForBookmark,
+  type ReaderBookmarkItem,
+  type ReaderOutlineItem,
+  type ReaderRecentPositionItem,
+  ReaderWayfindingPanel,
+  readerBookmarksFromProgress,
+  readerOutlineFromBookScopes,
+  readerRecentPositionsFromProgress,
+} from "../reader-navigation";
+import {
+  applyReaderTypographyPreset,
+  readingSurfaceClassName,
+  readingSurfaceDataAttributes,
+} from "../reading-surface";
+import { ReaderSettingsPopover } from "../settings/ReaderSettingsPopover";
+import {
+  bookSourceLifecycleEnvelope,
+  sourceSelectorOption,
+} from "../source-lifecycle/sourceSelectors";
+import { TEMPORARY_SOURCE_COPY } from "../temporary-source-copy";
+import { importBookCinemaSources, normalizeBookCinemaImportFiles } from "./bookCinemaImportHelpers";
+import {
+  BOOK_SOURCE_ACCEPT,
+  type BookCinemaPolicyNote,
+  type BookPage,
+  type BookPaginationResult,
+  type BookScopeOption,
+  bookCinemaLiveAnnouncement,
+  bookCinemaPolicyNotes,
+  bookScopeKey,
+  bookScopeLabel,
+  bookScopeOptions,
+  bookScopeSpans,
+  bookScopeText,
+  bookSourceName,
+  estimateBookWordsPerPage,
+  normalizeBookScopeForBook,
+  paginateBookSpans,
+  resolveBookActiveWordIndex,
+  resolveBookTimingCueWordIndexes,
+  resolveBookTimingMapV2WordIndexes,
+  resolveDefaultBookScope,
+  resolveDisplayedBookActiveWordIndex,
+  visibleBookSpans,
+} from "./model";
+import {
+  type BookPageStructuredBlock,
+  bookPageBlocksFromScopeContent,
+  bookPageStructuredBlocks,
+} from "./pageStructure";
 
 const LazyBookDocumentReaderStage = lazy(() =>
   import("../cinema/BookDocumentReaderStage").then((module) => ({
     default: module.BookDocumentReaderStage,
   })),
 );
+
+export type { ReaderAccessibilitySettings } from "../reader-accessibility";
+export {
+  DEFAULT_READER_ACCESSIBILITY_SETTINGS,
+  normalizeReaderAccessibilitySettings,
+  READER_ACCESSIBILITY_STORAGE_KEY,
+} from "../reader-accessibility";
+export type {
+  BookCinemaPolicyNote,
+  BookPage,
+  BookPaginationResult,
+  BookScopeOption,
+} from "./model";
 export {
   BOOK_SOURCE_ACCEPT,
   bookCinemaLiveAnnouncement,
@@ -191,24 +205,12 @@ export {
   normalizeBookScopeForBook,
   paginateBookSpans,
   resolveBookActiveWordIndex,
+  resolveBookTimingCueWordIndexes,
+  resolveBookTimingMapV2WordIndexes,
   resolveDefaultBookScope,
   resolveDisplayedBookActiveWordIndex,
-  resolveBookTimingMapV2WordIndexes,
-  resolveBookTimingCueWordIndexes,
   visibleBookSpans,
 } from "./model";
-export {
-  DEFAULT_READER_ACCESSIBILITY_SETTINGS,
-  READER_ACCESSIBILITY_STORAGE_KEY,
-  normalizeReaderAccessibilitySettings,
-} from "../reader-accessibility";
-export type {
-  BookCinemaPolicyNote,
-  BookPage,
-  BookPaginationResult,
-  BookScopeOption,
-} from "./model";
-export type { ReaderAccessibilitySettings } from "../reader-accessibility";
 export type BookCinemaTextSize = ReaderTextScale;
 export type BookCinemaKeyboardCommand = ReaderKeyboardCommand;
 
@@ -1296,6 +1298,7 @@ export function BookCinemaOverlay({
   const hasPlayableAudio = Boolean(activeBookJob && playbackControls.isAvailable);
   const isActiveBookJobGenerating = isBookJobGenerating(activeBookJob);
   const createAudioScope = pointerOption?.scope ?? normalizedScope;
+  const isTemporarySource = book.sourceOwner === "temporary";
   const playbackState = deriveCinemaPlaybackState({
     hasAudio: Boolean(activeBookJob?.audioUrl),
     isGenerating: isProcessing && !activeBookJob,
@@ -1770,6 +1773,20 @@ export function BookCinemaOverlay({
     onStateChange: onUiMemoryFocusStateChange,
     resetSignal: uiMemoryResetSignal,
   });
+  const cinemaMoreActions = useMemo(() => {
+    let audioAction: "create" | "none" | "retry" = "none";
+    if (activeBookJob && playbackState === "degraded") {
+      audioAction = "retry";
+    } else if (canCreateAudio) {
+      audioAction = "create";
+    }
+
+    return cinemaMoreActionsForContext({
+      audioAction,
+      includeDiagnostics: cinemaFocus.mode === "debug",
+      includeTemporaryActions: isTemporarySource,
+    });
+  }, [activeBookJob, canCreateAudio, cinemaFocus.mode, isTemporarySource, playbackState]);
   const cinemaTheatre = useCinemaTheatreController(dialogRef);
   const focusedAccessibilitySettings = cinemaTheatre.active
     ? applyReaderTypographyPreset("theatre", normalizedAccessibility)
@@ -2085,6 +2102,7 @@ export function BookCinemaOverlay({
             />
             <div className="hidden min-w-[20rem] shrink-0 lg:block">
               <CinemaFocusModeToolbar
+                actions={cinemaMoreActions}
                 activePanelId={cinemaFocus.activePanelId}
                 mode={cinemaFocus.mode}
                 onAdvancedAction={(action) => {
@@ -2092,16 +2110,45 @@ export function BookCinemaOverlay({
                   cinemaFocus.setActivePanelId(action.panelId);
                 }}
                 onCommandPalette={onCommandPaletteOpen}
+                onCreateAudio={() => {
+                  onCreateAudio(book, createAudioScope);
+                }}
+                onDiscardTemporarySource={
+                  isTemporarySource && onDiscardTemporarySource
+                    ? () => {
+                        onDiscardTemporarySource(book);
+                      }
+                    : undefined
+                }
                 onHelpGuide={onHelpOpen}
+                onKeepTemporarySource={
+                  isTemporarySource && onKeepTemporarySource
+                    ? () => {
+                        onKeepTemporarySource(book);
+                      }
+                    : undefined
+                }
                 onKeyboardShortcuts={onShortcutCheatSheetOpen}
                 onMenuOpen={() => {
                   setSettingsOpen(false);
                 }}
                 onModeChange={cinemaFocus.setMode}
+                onOpenInspector={() => {
+                  cinemaFocus.setMode("inspect");
+                  cinemaFocus.setActivePanelId("overview");
+                }}
+                onReturnPreview={onClose}
+                onReturnReview={onClose}
                 onReaderSettings={() => {
                   setSettingsOpen(true);
                 }}
+                onSourceDetails={() => {
+                  cinemaFocus.setMode("inspect");
+                  cinemaFocus.setActivePanelId("overview");
+                }}
                 onTheatreMode={handleTheatreMode}
+                sourceOwner={book.sourceOwner}
+                temporarySourceId={book.temporarySourceId}
               />
             </div>
             {timingConfidence.isDegraded ? (

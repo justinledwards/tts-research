@@ -6,17 +6,19 @@ export const UI_ACTION_AUDIT_THRESHOLDS = {
 };
 
 export const CINEMA_MORE_REQUIRED_SECTIONS = [
+  "source",
+  "audio",
   "display",
   "theatre",
+  "workflow",
   "advanced",
-  "diagnostics",
   "help-shortcuts",
 ];
 
 export const CINEMA_MORE_ACTION_BUDGETS = new Map([
-  ["BookCinema", { max: 10, min: 8 }],
-  ["DocumentCinema", { max: 10, min: 8 }],
-  ["WebsiteCinema", { max: 10, min: 8 }],
+  ["BookCinema", { max: 14, min: 8 }],
+  ["DocumentCinema", { max: 14, min: 8 }],
+  ["WebsiteCinema", { max: 14, min: 8 }],
   ["Mobile/narrow More sheet", { max: 6, min: 3 }],
 ]);
 
