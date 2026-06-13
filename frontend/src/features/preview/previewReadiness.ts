@@ -46,6 +46,7 @@ export interface PreviewReadinessModelInput {
   readonly sourceError?: string | null;
   readonly sourceLabel: string;
   readonly sourcePreparing: boolean;
+  readonly temporaryCinemaDisabledReason?: string;
   readonly voiceCapabilityReason?: string | null;
   readonly voiceLabel: string;
 }
@@ -83,9 +84,15 @@ export function resolvePreviewReadinessModel(
     input.audioPipeline,
     input.isTemporarySource,
   );
-  const canOpenAudioSurface = input.generatedAudioLifecycle === "ready";
+  const temporaryCinemaDisabledReason =
+    input.isTemporarySource && input.temporaryCinemaDisabledReason
+      ? input.temporaryCinemaDisabledReason
+      : undefined;
+  const canOpenAudioSurface =
+    input.generatedAudioLifecycle === "ready" && !temporaryCinemaDisabledReason;
   const canCreate = input.canCreate && canAudition;
-  const canOpenTeleprompt = source.status === "ready" && spoken.status === "ready";
+  const canOpenTeleprompt =
+    source.status === "ready" && spoken.status === "ready" && !temporaryCinemaDisabledReason;
   const canOpenTheatre = canOpenTeleprompt;
   const canPlayGeneratedAudio =
     input.generatedAudioLifecycle === "ready" || Boolean(input.audioPipeline?.canUsePartialAudio);
@@ -96,7 +103,7 @@ export function resolvePreviewReadinessModel(
       "Select a ready source or wait for the current run.");
   const openTelepromptDisabledReason = canOpenTeleprompt
     ? undefined
-    : firstBlockingDetail([source, spoken]);
+    : (temporaryCinemaDisabledReason ?? firstBlockingDetail([source, spoken]));
 
   return {
     canAudition,
@@ -104,7 +111,9 @@ export function resolvePreviewReadinessModel(
     canOpenCinema: canOpenAudioSurface,
     canOpenTeleprompt,
     canOpenTheatre,
-    cinemaDisabledReason: canOpenAudioSurface ? undefined : audio.detail,
+    cinemaDisabledReason: canOpenAudioSurface
+      ? undefined
+      : (temporaryCinemaDisabledReason ?? audio.detail),
     confirmations: [
       { label: "Source", value: input.sourceLabel },
       { label: "Scope", value: input.scopeLabel },

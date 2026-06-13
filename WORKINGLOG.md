@@ -1,3 +1,14 @@
+## 2026-06-13 11:43 CEST - Commit Temporary Theatre Continuity
+- [x] Review and stage temporary Theatre continuity files
+- [x] Commit temporary Theatre continuity work package
+
+## 2026-06-13 11:02 CEST - Teleprompt Theatre Temporary Continuity
+- [x] Inspect temporary Teleprompt and Theatre continuity paths
+- [x] Patch temporary return, audio, expiry, and fullscreen fallback gaps
+- [x] Add focused regression coverage
+- [x] Run project checks
+- Validation: focused frontend Preview/Teleprompt/Cinema Vitest passed; focused backend temporary-source expiry tests passed; frontend typecheck passed; `git diff --check` passed; `pnpm e2e:teleprompt-memory` and `pnpm e2e:responsive-snapshots` passed. `pnpm validate:ux-final` passed Teleprompt memory, readalong sync, accessibility, responsive snapshots, command palette, and context panel gates, then failed on the existing UI action audit/surface complexity blocker where Preview generation recovery timed out waiting for `preview-generation-cockpit`; final report written to `output/final-ux-gates/latest/final-ux-summary.md`.
+
 ## 2026-06-13 02:21 CEST - Commit Cinema More Menu Package
 - [x] Review Cinema More package diff
 - [x] Stage intended Cinema More files

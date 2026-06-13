@@ -538,6 +538,49 @@ func TestTemporarySourceExpiryRemovesArtifacts(t *testing.T) {
 	}
 }
 
+func TestTemporarySourceGetRefreshesExpiry(t *testing.T) {
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:             1,
+			JobDataDir:             t.TempDir(),
+			ProjectDataDir:         t.TempDir(),
+			SourcePrepDir:          t.TempDir(),
+			TemporarySourceDataDir: t.TempDir(),
+			TemporaryArtifactDir:   t.TempDir(),
+			TemporaryAudioDir:      t.TempDir(),
+			TemporaryProgressDir:   t.TempDir(),
+			TemporarySourceTTL:     time.Hour,
+		},
+	)
+	temporary, err := service.CreateTemporarySource(context.Background(), pipeline.CreateTemporarySourceRequest{
+		Text:       "This temporary source should stay alive while Theatre is active.",
+		SourceName: "active.md",
+	})
+	if err != nil {
+		t.Fatalf("CreateTemporarySource returned error: %v", err)
+	}
+	refreshed, err := service.GetTemporarySource(temporary.ID)
+	if err != nil {
+		t.Fatalf("GetTemporarySource returned error: %v", err)
+	}
+	if !refreshed.LastAccessedAt.After(temporary.LastAccessedAt) {
+		t.Fatalf("LastAccessedAt = %s, want after %s", refreshed.LastAccessedAt, temporary.LastAccessedAt)
+	}
+	if !refreshed.ExpiresAt.After(temporary.ExpiresAt) {
+		t.Fatalf("ExpiresAt = %s, want after %s", refreshed.ExpiresAt, temporary.ExpiresAt)
+	}
+	removed, err := service.CleanupExpiredTemporarySources(temporary.ExpiresAt.Add(time.Millisecond))
+	if err != nil {
+		t.Fatalf("CleanupExpiredTemporarySources returned error: %v", err)
+	}
+	if len(removed) != 0 {
+		t.Fatalf("removed = %#v, want active temporary source preserved", removed)
+	}
+}
+
 func TestTemporarySourceCreationAcceptsLocalReadableDocument(t *testing.T) {
 	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
 	localPath := filepath.Join(t.TempDir(), "local.md")

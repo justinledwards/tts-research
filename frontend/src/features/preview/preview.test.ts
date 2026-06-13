@@ -376,6 +376,27 @@ describe("preview readiness model", () => {
     });
   });
 
+  it("disables temporary Teleprompt and Theatre actions when temporary cinema is rolled back", () => {
+    const disabledReason =
+      "Website Cinema for temporary sources is disabled by the temporarySources.cinema feature flag.";
+    const model = resolvePreviewReadinessModel(
+      readinessInput({
+        generatedAudioLifecycle: "ready",
+        isTemporarySource: true,
+        temporaryCinemaDisabledReason: disabledReason,
+      }),
+    );
+
+    expect(model.canOpenCinema).toBe(false);
+    expect(model.canOpenTeleprompt).toBe(false);
+    expect(model.canOpenTheatre).toBe(false);
+    expect(model.canCreate).toBe(true);
+    expect(model.generatedPlaybackDisabledReason).toBeUndefined();
+    expect(model.cinemaDisabledReason).toBe(disabledReason);
+    expect(model.openTelepromptDisabledReason).toBe(disabledReason);
+    expect(model.openTheatreDisabledReason).toBe(disabledReason);
+  });
+
   it("surfaces source preparation and missing spoken form", () => {
     const preparing = resolvePreviewReadinessModel(
       readinessInput({ hasSource: true, sourcePreparing: true }),

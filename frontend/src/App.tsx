@@ -3979,7 +3979,11 @@ export function App() {
   });
   const playbackLifecycleReady =
     playbackControls.isAvailable && generatedAudioLifecycle === "ready";
-  const canOpenCurrentCinema = generatedAudioLifecycle === "ready";
+  const temporaryCinemaActionsEnabled = !activeNarrationIsTemporary || temporaryCinemaEnabled;
+  const temporaryCinemaActionDisabledReason = temporaryCinemaActionsEnabled
+    ? undefined
+    : temporaryCinemaDisabledReason();
+  const canOpenCurrentCinema = generatedAudioLifecycle === "ready" && temporaryCinemaActionsEnabled;
   const canonicalPreviewHasBlocks = canonicalPreviewSpeechPlanHasBlocks(canonicalPreviewSpeechPlan);
   const hasCanonicalPreviewSpeechText =
     !canonicalPreviewHasBlocks || canonicalPreviewSpeechPlan.text.trim().length > 0;
@@ -4498,11 +4502,33 @@ export function App() {
     setTeleprompterOpenSignal((currentSignal) => currentSignal + 1);
   }, [bookCinemaOpenTiming, canOpenBookCinema, themeName]);
   const openTelepromptStage = useCallback(() => {
+    if (!temporaryCinemaActionsEnabled) {
+      const message = temporaryCinemaActionDisabledReason ?? temporaryCinemaDisabledReason();
+      setSourcePrepError(message);
+      announceAssertive(message);
+      return;
+    }
     runWorkspaceStageAction("openTeleprompt");
-  }, [runWorkspaceStageAction]);
+  }, [
+    announceAssertive,
+    runWorkspaceStageAction,
+    temporaryCinemaActionDisabledReason,
+    temporaryCinemaActionsEnabled,
+  ]);
   const openTelepromptTheatreStage = useCallback(() => {
+    if (!temporaryCinemaActionsEnabled) {
+      const message = temporaryCinemaActionDisabledReason ?? temporaryCinemaDisabledReason();
+      setSourcePrepError(message);
+      announceAssertive(message);
+      return;
+    }
     runWorkspaceStageAction("openTheatre");
-  }, [runWorkspaceStageAction]);
+  }, [
+    announceAssertive,
+    runWorkspaceStageAction,
+    temporaryCinemaActionDisabledReason,
+    temporaryCinemaActionsEnabled,
+  ]);
   const handleSelectBookCinemaSource = useCallback(
     (bookId: string) => {
       const book = bookSources.find((item) => item.id === bookId);
@@ -8888,6 +8914,13 @@ export function App() {
   } else {
     reviewCommandBlockedReason = "Open Review before using this command.";
   }
+  let openTheatreCommandBlockedReason: string | undefined;
+  if (temporaryCinemaActionsEnabled) {
+    openTheatreCommandBlockedReason =
+      contentMode === "teleprompt" ? undefined : "Open Teleprompt before using Theatre.";
+  } else {
+    openTheatreCommandBlockedReason = temporaryCinemaActionDisabledReason;
+  }
   const playbackLifecycle: GeneratedAudioLifecycleState = playbackLifecycleReady
     ? "ready"
     : generatedAudioLifecycle;
@@ -9203,8 +9236,8 @@ export function App() {
     },
     {
       availability: {
-        reason: contentMode === "teleprompt" ? undefined : "Open Teleprompt before using Theatre.",
-        state: contentMode === "teleprompt" ? "available" : "blocked",
+        reason: openTheatreCommandBlockedReason,
+        state: openTheatreCommandBlockedReason ? "blocked" : "available",
       },
       category: "Teleprompt",
       detail: "Open Theatre from the current Teleprompt cue.",
@@ -10375,6 +10408,7 @@ export function App() {
               text={text}
               temporaryReview={temporaryReviewAdapter}
               temporaryReviewMode={temporaryReviewMode}
+              temporaryCinemaDisabledReason={temporaryCinemaActionDisabledReason}
               voiceProfileId={selectedVoiceProfileId}
               voiceProfileLabel={selectedVoiceProfileLabel}
               voiceProfiles={voiceProfiles}
@@ -13405,6 +13439,7 @@ function SourceTextPanel({
   text,
   temporaryReview,
   temporaryReviewMode,
+  temporaryCinemaDisabledReason,
   voiceProfileId,
   voiceProfileLabel,
   voiceProfiles,
@@ -13486,6 +13521,7 @@ function SourceTextPanel({
   text: string;
   temporaryReview: TemporaryReviewStateAdapter | null;
   temporaryReviewMode: ReviewMode;
+  temporaryCinemaDisabledReason?: string;
   voiceProfileId: string;
   voiceProfileLabel: string;
   voiceProfiles: VoiceProfile[];
@@ -13582,7 +13618,7 @@ function SourceTextPanel({
     text,
   });
   const workbenchAudioLifecycle = generatedAudioLifecycle;
-  const canOpenCinema = workbenchAudioLifecycle === "ready";
+  const canOpenCinema = workbenchAudioLifecycle === "ready" && !temporaryCinemaDisabledReason;
   const previewGenerationFocus =
     contentMode === "preview" &&
     Boolean(
@@ -13732,6 +13768,7 @@ function SourceTextPanel({
           shortcutPreferences={shortcutPreferences}
           sourceLifecycle={sourceLifecycle}
           sourceMode={sourceMode}
+          temporaryCinemaDisabledReason={temporaryCinemaDisabledReason}
           text={text}
           voiceProfileLabel={voiceProfileLabel}
           runConfigurationLabel={runConfigurationLabel}
@@ -13917,6 +13954,7 @@ function NarrationPreviewStage({
   shortcutPreferences,
   sourceLifecycle,
   sourceMode,
+  temporaryCinemaDisabledReason,
   text,
   voiceProfileLabel,
   runConfigurationLabel,
@@ -13955,6 +13993,7 @@ function NarrationPreviewStage({
   shortcutPreferences: ShortcutPreferences;
   sourceLifecycle: SourceLifecycleEnvelope;
   sourceMode: SourceMode;
+  temporaryCinemaDisabledReason?: string;
   text: string;
   voiceProfileLabel: string;
   runConfigurationLabel: string;
@@ -14076,6 +14115,7 @@ function NarrationPreviewStage({
     sourceError,
     sourceLabel,
     sourcePreparing,
+    temporaryCinemaDisabledReason,
     voiceCapabilityReason: createAndListenCapabilityReason,
     voiceLabel: voiceProfileLabel,
   });
