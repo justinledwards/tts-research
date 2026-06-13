@@ -35,19 +35,20 @@ export function CinemaMobileSheet<TPanelId extends string>({
   return (
     <section
       aria-label={label}
-      className="z-[55] max-h-[min(44vh,24rem)] overflow-y-auto rounded-t-2xl border-t bg-[var(--vs-raised)] px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 shadow-2xl vs-border lg:hidden"
+      className="z-[55] max-h-[min(46vh,26rem)] overflow-y-auto rounded-t-lg border-t bg-[var(--vs-raised)] px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 shadow-2xl vs-border sm:px-4 lg:hidden"
       data-cinema-mobile-sheet=""
       {...overlayDataAttributes("bottom-sheet", "mobile-bottom-sheet")}
       id={id}
     >
       <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-[var(--vs-border-strong)]" />
       <div
-        className="mb-4 grid snap-x grid-flow-col auto-cols-[minmax(6rem,1fr)] overflow-x-auto border-b text-sm font-semibold vs-border"
-        style={{ gridTemplateColumns: `repeat(${panels.length.toString()}, minmax(6rem, 1fr))` }}
+        className="mb-4 grid snap-x grid-flow-col auto-cols-[minmax(8.75rem,max-content)] gap-1 overflow-x-auto overscroll-x-contain border-b pb-1 text-sm font-semibold vs-border"
+        data-cinema-mobile-sheet-tabs=""
       >
         {panels.map((panel) => (
           <Button
-            className="min-h-11 snap-start gap-2 rounded-none border-x-0 border-t-0 px-2 pb-3 shadow-none"
+            className="min-h-11 snap-start gap-2 whitespace-normal rounded-none border-x-0 border-t-0 px-2 pb-3 text-center text-xs leading-4 shadow-none sm:text-sm"
+            data-cinema-mobile-sheet-tab={panel.id}
             key={panel.id}
             onClick={() => {
               onPanelChange(panel.id);

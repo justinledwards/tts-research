@@ -2248,7 +2248,9 @@ function TemporarySourceBehaviorPanel({
             project. Presets do not promote these choices into project defaults.
           </p>
         </div>
-        <StatusChip tone="warning">{TEMPORARY_SOURCE_COPY.terms.expiresAfterInactivity}</StatusChip>
+        <StatusChip tone="metadata">
+          {TEMPORARY_SOURCE_COPY.terms.expiresAfterInactivity}
+        </StatusChip>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">

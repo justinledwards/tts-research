@@ -2272,3 +2272,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] add focused backend and frontend regression coverage
 - [x] run local review commands
 - Validation: focused backend discard/cleanup tests passed; focused frontend temporary source copy, QuickListen, and WorkspaceDrawer tests passed; format, lint, and frontend typecheck passed. `pnpm e2e:temporary-sources`, `pnpm e2e:teleprompt-memory`, and `pnpm validate:local` passed. `pnpm check` failed in existing backend TempDir cleanup flake `TestTemporarySourceListJobsAndStorageTypeBytes`.
+
+## 2026-06-13 17:42 CEST - Responsive Temporary Source Polish
+
+- [x] map mobile temporary source surfaces and responsive budgets
+- [x] refine Quick Listen, Cinema, Theatre, Settings, and Inspector narrow layouts
+- [x] add or update responsive regression coverage
+- [x] run local review commands
+- Validation: focused frontend QuickListen, Settings, Cinema, Theatre, and temporary surface budget tests passed; frontend typecheck, format, lint, and diff check passed. `pnpm e2e:responsive-snapshots` passed. `pnpm e2e:surface-complexity` failed because the upstream UI action audit exited nonzero before budget evaluation; its generated inventory still showed Cinema More actions for Book, Document, and Website surfaces. `pnpm validate:ux-final` passed responsive, command palette, context panel, accessibility, readalong sync, and teleprompt memory gates, then failed on existing UI action audit timeout waiting for `preview-generation-cockpit` and the derived More-menu gate.

@@ -164,6 +164,7 @@ describe("SettingsPanel", () => {
     expect(markup).toContain("Temporary source behavior");
     expect(markup).toContain("Remember temporary work for this session");
     expect(markup).toContain("Expiry duration");
+    expect(markup).toContain('data-status-tone="metadata"');
     expect(markup).toContain("Clear temporary sources");
     expect(markup).toContain("Project sources are unchanged.");
     expect(markup).toContain("Ask before discarding generated temporary audio");

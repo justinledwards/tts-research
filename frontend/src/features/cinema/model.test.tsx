@@ -677,12 +677,16 @@ describe("CinemaMobileSheet", () => {
   it("keeps temporary action tabs stable when the mobile sheet has more than four panels", () => {
     const markup = renderToStaticMarkup(
       <CinemaMobileSheet
-        activePanelId="keep"
+        activePanelId="keep-in-project"
         id="cinema-more-sheet"
         label="Cinema more controls"
         panels={[
-          { children: <p>Keep body</p>, id: "keep", label: "Keep" },
-          { children: <p>Discard body</p>, id: "discard", label: "Discard" },
+          { children: <p>Keep body</p>, id: "keep-in-project", label: "Keep in project" },
+          {
+            children: <p>Discard body</p>,
+            id: "discard-temporary-source",
+            label: "Discard temporary source",
+          },
           { children: <p>Source body</p>, id: "source", label: "Source" },
           { children: <p>Structure body</p>, id: "structure", label: "Structure" },
           { children: <p>Narration body</p>, id: "narration", label: "Narration" },
@@ -691,9 +695,12 @@ describe("CinemaMobileSheet", () => {
       />,
     );
 
-    expect(markup).toContain("auto-cols-[minmax(6rem,1fr)]");
-    expect(markup).toContain(">Keep<");
-    expect(markup).toContain(">Discard<");
+    expect(markup).toContain("data-cinema-mobile-sheet-tabs");
+    expect(markup).toContain("auto-cols-[minmax(8.75rem,max-content)]");
+    expect(markup).toContain('data-cinema-mobile-sheet-tab="keep-in-project"');
+    expect(markup).toContain('data-cinema-mobile-sheet-tab="discard-temporary-source"');
+    expect(markup).toContain(">Keep in project<");
+    expect(markup).toContain(">Discard temporary source<");
     expect(markup).toContain(">Source<");
     expect(markup).toContain(">Structure<");
     expect(markup).toContain(">Narration<");

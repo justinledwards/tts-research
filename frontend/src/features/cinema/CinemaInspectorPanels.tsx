@@ -444,7 +444,7 @@ function TemporaryFacts({
       </dl>
       {supportingContent}
       <div className="flex flex-wrap gap-2">
-        <StatusChip tone="metadata">Temporary</StatusChip>
+        <StatusChip tone="metadata">Temporary source</StatusChip>
       </div>
     </div>
   );

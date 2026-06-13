@@ -34,10 +34,12 @@ describe("temporarySessionToPreparedSource", () => {
 
     expect(markup).toContain('data-testid="quick-listen-temporary-source-temp-book-1"');
     expect(markup).toContain('data-testid="ui-action-quick-listen-temporary-open-temp-book-1"');
+    expect(markup).toContain("col-span-2 sm:col-span-auto");
     expect(markup).toContain(
       "Temporary source expired after inactivity. Extend expiry before reopening it.",
     );
     expect(markup).toContain('data-testid="ui-action-quick-listen-temporary-discard-temp-book-1"');
+    expect(markup).toContain(">Discard temporary source<");
   });
 
   it("adapts temporary webpages into Website Cinema sources with extraction metadata", () => {
@@ -156,6 +158,7 @@ describe("temporarySessionToPreparedSource", () => {
     expect(pasteMarkup).toContain("Temporary source text");
     expect(pasteMarkup).toContain('data-testid="ui-action-quick-listen-paste-open-cinema"');
     expect(pasteMarkup).toContain("Generated temporary audio");
+    expect(pasteMarkup).toContain('data-status-tone="metadata"');
     expect(pasteMarkup).toContain(
       "Provider-backed generation can send request text, selected voice settings, and run configuration.",
     );

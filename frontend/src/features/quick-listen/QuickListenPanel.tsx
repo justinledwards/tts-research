@@ -224,7 +224,7 @@ export function QuickListenPanel({
             <StatusChip tone="metadata">{TEMPORARY_SOURCE_COPY.terms.temporarySource}</StatusChip>
             <StatusChip tone="success">Local-first when possible</StatusChip>
             <StatusChip tone="metadata">Generated temporary audio</StatusChip>
-            <StatusChip tone="warning">
+            <StatusChip tone="metadata">
               {TEMPORARY_SOURCE_COPY.terms.expiresAfterInactivity}
               {` · about ${expiryHours.toString()} hours`}
             </StatusChip>
@@ -767,8 +767,9 @@ function TemporarySourceRow({
           </p>
         ) : null}
       </div>
-      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
         <Button
+          className="col-span-2 sm:col-span-auto"
           data-testid={`ui-action-quick-listen-temporary-open-${source.id}`}
           data-ui-action-owner="temporary-source"
           disabledReason={openDisabledReason}
@@ -783,6 +784,7 @@ function TemporarySourceRow({
           Open
         </Button>
         <Button
+          className="min-w-0"
           data-testid={`ui-action-quick-listen-temporary-extend-${source.id}`}
           data-ui-action-owner="temporary-source"
           onClick={() => {
@@ -794,6 +796,7 @@ function TemporarySourceRow({
           Extend
         </Button>
         <Button
+          className="min-w-0"
           data-testid={`ui-action-quick-listen-temporary-clean-audio-${source.id}`}
           data-ui-action-owner="temporary-source"
           onClick={() => {
@@ -811,6 +814,7 @@ function TemporarySourceRow({
           {TEMPORARY_SOURCE_COPY.actions.generatedAudioOnly}
         </Button>
         <Button
+          className="min-w-0"
           data-testid={`ui-action-quick-listen-temporary-clean-artifacts-${source.id}`}
           data-ui-action-owner="temporary-source"
           onClick={() => {
@@ -825,6 +829,7 @@ function TemporarySourceRow({
           {TEMPORARY_SOURCE_COPY.actions.removeTemporaryArtifacts}
         </Button>
         <Button
+          className="col-span-2 min-w-0 sm:col-span-auto"
           data-testid={`ui-action-quick-listen-temporary-discard-${source.id}`}
           data-ui-action-owner="temporary-source"
           onClick={() => {

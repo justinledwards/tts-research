@@ -2385,7 +2385,7 @@ function PreparedSourceCinemaMobileSheet({
               {isTemporarySource ? (
                 <div className="mt-3 grid gap-2 border-t pt-3 vs-border">
                   <div className="flex flex-wrap gap-2">
-                    <StatusChip tone="metadata">Temporary</StatusChip>
+                    <StatusChip tone="metadata">Temporary source</StatusChip>
                     <StatusChip tone="metadata">{temporaryContract.statusLabel}</StatusChip>
                   </div>
                   <StatusChip tone="metadata">{temporaryContract.expiryLabel}</StatusChip>
