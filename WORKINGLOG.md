@@ -2281,6 +2281,15 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] run local review commands
 - Validation: focused frontend QuickListen, Settings, Cinema, Theatre, and temporary surface budget tests passed; frontend typecheck, format, lint, and diff check passed. `pnpm e2e:responsive-snapshots` passed. `pnpm e2e:surface-complexity` failed because the upstream UI action audit exited nonzero before budget evaluation; its generated inventory still showed Cinema More actions for Book, Document, and Website surfaces. `pnpm validate:ux-final` passed responsive, command palette, context panel, accessibility, readalong sync, and teleprompt memory gates, then failed on existing UI action audit timeout waiting for `preview-generation-cockpit` and the derived More-menu gate.
 
+## 2026-06-13 20:44 CEST - Golden Minute Temporary Audio QA
+
+- [x] reproduce Golden Minute global preview player failure
+- [x] inspect durable and temporary audio/read-along evidence paths
+- [x] fix global preview, timing, highlight, or currentness gaps
+- [x] add focused regression coverage
+- [x] run local review commands
+- Validation: focused Teleprompt cue sync Vitest passed; frontend typecheck passed; `git diff --check` passed; `pnpm e2e:readalong-sync` passed. `pnpm e2e:golden-minute` still fails after Preview/Cinema evidence when Teleprompt Theatre withholds play/pause for timing trust (`Theatre playback... Audio may be available, but Theatre is withholding audio-follow until timing is trusted.`); latest screenshots are under `output/golden-minute/latest/screenshots`. `pnpm e2e:read-along-fidelity` failed waiting for `ui-action-cinema-advanced-diagnostics` in Book Cinema.
+
 ## 2026-06-13 18:24 CEST - Stable Action Evidence Surfaces
 
 - [x] reproduce action inventory, stage traversal, and evidence failures

@@ -192,6 +192,120 @@ describe("teleprompt cue timeline sync", () => {
     expect(sync.activeCue?.wordTimings[0]?.sourceWordId).toBe("source-1:demo:word:20");
   });
 
+  it("trusts short Golden Minute boundary cues when phrase timing has provider words", () => {
+    const boundaryBlocks = [
+      block({
+        id: "gm-p5",
+        index: 7,
+        spokenText: "Then listen.",
+      }),
+    ];
+    const timeline = buildTelepromptCueTimeline({
+      blocks: boundaryBlocks,
+      highlightMapV2: highlightMapV2([
+        phraseEntry({
+          audioEndMs: 43_000,
+          audioStartMs: 41_000,
+          fragmentIndex: 5,
+          spokenText: "Then listen",
+        }),
+        wordEntry({
+          audioEndMs: 41_700,
+          audioStartMs: 41_000,
+          fragmentIndex: 5,
+          sourceWordIndex: 120,
+          spokenText: "Then",
+          tokenIndex: 0,
+        }),
+        wordEntry({
+          audioEndMs: 43_000,
+          audioStartMs: 41_700,
+          fragmentIndex: 5,
+          sourceWordIndex: 121,
+          spokenText: "listen",
+          tokenIndex: 1,
+        }),
+      ]),
+    });
+
+    const sync = resolveTelepromptCueSync({
+      activeBlockId: "gm-p5",
+      mode: "audio-follow",
+      playbackAvailable: true,
+      playbackCursorSec: 41.35,
+      playbackPlaying: true,
+      timeline,
+    });
+
+    expect(sync.activeCue?.sourceBlockId).toBe("gm-p5");
+    expect(sync.activeCue?.timingLevel).toBe("word");
+    expect(sync.activeCue?.timingSource).toBe("provider-word");
+    expect(sync.activeCue?.currentSourceWordId).toBe("source-1:demo:word:120");
+  });
+
+  it("keeps multi-phrase Golden Minute paragraphs in one cue range", () => {
+    const paragraphBlocks = [
+      block({
+        id: "gm-p2",
+        index: 3,
+        spokenText:
+          "The first source block names the route: Intake to Review, Preview, mock audio, Cinema, and Teleprompt Theatre, with each handoff recorded for later evidence.",
+      }),
+      block({
+        id: "gm-p3",
+        index: 4,
+        spokenText:
+          "Before playback begins, she taps the source locator golden minute resume anchor, waits for a breath, and checks that citation stays silent under the default policy.",
+      }),
+    ];
+    const timeline = buildTelepromptCueTimeline({
+      blocks: paragraphBlocks,
+      highlightMapV2: highlightMapV2([
+        phraseEntry({
+          audioEndMs: 15_300,
+          audioStartMs: 11_000,
+          fragmentIndex: 2,
+          spokenText: "The first source block names the route Intake to Review Preview",
+        }),
+        phraseEntry({
+          audioEndMs: 19_500,
+          audioStartMs: 15_300,
+          fragmentIndex: 3,
+          spokenText:
+            "mock audio Cinema and Teleprompt Theatre with each handoff recorded for later evidence",
+        }),
+        wordEntry({
+          audioEndMs: 16_300,
+          audioStartMs: 16_000,
+          fragmentIndex: 3,
+          sourceWordIndex: 44,
+          spokenText: "Cinema",
+          tokenIndex: 44,
+        }),
+        phraseEntry({
+          audioEndMs: 23_800,
+          audioStartMs: 19_500,
+          fragmentIndex: 4,
+          spokenText: "Before playback begins she taps the source locator",
+        }),
+      ]),
+    });
+
+    const sync = resolveTelepromptCueSync({
+      activeBlockId: "gm-p2",
+      mode: "audio-follow",
+      playbackAvailable: true,
+      playbackCursorSec: 16.1,
+      playbackPlaying: true,
+      timeline,
+    });
+
+    expect(timeline.cues[0]?.audioEndMs).toBe(19_500);
+    expect(sync.activeCue?.sourceBlockId).toBe("gm-p2");
+    expect(sync.activeCue?.timingSource).toBe("provider-word");
+    expect(sync.activeCue?.currentSourceWordId).toBe("source-1:demo:word:44");
+  });
+
   it("keeps Cinema handoff anchored to the active cue start time", () => {
     const timeline = buildTelepromptCueTimeline({
       blocks,

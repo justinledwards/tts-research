@@ -570,8 +570,17 @@ async function closeCinema(page) {
 
 async function assertTelepromptTheatreSyncLint(page, { highlightMapV2, jobId }) {
   const failures = [];
+  await revealTelepromptTheatreControls(page);
   const playPause = page.getByTestId("ui-action-teleprompt-theatre-play-pause");
-  await playPause.waitFor({ state: "visible" });
+  await playPause.waitFor({ state: "visible", timeout: 10_000 }).catch(async () => {
+    const placeholderDetail = await page
+      .getByTestId("teleprompt-theatre-playback-placeholder")
+      .textContent()
+      .catch(() => "");
+    throw new Error(
+      `Teleprompt Theatre play/pause was not visible. ${normalizeWhitespace(placeholderDetail)}`,
+    );
+  });
   if (!(await playPause.isEnabled().catch(() => false))) {
     return ["Teleprompt Theatre play/pause was not enabled for sync lint."];
   }
@@ -659,6 +668,29 @@ async function assertTelepromptTheatreSyncLint(page, { highlightMapV2, jobId }) 
     );
   }
   return failures;
+}
+
+async function revealTelepromptTheatreControls(page) {
+  const theatre = page.getByTestId("teleprompt-theatre");
+  await theatre.hover();
+  const playPause = page.getByTestId("ui-action-teleprompt-theatre-play-pause");
+  if (await playPause.isVisible().catch(() => false)) {
+    return;
+  }
+  const toggleControls = page.getByTestId("ui-action-teleprompt-theatre-toggle-controls");
+  await toggleControls.waitFor({ state: "visible", timeout: 5_000 });
+  await toggleControls.click({ force: true });
+  await page.waitForTimeout(250);
+  if (!(await playPause.isVisible().catch(() => false))) {
+    await page.keyboard.press("t");
+    await page.waitForTimeout(250);
+  }
+}
+
+function normalizeWhitespace(value) {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function expectedTelepromptWordAtCursor(map, cursorSec) {

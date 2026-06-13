@@ -47,6 +47,8 @@ export interface TelepromptCueWordTiming {
   readonly sourceWordIndex?: number;
   readonly spokenTokenId?: string;
   readonly text: string;
+  readonly timingLevel?: HighlightMapV2TimingLevel;
+  readonly timingSource?: HighlightMapV2TimingSource;
   readonly wordIndex: number;
 }
 
@@ -210,18 +212,36 @@ function timelineFromHighlightMapV2(
     const matchedEntry = bestUnusedV2EntryForBlock(block, index, anchorEntries, usedEntryIds);
     const draft = cueDraftFromBlock(block);
     if (matchedEntry) {
-      usedEntryIds.add(v2EntryKey(matchedEntry));
-      draft.audioStartMs = resolvedStartMs(matchedEntry);
-      draft.audioEndMs = Math.max(resolvedEndMs(matchedEntry), draft.audioStartMs + 1);
-      draft.confidence = safeConfidence(matchedEntry.confidence, draft.confidence);
+      const matchedEntries = expandV2EntriesForBlock(
+        block,
+        matchedEntry,
+        anchorEntries,
+        usedEntryIds,
+      );
+      for (const entry of matchedEntries) {
+        usedEntryIds.add(v2EntryKey(entry));
+      }
+      const startMs = Math.min(...matchedEntries.map((entry) => resolvedStartMs(entry)));
+      const endMs = Math.max(...matchedEntries.map((entry) => resolvedEndMs(entry)));
+      const confidence =
+        matchedEntries.reduce((total, entry) => total + safeConfidence(entry.confidence, 0), 0) /
+        matchedEntries.length;
+      draft.audioStartMs = startMs;
+      draft.audioEndMs = Math.max(endMs, draft.audioStartMs + 1);
+      draft.confidence = safeConfidence(confidence, draft.confidence);
       draft.timingLevel = matchedEntry.level;
       draft.timingSource = matchedEntry.timingSource;
-      draft.spokenText = block.spokenText || matchedEntry.spokenText || matchedEntry.textQuote;
-      draft.normalizedText = normalizeCueText(draft.spokenText || matchedEntry.normalizedText);
+      draft.spokenText =
+        block.spokenText ||
+        matchedEntries.map((entry) => entry.spokenText || entry.textQuote).join(" ");
+      draft.normalizedText = normalizeCueText(
+        draft.spokenText || matchedEntries.map((entry) => entry.normalizedText).join(" "),
+      );
     } else {
       applyEstimateRange(draft, previousEndMsFromDrafts(index, blocks));
     }
     draft.wordTimings = wordTimingsForV2Cue(map.entries, draft);
+    promoteCueTimingFromTrustedWords(draft);
     return draft;
   });
   return buildTimeline("highlight-map-v2", cues, map.summary.status);
@@ -384,6 +404,43 @@ function bestUnusedV2EntryForBlock(
   );
 }
 
+function expandV2EntriesForBlock(
+  block: RevisionBlock,
+  firstEntry: HighlightMapV2Entry,
+  entries: readonly HighlightMapV2Entry[],
+  usedEntryIds: ReadonlySet<string>,
+): HighlightMapV2Entry[] {
+  const blockText = normalizeCueText(block.spokenText || block.text);
+  const startIndex = Math.max(0, entries.indexOf(firstEntry));
+  const matched = [firstEntry];
+  let combinedText = normalizeCueText(v2EntryText(firstEntry));
+  for (let index = startIndex + 1; index < entries.length; index += 1) {
+    const next = entries[index];
+    if (usedEntryIds.has(v2EntryKey(next))) {
+      continue;
+    }
+    if (!shouldExtendV2CueRange(blockText, combinedText, normalizeCueText(v2EntryText(next)))) {
+      break;
+    }
+    matched.push(next);
+    combinedText = normalizeCueText(`${combinedText} ${v2EntryText(next)}`);
+  }
+  return matched;
+}
+
+function shouldExtendV2CueRange(
+  blockText: string,
+  combinedText: string,
+  nextText: string,
+): boolean {
+  if (!blockText || !nextText || !blockText.includes(nextText)) {
+    return false;
+  }
+  const currentScore = cueTextScore(blockText, combinedText);
+  const candidateScore = cueTextScore(blockText, normalizeCueText(`${combinedText} ${nextText}`));
+  return candidateScore >= currentScore;
+}
+
 function bestLegacyFragmentForBlock(
   block: RevisionBlock,
   fragments: readonly HighlightMap["fragments"][number][],
@@ -427,9 +484,29 @@ function wordTimingsForV2Cue(
       sourceWordIndex: entry.sourceWordIndex,
       spokenTokenId: entry.spokenTokenId,
       text: v2EntryText(entry),
+      timingLevel: entry.level,
+      timingSource: entry.timingSource,
       wordIndex: mappedWordIndex,
     };
   });
+}
+
+function promoteCueTimingFromTrustedWords(draft: MutableCueDraft): void {
+  const trustedWord = draft.wordTimings.find((word) =>
+    trustedV2WordTimingSource(word.timingSource),
+  );
+  if (!trustedWord) {
+    return;
+  }
+  draft.confidence = safeConfidence(trustedWord.confidence, draft.confidence);
+  draft.timingLevel = "word";
+  draft.timingSource = trustedWord.timingSource ?? draft.timingSource;
+}
+
+function trustedV2WordTimingSource(
+  source: HighlightMapV2TimingSource | undefined,
+): source is HighlightMapV2TimingSource {
+  return source === "provider-word" || source === "provider-mark" || source === "forced-alignment";
 }
 
 function sourceWordIdForV2Entry(entry: HighlightMapV2Entry): string | undefined {

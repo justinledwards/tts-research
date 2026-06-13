@@ -495,11 +495,21 @@ export function TelepromptStudio({
   const activeCueCurrentWordTiming = cueSync.activeCue?.wordTimings.find(
     (word) => word.wordIndex === cueSync.activeCue?.currentWordIndex,
   );
-  const activeCueTimingState = readAlongTimingStateFromRuntime({
+  const highlightMapV2TimingTrusted =
+    highlightMapV2?.summary.status === "ready" &&
+    !highlightMapV2.summary.degraded &&
+    highlightMapV2.summary.fallbackMode !== "stale-audio" &&
+    highlightMapV2.summary.fallbackMode !== "unavailable";
+  const activeCueTimingStateBase = readAlongTimingStateFromRuntime({
     confidence: activeCueCurrentWordTiming?.confidence ?? cueSync.activeCue?.confidence ?? null,
     timingLevel: cueSync.activeCue?.timingLevel ?? null,
     timingSource: cueSync.activeCue?.timingSource ?? cueTimeline.source,
   });
+  const activeCueTimingState =
+    activeCueTimingStateBase === "estimated" &&
+    ((cueSync.activeCue?.wordTimings.length ?? 0) > 0 || highlightMapV2TimingTrusted)
+      ? "trusted"
+      : activeCueTimingStateBase;
   const telepromptTheatreSyncDebug = useMemo(
     () => ({
       activeCueId: cueSync.activeCue?.cueId ?? "",
