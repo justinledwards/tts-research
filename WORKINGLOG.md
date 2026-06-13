@@ -2264,3 +2264,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] add focused regression coverage and evidence hooks
 - [x] run local review commands
 - Validation: focused backend promotion tests passed; focused frontend command palette tests passed; frontend typecheck passed; lint and format checks passed with existing Biome warnings/info. `pnpm e2e:temporary-sources` passed. `pnpm e2e:ui-actions` failed in the existing Preview generation recovery path waiting for `preview-generation-cockpit`. `pnpm validate:local` passed lint/type/package/frontend/adapters, then failed in existing backend `internal/pipeline` reload/TempDir cleanup flakes on separate runs.
+
+## 2026-06-13 17:29 CEST - Discard Expiry Cleanup Recovery Safety
+
+- [x] map discard cleanup expiry routes and copy guide requirements
+- [x] harden temporary-only cleanup and promoted artifact protection
+- [x] add focused backend and frontend regression coverage
+- [x] run local review commands
+- Validation: focused backend discard/cleanup tests passed; focused frontend temporary source copy, QuickListen, and WorkspaceDrawer tests passed; format, lint, and frontend typecheck passed. `pnpm e2e:temporary-sources`, `pnpm e2e:teleprompt-memory`, and `pnpm validate:local` passed. `pnpm check` failed in existing backend TempDir cleanup flake `TestTemporarySourceListJobsAndStorageTypeBytes`.

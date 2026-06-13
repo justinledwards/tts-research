@@ -710,11 +710,21 @@ export function WorkspaceDrawer({
                   <div className="flex flex-wrap gap-2">
                     <button
                       className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
-                      data-confirm="Clear expired temporary work? This deletes only expired temporary content and artifacts. Project sources are unchanged."
+                      data-confirm={TEMPORARY_SOURCE_COPY.confirmation.clearExpired}
+                      data-disabled-reason={
+                        (temporaryStorageUsage?.expiredCount ?? 0) > 0
+                          ? undefined
+                          : TEMPORARY_SOURCE_COPY.empty.noExpired
+                      }
                       data-testid="ui-action-temporary-source-clear-expired"
                       data-ui-action-owner="temporary-source"
                       data-ui-action-surface="Command Center"
                       disabled={(temporaryStorageUsage?.expiredCount ?? 0) === 0}
+                      title={
+                        (temporaryStorageUsage?.expiredCount ?? 0) > 0
+                          ? undefined
+                          : TEMPORARY_SOURCE_COPY.empty.noExpired
+                      }
                       onClick={() => {
                         void onClearExpiredTemporarySources();
                       }}

@@ -31,12 +31,13 @@ export const TEMPORARY_SOURCE_COPY = {
     removeTemporaryArtifacts: "Temporary artifacts",
   },
   confirmation: {
+    clearExpired:
+      "Clear expired temporary work? This deletes only expired temporary content and artifacts. Project sources are unchanged.",
     discard:
       "Discard temporary source now? This deletes temporary source text, generated temporary audio, timing, bookmarks, progress, review notes, and diagnostics from this session. Project sources are unchanged.",
     removeAllArtifacts:
       "Remove all temporary artifacts for this session? Recovery metadata remains, but temporary source text, generated temporary audio, timing, bookmarks, and progress will be cleaned. Project sources are unchanged.",
-    removeGeneratedAudio:
-      "Remove generated temporary audio for this session? Temporary source text and session-only review state will remain.",
+    removeGeneratedAudio: "Remove generated temporary audio for this session?",
   },
   errors: {
     discardedCannotKeep: "Temporary source was discarded and cannot be kept in a project.",

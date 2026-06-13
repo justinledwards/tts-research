@@ -6906,6 +6906,9 @@ export function App() {
 
   const handleDiscardTemporarySource = useCallback(
     async (session: TemporarySourceSession) => {
+      if (!globalThis.confirm(TEMPORARY_SOURCE_COPY.confirmation.discard)) {
+        return;
+      }
       try {
         await cleanupTemporarySource(session.id, { action: "discardNow" });
         setTemporarySources((currentSources) =>
@@ -6987,6 +6990,11 @@ export function App() {
   );
 
   const handleClearExpiredTemporarySources = useCallback(async () => {
+    if ((temporaryStorageUsage?.expiredCount ?? 0) === 0) {
+      setQuickListenError(TEMPORARY_SOURCE_COPY.empty.noExpired);
+      announcePolite(TEMPORARY_SOURCE_COPY.empty.noExpired);
+      return;
+    }
     if (
       !globalThis.confirm(
         "Clear expired temporary work? This deletes only expired temporary content and artifacts. Project sources are unchanged.",
@@ -7006,7 +7014,13 @@ export function App() {
           : "Unable to clear expired temporary sessions.",
       );
     }
-  }, [refreshTemporaryJobs, refreshTemporarySources, refreshTemporaryStorageUsage]);
+  }, [
+    announcePolite,
+    refreshTemporaryJobs,
+    refreshTemporarySources,
+    refreshTemporaryStorageUsage,
+    temporaryStorageUsage?.expiredCount,
+  ]);
 
   const handleClearTemporarySources = useCallback(async () => {
     if (
@@ -7042,6 +7056,9 @@ export function App() {
   const handleDiscardTemporaryPreparedSource = useCallback(
     async (source: PreparedSource) => {
       const temporarySourceId = source.temporarySourceId ?? source.id;
+      if (!globalThis.confirm(TEMPORARY_SOURCE_COPY.confirmation.discard)) {
+        return;
+      }
       try {
         await cleanupTemporarySource(temporarySourceId, { action: "discardNow" });
         setTemporarySources((currentSources) =>
@@ -7077,6 +7094,9 @@ export function App() {
   const handleDiscardTemporaryBookSource = useCallback(
     async (source: BookSource) => {
       const temporarySourceId = source.temporarySourceId ?? source.id;
+      if (!globalThis.confirm(TEMPORARY_SOURCE_COPY.confirmation.discard)) {
+        return;
+      }
       try {
         await cleanupTemporarySource(temporarySourceId, { action: "discardNow" });
         setTemporarySources((currentSources) =>

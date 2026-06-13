@@ -573,8 +573,15 @@ func (service *Service) ClearExpiredTemporarySources(now time.Time) (TemporarySo
 		Action:       TemporarySourceCleanupRemoveAllArtifacts,
 		Status:       TemporarySourceStateExpired,
 		RemovedBytes: removed,
-		Message:      fmt.Sprintf("Cleaned %d expired temporary session(s).", len(ids)),
+		Message:      clearExpiredTemporarySourcesMessage(len(ids)),
 	}, nil
+}
+
+func clearExpiredTemporarySourcesMessage(count int) string {
+	if count == 0 {
+		return "No expired temporary sources are ready to clear."
+	}
+	return fmt.Sprintf("Cleaned %d expired temporary session(s).", count)
 }
 
 func (service *Service) ClearTemporarySources() (TemporarySourceCleanupResult, error) {
@@ -827,13 +834,19 @@ func (service *Service) removeTemporaryGeneratedAudio(session TemporarySourceSes
 		filepath.Join(service.options.TemporaryAudioDir, cleanID),
 		filepath.Join(service.options.TemporaryProgressDir, cleanID),
 		filepath.Join(service.options.ProgressDataDir, safeDataPathID(progressTargetForTemporarySource(cleanID))),
-		filepath.Join(service.options.PlaybackSessionDir, safeDataPathID(progressTargetForTemporarySource(cleanID))),
 	} {
 		removed += directorySize(dir)
 		if err := os.RemoveAll(dir); err != nil {
 			return removed, err
 		}
 	}
+	for _, dir := range service.temporaryPlaybackSessionDirs(cleanID) {
+		removed += directorySize(dir)
+		if err := os.RemoveAll(dir); err != nil {
+			return removed, err
+		}
+	}
+	service.removeTemporaryPlaybackSessions(cleanID)
 	return removed, nil
 }
 
@@ -847,15 +860,44 @@ func (service *Service) temporarySourceStorageBytes(id string) temporaryStorageB
 	audioDir := filepath.Join(service.options.TemporaryAudioDir, cleanID)
 	progressDir := filepath.Join(service.options.TemporaryProgressDir, cleanID)
 	progressTargetDir := filepath.Join(service.options.ProgressDataDir, safeDataPathID(progressTargetForTemporarySource(cleanID)))
-	playbackDir := filepath.Join(service.options.PlaybackSessionDir, safeDataPathID(progressTargetForTemporarySource(cleanID)))
+	playbackBytes := int64(0)
+	for _, dir := range service.temporaryPlaybackSessionDirs(cleanID) {
+		playbackBytes += directorySize(dir)
+	}
 	bytes := temporaryStorageBytes{
 		source:   directorySize(sourceDir),
 		artifact: directorySize(artifactDir),
 		audio:    directorySize(audioDir),
-		progress: directorySize(progressDir) + directorySize(progressTargetDir) + directorySize(playbackDir),
+		progress: directorySize(progressDir) + directorySize(progressTargetDir) + playbackBytes,
 	}
 	bytes.total = bytes.source + bytes.artifact + bytes.audio + bytes.progress
 	return bytes
+}
+
+func (service *Service) temporaryPlaybackSessionDirs(cleanID string) []string {
+	targetID := progressTargetForTemporarySource(cleanID)
+	dirs := []string{
+		filepath.Join(service.options.PlaybackSessionDir, safeDataPathID(targetID)),
+	}
+	service.mu.RLock()
+	for _, session := range service.sessions {
+		if session.TargetID == targetID {
+			dirs = append(dirs, filepath.Join(service.options.PlaybackSessionDir, safeDataPathID(session.ID)))
+		}
+	}
+	service.mu.RUnlock()
+	return dirs
+}
+
+func (service *Service) removeTemporaryPlaybackSessions(cleanID string) {
+	targetID := progressTargetForTemporarySource(cleanID)
+	service.mu.Lock()
+	for sessionID, session := range service.sessions {
+		if session.TargetID == targetID {
+			delete(service.sessions, sessionID)
+		}
+	}
+	service.mu.Unlock()
 }
 
 func filterSourceArtifacts(artifacts []SourceArtifactRef, keep func(SourceArtifactRef) bool) []SourceArtifactRef {
@@ -1261,12 +1303,17 @@ func (service *Service) removeTemporarySource(session TemporarySourceSession, st
 		filepath.Join(service.options.TemporaryAudioDir, cleanID),
 		filepath.Join(service.options.TemporaryProgressDir, cleanID),
 		filepath.Join(service.options.ProgressDataDir, safeDataPathID(progressTargetForTemporarySource(cleanID))),
-		filepath.Join(service.options.PlaybackSessionDir, safeDataPathID(progressTargetForTemporarySource(cleanID))),
 	} {
 		if err := os.RemoveAll(dir); err != nil {
 			return 0, err
 		}
 	}
+	for _, dir := range service.temporaryPlaybackSessionDirs(cleanID) {
+		if err := os.RemoveAll(dir); err != nil {
+			return 0, err
+		}
+	}
+	service.removeTemporaryPlaybackSessions(cleanID)
 	if removeMetadata {
 		if err := os.RemoveAll(filepath.Join(service.options.TemporarySourceDataDir, cleanID)); err != nil {
 			return 0, err

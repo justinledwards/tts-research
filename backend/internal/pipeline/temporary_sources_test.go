@@ -237,6 +237,102 @@ func TestTemporarySourceCleanupPreservesExpiredRecoveryMetadata(t *testing.T) {
 	}
 }
 
+func TestClearExpiredTemporarySourcesEmptyStateMessage(t *testing.T) {
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+
+	result, err := service.ClearExpiredTemporarySources(time.Now().UTC())
+	if err != nil {
+		t.Fatalf("ClearExpiredTemporarySources returned error: %v", err)
+	}
+	if result.Message != "No expired temporary sources are ready to clear." {
+		t.Fatalf("message = %q, want empty cleanup copy", result.Message)
+	}
+	if result.RemovedBytes != 0 {
+		t.Fatalf("removed bytes = %d, want 0", result.RemovedBytes)
+	}
+}
+
+func TestTemporarySourceDiscardRemovesTemporaryArtifactsAndPreservesProjectSources(t *testing.T) {
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	project, err := service.CreateProject("Discard safety")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	temporary, err := service.CreateTemporarySource(context.Background(), pipeline.CreateTemporarySourceRequest{
+		Kind:       pipeline.PreparedSourceKindText,
+		Text:       "Temporary source text with generated audio, progress, bookmarks, and diagnostics.",
+		SourceName: "discard-safety.md",
+	})
+	if err != nil {
+		t.Fatalf("CreateTemporarySource returned error: %v", err)
+	}
+	job, err := service.CreateTemporarySourceJob(context.Background(), temporary.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreateTemporarySourceJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	progressTargetID := "temporary-source:" + temporary.ID
+	if _, err := service.UpdatePlaybackProgress(progressTargetID, pipeline.PlaybackProgressUpdate{
+		ProjectID:       project.ID,
+		TargetID:        progressTargetID,
+		JobID:           completed.ID,
+		CurrentTimeSec:  2,
+		DurationSec:     10,
+		ActiveWordIndex: 1,
+		AddBookmark: &pipeline.ProgressBookmark{
+			ID:             "temporary-bookmark",
+			Label:          "Temporary bookmark",
+			CurrentTimeSec: 2,
+		},
+	}); err != nil {
+		t.Fatalf("UpdatePlaybackProgress returned error: %v", err)
+	}
+	playbackSession, err := service.StartPlaybackSession(pipeline.PlaybackProgressUpdate{
+		ProjectID: project.ID,
+		TargetID:  progressTargetID,
+		JobID:     completed.ID,
+	})
+	if err != nil {
+		t.Fatalf("StartPlaybackSession returned error: %v", err)
+	}
+	diagnosticPath := filepath.Join(service.Options().TemporaryArtifactDir, temporary.ID, "diagnostics.json")
+	if err := os.MkdirAll(filepath.Dir(diagnosticPath), 0o755); err != nil {
+		t.Fatalf("mkdir diagnostics dir: %v", err)
+	}
+	if err := os.WriteFile(diagnosticPath, []byte(`{"scope":"temporary"}`), 0o644); err != nil {
+		t.Fatalf("write diagnostics artifact: %v", err)
+	}
+
+	if _, err := service.CleanupTemporarySource(temporary.ID, pipeline.TemporarySourceCleanupRequest{
+		Action: pipeline.TemporarySourceCleanupDiscardNow,
+	}); err != nil {
+		t.Fatalf("CleanupTemporarySource(discard) returned error: %v", err)
+	}
+
+	for _, path := range []string{
+		filepath.Join(service.Options().TemporarySourceDataDir, temporary.ID),
+		filepath.Join(service.Options().TemporaryArtifactDir, temporary.ID),
+		filepath.Join(service.Options().TemporaryAudioDir, temporary.ID),
+		filepath.Join(service.Options().TemporaryProgressDir, temporary.ID),
+		filepath.Join(service.Options().ProgressDataDir, "temporary-source_"+temporary.ID),
+		filepath.Join(service.Options().PlaybackSessionDir, playbackSession.ID),
+	} {
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("temporary cleanup path %s stat error = %v, want removed", path, err)
+		}
+	}
+	if _, _, err := service.GetAudio(completed.ID); err == nil {
+		t.Fatalf("GetAudio temporary job returned nil error after discard, want removed audio")
+	}
+	sources, err := service.ListProjectPreparedSources(project.ID)
+	if err != nil {
+		t.Fatalf("ListProjectPreparedSources returned error: %v", err)
+	}
+	if len(sources) != 0 {
+		t.Fatalf("project sources = %#v, want unchanged empty project source list", sources)
+	}
+}
+
 func TestTemporaryCleanupAllArtifactsDoesNotAffectPromotedProjectArtifacts(t *testing.T) {
 	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
 	temporary, err := service.CreateTemporarySource(context.Background(), pipeline.CreateTemporarySourceRequest{

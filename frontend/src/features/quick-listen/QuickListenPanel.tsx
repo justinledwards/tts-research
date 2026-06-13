@@ -598,7 +598,12 @@ function TemporaryStorageControls({
           <p className="vs-muted">{temporaryUsageSummaryLabel(storageUsage)}</p>
         </div>
         <Button
-          data-confirm="Clear expired temporary work? This deletes only expired temporary content and artifacts. Project sources are unchanged."
+          data-confirm={TEMPORARY_SOURCE_COPY.confirmation.clearExpired}
+          disabledReason={
+            storageUsage && storageUsage.expiredCount > 0
+              ? undefined
+              : TEMPORARY_SOURCE_COPY.empty.noExpired
+          }
           data-testid="ui-action-quick-listen-clear-expired"
           data-ui-action-owner="temporary-source"
           data-ui-action-surface="Quick Listen"

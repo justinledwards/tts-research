@@ -48,7 +48,7 @@ Avoid `Save`, `Import` for temporary-only intake, bare `Project`, bare `History`
 ## Confirmation Copy
 
 - Discard temporary source: `Discard temporary source now? This deletes temporary source text, generated temporary audio, timing, bookmarks, progress, review notes, and diagnostics from this session. Project sources are unchanged.`
-- Remove generated temporary audio: `Remove generated temporary audio for this session? Temporary source text and session-only review state will remain.`
+- Remove generated temporary audio: `Remove generated temporary audio for this session?`
 - Remove all temporary artifacts: `Remove all temporary artifacts for this session? Recovery metadata remains, but temporary source text, generated temporary audio, timing, bookmarks, and progress will be cleaned. Project sources are unchanged.`
 
 ## Error And Failure Copy

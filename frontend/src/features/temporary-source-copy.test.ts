@@ -21,8 +21,15 @@ describe("temporary source copy", () => {
   });
 
   it("keeps destructive and durable confirmations explicit about scope", () => {
-    expect(TEMPORARY_SOURCE_COPY.confirmation.discard).toContain("Project sources are unchanged");
-    expect(TEMPORARY_SOURCE_COPY.confirmation.discard).toContain("generated temporary audio");
+    expect(TEMPORARY_SOURCE_COPY.confirmation.discard).toBe(
+      "Discard temporary source now? This deletes temporary source text, generated temporary audio, timing, bookmarks, progress, review notes, and diagnostics from this session. Project sources are unchanged.",
+    );
+    expect(TEMPORARY_SOURCE_COPY.confirmation.removeGeneratedAudio).toBe(
+      "Remove generated temporary audio for this session?",
+    );
+    expect(TEMPORARY_SOURCE_COPY.empty.noExpired).toBe(
+      "No expired temporary sources are ready to clear.",
+    );
     expect(TEMPORARY_SOURCE_COPY.promotion.subtitle).toContain("durable project history");
     expect(TEMPORARY_SOURCE_COPY.privacy.localFirst).toContain("Provider-backed generation");
   });
