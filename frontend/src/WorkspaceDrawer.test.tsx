@@ -61,9 +61,47 @@ describe("Command Center", () => {
 
     expect(markup).toContain('data-testid="temporary-source-card-temp-1"');
     expect(markup).toContain('data-testid="ui-action-temporary-source-reopen-temp-1"');
+    expect(markup).toContain("Open temporary source");
     expect(markup).toContain('data-testid="ui-action-temporary-source-keep-temp-1"');
+    expect(markup).toContain("Keep in project");
     expect(markup).toContain('data-testid="ui-action-temporary-source-discard-temp-1"');
+    expect(markup).toContain("Discard temporary source");
     expect(markup).toContain("Temporary source is already kept in a project.");
+  });
+
+  it("renders Temporary Work empty and filter states with required copy", () => {
+    const emptyMarkup = renderToStaticMarkup(
+      <WorkspaceDrawer {...props()} activeSection="temporary" />,
+    );
+    const filteredMarkup = renderToStaticMarkup(
+      <WorkspaceDrawer
+        {...props()}
+        activeSection="temporary"
+        temporarySources={[temporarySource({ status: "reviewable" })]}
+      />,
+    );
+
+    expect(emptyMarkup).toContain(
+      "Recent temporary sources appear here after you start Quick Listen in this app session.",
+    );
+    expect(emptyMarkup).toContain("Clear expired temporary work");
+    expect(filteredMarkup).toContain("Temporary Work");
+    expect(filteredMarkup).toContain("Generated temporary audio");
+  });
+
+  it("hides Temporary Work management when temporarySources.premiumSurfaces is disabled", () => {
+    const markup = renderToStaticMarkup(
+      <WorkspaceDrawer
+        {...props()}
+        activeSection="temporary"
+        temporarySources={[temporarySource()]}
+        temporaryWorkEnabled={false}
+      />,
+    );
+
+    expect(markup).not.toContain('data-testid="ui-action-command-center-section-temporary"');
+    expect(markup).not.toContain('data-testid="temporary-source-card-temp-1"');
+    expect(markup).not.toContain("Reopen, Keep in project, Discard temporary source");
   });
 
   it("keeps project library and generated audio in the projects section", () => {

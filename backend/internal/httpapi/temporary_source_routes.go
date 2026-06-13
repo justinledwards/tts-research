@@ -82,6 +82,10 @@ func registerTemporarySourceRoutes(app *fiber.App, service *pipeline.Service) {
 		return ctx.JSON(service.TemporaryStorageUsageSummary(time.Now().UTC()))
 	})
 
+	app.Get("/api/temporary-sources/jobs", func(ctx fiber.Ctx) error {
+		return ctx.JSON(service.ListTemporarySourceJobs())
+	})
+
 	app.Post("/api/temporary-sources/cleanup-expired", func(ctx fiber.Ctx) error {
 		result, err := service.ClearExpiredTemporarySources(time.Now().UTC())
 		if err != nil {
@@ -90,7 +94,24 @@ func registerTemporarySourceRoutes(app *fiber.App, service *pipeline.Service) {
 		return ctx.JSON(result)
 	})
 
+	app.Get("/api/temporary-sources", func(ctx fiber.Ctx) error {
+		sources := service.ListTemporarySources(time.Now().UTC())
+		envelopes := make([]pipeline.TemporarySourceEnvelope, 0, len(sources))
+		for _, source := range sources {
+			envelopes = append(envelopes, temporarySourceEnvelope(source))
+		}
+		return ctx.JSON(envelopes)
+	})
+
 	app.Get("/api/temporary-sources/:id", func(ctx fiber.Ctx) error {
+		source, err := service.GetTemporarySource(ctx.Params("id"))
+		if err != nil {
+			return temporarySourceError(ctx, err)
+		}
+		return ctx.JSON(temporarySourceEnvelope(source))
+	})
+
+	app.Post("/api/temporary-sources/:id/reopen", func(ctx fiber.Ctx) error {
 		source, err := service.GetTemporarySource(ctx.Params("id"))
 		if err != nil {
 			return temporarySourceError(ctx, err)

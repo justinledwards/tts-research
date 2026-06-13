@@ -115,6 +115,7 @@ export interface CommandPaletteBuildContext {
   quickListenEnabled?: boolean;
   temporarySources: TemporarySourceSession[];
   temporaryStorageUsage: TemporaryStorageUsageSummary | null;
+  temporaryWorkEnabled?: boolean;
   wordHighlightCapabilityReason: string | undefined;
   workspaceStageActionLabel: (action: WorkspaceStageActionId) => string;
 }
@@ -404,6 +405,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     quickListenEnabled = true,
     temporarySources,
     temporaryStorageUsage,
+    temporaryWorkEnabled = true,
     wordHighlightCapabilityReason,
     workspaceStageActionLabel,
   } = context;
@@ -603,7 +605,9 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
       title: "Open voice dashboard",
     },
   ];
-  const commandCenterRouteEntries = COMMAND_CENTER_ROUTES.map<CommandEntry>((route) => ({
+  const commandCenterRouteEntries = COMMAND_CENTER_ROUTES.filter(
+    (route) => temporaryWorkEnabled || route.id !== "temporary",
+  ).map<CommandEntry>((route) => ({
     category: commandCenterRouteCategory(route.id),
     detail: route.description,
     id: `command-center:${route.id}`,
@@ -779,206 +783,214 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     (activeTemporaryReady
       ? undefined
       : (activeTemporarySource?.error ?? "This temporary source is not ready."));
-  const temporaryCommandEntries: CommandEntry[] = [
-    {
-      category: "Source",
-      detail:
-        "Temporary source · Reopen the most recent temporary session before it expires after inactivity.",
-      disabled: temporarySources.length === 0,
-      disabledReason:
-        temporarySources.length === 0 ? TEMPORARY_SOURCE_COPY.empty.noTemporarySources : undefined,
-      id: "temporary-source:reopen-recent",
-      keywords: ["temporary", "recent", "reopen", "quick listen", "scratch"],
-      owner: "temporary-source",
-      perform: () => {
-        void handlers.openTemporarySourceInReview(temporarySources[0]);
-      },
-      section: "Sources",
-      title: "Reopen recent temporary source",
-    },
-    {
-      category: "Source",
-      detail: "Temporary source · Keep the active temporary source as durable project history.",
-      disabled: !activeTemporarySource,
-      disabledReason: currentTemporaryDisabledReason,
-      id: "temporary-source:keep-in-project",
-      keywords: ["temporary", "keep", "promote", "project", "durable"],
-      owner: "temporary-source",
-      perform: () => {
-        if (activeTemporarySource) {
-          handlers.keepTemporarySourceInProject(activeTemporarySource);
-        }
-      },
-      section: "Sources",
-      shortcutCommandId: "temporary.keepInProject",
-      title: "Keep temporary source in project",
-    },
-    {
-      category: "Source",
-      detail:
-        "Temporary source · Discard temporary source text, generated temporary audio, and session artifacts. Project sources are unchanged.",
-      disabled: !activeTemporarySource,
-      disabledReason: currentTemporaryDisabledReason,
-      id: "temporary-source:discard",
-      keywords: ["temporary", "discard", "delete", "remove", "scratch"],
-      owner: "temporary-source",
-      perform: () => {
-        if (activeTemporarySource) {
-          void handlers.discardTemporarySource(activeTemporarySource);
-        }
-      },
-      section: "Sources",
-      title: "Discard temporary source",
-    },
-    {
-      category: "Source",
-      detail:
-        "Temporary storage · Clear expired temporary work after inactivity. Project sources are unchanged.",
-      disabled: temporaryExpiredCount(temporarySources, temporaryStorageUsage) === 0,
-      disabledReason:
-        temporaryExpiredCount(temporarySources, temporaryStorageUsage) === 0
-          ? TEMPORARY_SOURCE_COPY.empty.noExpired
-          : undefined,
-      id: "temporary-source:clear-expired",
-      keywords: ["temporary", "expired", "clear", "cleanup", "storage"],
-      owner: "temporary-source",
-      perform: () => {
-        void handlers.clearExpiredTemporarySources();
-      },
-      section: "Sources",
-      title: TEMPORARY_SOURCE_COPY.actions.clearExpired,
-    },
-    {
-      category: "Review",
-      detail: "Temporary source · Open the active temporary session in Review.",
-      disabled: !activeTemporaryReady,
-      disabledReason: activeTemporaryUnavailableReason,
-      id: "temporary-source:open-review",
-      keywords: ["temporary", "review", "open", "article", "scratch"],
-      owner: "temporary-source",
-      perform: () => {
-        if (activeTemporarySource) {
-          void handlers.openTemporarySourceInReview(activeTemporarySource);
-        }
-      },
-      section: "Sources",
-      title: "Open temporary source in Review",
-    },
-    {
-      category: "Playback",
-      detail: "Temporary source · Open the active temporary session in Preview.",
-      disabled: !activeTemporaryReady,
-      disabledReason: activeTemporaryUnavailableReason,
-      id: "temporary-source:open-preview",
-      keywords: ["temporary", "preview", "open", "quick listen"],
-      owner: "temporary-source",
-      perform: () => {
-        if (activeTemporarySource) {
-          void handlers.openTemporarySourceInPreview(activeTemporarySource);
-        }
-      },
-      section: "Sources",
-      title: "Open temporary source in Preview",
-    },
-    {
-      category: "Playback",
-      detail: "Temporary source · Open the active temporary session in Cinema.",
-      disabled: !activeTemporaryReady,
-      disabledReason: activeTemporaryUnavailableReason,
-      id: "temporary-source:open-cinema",
-      keywords: ["temporary", "cinema", "reader", "listen", "quick listen"],
-      owner: "temporary-source",
-      perform: () => {
-        if (activeTemporarySource) {
-          void handlers.openTemporarySourceCinema(activeTemporarySource);
-        }
-      },
-      section: "Sources",
-      title: "Open temporary source in Cinema",
-    },
-    {
-      capabilityGate: "tts",
-      capabilityGated: Boolean(createAndListenCapabilityReason),
-      category: "Playback",
-      detail:
-        "Temporary source · Create generated temporary audio for the active temporary session.",
-      disabled: !activeTemporarySource || !canCreateCurrentSource,
-      disabledReason:
-        currentTemporaryDisabledReason ??
-        createAndListenDisabledReason ??
-        "Open the temporary source in Review before creating audio.",
-      id: "temporary-source:create-audio",
-      keywords: ["temporary", "audio", "create", "quick listen", "generate", "listen"],
-      owner: "temporary-source",
-      perform: () => {
-        handlers.createAndListenFromCurrentSource();
-      },
-      section: "Sources",
-      shortcutCommandId: "temporary.quickListen",
-      title: "Create audio for temporary source",
-    },
-    {
-      capabilityGate: "tts",
-      capabilityGated: Boolean(createAndListenCapabilityReason),
-      category: "Playback",
-      detail: "Temporary source · Retry narration audio for the active temporary session.",
-      disabled: !activeTemporarySource || !canCreateCurrentSource,
-      disabledReason:
-        currentTemporaryDisabledReason ??
-        createAndListenDisabledReason ??
-        "Open the temporary source in Review before retrying audio.",
-      id: "temporary-source:retry-audio",
-      keywords: ["temporary", "retry", "audio", "quick listen", "generate"],
-      owner: "temporary-source",
-      perform: () => {
-        handlers.createAndListenFromCurrentSource();
-      },
-      section: "Sources",
-      title: "Retry temporary audio",
-    },
-    {
-      category: "Source",
-      detail: temporaryStorageDetail(temporarySources, temporaryStorageUsage),
-      id: "temporary-source:show-storage",
-      keywords: ["temporary", "storage", "usage", "sessions", "cleanup"],
-      owner: "temporary-source",
-      perform: () => {
-        handlers.openCommandCenterRoute("temporary");
-      },
-      section: "Sources",
-      title: "Show temporary source storage",
-    },
-  ];
-  const recentTemporarySourceCommandEntries = temporarySources.map<CommandEntry>((source) => {
-    const label = temporarySourceLabel(source);
-    const ready = temporarySourceCommandReady(source);
-    return {
-      category: "Source",
-      detail: `Temporary source · Reopen in Review · ${temporarySourceKindLabel(source)}.`,
-      disabled: !ready,
-      disabledReason: ready ? undefined : (source.error ?? "This temporary source is not ready."),
-      id: `temporary-source:recent:${source.id}`,
-      keywords: [
-        "temporary",
-        "recent",
-        "quick listen",
-        "article",
-        "scratch",
-        "webpage",
-        "url",
-        source.kind,
-        label,
-        source.sourceName,
-        source.sourceUrl ?? "",
-      ],
-      owner: "temporary-source",
-      perform: () => {
-        void handlers.openTemporarySourceInReview(source);
-      },
-      section: "Sources",
-      title: `Temporary: ${label}`,
-    };
-  });
+  const temporaryCommandEntries: CommandEntry[] = temporaryWorkEnabled
+    ? [
+        {
+          category: "Source",
+          detail:
+            "Temporary source · Reopen the most recent temporary session before it expires after inactivity.",
+          disabled: temporarySources.length === 0,
+          disabledReason:
+            temporarySources.length === 0
+              ? TEMPORARY_SOURCE_COPY.empty.noTemporarySources
+              : undefined,
+          id: "temporary-source:reopen-recent",
+          keywords: ["temporary", "recent", "reopen", "quick listen", "scratch"],
+          owner: "temporary-source",
+          perform: () => {
+            void handlers.openTemporarySourceInReview(temporarySources[0]);
+          },
+          section: "Sources",
+          title: "Reopen recent temporary source",
+        },
+        {
+          category: "Source",
+          detail: "Temporary source · Keep the active temporary source as durable project history.",
+          disabled: !activeTemporarySource,
+          disabledReason: currentTemporaryDisabledReason,
+          id: "temporary-source:keep-in-project",
+          keywords: ["temporary", "keep", "promote", "project", "durable"],
+          owner: "temporary-source",
+          perform: () => {
+            if (activeTemporarySource) {
+              handlers.keepTemporarySourceInProject(activeTemporarySource);
+            }
+          },
+          section: "Sources",
+          shortcutCommandId: "temporary.keepInProject",
+          title: "Keep temporary source in project",
+        },
+        {
+          category: "Source",
+          detail:
+            "Temporary source · Discard temporary source text, generated temporary audio, and session artifacts. Project sources are unchanged.",
+          disabled: !activeTemporarySource,
+          disabledReason: currentTemporaryDisabledReason,
+          id: "temporary-source:discard",
+          keywords: ["temporary", "discard", "delete", "remove", "scratch"],
+          owner: "temporary-source",
+          perform: () => {
+            if (activeTemporarySource) {
+              void handlers.discardTemporarySource(activeTemporarySource);
+            }
+          },
+          section: "Sources",
+          title: "Discard temporary source",
+        },
+        {
+          category: "Source",
+          detail:
+            "Temporary storage · Clear expired temporary work after inactivity. Project sources are unchanged.",
+          disabled: temporaryExpiredCount(temporarySources, temporaryStorageUsage) === 0,
+          disabledReason:
+            temporaryExpiredCount(temporarySources, temporaryStorageUsage) === 0
+              ? TEMPORARY_SOURCE_COPY.empty.noExpired
+              : undefined,
+          id: "temporary-source:clear-expired",
+          keywords: ["temporary", "expired", "clear", "cleanup", "storage"],
+          owner: "temporary-source",
+          perform: () => {
+            void handlers.clearExpiredTemporarySources();
+          },
+          section: "Sources",
+          title: TEMPORARY_SOURCE_COPY.actions.clearExpired,
+        },
+        {
+          category: "Review",
+          detail: "Temporary source · Open the active temporary session in Review.",
+          disabled: !activeTemporaryReady,
+          disabledReason: activeTemporaryUnavailableReason,
+          id: "temporary-source:open-review",
+          keywords: ["temporary", "review", "open", "article", "scratch"],
+          owner: "temporary-source",
+          perform: () => {
+            if (activeTemporarySource) {
+              void handlers.openTemporarySourceInReview(activeTemporarySource);
+            }
+          },
+          section: "Sources",
+          title: "Open temporary source in Review",
+        },
+        {
+          category: "Playback",
+          detail: "Temporary source · Open the active temporary session in Preview.",
+          disabled: !activeTemporaryReady,
+          disabledReason: activeTemporaryUnavailableReason,
+          id: "temporary-source:open-preview",
+          keywords: ["temporary", "preview", "open", "quick listen"],
+          owner: "temporary-source",
+          perform: () => {
+            if (activeTemporarySource) {
+              void handlers.openTemporarySourceInPreview(activeTemporarySource);
+            }
+          },
+          section: "Sources",
+          title: "Open temporary source in Preview",
+        },
+        {
+          category: "Playback",
+          detail: "Temporary source · Open the active temporary session in Cinema.",
+          disabled: !activeTemporaryReady,
+          disabledReason: activeTemporaryUnavailableReason,
+          id: "temporary-source:open-cinema",
+          keywords: ["temporary", "cinema", "reader", "listen", "quick listen"],
+          owner: "temporary-source",
+          perform: () => {
+            if (activeTemporarySource) {
+              void handlers.openTemporarySourceCinema(activeTemporarySource);
+            }
+          },
+          section: "Sources",
+          title: "Open temporary source in Cinema",
+        },
+        {
+          capabilityGate: "tts",
+          capabilityGated: Boolean(createAndListenCapabilityReason),
+          category: "Playback",
+          detail:
+            "Temporary source · Create generated temporary audio for the active temporary session.",
+          disabled: !activeTemporarySource || !canCreateCurrentSource,
+          disabledReason:
+            currentTemporaryDisabledReason ??
+            createAndListenDisabledReason ??
+            "Open the temporary source in Review before creating audio.",
+          id: "temporary-source:create-audio",
+          keywords: ["temporary", "audio", "create", "quick listen", "generate", "listen"],
+          owner: "temporary-source",
+          perform: () => {
+            handlers.createAndListenFromCurrentSource();
+          },
+          section: "Sources",
+          shortcutCommandId: "temporary.quickListen",
+          title: "Create audio for temporary source",
+        },
+        {
+          capabilityGate: "tts",
+          capabilityGated: Boolean(createAndListenCapabilityReason),
+          category: "Playback",
+          detail: "Temporary source · Retry narration audio for the active temporary session.",
+          disabled: !activeTemporarySource || !canCreateCurrentSource,
+          disabledReason:
+            currentTemporaryDisabledReason ??
+            createAndListenDisabledReason ??
+            "Open the temporary source in Review before retrying audio.",
+          id: "temporary-source:retry-audio",
+          keywords: ["temporary", "retry", "audio", "quick listen", "generate"],
+          owner: "temporary-source",
+          perform: () => {
+            handlers.createAndListenFromCurrentSource();
+          },
+          section: "Sources",
+          title: "Retry temporary audio",
+        },
+        {
+          category: "Source",
+          detail: temporaryStorageDetail(temporarySources, temporaryStorageUsage),
+          id: "temporary-source:show-storage",
+          keywords: ["temporary", "storage", "usage", "sessions", "cleanup"],
+          owner: "temporary-source",
+          perform: () => {
+            handlers.openCommandCenterRoute("temporary");
+          },
+          section: "Sources",
+          title: "Show temporary source storage",
+        },
+      ]
+    : [];
+  const recentTemporarySourceCommandEntries = temporaryWorkEnabled
+    ? temporarySources.map<CommandEntry>((source) => {
+        const label = temporarySourceLabel(source);
+        const ready = temporarySourceCommandReady(source);
+        return {
+          category: "Source",
+          detail: `Temporary source · Reopen in Review · ${temporarySourceKindLabel(source)}.`,
+          disabled: !ready,
+          disabledReason: ready
+            ? undefined
+            : (source.error ?? "This temporary source is not ready."),
+          id: `temporary-source:recent:${source.id}`,
+          keywords: [
+            "temporary",
+            "recent",
+            "quick listen",
+            "article",
+            "scratch",
+            "webpage",
+            "url",
+            source.kind,
+            label,
+            source.sourceName,
+            source.sourceUrl ?? "",
+          ],
+          owner: "temporary-source",
+          perform: () => {
+            void handlers.openTemporarySourceInReview(source);
+          },
+          section: "Sources",
+          title: `Temporary: ${label}`,
+        };
+      })
+    : [];
   const openCurrentCinemaCommand: CommandEntry = {
     category: "Playback",
     detail: "Open the current narration or selected book in Cinema.",

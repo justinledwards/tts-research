@@ -2275,7 +2275,7 @@ function TemporarySourceBehaviorPanel({
           checked={settings.autoClean}
           data-testid="settings-temporary-auto-clean"
           detail="Expired temporary sources and generated temporary audio are eligible for cleanup without changing project sources."
-          label={TEMPORARY_SOURCE_COPY.terms.clearExpiredTemporaryWork}
+          label="Auto-clean expired temporary work"
           onChange={(checked) => {
             patchSettings({ autoClean: checked });
           }}

@@ -19,12 +19,16 @@ import {
   getContentIR,
   getContentIRSpeechPlan,
   getJobSpeechPlan,
+  getTemporaryStorageUsageSummary,
   getVoiceProfileCredentials,
+  listTemporarySourceJobs,
+  listTemporarySources,
   previewMathSpeech,
   previewContentIRSpeechPolicy,
   isApiNotFoundError,
   previewPreparedSourceSpeechPolicy,
   saveHuggingFaceToken,
+  reopenTemporarySource,
   subscribeToVoiceJob,
   updateBookSourceSpeechPolicy,
   updatePreparedSourceSpeechPolicy,
@@ -217,6 +221,86 @@ describe("API errors", () => {
       expect(JSON.parse(body as string)).toMatchObject({
         temporarySourceId: "temp-1",
       });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("lists recent temporary sources, reopens by id, lists jobs, and preserves storage byte maps", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (input, init) => {
+      const url = fetchInputUrl(input);
+      requests.push({ url, init });
+      if (url === "/api/temporary-sources") {
+        return Promise.resolve(
+          Response.json([
+            {
+              scope: "temporary",
+              sourceOwner: "temporary",
+              temporarySourceId: "temp-1",
+              source: temporarySourceResponse({ id: "temp-1" }),
+            },
+          ]),
+        );
+      }
+      if (url === "/api/temporary-sources/temp-1/reopen") {
+        return Promise.resolve(
+          Response.json({
+            scope: "temporary",
+            sourceOwner: "temporary",
+            temporarySourceId: "temp-1",
+            source: temporarySourceResponse({ id: "temp-1", status: "previewable" }),
+          }),
+        );
+      }
+      if (url === "/api/temporary-sources/jobs") {
+        return Promise.resolve(Response.json([{ id: "job-temp", status: "failed" }]));
+      }
+      return Promise.resolve(
+        Response.json({
+          artifactBytes: 32,
+          artifactTypeBytes: { generatedAudio: 16, source: 8 },
+          audioBytes: 16,
+          expiredCount: 0,
+          generatingCount: 1,
+          progressBytes: 4,
+          sessions: [
+            {
+              artifactTypeBytes: { generatedAudio: 16, source: 8 },
+              bytes: 28,
+              expiresAt: "2026-06-13T10:00:00Z",
+              lastAccessedAt: "2026-06-12T11:00:00Z",
+              status: "audio_ready",
+              temporarySourceId: "temp-1",
+            },
+          ],
+          sourceBytes: 8,
+          temporaryCount: 1,
+          totalBytes: 60,
+          updatedAt: "2026-06-12T11:00:00Z",
+        }),
+      );
+    };
+
+    try {
+      const sources = await listTemporarySources();
+      const reopened = await reopenTemporarySource("temp-1");
+      const jobs = await listTemporarySourceJobs();
+      const storage = await getTemporaryStorageUsageSummary();
+
+      expect(sources[0]).toMatchObject({ id: "temp-1", sourceOwner: "temporary" });
+      expect(reopened.status).toBe("previewable");
+      expect(jobs[0]?.id).toBe("job-temp");
+      expect(storage.artifactTypeBytes?.generatedAudio).toBe(16);
+      expect(storage.sessions[0]?.artifactTypeBytes?.source).toBe(8);
+      expect(requests.map((request) => request.url)).toEqual([
+        "/api/temporary-sources",
+        "/api/temporary-sources/temp-1/reopen",
+        "/api/temporary-sources/jobs",
+        "/api/temporary-sources/storage/summary",
+      ]);
+      expect(requests[1]?.init?.method).toBe("POST");
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -929,6 +1013,27 @@ function preparedSourceResponse(
     },
     createdAt: "2026-05-16T12:00:00Z",
     updatedAt: "2026-05-16T12:00:00Z",
+    ...overrides,
+  };
+}
+
+function temporarySourceResponse(overrides: Record<string, unknown> = {}) {
+  const id = typeof overrides.id === "string" ? overrides.id : "temp-1";
+  return {
+    artifacts: [],
+    createdAt: "2026-06-12T10:00:00Z",
+    expiresAt: "2026-06-13T10:00:00Z",
+    id,
+    kind: "text",
+    lastAccessedAt: "2026-06-12T11:00:00Z",
+    promotionStatus: "notPromoted",
+    scope: "temporary",
+    sourceName: "Temporary briefing",
+    sourceOwner: "temporary",
+    status: "reviewable",
+    temporarySourceId: id,
+    updatedAt: "2026-06-12T11:00:00Z",
+    wordCount: 3,
     ...overrides,
   };
 }

@@ -48,7 +48,7 @@ export const COMMAND_CENTER_ROUTES: readonly CommandCenterRouteDefinition[] = [
     detail: "Recent temporary sources",
     headline: "Recent temporary work without project clutter",
     description:
-      "Find temporary sources before expiry, reopen recent work, Keep in project for durable history, or Discard temporary source.",
+      "Find temporary sources before expiry, review storage, and choose lifecycle actions from a shelf that stays separate from Projects and Assets.",
   },
   {
     id: "assets",
@@ -117,8 +117,8 @@ export function visibleCommandCenterJobs({
   projectJobs: readonly VoiceJob[];
 }>): VoiceJob[] {
   const candidates = [
-    ...(job?.projectId === activeProjectId ? [job] : []),
-    ...projectJobs.filter((item) => item.projectId === activeProjectId),
+    ...(job?.projectId === activeProjectId && !job.temporarySourceId ? [job] : []),
+    ...projectJobs.filter((item) => item.projectId === activeProjectId && !item.temporarySourceId),
   ];
   const seen = new Set<string>();
   const uniqueJobs = candidates.filter((item) => {

@@ -755,6 +755,36 @@ export async function getTemporarySource(id: string): Promise<TemporarySourceSes
   );
 }
 
+export async function reopenTemporarySource(id: string): Promise<TemporarySourceSession> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/temporary-sources/${encodeURIComponent(id)}/reopen`,
+    { method: "POST" },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return temporarySourceFromPayload(
+    (await response.json()) as TemporarySourceEnvelope | TemporarySourceSession,
+  );
+}
+
+export async function listTemporarySources(): Promise<TemporarySourceSession[]> {
+  const response = await fetch(`${apiBaseUrl}/api/temporary-sources`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  const payload = (await response.json()) as (TemporarySourceEnvelope | TemporarySourceSession)[];
+  return payload.map((source) => temporarySourceFromPayload(source));
+}
+
+export async function listTemporarySourceJobs(): Promise<VoiceJob[]> {
+  const response = await fetch(`${apiBaseUrl}/api/temporary-sources/jobs`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<VoiceJob[]>;
+}
+
 export async function getTemporaryStorageUsageSummary(): Promise<TemporaryStorageUsageSummary> {
   const response = await fetch(`${apiBaseUrl}/api/temporary-sources/storage/summary`);
   if (!response.ok) {

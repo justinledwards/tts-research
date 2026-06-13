@@ -114,6 +114,7 @@ export function WorkspaceDrawer({
   ttsEngines,
   temporarySources,
   temporaryStorageUsage,
+  temporaryWorkEnabled = true,
   onCreateProject,
   onCancelJob,
   onCancelProfileSource,
@@ -190,6 +191,7 @@ export function WorkspaceDrawer({
   ttsEngines: TTSEngineDiagnostics[];
   temporarySources: TemporarySourceSession[];
   temporaryStorageUsage: TemporaryStorageUsageSummary | null;
+  temporaryWorkEnabled?: boolean;
   onCreateProject: (name: string) => Promise<void>;
   onCancelJob: () => Promise<void>;
   onCancelProfileSource: (sourceId: string) => Promise<void>;
@@ -407,9 +409,15 @@ export function WorkspaceDrawer({
     ? `${metrics.serviceVersion || "backend"} online`
     : (metricsError ?? "Provider status pending");
   const activeProject = projects.find((project) => project.id === activeProjectId);
+  const commandCenterRoutes = temporaryWorkEnabled
+    ? COMMAND_CENTER_ROUTES
+    : COMMAND_CENTER_ROUTES.filter((section) => section.id !== "temporary");
+  const visibleActiveSection =
+    !temporaryWorkEnabled && effectiveActiveSection === "temporary"
+      ? "overview"
+      : effectiveActiveSection;
   const activeSectionLabel =
-    COMMAND_CENTER_ROUTES.find((section) => section.id === effectiveActiveSection)?.label ??
-    "Overview";
+    commandCenterRoutes.find((section) => section.id === visibleActiveSection)?.label ?? "Overview";
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId) ?? null;
   const totalSources = sourceAssetModels.length;
   const generatedDurationMs = visibleJobs.reduce((total, item) => total + item.durationMs, 0);
@@ -494,18 +502,18 @@ export function WorkspaceDrawer({
               </div>
             </div>
             <div className="mt-4 grid gap-1.5">
-              {COMMAND_CENTER_ROUTES.map((section) => (
+              {commandCenterRoutes.map((section) => (
                 <button
-                  aria-current={effectiveActiveSection === section.id ? "page" : undefined}
+                  aria-current={visibleActiveSection === section.id ? "page" : undefined}
                   className={`grid min-w-0 gap-1 rounded-md border px-3 py-2 text-left transition ${
-                    effectiveActiveSection === section.id
+                    visibleActiveSection === section.id
                       ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)] shadow-sm"
                       : "vs-work-surface hover:bg-[var(--vs-surface)]"
                   }`}
                   data-testid={`ui-action-command-center-section-${section.id}`}
                   data-ui-action-owner="command-center"
                   data-ui-noop-reason={
-                    effectiveActiveSection === section.id
+                    visibleActiveSection === section.id
                       ? "Command Center section is already selected."
                       : undefined
                   }
@@ -520,7 +528,7 @@ export function WorkspaceDrawer({
                     {sectionCounts[section.id] ? (
                       <span
                         className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.65rem] ${
-                          effectiveActiveSection === section.id
+                          visibleActiveSection === section.id
                             ? "border-[var(--vs-selected-border)] text-[var(--vs-selected-text)]"
                             : "vs-border vs-muted"
                         }`}
@@ -531,7 +539,7 @@ export function WorkspaceDrawer({
                   </span>
                   <span
                     className={`truncate text-[0.68rem] ${
-                      effectiveActiveSection === section.id
+                      visibleActiveSection === section.id
                         ? "text-[var(--vs-selected-text)]"
                         : "vs-muted"
                     }`}
@@ -549,14 +557,14 @@ export function WorkspaceDrawer({
                 {activeSectionLabel}
               </p>
               <h3 className="text-xl font-semibold">
-                {commandCenterSectionHeadline(effectiveActiveSection)}
+                {commandCenterSectionHeadline(visibleActiveSection)}
               </h3>
               <p className="vs-muted text-sm leading-6">
-                {commandCenterSectionDescription(effectiveActiveSection)}
+                {commandCenterSectionDescription(visibleActiveSection)}
               </p>
             </div>
 
-            {effectiveActiveSection === "overview" ? (
+            {visibleActiveSection === "overview" ? (
               <CommandCenterOverview
                 activityCount={activitySummaries.length}
                 activeProjectName={activeProject?.name ?? "Draft"}
@@ -585,13 +593,17 @@ export function WorkspaceDrawer({
                 onOpenReports={() => {
                   setActiveSection("reports");
                 }}
-                onOpenTemporary={() => {
-                  setActiveSection("temporary");
-                }}
+                onOpenTemporary={
+                  temporaryWorkEnabled
+                    ? () => {
+                        setActiveSection("temporary");
+                      }
+                    : undefined
+                }
               />
             ) : null}
 
-            {effectiveActiveSection === "projects" ? (
+            {visibleActiveSection === "projects" ? (
               <WorkspaceSection
                 actions={
                   <div className="flex flex-wrap gap-2">
@@ -689,19 +701,20 @@ export function WorkspaceDrawer({
               </WorkspaceSection>
             ) : null}
 
-            {effectiveActiveSection === "temporary" ? (
+            {visibleActiveSection === "temporary" ? (
               <WorkspaceSection
                 actions={
                   <div className="flex flex-wrap gap-2">
                     <button
                       className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
+                      data-confirm="Clear expired temporary work? This deletes only expired temporary content and artifacts. Project sources are unchanged."
                       disabled={(temporaryStorageUsage?.expiredCount ?? 0) === 0}
                       onClick={() => {
                         void onClearExpiredTemporarySources();
                       }}
                       type="button"
                     >
-                      Clear Expired
+                      {TEMPORARY_SOURCE_COPY.actions.clearExpired}
                     </button>
                     {quickListenEnabled ? (
                       <button
@@ -731,7 +744,7 @@ export function WorkspaceDrawer({
               </WorkspaceSection>
             ) : null}
 
-            {effectiveActiveSection === "assets" ? (
+            {visibleActiveSection === "assets" ? (
               <WorkspaceSection
                 actions={
                   <div className="flex flex-wrap gap-2">
@@ -793,7 +806,7 @@ export function WorkspaceDrawer({
               </WorkspaceSection>
             ) : null}
 
-            {effectiveActiveSection === "activity" ? (
+            {visibleActiveSection === "activity" ? (
               <WorkspaceSection id="command-center-activity" title="Activity">
                 <div className="grid gap-3">
                   {activitySummaries.length > 0 ? (
@@ -810,7 +823,7 @@ export function WorkspaceDrawer({
               </WorkspaceSection>
             ) : null}
 
-            {effectiveActiveSection === "importsExports" ? (
+            {visibleActiveSection === "importsExports" ? (
               <WorkspaceSection id="command-center-imports-exports" title="Imports and Exports">
                 <div className="grid gap-3 rounded-md border p-4 vs-surface">
                   <p className="text-sm font-semibold">Shareable project bundles</p>
@@ -840,7 +853,7 @@ export function WorkspaceDrawer({
               </WorkspaceSection>
             ) : null}
 
-            {effectiveActiveSection === "reports" ? (
+            {visibleActiveSection === "reports" ? (
               <WorkspaceSection id="command-center-reports" title="Reports">
                 <HealthReportsPanel
                   bundleReport={bundleReport}
@@ -944,7 +957,11 @@ function TemporaryWorkShelf({
             />
           ))
         ) : (
-          <EmptyDrawerText>{TEMPORARY_SOURCE_COPY.empty.recovery}</EmptyDrawerText>
+          <EmptyDrawerText>
+            {totalSessions === 0
+              ? TEMPORARY_SOURCE_COPY.launcher.noRecent
+              : "No temporary sources match this filter."}
+          </EmptyDrawerText>
         )}
       </div>
     </div>
@@ -1033,7 +1050,7 @@ function TemporarySourceCard({
             title={reopenDisabledReason}
             type="button"
           >
-            Reopen
+            {TEMPORARY_SOURCE_COPY.actions.open}
           </button>
           <button
             className="min-h-11 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border sm:h-9 sm:min-h-0"
@@ -1154,7 +1171,7 @@ function CommandCenterOverview({
   onOpenAssets: () => void;
   onOpenProjects: () => void;
   onOpenReports: () => void;
-  onOpenTemporary: () => void;
+  onOpenTemporary?: () => void;
 }>) {
   return (
     <div className="grid gap-4">
@@ -1196,12 +1213,14 @@ function CommandCenterOverview({
           >
             Assets
           </OverviewRouteButton>
-          <OverviewRouteButton
-            detail="Reopen, Keep in project, Discard temporary source, or Clear expired temporary work."
-            onClick={onOpenTemporary}
-          >
-            Temporary Work
-          </OverviewRouteButton>
+          {onOpenTemporary ? (
+            <OverviewRouteButton
+              detail="Review recent temporary work, storage, and lifecycle actions."
+              onClick={onOpenTemporary}
+            >
+              Temporary Work
+            </OverviewRouteButton>
+          ) : null}
           <OverviewRouteButton
             detail={
               activityCount > 0

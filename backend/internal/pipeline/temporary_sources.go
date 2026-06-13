@@ -230,6 +230,36 @@ func (service *Service) GetTemporarySource(id string) (TemporarySourceSession, e
 	return source, nil
 }
 
+func (service *Service) ListTemporarySources(now time.Time) []TemporarySourceSession {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	sessions := service.temporarySourceSessionsIncludingExpired(now)
+	sort.SliceStable(sessions, func(left int, right int) bool {
+		return sessions[left].LastAccessedAt.After(sessions[right].LastAccessedAt)
+	})
+	return sessions
+}
+
+func (service *Service) ListTemporarySourceJobs() []VoiceJob {
+	service.mu.RLock()
+	jobs := make([]VoiceJob, 0)
+	for _, job := range service.jobs {
+		if strings.TrimSpace(job.TemporarySourceID) == "" {
+			continue
+		}
+		if jobStatusIsTerminal(job.Status) && job.Status != JobStatusFailed {
+			continue
+		}
+		jobs = append(jobs, job.VoiceJob)
+	}
+	service.mu.RUnlock()
+	sort.SliceStable(jobs, func(left int, right int) bool {
+		return jobs[left].UpdatedAt.After(jobs[right].UpdatedAt)
+	})
+	return jobs
+}
+
 func (service *Service) ConfirmTemporarySourceReadiness(id string, request SourceReadinessConfirmationRequest) (TemporarySourceSession, error) {
 	session, err := service.getTemporarySource(id, true)
 	if err != nil {
@@ -574,6 +604,53 @@ func (service *Service) TemporaryStorageUsageSummary(now time.Time) TemporarySto
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
+	sessions := service.temporarySourceSessionsIncludingExpired(now)
+	summary := TemporaryStorageUsageSummary{ArtifactTypeBytes: map[string]int64{}, UpdatedAt: now}
+	for _, session := range sessions {
+		bytes := service.temporarySourceStorageBytes(session.ID)
+		artifactTypeBytes := map[string]int64{
+			string(SourceArtifactKindGeneratedAudio): bytes.audio,
+			"progress":                               bytes.progress,
+			"source":                                 bytes.source,
+			"temporaryArtifacts":                     bytes.artifact,
+		}
+		row := TemporaryStorageUsageSession{
+			TemporarySourceID: session.ID,
+			Title:             firstNonEmpty(session.Title, session.SourceName),
+			Status:            session.Status,
+			Bytes:             bytes.total,
+			AudioBytes:        bytes.audio,
+			ArtifactBytes:     bytes.artifact,
+			SourceBytes:       bytes.source,
+			ProgressBytes:     bytes.progress,
+			ArtifactTypeBytes: artifactTypeBytes,
+			ExpiresAt:         session.ExpiresAt,
+			LastAccessedAt:    session.LastAccessedAt,
+		}
+		summary.Sessions = append(summary.Sessions, row)
+		summary.TotalBytes += bytes.total
+		summary.SourceBytes += bytes.source
+		summary.ArtifactBytes += bytes.artifact
+		summary.AudioBytes += bytes.audio
+		summary.ProgressBytes += bytes.progress
+		for kind, value := range artifactTypeBytes {
+			summary.ArtifactTypeBytes[kind] += value
+		}
+		summary.TemporaryCount++
+		if !session.ExpiresAt.After(now) || session.Status == TemporarySourceStateExpired {
+			summary.ExpiredCount++
+		}
+		if service.temporarySourceHasActiveJob(session.ID) {
+			summary.GeneratingCount++
+		}
+	}
+	sort.Slice(summary.Sessions, func(i, j int) bool {
+		return summary.Sessions[i].LastAccessedAt.After(summary.Sessions[j].LastAccessedAt)
+	})
+	return summary
+}
+
+func (service *Service) temporarySourceSessionsIncludingExpired(now time.Time) []TemporarySourceSession {
 	sessions := make([]TemporarySourceSession, 0)
 	service.mu.RLock()
 	for _, session := range service.temporary {
@@ -593,39 +670,7 @@ func (service *Service) TemporaryStorageUsageSummary(now time.Time) TemporarySto
 			sessions = append(sessions, cloneTemporarySourceSession(session))
 		}
 	}
-	summary := TemporaryStorageUsageSummary{UpdatedAt: now}
-	for _, session := range sessions {
-		bytes := service.temporarySourceStorageBytes(session.ID)
-		row := TemporaryStorageUsageSession{
-			TemporarySourceID: session.ID,
-			Title:             firstNonEmpty(session.Title, session.SourceName),
-			Status:            session.Status,
-			Bytes:             bytes.total,
-			AudioBytes:        bytes.audio,
-			ArtifactBytes:     bytes.artifact,
-			SourceBytes:       bytes.source,
-			ProgressBytes:     bytes.progress,
-			ExpiresAt:         session.ExpiresAt,
-			LastAccessedAt:    session.LastAccessedAt,
-		}
-		summary.Sessions = append(summary.Sessions, row)
-		summary.TotalBytes += bytes.total
-		summary.SourceBytes += bytes.source
-		summary.ArtifactBytes += bytes.artifact
-		summary.AudioBytes += bytes.audio
-		summary.ProgressBytes += bytes.progress
-		summary.TemporaryCount++
-		if !session.ExpiresAt.After(now) || session.Status == TemporarySourceStateExpired {
-			summary.ExpiredCount++
-		}
-		if service.temporarySourceHasActiveJob(session.ID) {
-			summary.GeneratingCount++
-		}
-	}
-	sort.Slice(summary.Sessions, func(i, j int) bool {
-		return summary.Sessions[i].LastAccessedAt.After(summary.Sessions[j].LastAccessedAt)
-	})
-	return summary
+	return sessions
 }
 
 type temporaryStorageBytes struct {

@@ -1,5 +1,6 @@
 export interface TemporarySourcesFeatureFlags {
   cinema: boolean;
+  premiumSurfaces: boolean;
   quickListen: boolean;
 }
 
@@ -19,6 +20,9 @@ const featureFlagEnv = import.meta.env as Record<string, string | undefined>;
 export const studioFeatureFlags: StudioFeatureFlags = {
   temporarySources: {
     cinema: enabledByDefault(featureFlagEnv.VITE_FEATURE_TEMPORARY_SOURCES_CINEMA),
+    premiumSurfaces: enabledByDefault(
+      featureFlagEnv.VITE_FEATURE_TEMPORARY_SOURCES_PREMIUM_SURFACES,
+    ),
     quickListen: enabledByDefault(featureFlagEnv.VITE_FEATURE_TEMPORARY_SOURCES_QUICK_LISTEN),
   },
 };
@@ -29,4 +33,8 @@ export function temporaryCinemaDisabledReason(): string {
 
 export function quickListenDisabledReason(): string {
   return "Quick Listen is disabled by the temporarySources.quickListen feature flag.";
+}
+
+export function temporaryPremiumSurfacesDisabledReason(): string {
+  return "Temporary Work management is disabled by the temporarySources.premiumSurfaces feature flag.";
 }

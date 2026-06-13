@@ -581,6 +581,37 @@ func TestTemporarySourceGetRefreshesExpiry(t *testing.T) {
 	}
 }
 
+func TestTemporarySourceListJobsAndStorageTypeBytes(t *testing.T) {
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	temporary, err := service.CreateTemporarySource(context.Background(), pipeline.CreateTemporarySourceRequest{
+		Text:       "Temporary source should appear in recent management surfaces.",
+		SourceName: "recent.md",
+	})
+	if err != nil {
+		t.Fatalf("CreateTemporarySource returned error: %v", err)
+	}
+	job, err := service.CreateTemporarySourceJob(context.Background(), temporary.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreateTemporarySourceJob returned error: %v", err)
+	}
+
+	recent := service.ListTemporarySources(time.Now().UTC())
+	if len(recent) != 1 || recent[0].ID != temporary.ID {
+		t.Fatalf("recent = %#v, want temporary source", recent)
+	}
+	jobs := service.ListTemporarySourceJobs()
+	if len(jobs) != 1 || jobs[0].ID != job.ID || jobs[0].TemporarySourceID != temporary.ID {
+		t.Fatalf("temporary jobs = %#v, want active temporary job", jobs)
+	}
+	summary := service.TemporaryStorageUsageSummary(time.Now().UTC())
+	if summary.ArtifactTypeBytes["source"] == 0 {
+		t.Fatalf("source bytes = 0, want temporary source storage counted")
+	}
+	if len(summary.Sessions) != 1 || summary.Sessions[0].ArtifactTypeBytes["source"] == 0 {
+		t.Fatalf("storage sessions = %#v, want per-source artifact type bytes", summary.Sessions)
+	}
+}
+
 func TestTemporarySourceCreationAcceptsLocalReadableDocument(t *testing.T) {
 	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
 	localPath := filepath.Join(t.TempDir(), "local.md")

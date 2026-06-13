@@ -71,6 +71,8 @@ import {
   isApiNotFoundError,
   listPreparedSources,
   listProjectBookSources,
+  listTemporarySourceJobs,
+  listTemporarySources,
   listProjectProgress,
   listSpeechPolicyProfiles,
   listTTSEngines,
@@ -83,6 +85,7 @@ import {
   previewContentIRSpeechPolicy,
   promoteTemporarySource,
   queueVoiceProfileTarget,
+  reopenTemporarySource,
   refreshVoiceProfileCandidateTranscript,
   refreshVoiceProfileSourceTranscript,
   renameBookSource,
@@ -2757,6 +2760,7 @@ export function App() {
   const [uiMemoryResetSignal, setUiMemoryResetSignal] = useState(0);
   const [projectStateReadyId, setProjectStateReadyId] = useState<string | null>(null);
   const [projectJobs, setProjectJobs] = useState<VoiceJob[]>([]);
+  const [temporaryJobs, setTemporaryJobs] = useState<VoiceJob[]>([]);
   const [bookSources, setBookSources] = useState<BookSource[]>([]);
   const [selectedBookSourceId, setSelectedBookSourceId] = useState<string | null>(null);
   const [selectedBookScope, setSelectedBookScope] = useState<BookScope | null>(null);
@@ -2786,6 +2790,7 @@ export function App() {
   const [quickListenError, setQuickListenError] = useState<string | null>(null);
   const quickListenEnabled = studioFeatureFlags.temporarySources.quickListen;
   const temporaryCinemaEnabled = studioFeatureFlags.temporarySources.cinema;
+  const temporaryWorkEnabled = studioFeatureFlags.temporarySources.premiumSurfaces;
   const [hydratingPreparedSourceId, setHydratingPreparedSourceId] = useState<string | null>(null);
   const [isPreparingSource, setIsPreparingSource] = useState(false);
   const [sourcePrepError, setSourcePrepError] = useState<string | null>(null);
@@ -2997,10 +3002,15 @@ export function App() {
   const [bundleOperationReport, setBundleOperationReport] = useState<BundleOperationReport | null>(
     null,
   );
-  const openCommandCenter = useCallback((section: CommandCenterSectionId = "overview") => {
-    setCommandCenterSection(section);
-    setIsCommandCenterOpen(true);
-  }, []);
+  const openCommandCenter = useCallback(
+    (section: CommandCenterSectionId = "overview") => {
+      setCommandCenterSection(
+        section === "temporary" && !temporaryWorkEnabled ? "overview" : section,
+      );
+      setIsCommandCenterOpen(true);
+    },
+    [temporaryWorkEnabled],
+  );
   const [isContentIROpen, setIsContentIROpen] = useState(false);
   const [contentIRDocument, setContentIRDocument] = useState<ContentIRDocument | null>(null);
   const [contentIRError, setContentIRError] = useState<string | null>(null);
@@ -6450,6 +6460,22 @@ export function App() {
     }
   }, []);
 
+  const refreshTemporarySources = useCallback(async () => {
+    try {
+      setTemporarySources(await listTemporarySources());
+    } catch {
+      setTemporarySources([]);
+    }
+  }, []);
+
+  const refreshTemporaryJobs = useCallback(async () => {
+    try {
+      setTemporaryJobs(await listTemporarySourceJobs());
+    } catch {
+      setTemporaryJobs([]);
+    }
+  }, []);
+
   const createQuickListenSource = useCallback(
     async (
       request: Parameters<typeof createTemporarySource>[0],
@@ -6500,6 +6526,8 @@ export function App() {
           session = await confirmTemporarySourceReadiness(session.id, confirmation);
         }
         activateTemporarySource(session, effectiveDestination);
+        void refreshTemporarySources();
+        void refreshTemporaryJobs();
         void refreshTemporaryStorageUsage();
       } catch (caughtError) {
         const message = formatTemporarySourceError(caughtError);
@@ -6515,6 +6543,8 @@ export function App() {
       announceAssertive,
       announcePolite,
       quickListenEnabled,
+      refreshTemporaryJobs,
+      refreshTemporarySources,
       refreshTemporaryStorageUsage,
       temporaryCinemaEnabled,
     ],
@@ -6609,9 +6639,30 @@ export function App() {
 
   useEffect(() => {
     if (isQuickListenOpen) {
+      void refreshTemporarySources();
+      void refreshTemporaryJobs();
       void refreshTemporaryStorageUsage();
     }
-  }, [isQuickListenOpen, refreshTemporaryStorageUsage]);
+  }, [
+    isQuickListenOpen,
+    refreshTemporaryJobs,
+    refreshTemporarySources,
+    refreshTemporaryStorageUsage,
+  ]);
+
+  useEffect(() => {
+    if (temporaryWorkEnabled || quickListenEnabled) {
+      void refreshTemporarySources();
+      void refreshTemporaryJobs();
+      void refreshTemporaryStorageUsage();
+    }
+  }, [
+    quickListenEnabled,
+    refreshTemporaryJobs,
+    refreshTemporarySources,
+    refreshTemporaryStorageUsage,
+    temporaryWorkEnabled,
+  ]);
 
   const markTemporarySourceExpired = useCallback((temporarySourceId: string, message: string) => {
     setTemporarySources((currentSources) =>
@@ -6675,7 +6726,7 @@ export function App() {
   const handleUseTemporarySource = useCallback(
     async (session: TemporarySourceSession) => {
       try {
-        const refreshed = await getTemporarySource(session.id);
+        const refreshed = await reopenTemporarySource(session.id);
         activateTemporarySource(
           refreshed,
           refreshed.sourceReadiness?.state === "ready" ? "preview" : "review",
@@ -6710,7 +6761,7 @@ export function App() {
   const handleOpenTemporarySourceInReview = useCallback(
     async (session: TemporarySourceSession) => {
       try {
-        activateTemporarySource(await getTemporarySource(session.id), "review");
+        activateTemporarySource(await reopenTemporarySource(session.id), "review");
       } catch (caughtError) {
         const message =
           caughtError instanceof Error
@@ -6726,7 +6777,7 @@ export function App() {
   const handleOpenTemporarySourceInPreview = useCallback(
     async (session: TemporarySourceSession) => {
       try {
-        activateTemporarySource(await getTemporarySource(session.id), "preview");
+        activateTemporarySource(await reopenTemporarySource(session.id), "preview");
       } catch (caughtError) {
         const message =
           caughtError instanceof Error
@@ -6742,7 +6793,7 @@ export function App() {
   const handleOpenTemporarySourceCinema = useCallback(
     async (session: TemporarySourceSession) => {
       try {
-        const refreshed = await getTemporarySource(session.id);
+        const refreshed = await reopenTemporarySource(session.id);
         if (temporarySessionPrefersBookCinema(refreshed)) {
           activateTemporarySource(refreshed, "review");
           setIsBookCinemaOpen(true);
@@ -6818,6 +6869,7 @@ export function App() {
         );
         setSelectedPreparedSourceId((currentId) => (currentId === session.id ? null : currentId));
         setSelectedBookSourceId((currentId) => (currentId === session.id ? null : currentId));
+        void refreshTemporaryJobs();
         void refreshTemporaryStorageUsage();
       } catch (caughtError) {
         setQuickListenError(
@@ -6827,7 +6879,7 @@ export function App() {
         );
       }
     },
-    [refreshTemporaryStorageUsage],
+    [refreshTemporaryJobs, refreshTemporaryStorageUsage],
   );
 
   const handleExtendTemporarySource = useCallback(
@@ -6873,6 +6925,7 @@ export function App() {
             result.message ?? "Temporary artifacts were removed.",
           );
         }
+        void refreshTemporaryJobs();
         void refreshTemporaryStorageUsage();
       } catch (caughtError) {
         setQuickListenError(
@@ -6880,12 +6933,21 @@ export function App() {
         );
       }
     },
-    [markTemporarySourceExpired, refreshTemporaryStorageUsage],
+    [markTemporarySourceExpired, refreshTemporaryJobs, refreshTemporaryStorageUsage],
   );
 
   const handleClearExpiredTemporarySources = useCallback(async () => {
+    if (
+      !globalThis.confirm(
+        "Clear expired temporary work? This deletes only expired temporary content and artifacts. Project sources are unchanged.",
+      )
+    ) {
+      return;
+    }
     try {
       await clearExpiredTemporarySources();
+      await refreshTemporarySources();
+      await refreshTemporaryJobs();
       await refreshTemporaryStorageUsage();
     } catch (caughtError) {
       setQuickListenError(
@@ -6894,7 +6956,7 @@ export function App() {
           : "Unable to clear expired temporary sessions.",
       );
     }
-  }, [refreshTemporaryStorageUsage]);
+  }, [refreshTemporaryJobs, refreshTemporarySources, refreshTemporaryStorageUsage]);
 
   const handleDiscardTemporaryPreparedSource = useCallback(
     async (source: PreparedSource) => {
@@ -8888,6 +8950,7 @@ export function App() {
     quickListenEnabled,
     temporarySources,
     temporaryStorageUsage,
+    temporaryWorkEnabled,
     wordHighlightCapabilityReason,
     workspaceStageActionLabel,
   });
@@ -9491,7 +9554,7 @@ export function App() {
             narrationStatusModel={narrationStatusModel}
             preparedSources={preparedSources}
             projectError={projectError}
-            projectJobs={projectJobs}
+            projectJobs={[...projectJobs, ...temporaryJobs]}
             projectStorage={projectStorage}
             projectStorageError={projectStorageError}
             projects={projects}
@@ -9518,6 +9581,7 @@ export function App() {
             ttsEngines={ttsEngines}
             temporarySources={temporarySources}
             temporaryStorageUsage={temporaryStorageUsage}
+            temporaryWorkEnabled={temporaryWorkEnabled}
             onCancelJob={handleCancelVoiceJob}
             onCancelProfileSource={handleCancelVoiceProfileSource}
             onCancelProfileTarget={handleCancelVoiceProfileTarget}

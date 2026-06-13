@@ -184,6 +184,7 @@ export interface TemporaryStorageUsageSession {
   artifactBytes?: number;
   sourceBytes?: number;
   progressBytes?: number;
+  artifactTypeBytes?: Record<string, number>;
   expiresAt: string;
   lastAccessedAt: string;
 }
@@ -194,6 +195,7 @@ export interface TemporaryStorageUsageSummary {
   artifactBytes: number;
   audioBytes: number;
   progressBytes: number;
+  artifactTypeBytes?: Record<string, number>;
   temporaryCount: number;
   expiredCount: number;
   generatingCount: number;

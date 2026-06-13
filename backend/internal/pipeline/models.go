@@ -234,16 +234,17 @@ type TemporarySourceCleanupResult struct {
 }
 
 type TemporaryStorageUsageSummary struct {
-	TotalBytes      int64                          `json:"totalBytes"`
-	SourceBytes     int64                          `json:"sourceBytes"`
-	ArtifactBytes   int64                          `json:"artifactBytes"`
-	AudioBytes      int64                          `json:"audioBytes"`
-	ProgressBytes   int64                          `json:"progressBytes"`
-	TemporaryCount  int                            `json:"temporaryCount"`
-	ExpiredCount    int                            `json:"expiredCount"`
-	GeneratingCount int                            `json:"generatingCount"`
-	Sessions        []TemporaryStorageUsageSession `json:"sessions"`
-	UpdatedAt       time.Time                      `json:"updatedAt"`
+	TotalBytes        int64                          `json:"totalBytes"`
+	SourceBytes       int64                          `json:"sourceBytes"`
+	ArtifactBytes     int64                          `json:"artifactBytes"`
+	AudioBytes        int64                          `json:"audioBytes"`
+	ProgressBytes     int64                          `json:"progressBytes"`
+	ArtifactTypeBytes map[string]int64               `json:"artifactTypeBytes,omitempty"`
+	TemporaryCount    int                            `json:"temporaryCount"`
+	ExpiredCount      int                            `json:"expiredCount"`
+	GeneratingCount   int                            `json:"generatingCount"`
+	Sessions          []TemporaryStorageUsageSession `json:"sessions"`
+	UpdatedAt         time.Time                      `json:"updatedAt"`
 }
 
 type TemporaryStorageUsageSession struct {
@@ -255,6 +256,7 @@ type TemporaryStorageUsageSession struct {
 	ArtifactBytes     int64                         `json:"artifactBytes,omitempty"`
 	SourceBytes       int64                         `json:"sourceBytes,omitempty"`
 	ProgressBytes     int64                         `json:"progressBytes,omitempty"`
+	ArtifactTypeBytes map[string]int64              `json:"artifactTypeBytes,omitempty"`
 	ExpiresAt         time.Time                     `json:"expiresAt"`
 	LastAccessedAt    time.Time                     `json:"lastAccessedAt"`
 }

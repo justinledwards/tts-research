@@ -79,6 +79,26 @@ describe("command palette helpers", () => {
     );
   });
 
+  it("hides Temporary Work management commands when temporarySources.premiumSurfaces is disabled", () => {
+    const session = temporarySourceSession();
+    const entries = buildCommandEntries(
+      buildContext({
+        activeTemporarySource: session,
+        temporarySources: [session],
+        temporaryWorkEnabled: false,
+      }),
+    );
+    const entryIds = entries.map((entry) => entry.id);
+
+    expect(entryIds).toContain("quick-listen:open");
+    expect(entryIds).not.toContain("command-center:temporary");
+    expect(entryIds).not.toContain("temporary-source:reopen-recent");
+    expect(entryIds).not.toContain("temporary-source:keep-in-project");
+    expect(entryIds).not.toContain("temporary-source:discard");
+    expect(entryIds).not.toContain("temporary-source:clear-expired");
+    expect(entryIds).not.toContain("temporary-source:recent:temp-article");
+  });
+
   it("labels recent temporary sources and makes them searchable by expert terms", () => {
     const session = temporarySourceSession();
     const entries = buildCommandEntries(

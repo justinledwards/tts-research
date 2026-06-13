@@ -2220,3 +2220,16 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [ ] Review scoped work package diff
 - [x] Stage scoped work package files
 - [ ] Commit scoped work package
+
+## 2026-06-13 13:21 CEST - Command Center Temporary Work Shelf
+- [x] Map existing temporary source, Command Center, and activity surfaces
+- [x] Add backend summary/list/job/cleanup/reopen support
+- [x] Add Command Center Temporary Work shelf and drawer navigation
+- [x] Add focused regression coverage and screenshot hooks
+- [x] Run project checks
+- Validation: backend pipeline/httpapi tests, focused frontend API/Command Center/Quick Listen/settings tests, and frontend typecheck passed. `pnpm e2e:temporary-sources` failed in responsive screenshot state classification, `pnpm e2e:ui-actions` failed later on an unrelated `preview-generation-cockpit` locator timeout, `pnpm e2e:surface-complexity` failed through the same audit family, and `pnpm validate:local` failed on existing lint findings outside the touched files after touched-file formatting was fixed.
+
+## 2026-06-13 14:03 CEST - Commit Command Center Temporary Work Shelf
+- [x] Review scoped work package files
+- [x] Stage scoped work package files
+- [x] Commit scoped work package
