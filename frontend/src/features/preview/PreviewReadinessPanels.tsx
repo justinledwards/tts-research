@@ -1,5 +1,11 @@
 import type { ReactNode } from "react";
-import { Button, Panel, StatusChip, type StatusChipTone } from "../../design";
+import {
+  Button,
+  fieldControlClassName,
+  Panel,
+  StatusChip,
+  type StatusChipTone,
+} from "../../design";
 import type {
   PreviewReadinessModel,
   PreviewReadinessRow,
@@ -15,6 +21,12 @@ export interface PreviewVoiceAuditionState {
   readonly metadata?: string;
   readonly play: () => void;
   readonly status: "error" | "idle" | "loading" | "playing" | "ready";
+}
+
+export interface PreviewTemporaryVoiceOption {
+  readonly detail: string;
+  readonly id: string;
+  readonly label: string;
 }
 
 export interface PreviewGeneratedAudioPanelProps {
@@ -145,12 +157,22 @@ export function VoiceAuditionPanel({
   disabledReason,
   sampleText,
   state,
+  temporaryVoiceOptions = [],
+  temporaryVoiceSelectionId,
+  onTemporaryVoiceChange,
 }: Readonly<{
   disabledReason?: string;
   sampleText: string;
   state: PreviewVoiceAuditionState;
+  temporaryVoiceOptions?: readonly PreviewTemporaryVoiceOption[];
+  temporaryVoiceSelectionId?: string;
+  onTemporaryVoiceChange?: (voiceId: string) => void;
 }>) {
   const disabled = Boolean(disabledReason) || state.status === "loading";
+  const showTemporaryVoiceSelection =
+    Boolean(temporaryVoiceSelectionId) &&
+    temporaryVoiceOptions.length > 0 &&
+    onTemporaryVoiceChange;
   return (
     <Panel
       as="section"
@@ -165,6 +187,42 @@ export function VoiceAuditionPanel({
           Plays a short selected-block sample without creating full narration audio.
         </p>
       </div>
+      {showTemporaryVoiceSelection ? (
+        <div
+          className="grid gap-2 rounded-md border p-3 vs-border vs-work-surface"
+          data-testid="preview-temporary-voice-selection"
+        >
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <label
+              className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted"
+              htmlFor="preview-temporary-voice-select"
+            >
+              Use this voice for temporary source
+            </label>
+            <StatusChip tone="info">Session voice override</StatusChip>
+          </div>
+          <select
+            className={fieldControlClassName}
+            data-testid="ui-action-preview-temporary-voice-select"
+            data-ui-action-surface="Preview"
+            id="preview-temporary-voice-select"
+            onChange={(event) => {
+              onTemporaryVoiceChange(event.currentTarget.value);
+            }}
+            value={temporaryVoiceSelectionId}
+          >
+            {temporaryVoiceOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs leading-5 vs-muted">
+            Temporary voice choices stay in this session. Provider-backed voice generation can send
+            request text, selected voice settings, and run configuration to the configured provider.
+          </p>
+        </div>
+      ) : null}
       <p className="line-clamp-3 rounded-md px-3 py-2 text-sm leading-6 vs-work-surface">
         {sampleText || "Select a spoken block to audition."}
       </p>

@@ -123,6 +123,25 @@ describe("temporary voice model", () => {
     });
     expect(loadTemporaryVoiceState("beta").selectionsByTemporarySourceId).toEqual({});
   });
+
+  it("reports provider readiness failures as temporary-source errors", () => {
+    const model = buildTemporaryVoiceDashboardModel({
+      activeTemporarySourceId: "temp-1",
+      profiles: [],
+      state: EMPTY_TEMPORARY_VOICE_STATE,
+      temporarySources: [temporarySource()],
+      ttsEngines: [],
+    });
+
+    expect(model.diagnostics.find((item) => item.id === "tts")).toMatchObject({
+      detail:
+        "Provider unavailable for temporary generation. This temporary-source error does not change project voice defaults.",
+      status: "attention",
+    });
+    expect(model.diagnostics.find((item) => item.id === "preview")?.detail).toContain(
+      "Temporary auditions remain session history only.",
+    );
+  });
 });
 
 function voiceProfile(): VoiceProfile {

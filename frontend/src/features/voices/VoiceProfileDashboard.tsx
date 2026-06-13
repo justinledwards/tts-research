@@ -46,6 +46,7 @@ export interface VoiceProfileDashboardProps {
   selectedProfileId: string;
   temporarySourceId: string | null;
   temporarySources: TemporarySourceSession[];
+  temporaryWorkEnabled: boolean;
   temporaryVoiceState: TemporaryVoiceState;
   ttsEngines: TTSEngineDiagnostics[];
   onBuildArtifact: (profileId: string, moduleId: string) => Promise<void>;
@@ -71,6 +72,7 @@ export function VoiceProfileDashboard({
   selectedProfileId,
   temporarySourceId,
   temporarySources,
+  temporaryWorkEnabled,
   temporaryVoiceState,
   ttsEngines,
   onBuildArtifact,
@@ -265,13 +267,15 @@ export function VoiceProfileDashboard({
                 title="Voice data boundary"
               />
 
-              <TemporaryVoiceUsagePanel
-                activeTemporarySourceId={temporarySourceId}
-                model={temporaryVoiceModel}
-                onConfirmTemporaryCloneConsent={onConfirmTemporaryCloneConsent}
-                onOpenVoiceCloning={onOpenVoiceCloning}
-                onSaveTemporaryVoicePreference={onSaveTemporaryVoicePreference}
-              />
+              {temporaryWorkEnabled ? (
+                <TemporaryVoiceUsagePanel
+                  activeTemporarySourceId={temporarySourceId}
+                  model={temporaryVoiceModel}
+                  onConfirmTemporaryCloneConsent={onConfirmTemporaryCloneConsent}
+                  onOpenVoiceCloning={onOpenVoiceCloning}
+                  onSaveTemporaryVoicePreference={onSaveTemporaryVoicePreference}
+                />
+              ) : null}
 
               <Panel title="Selected Voice">
                 <div className="grid gap-3 p-3">
@@ -402,6 +406,7 @@ function TemporaryVoiceUsagePanel({
   onOpenVoiceCloning: () => void;
   onSaveTemporaryVoicePreference: (selection: TemporaryVoiceSelection) => void;
 }>) {
+  const [confirmDurableSave, setConfirmDurableSave] = useState(false);
   const activeUsage = activeTemporarySourceId
     ? model.activeUsage.find((usage) => usage.temporarySourceId === activeTemporarySourceId)
     : null;
@@ -439,12 +444,19 @@ function TemporaryVoiceUsagePanel({
                   data-testid="ui-action-voice-dashboard-save-temporary-preference"
                   data-ui-action-surface="Workspace"
                   onClick={() => {
+                    if (!confirmDurableSave) {
+                      setConfirmDurableSave(true);
+                      return;
+                    }
                     onSaveTemporaryVoicePreference(activeUsage.currentSelection);
+                    setConfirmDurableSave(false);
                   }}
                   size="sm"
                   variant="primary"
                 >
-                  Save voice preference to project
+                  {confirmDurableSave
+                    ? "Confirm: Save voice preference to project"
+                    : "Save voice preference to project"}
                 </Button>
                 <Button
                   data-testid="ui-action-voice-dashboard-open-cloning-from-temporary"
@@ -508,7 +520,7 @@ function TemporaryVoiceUsagePanel({
 
         <div className="grid gap-2">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
-            Temporary provider diagnostics
+            Voice readiness inspector
           </p>
           {model.diagnostics.map((item) => (
             <div className="rounded-md border p-3 vs-border vs-surface" key={item.id}>

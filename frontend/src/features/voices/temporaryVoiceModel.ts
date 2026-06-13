@@ -266,8 +266,18 @@ function temporaryVoiceDiagnostics(
     (engine) => engine.capabilities?.voiceCloning ?? engine.supportsReference,
   );
   return [
-    diagnostic("tts", "Temporary generation", readyTts, "No ready TTS engine is available."),
-    diagnostic("preview", "Voice audition", readyPreview, "No engine advertises voice preview."),
+    diagnostic(
+      "tts",
+      "Temporary generation",
+      readyTts,
+      "Provider unavailable for temporary generation. This temporary-source error does not change project voice defaults.",
+    ),
+    diagnostic(
+      "preview",
+      "Voice audition",
+      readyPreview,
+      "Provider unavailable for temporary voice audition. Temporary auditions remain session history only.",
+    ),
     diagnostic(
       "clone",
       "Reference cloning",

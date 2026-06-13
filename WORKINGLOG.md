@@ -2248,3 +2248,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] add or update focused regression coverage
 - [x] run local review commands
 - Validation: focused frontend settings/privacy/UI memory tests passed; focused backend temporary source tests passed; frontend typecheck passed; `pnpm e2e:settings-ia`, `pnpm e2e:teleprompt-memory`, `pnpm e2e:temporary-sources`, and `pnpm validate:local` passed. Screenshot evidence written to `output/settings-temporary-work-evidence/latest`.
+
+## 2026-06-13 16:17 CEST - Voice Dashboard Temporary Voice Usage
+
+- [x] map temporary voice and dashboard surfaces
+- [x] implement session voice override and readiness behavior
+- [x] add focused regression coverage and evidence hooks
+- [x] run local review commands
+- Validation: focused frontend temporary voice/preview tests passed; frontend typecheck passed; `pnpm e2e:temporary-sources`, standalone `pnpm e2e:command-palette`, and `pnpm validate:local` passed. `pnpm check` reached backend tests and failed on transient pipeline temp-dir cleanup races in two different tests; focused rerun of the first failed test passed and `pnpm validate:local` backend tests passed. Screenshot evidence from e2e runs written under `output/accessibility/latest/responsive-snapshots`, `output/teleprompt-memory/latest`, `output/context-panel/latest`, and `output/command-palette/latest`.

@@ -353,6 +353,7 @@ import {
   PreviewConfirmationStrip,
   PreviewReadinessChecklist,
   VoiceAuditionPanel,
+  type PreviewTemporaryVoiceOption,
 } from "./features/preview/PreviewReadinessPanels";
 import {
   playbackActionAriaLabel,
@@ -412,8 +413,10 @@ import {
 } from "./features/workspace/model";
 import {
   confirmTemporaryVoiceCloneConsent,
+  defaultTemporaryVoiceSelection,
   effectiveTemporaryVoiceSelection,
   loadTemporaryVoiceState,
+  providerTemporaryVoiceSelection,
   recordTemporaryVoiceAudition,
   saveTemporaryVoiceState,
   savedProfileTemporaryVoiceSelection,
@@ -3680,6 +3683,21 @@ export function App() {
     ],
     [voiceProfiles],
   );
+  const activePreviewVoiceSelectionId = useMemo(() => {
+    if (!activeNarrationIsTemporary) {
+      return selectedVoiceProfileId || "default";
+    }
+    if (activeTemporaryVoiceSelection.kind === "provider") {
+      return activeTemporaryVoiceSelection.providerVoiceId ?? "default";
+    }
+    if (activeTemporaryVoiceSelection.kind === "saved-profile") {
+      return activeTemporaryVoiceSelection.voiceProfileId ?? "default";
+    }
+    return "default";
+  }, [activeNarrationIsTemporary, activeTemporaryVoiceSelection, selectedVoiceProfileId]);
+  const activePreviewVoiceLabel = activeNarrationIsTemporary
+    ? `${activeTemporaryVoiceSelection.label} · Session voice override`
+    : selectedVoiceProfileLabel;
   const globalPreviewPolicyOptions = useMemo(() => {
     const builtInProfiles =
       speechPolicyProfiles.length > 0
@@ -5119,6 +5137,32 @@ export function App() {
         id: profile.id,
         kind: "voice",
         label: `${profile.name} (temporary)`,
+      });
+    },
+    [activeTemporarySourceId, selectWorkspaceInspectorTarget, voiceProfiles],
+  );
+
+  const applyTemporaryVoiceForSource = useCallback(
+    (voiceId: string) => {
+      if (!activeTemporarySourceId) {
+        return;
+      }
+      const cleanVoiceId = voiceId.trim();
+      const profile = voiceProfiles.find((item) => item.id === cleanVoiceId);
+      const providerVoice = demoVoices.find((item) => item.id === cleanVoiceId);
+      let selection = defaultTemporaryVoiceSelection();
+      if (profile) {
+        selection = savedProfileTemporaryVoiceSelection(profile);
+      } else if (providerVoice && cleanVoiceId !== "default") {
+        selection = providerTemporaryVoiceSelection(providerVoice.id, providerVoice.label);
+      }
+      setTemporaryVoiceState((currentState) =>
+        selectTemporaryVoiceForSource(currentState, activeTemporarySourceId, selection),
+      );
+      selectWorkspaceInspectorTarget({
+        id: cleanVoiceId || "provider",
+        kind: "voice",
+        label: `${selection.label} (temporary)`,
       });
     },
     [activeTemporarySourceId, selectWorkspaceInspectorTarget, voiceProfiles],
@@ -7386,13 +7430,22 @@ export function App() {
 
   const handleGlobalPreviewVoiceChange = useCallback(
     (profileId: string) => {
+      if (activeNarrationIsTemporary) {
+        applyTemporaryVoiceForSource(profileId);
+        return;
+      }
       if (profileId === "default") {
         clearVoiceProfileSelection();
         return;
       }
       selectVoiceProfile(profileId);
     },
-    [clearVoiceProfileSelection, selectVoiceProfile],
+    [
+      activeNarrationIsTemporary,
+      clearVoiceProfileSelection,
+      selectVoiceProfile,
+      applyTemporaryVoiceForSource,
+    ],
   );
 
   const handleGlobalPreviewRunModeChange = useCallback((runMode: RunMode) => {
@@ -9062,6 +9115,14 @@ export function App() {
       seekPlaybackToSeconds(playbackControls, seekTargetSec, playbackCursorSec);
     }
   };
+  let temporaryProjectVoiceCommandReason: string | undefined;
+  if (!activeNarrationIsTemporary) {
+    temporaryProjectVoiceCommandReason =
+      "Open a temporary source before using a session voice override.";
+  } else if (!selectedVoiceProfileId) {
+    temporaryProjectVoiceCommandReason =
+      "Select a saved project voice before applying it as a temporary override.";
+  }
   const narrationShortcutCommandEntries: CommandEntry[] = [
     {
       availability: {
@@ -9146,6 +9207,55 @@ export function App() {
       section: "Diagnostics",
       shortcutCommandId: "status.inspectIssue",
       title: "Inspect status issue",
+    },
+    {
+      availability: {
+        reason: activeNarrationIsTemporary
+          ? undefined
+          : "Open a temporary source before using a session voice override.",
+        state: activeNarrationIsTemporary ? "available" : "blocked",
+      },
+      category: "Voice",
+      detail: "Use the provider default as a Session voice override for this temporary source.",
+      id: "voice:temporary:use-default",
+      keywords: ["temporary", "voice", "session", "override", "default"],
+      owner: "voice",
+      perform: () => {
+        applyTemporaryVoiceForSource("default");
+      },
+      section: "Voice",
+      title: "Use default voice for temporary source",
+    },
+    {
+      availability: {
+        reason: temporaryProjectVoiceCommandReason,
+        state: temporaryProjectVoiceCommandReason ? "blocked" : "available",
+      },
+      category: "Voice",
+      detail:
+        "Use the current saved project voice as a Session voice override without saving a new project default.",
+      id: "voice:temporary:use-current-project",
+      keywords: ["temporary", "voice", "session", "override", "project"],
+      owner: "voice",
+      perform: () => {
+        if (selectedVoiceProfileId) {
+          applyTemporaryVoiceForSource(selectedVoiceProfileId);
+        }
+      },
+      section: "Voice",
+      title: "Use project voice for temporary source",
+    },
+    {
+      category: "Voice",
+      detail: "Open Voice Dashboard temporary usage and provider readiness.",
+      id: "voice:temporary:dashboard",
+      keywords: ["temporary", "voice", "dashboard", "readiness", "provider"],
+      owner: "voice",
+      perform: () => {
+        setIsVoiceDashboardOpen(true);
+      },
+      section: "Voice",
+      title: "Inspect temporary voice usage",
     },
     {
       availability: {
@@ -9707,6 +9817,7 @@ export function App() {
             selectedProfileId={selectedVoiceProfileId}
             temporarySourceId={activeTemporarySourceId}
             temporarySources={temporarySources}
+            temporaryWorkEnabled={temporaryWorkEnabled}
             temporaryVoiceState={temporaryVoiceState}
             ttsEngines={ttsEngines}
             onBuildArtifact={handleBuildVoiceProfileArtifact}
@@ -9890,7 +10001,7 @@ export function App() {
             canOpenCinema={canOpenCurrentCinema}
             currentPolicyId={speechPolicyProfile}
             currentRunMode={runConfiguration.runMode}
-            currentVoiceId={selectedVoiceProfileId || "default"}
+            currentVoiceId={activePreviewVoiceSelectionId}
             hidden={!globalPreviewVisible || workspaceOverlay.previewPlacement === "hidden"}
             isPlaybackActive={isPlaybackActive}
             generatedAudioLifecycle={generatedAudioLifecycle}
@@ -9923,7 +10034,7 @@ export function App() {
                 : workspaceOverlay.previewVariant
             }
             voiceOptions={globalPreviewVoiceOptions}
-            voiceProfileLabel={selectedVoiceProfileLabel}
+            voiceProfileLabel={activePreviewVoiceLabel}
             onActiveBlockChange={(blockId) => {
               setWorkspaceContext((currentContext) =>
                 withWorkspaceActiveBlock(currentContext, blockId),
@@ -10507,6 +10618,12 @@ export function App() {
               temporaryReview={temporaryReviewAdapter}
               temporaryReviewMode={temporaryReviewMode}
               temporaryCinemaDisabledReason={temporaryCinemaActionDisabledReason}
+              temporaryVoiceOptions={
+                activeNarrationIsTemporary ? globalPreviewVoiceOptions : undefined
+              }
+              temporaryVoiceSelectionId={
+                activeNarrationIsTemporary ? activePreviewVoiceSelectionId : undefined
+              }
               voiceProfileId={selectedVoiceProfileId}
               voiceProfileLabel={selectedVoiceProfileLabel}
               voiceProfiles={voiceProfiles}
@@ -10519,6 +10636,9 @@ export function App() {
               playbackControls={playbackControls}
               playbackCursorSec={playbackCursorSec}
               onAuditionVoice={auditionVoicePreviewFromCurrentConfig}
+              onTemporaryVoiceChange={
+                activeNarrationIsTemporary ? applyTemporaryVoiceForSource : undefined
+              }
               onCancelRun={() => {
                 void handleCancelVoiceJob();
               }}
@@ -13538,6 +13658,8 @@ function SourceTextPanel({
   temporaryReview,
   temporaryReviewMode,
   temporaryCinemaDisabledReason,
+  temporaryVoiceOptions,
+  temporaryVoiceSelectionId,
   voiceProfileId,
   voiceProfileLabel,
   voiceProfiles,
@@ -13548,6 +13670,7 @@ function SourceTextPanel({
   playbackControls,
   playbackCursorSec,
   onAuditionVoice,
+  onTemporaryVoiceChange,
   onCancelRun,
   onCreateAndListen,
   onCreateWithCurrentPlan,
@@ -13620,6 +13743,8 @@ function SourceTextPanel({
   temporaryReview: TemporaryReviewStateAdapter | null;
   temporaryReviewMode: ReviewMode;
   temporaryCinemaDisabledReason?: string;
+  temporaryVoiceOptions?: readonly PreviewTemporaryVoiceOption[];
+  temporaryVoiceSelectionId?: string;
   voiceProfileId: string;
   voiceProfileLabel: string;
   voiceProfiles: VoiceProfile[];
@@ -13630,6 +13755,7 @@ function SourceTextPanel({
   playbackControls: PlaybackController;
   playbackCursorSec: number;
   onAuditionVoice: (sampleText: string) => Promise<VoicePreviewAudio>;
+  onTemporaryVoiceChange?: (voiceId: string) => void;
   onCancelRun: () => void;
   onCreateAndListen: () => void;
   onCreateWithCurrentPlan: () => void;
@@ -13867,6 +13993,8 @@ function SourceTextPanel({
           sourceLifecycle={sourceLifecycle}
           sourceMode={sourceMode}
           temporaryCinemaDisabledReason={temporaryCinemaDisabledReason}
+          temporaryVoiceOptions={temporaryVoiceOptions}
+          temporaryVoiceSelectionId={temporaryVoiceSelectionId}
           text={text}
           voiceProfileLabel={voiceProfileLabel}
           runConfigurationLabel={runConfigurationLabel}
@@ -13881,6 +14009,7 @@ function SourceTextPanel({
           playbackControls={playbackControls}
           playbackCursorSec={playbackCursorSec}
           onAuditionVoice={onAuditionVoice}
+          onTemporaryVoiceChange={onTemporaryVoiceChange}
           onCreateAndListen={onCreateAndListen}
           onCreateWithCurrentPlan={onCreateWithCurrentPlan}
           onCancelRun={onCancelRun}
@@ -14053,6 +14182,8 @@ function NarrationPreviewStage({
   sourceLifecycle,
   sourceMode,
   temporaryCinemaDisabledReason,
+  temporaryVoiceOptions,
+  temporaryVoiceSelectionId,
   text,
   voiceProfileLabel,
   runConfigurationLabel,
@@ -14064,6 +14195,7 @@ function NarrationPreviewStage({
   createAndListenScope,
   onActiveBlockChange,
   onAuditionVoice,
+  onTemporaryVoiceChange,
   onCancelRun,
   onCreateAndListen,
   onCreateWithCurrentPlan,
@@ -14092,6 +14224,8 @@ function NarrationPreviewStage({
   sourceLifecycle: SourceLifecycleEnvelope;
   sourceMode: SourceMode;
   temporaryCinemaDisabledReason?: string;
+  temporaryVoiceOptions?: readonly PreviewTemporaryVoiceOption[];
+  temporaryVoiceSelectionId?: string;
   text: string;
   voiceProfileLabel: string;
   runConfigurationLabel: string;
@@ -14103,6 +14237,7 @@ function NarrationPreviewStage({
   createAndListenScope: CreateAndListenScope;
   onActiveBlockChange: (blockId: string | null) => void;
   onAuditionVoice: (sampleText: string) => Promise<VoicePreviewAudio>;
+  onTemporaryVoiceChange?: (voiceId: string) => void;
   onCancelRun: () => void;
   onCreateAndListen: () => void;
   onCreateWithCurrentPlan: () => void;
@@ -14597,6 +14732,9 @@ function NarrationPreviewStage({
               <VoiceAuditionPanel
                 sampleText={auditionSampleText}
                 state={voiceAudition}
+                temporaryVoiceOptions={temporaryVoiceOptions}
+                temporaryVoiceSelectionId={temporaryVoiceSelectionId}
+                onTemporaryVoiceChange={onTemporaryVoiceChange}
                 disabledReason={
                   readiness.canAudition
                     ? undefined
@@ -14609,6 +14747,9 @@ function NarrationPreviewStage({
           <VoiceAuditionPanel
             sampleText={auditionSampleText}
             state={voiceAudition}
+            temporaryVoiceOptions={temporaryVoiceOptions}
+            temporaryVoiceSelectionId={temporaryVoiceSelectionId}
+            onTemporaryVoiceChange={onTemporaryVoiceChange}
             disabledReason={
               readiness.canAudition
                 ? undefined

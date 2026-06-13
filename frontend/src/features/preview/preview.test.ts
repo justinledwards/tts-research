@@ -676,6 +676,32 @@ describe("preview readiness UI", () => {
     expect(markup).toContain("0:01 · mock · af_heart");
   });
 
+  it("renders temporary voice override selection without durable preference copy", () => {
+    const markup = renderToStaticMarkup(
+      createElement(VoiceAuditionPanel, {
+        sampleText: "Selected spoken block sample.",
+        state: {
+          detail: "Audition the selected spoken block before full generation.",
+          label: "Audition voice",
+          play: vi.fn(),
+          status: "idle",
+        },
+        temporaryVoiceOptions: [
+          { detail: "Provider default.", id: "default", label: "Default voice" },
+          { detail: "Provider voice.", id: "af_heart", label: "Heart" },
+        ],
+        temporaryVoiceSelectionId: "af_heart",
+        onTemporaryVoiceChange: vi.fn(),
+      }),
+    );
+
+    expect(markup).toContain('data-testid="preview-temporary-voice-selection"');
+    expect(markup).toContain("Session voice override");
+    expect(markup).toContain("Use this voice for temporary source");
+    expect(markup).toContain("Provider-backed voice generation can send");
+    expect(markup).not.toContain("Save voice preference to project");
+  });
+
   it("keeps audition retryable after a 404 recovery message", () => {
     const play = vi.fn();
     const markup = renderToStaticMarkup(
