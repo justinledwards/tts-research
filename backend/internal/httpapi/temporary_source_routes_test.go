@@ -14,6 +14,12 @@ import (
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
 )
 
+type temporarySourceErrorPayload struct {
+	Code            pipeline.TemporarySourceFailureCode `json:"code"`
+	Error           string                              `json:"error"`
+	TemporarySource bool                                `json:"temporarySource"`
+}
+
 func TestTemporarySourceRoutesCreateGenerateArtifactsAndPromote(t *testing.T) {
 	service := newService(t)
 	app := httpapi.NewRouter(service)
@@ -300,8 +306,14 @@ func TestTemporarySourceRouteRejectsUnsupportedMultipartFileWithoutProjectArtifa
 		t.Fatalf("status = %d, want %d, body = %s", response.StatusCode, http.StatusBadRequest, payload)
 	}
 	payload, _ := io.ReadAll(response.Body)
-	if !bytes.Contains(payload, []byte("temporary source file is not supported")) {
-		t.Fatalf("payload = %s, want unsupported file error", payload)
+	var errorPayload temporarySourceErrorPayload
+	if err := json.Unmarshal(payload, &errorPayload); err != nil {
+		t.Fatalf("decode error payload %s: %v", payload, err)
+	}
+	if errorPayload.Code != pipeline.TemporarySourceFailureUnsupportedFile ||
+		errorPayload.Error != "Temporary source failed. Choose a supported file and try Quick Listen again." ||
+		!errorPayload.TemporarySource {
+		t.Fatalf("payload = %#v, want typed unsupported file error", errorPayload)
 	}
 
 	preparedAfter, err := service.ListProjectPreparedSources("default")
@@ -317,6 +329,74 @@ func TestTemporarySourceRouteRejectsUnsupportedMultipartFileWithoutProjectArtifa
 	}
 	if summary := service.TemporaryStorageUsageSummary(time.Now().UTC()); summary.TemporaryCount != 0 {
 		t.Fatalf("temporary storage summary = %#v, want no temporary artifacts", summary)
+	}
+}
+
+func TestTemporarySourceRouteReturnsTypedTemporaryFailureCopy(t *testing.T) {
+	service := newService(t)
+	app := httpapi.NewRouter(service)
+
+	tests := []struct {
+		name       string
+		method     string
+		path       string
+		body       string
+		statusCode int
+		code       pipeline.TemporarySourceFailureCode
+		message    string
+	}{
+		{
+			name:       "metadata required",
+			method:     http.MethodPost,
+			path:       "/api/temporary-sources",
+			body:       `{bad json`,
+			statusCode: http.StatusBadRequest,
+			code:       pipeline.TemporarySourceFailureMetadataRequired,
+			message:    "This temporary source is not ready for review or audio.",
+		},
+		{
+			name:       "expired missing temporary source",
+			method:     http.MethodPost,
+			path:       "/api/temporary-sources/missing-temp/reopen",
+			statusCode: http.StatusNotFound,
+			code:       pipeline.TemporarySourceFailureExpired,
+			message:    "Temporary source expired after inactivity. Extend expiry before reopening it.",
+		},
+		{
+			name:       "promotion failure leaves project unchanged",
+			method:     http.MethodPost,
+			path:       "/api/temporary-sources/missing-temp/promote",
+			body:       `{"projectId":"missing-project"}`,
+			statusCode: http.StatusNotFound,
+			code:       pipeline.TemporarySourceFailurePromotionFailed,
+			message:    "Unable to keep temporary source in the project. No project history was changed.",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request, err := http.NewRequest(test.method, test.path, bytes.NewBufferString(test.body))
+			if err != nil {
+				t.Fatalf("NewRequest returned error: %v", err)
+			}
+			request.Header.Set("Content-Type", "application/json")
+			response, err := app.Test(request)
+			if err != nil {
+				t.Fatalf("app.Test returned error: %v", err)
+			}
+			defer response.Body.Close()
+			if response.StatusCode != test.statusCode {
+				payload, _ := io.ReadAll(response.Body)
+				t.Fatalf("status = %d, want %d, body = %s", response.StatusCode, test.statusCode, payload)
+			}
+			var payload temporarySourceErrorPayload
+			if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode error payload: %v", err)
+			}
+			if payload.Code != test.code || payload.Error != test.message || !payload.TemporarySource {
+				t.Fatalf("payload = %#v, want code %q and message %q", payload, test.code, test.message)
+			}
+		})
 	}
 }
 

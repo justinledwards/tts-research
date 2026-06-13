@@ -179,6 +179,25 @@ const (
 	TemporarySourcePromotionFailed TemporarySourcePromotionStatus = "promotionFailed"
 )
 
+type TemporarySourceFailureCode string
+
+const (
+	TemporarySourceFailureUnsafeURL           TemporarySourceFailureCode = "unsafe_url"
+	TemporarySourceFailureFetchFailed         TemporarySourceFailureCode = "fetch_failed"
+	TemporarySourceFailureExtractionFailed    TemporarySourceFailureCode = "extraction_failed"
+	TemporarySourceFailureUnsupportedFile     TemporarySourceFailureCode = "unsupported_file"
+	TemporarySourceFailureFileTooLarge        TemporarySourceFailureCode = "file_too_large"
+	TemporarySourceFailureMetadataRequired    TemporarySourceFailureCode = "metadata_required"
+	TemporarySourceFailureSourceNotReady      TemporarySourceFailureCode = "source_not_ready"
+	TemporarySourceFailureGenerationFailed    TemporarySourceFailureCode = "generation_failed"
+	TemporarySourceFailureProviderUnavailable TemporarySourceFailureCode = "provider_unavailable"
+	TemporarySourceFailureAlignmentFailed     TemporarySourceFailureCode = "alignment_failed"
+	TemporarySourceFailureExpired             TemporarySourceFailureCode = "expired"
+	TemporarySourceFailureDiscarded           TemporarySourceFailureCode = "discarded"
+	TemporarySourceFailureCleanupFailed       TemporarySourceFailureCode = "cleanup_failed"
+	TemporarySourceFailurePromotionFailed     TemporarySourceFailureCode = "promotion_failed"
+)
+
 type SourceArtifactScope string
 
 const (
@@ -750,6 +769,7 @@ type TemporarySourceSession struct {
 	SourceSpeechPolicyOverrides policy.Overrides               `json:"sourceSpeechPolicyOverrides,omitempty"`
 	Warnings                    []string                       `json:"warnings,omitempty"`
 	Error                       string                         `json:"error,omitempty"`
+	FailureCode                 TemporarySourceFailureCode     `json:"failureCode,omitempty"`
 	CreatedAt                   time.Time                      `json:"createdAt"`
 	LastAccessedAt              time.Time                      `json:"lastAccessedAt"`
 	ExpiresAt                   time.Time                      `json:"expiresAt"`

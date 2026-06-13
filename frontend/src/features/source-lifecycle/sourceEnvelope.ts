@@ -11,6 +11,7 @@ import {
   generatedAudioLifecycleFromJob,
   type GeneratedAudioLifecycleState,
 } from "../playback/generatedAudioLifecycle";
+import { TEMPORARY_SOURCE_COPY, temporarySourceFailureCopy } from "../temporary-source-copy";
 import {
   canonicalSourceLifecycleState,
   fallbackBookSourceReadiness,
@@ -230,7 +231,10 @@ export function temporarySourceLifecycleEnvelope(
     activeBlockId: options.activeBlockId ?? null,
     adapterKind: temporaryAdapterKind(source.kind),
     canonicalState,
-    disabledReason: sourceReadinessDisabledReason(sourceReadiness, source.error),
+    disabledReason: sourceReadinessDisabledReason(
+      sourceReadiness,
+      temporarySourceFailureCopy(source.failureCode, source.error),
+    ),
     expiresAt: source.expiresAt,
     extractionState,
     generatedAudioState,
@@ -356,11 +360,14 @@ function temporaryNarrationState(
 
 function temporarySourceReadiness(source: TemporarySourceSession): SourceReadiness {
   if (source.sourceReadiness) {
-    return source.sourceReadiness;
+    return {
+      ...source.sourceReadiness,
+      detail: temporarySourceFailureCopy(source.failureCode, source.sourceReadiness.detail),
+    };
   }
   if (source.status === "failed") {
     return {
-      detail: source.error ?? "Temporary source failed.",
+      detail: temporarySourceFailureCopy(source.failureCode, source.error),
       failureStage: "extraction",
       state: "failed",
       title: source.title ?? source.sourceName,
@@ -368,14 +375,21 @@ function temporarySourceReadiness(source: TemporarySourceSession): SourceReadine
   }
   if (source.status === "needs_metadata") {
     return {
-      detail: "Temporary source needs metadata before narration.",
+      detail: TEMPORARY_SOURCE_COPY.errors.notReady,
       state: "needsMetadata",
       title: source.title ?? source.sourceName,
     };
   }
-  if (source.status === "expired" || source.status === "discarded") {
+  if (source.status === "expired") {
     return {
-      detail: "Temporary source is no longer available.",
+      detail: TEMPORARY_SOURCE_COPY.errors.expiredCannotOpen,
+      state: "stale",
+      title: source.title ?? source.sourceName,
+    };
+  }
+  if (source.status === "discarded") {
+    return {
+      detail: TEMPORARY_SOURCE_COPY.errors.discardedCannotOpen,
       state: "stale",
       title: source.title ?? source.sourceName,
     };

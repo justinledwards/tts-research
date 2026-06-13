@@ -79,3 +79,47 @@ export const TEMPORARY_SOURCE_COPY = {
 } as const;
 
 export type TemporarySourceCopy = typeof TEMPORARY_SOURCE_COPY;
+
+export function temporarySourceFailureCopy(
+  code: string | null | undefined,
+  fallback?: string | null,
+): string {
+  switch (code) {
+    case "expired": {
+      return TEMPORARY_SOURCE_COPY.errors.expiredCannotOpen;
+    }
+    case "discarded": {
+      return TEMPORARY_SOURCE_COPY.errors.discardedCannotOpen;
+    }
+    case "metadata_required":
+    case "source_not_ready": {
+      return TEMPORARY_SOURCE_COPY.errors.notReady;
+    }
+    case "promotion_failed": {
+      return TEMPORARY_SOURCE_COPY.errors.keepFailed;
+    }
+    case "provider_unavailable": {
+      return "Temporary source failed. Provider-backed generation is unavailable.";
+    }
+    case "cleanup_failed": {
+      return "Temporary source failed. Project sources are unchanged.";
+    }
+    case "unsupported_file":
+    case "file_too_large": {
+      return "Temporary source failed. Choose a supported file and try Quick Listen again.";
+    }
+    case "unsafe_url":
+    case "fetch_failed":
+    case "extraction_failed":
+    case "generation_failed":
+    case "alignment_failed": {
+      return TEMPORARY_SOURCE_COPY.errors.failed;
+    }
+    default: {
+      const trimmed = fallback?.trim();
+      return trimmed === undefined || trimmed.length === 0
+        ? TEMPORARY_SOURCE_COPY.errors.failed
+        : trimmed;
+    }
+  }
+}

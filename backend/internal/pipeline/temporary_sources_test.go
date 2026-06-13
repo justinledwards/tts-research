@@ -756,6 +756,7 @@ func TestTemporarySourceListJobsAndStorageTypeBytes(t *testing.T) {
 	if len(summary.Sessions) != 1 || summary.Sessions[0].ArtifactTypeBytes["source"] == 0 {
 		t.Fatalf("storage sessions = %#v, want per-source artifact type bytes", summary.Sessions)
 	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
 }
 
 func TestTemporarySourceCreationAcceptsLocalReadableDocument(t *testing.T) {

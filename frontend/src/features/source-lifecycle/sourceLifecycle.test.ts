@@ -94,6 +94,39 @@ describe("canonical source lifecycle", () => {
     expect("projectId" in envelope).toBe(false);
   });
 
+  it("uses temporary-specific recovery copy for blocked temporary sources", () => {
+    const expired = temporarySourceLifecycleEnvelope({
+      ...temporarySourceFixture,
+      error: "Generic project recovery failed.",
+      failureCode: "expired",
+      status: "expired",
+    });
+    const discarded = temporarySourceLifecycleEnvelope({
+      ...temporarySourceFixture,
+      error: "Generic project recovery failed.",
+      failureCode: "discarded",
+      status: "discarded",
+    });
+    const notReady = temporarySourceLifecycleEnvelope({
+      ...temporarySourceFixture,
+      failureCode: "source_not_ready",
+      sourceReadiness: {
+        detail: "Refresh or reconfirm source metadata before Review opens.",
+        state: "needsMetadata",
+        title: "Quick listen",
+      },
+      status: "needs_metadata",
+    });
+
+    expect(expired.disabledReason).toBe(
+      "Temporary source expired after inactivity. Extend expiry before reopening it.",
+    );
+    expect(discarded.disabledReason).toBe(
+      "Temporary source was discarded. Start Quick Listen again to create a new temporary source.",
+    );
+    expect(notReady.disabledReason).toBe("This temporary source is not ready for review or audio.");
+  });
+
   it("marks generated audio stale when the source changed after the run", () => {
     const envelope = preparedSourceLifecycleEnvelope(
       {

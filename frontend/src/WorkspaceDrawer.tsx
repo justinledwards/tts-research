@@ -21,7 +21,10 @@ import {
   visibleCommandCenterJobs,
   visibleTemporaryCommandCenterJobs,
 } from "./features/command-center";
-import { TEMPORARY_SOURCE_COPY } from "./features/temporary-source-copy";
+import {
+  TEMPORARY_SOURCE_COPY,
+  temporarySourceFailureCopy,
+} from "./features/temporary-source-copy";
 import { temporaryPromotionDisabledReason } from "./features/featureFlags";
 import {
   buildHealthReport,
@@ -1059,7 +1062,10 @@ function TemporarySourceCard({
           ) : null}
           {session.error || session.sourceReadiness?.state === "failed" ? (
             <p className="mt-2 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] px-3 py-2 text-xs text-[var(--vs-status-danger)]">
-              {session.error ?? session.sourceReadiness?.detail ?? "Temporary source failed."}
+              {temporarySourceFailureCopy(
+                session.failureCode,
+                session.error ?? session.sourceReadiness?.detail,
+              )}
             </p>
           ) : null}
         </div>

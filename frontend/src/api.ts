@@ -85,11 +85,19 @@ function apiEndpoint(path: string, params: Record<string, string | undefined> = 
 
 export class ApiRequestError extends Error {
   readonly status: number;
+  readonly code?: string;
+  readonly temporarySource?: boolean;
 
-  constructor(status: number, message: string) {
+  constructor(
+    status: number,
+    message: string,
+    options: { code?: string; temporarySource?: boolean } = {},
+  ) {
     super(message);
     this.name = "ApiRequestError";
     this.status = status;
+    this.code = options.code;
+    this.temporarySource = options.temporarySource;
   }
 }
 
@@ -1725,36 +1733,64 @@ export function backendAssetUrl(path: string): string {
   return `${apiBaseUrl}${normalizedPath}`;
 }
 
-async function readError(response: Response): Promise<string> {
+interface ErrorPayload {
+  code?: string;
+  message: string;
+  temporarySource?: boolean;
+}
+
+async function readErrorPayload(response: Response): Promise<ErrorPayload> {
   const fallback = `Request failed with ${String(response.status)}`;
   let rawBody = "";
   try {
     rawBody = await response.text();
   } catch {
-    return fallback;
+    return { message: fallback };
   }
   const trimmed = rawBody.trim();
   if (!trimmed) {
-    return fallback;
+    return { message: fallback };
   }
   try {
-    const payload = JSON.parse(trimmed) as { error?: unknown; message?: unknown };
+    const payload = JSON.parse(trimmed) as {
+      code?: unknown;
+      error?: unknown;
+      message?: unknown;
+      temporarySource?: unknown;
+    };
     const error = typeof payload.error === "string" ? payload.error.trim() : "";
     if (error) {
-      return error;
+      return {
+        code: typeof payload.code === "string" ? payload.code : undefined,
+        message: error,
+        temporarySource: payload.temporarySource === true,
+      };
     }
     const message = typeof payload.message === "string" ? payload.message.trim() : "";
     if (message) {
-      return message;
+      return {
+        code: typeof payload.code === "string" ? payload.code : undefined,
+        message,
+        temporarySource: payload.temporarySource === true,
+      };
     }
   } catch {
-    return trimmed;
+    return { message: trimmed };
   }
-  return trimmed;
+  return { message: trimmed };
+}
+
+async function readError(response: Response): Promise<string> {
+  const payload = await readErrorPayload(response);
+  return payload.message;
 }
 
 async function apiError(response: Response): Promise<ApiRequestError> {
-  return new ApiRequestError(response.status, await readError(response));
+  const payload = await readErrorPayload(response);
+  return new ApiRequestError(response.status, payload.message, {
+    code: payload.code,
+    temporarySource: payload.temporarySource,
+  });
 }
 
 function parseOptionalNumber(value: string | null): number | null {

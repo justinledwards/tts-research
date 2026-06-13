@@ -19,7 +19,7 @@ import {
   DEFAULT_TEMPORARY_SOURCE_BEHAVIOR,
   type TemporarySourceBehaviorSettings,
 } from "../settings/model";
-import { TEMPORARY_SOURCE_COPY } from "../temporary-source-copy";
+import { TEMPORARY_SOURCE_COPY, temporarySourceFailureCopy } from "../temporary-source-copy";
 import { WebsiteExtractionSummary } from "../website-cinema/WebsiteExtractionSummary";
 
 export type QuickListenMode = "paste" | "url" | "file" | "recent";
@@ -738,7 +738,12 @@ function TemporarySourceRow({
   onUseRecentSource,
 }: Readonly<TemporarySourceRowProps>) {
   const openDisabledReason =
-    source.status === "expired" ? TEMPORARY_SOURCE_COPY.errors.expiredCannotOpen : undefined;
+    source.status === "expired"
+      ? temporarySourceFailureCopy(
+          source.failureCode,
+          TEMPORARY_SOURCE_COPY.errors.expiredCannotOpen,
+        )
+      : undefined;
   return (
     <div
       className="grid gap-2 rounded-md border p-3 vs-border vs-surface sm:grid-cols-[minmax(0,1fr)_auto]"

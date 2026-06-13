@@ -1,3 +1,13 @@
+## 2026-06-13 21:35 CEST - Temporary Source Error Taxonomy
+
+- [x] map existing temporary error and recovery surfaces
+- [x] add backend temporary failure codes and safe details
+- [x] wire frontend temporary-specific recovery copy
+- [x] add focused regression coverage
+- [x] stabilize temporary job storage test teardown
+- [x] run local review commands
+- Validation: focused frontend taxonomy/API/lifecycle tests passed; backend httpapi and pipeline focused tests passed; `git diff --check` passed; `pnpm lint`, frontend typecheck, full frontend Vitest, `pnpm e2e:temporary-sources`, `pnpm e2e:context-panel`, `pnpm e2e:command-palette`, and backend package tests passed. `pnpm check` reached backend pipeline tests and failed once on transient `TestRetryJobReusesPersistedReadySegments` JSON reload; direct `-count=5` rerun and full backend package rerun passed.
+
 ## 2026-06-13 12:12 CEST - Inspector Temporary Source Tabs
 - [x] Inspect context panel and Cinema inspector tab model
 - [x] Add temporary source overview, diagnostics, policy, history, and promotion coverage

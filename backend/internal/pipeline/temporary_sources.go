@@ -725,6 +725,7 @@ func (service *Service) recoverExpiredTemporarySource(id string) (TemporarySourc
 	session.Bookmarks = nil
 	session.PlaybackProgress = nil
 	session.Error = temporaryRecoveryMessage(TemporarySourceStateExpired)
+	session.FailureCode = TemporarySourceFailureExpired
 	return session, nil
 }
 
@@ -787,9 +788,22 @@ func (service *Service) loadTemporarySourceMetadataSessions() []TemporarySourceS
 
 func temporaryRecoveryMessage(status TemporarySourceLifecycleState) string {
 	if status == TemporarySourceStateDiscarded {
-		return "This temporary source was discarded and its artifacts were removed."
+		return "Temporary source was discarded. Start Quick Listen again to create a new temporary source."
 	}
-	return "This temporary source expired. Generated files were removed, but enough metadata remains to explain what happened."
+	return "Temporary source expired after inactivity. Extend expiry before reopening it."
+}
+
+func temporaryFailureCodeForLifecycleStatus(status TemporarySourceLifecycleState) TemporarySourceFailureCode {
+	switch status {
+	case TemporarySourceStateDiscarded:
+		return TemporarySourceFailureDiscarded
+	case TemporarySourceStateExpired:
+		return TemporarySourceFailureExpired
+	case TemporarySourceStateFailed:
+		return TemporarySourceFailureGenerationFailed
+	default:
+		return ""
+	}
 }
 
 func firstActiveTemporaryStatus(status TemporarySourceLifecycleState) TemporarySourceLifecycleState {
@@ -929,6 +943,7 @@ func (service *Service) PromoteTemporarySource(ctx context.Context, id string, r
 	if err != nil {
 		session.PromotionStatus = TemporarySourcePromotionFailed
 		session.Error = err.Error()
+		session.FailureCode = TemporarySourceFailurePromotionFailed
 		_ = service.persistTemporarySource(session)
 		service.mu.Lock()
 		service.temporary[session.ID] = cloneTemporarySourceSession(session)
@@ -963,6 +978,7 @@ func (service *Service) PromoteTemporarySource(ctx context.Context, id string, r
 	if err := service.ensureTemporaryPromotionConflictFree(project.ID, source, request.ConflictResolution); err != nil {
 		session.PromotionStatus = TemporarySourcePromotionFailed
 		session.Error = err.Error()
+		session.FailureCode = TemporarySourceFailurePromotionFailed
 		_ = service.persistTemporarySource(session)
 		service.mu.Lock()
 		service.temporary[session.ID] = cloneTemporarySourceSession(session)
@@ -1015,6 +1031,7 @@ func (service *Service) PromoteTemporarySource(ctx context.Context, id string, r
 			}
 			session.PromotionStatus = TemporarySourcePromotionFailed
 			session.Error = err.Error()
+			session.FailureCode = TemporarySourceFailurePromotionFailed
 			_ = service.persistTemporarySource(session)
 			service.mu.Lock()
 			service.temporary[session.ID] = cloneTemporarySourceSession(session)
@@ -1284,6 +1301,7 @@ func (service *Service) removeTemporarySource(session TemporarySourceSession, st
 	session.Status = status
 	session.UpdatedAt = time.Now().UTC()
 	session.Error = temporaryRecoveryMessage(status)
+	session.FailureCode = temporaryFailureCodeForLifecycleStatus(status)
 	if !removeMetadata {
 		session.Text = ""
 		session.SpeechText = ""
@@ -1666,6 +1684,13 @@ func (service *Service) markTemporarySourceJobTerminal(job VoiceJob, status Temp
 	session.Status = status
 	session.LastAccessedAt = now
 	session.UpdatedAt = now
+	if status == TemporarySourceStateFailed {
+		session.Error = firstNonEmpty(job.Error, "Temporary source failed.")
+		session.FailureCode = TemporarySourceFailureGenerationFailed
+	} else {
+		session.Error = ""
+		session.FailureCode = ""
+	}
 	audioURL := job.AudioURL
 	if audioURL == "" {
 		audioURL = job.AudioPartialURL

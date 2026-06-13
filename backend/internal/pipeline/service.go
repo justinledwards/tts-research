@@ -52,6 +52,7 @@ var (
 	ErrTemporarySourceExpired         = errors.New("temporary source expired")
 	ErrTemporarySourceConflict        = errors.New("temporary source promotion conflicts with an existing project source")
 	ErrTemporarySourceUnsupportedFile = errors.New("temporary source file is not supported")
+	ErrTemporarySourceFileTooLarge    = errors.New("temporary source file is too large")
 	ErrContentIRNotFound              = errors.New("content IR not found")
 	ErrSpeechPolicyProfileNotFound    = errors.New("speech policy profile not found")
 	ErrProgressNotFound               = errors.New("playback progress not found")

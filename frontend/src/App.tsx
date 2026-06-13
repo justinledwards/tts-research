@@ -20,6 +20,7 @@ import type {
 } from "./BundlePanels";
 import {
   apiBaseUrl,
+  ApiRequestError,
   audioSource,
   cancelVoiceJob,
   cancelVoiceProfileSource,
@@ -572,7 +573,10 @@ import {
   temporarySessionToBookSource,
   temporarySessionToPreparedSource,
 } from "./features/quick-listen";
-import { TEMPORARY_SOURCE_COPY } from "./features/temporary-source-copy";
+import {
+  TEMPORARY_SOURCE_COPY,
+  temporarySourceFailureCopy,
+} from "./features/temporary-source-copy";
 import {
   quickListenDisabledReason,
   studioFeatureFlags,
@@ -2666,6 +2670,9 @@ function formatErrorMessage(error: unknown, fallback: string): string {
 }
 
 function formatTemporarySourceError(error: unknown): string {
+  if (error instanceof ApiRequestError && error.temporarySource) {
+    return temporarySourceFailureCopy(error.code, error.message);
+  }
   const message = formatErrorMessage(error, TEMPORARY_SOURCE_COPY.errors.failed);
   if (/private|local address|this machine|safety/i.test(message)) {
     return "Temporary source safety check blocked this URL. Use a public http or https article URL, or choose project intake for private sources when that workflow is explicitly enabled.";

@@ -134,6 +134,22 @@ export type TemporarySourceLifecycleState =
 
 export type TemporarySourcePromotionStatus = "notPromoted" | "promoted" | "promotionFailed";
 
+export type TemporarySourceFailureCode =
+  | "unsafe_url"
+  | "fetch_failed"
+  | "extraction_failed"
+  | "unsupported_file"
+  | "file_too_large"
+  | "metadata_required"
+  | "source_not_ready"
+  | "generation_failed"
+  | "provider_unavailable"
+  | "alignment_failed"
+  | "expired"
+  | "discarded"
+  | "cleanup_failed"
+  | "promotion_failed";
+
 export type SourceArtifactScope = "project" | "temporary";
 
 export interface SourceArtifactRef {
@@ -710,6 +726,7 @@ export interface TemporarySourceSession {
   sourceSpeechPolicyOverrides?: SpeechPolicyOverrides;
   warnings?: string[];
   error?: string;
+  failureCode?: TemporarySourceFailureCode;
   createdAt: string;
   lastAccessedAt: string;
   expiresAt: string;

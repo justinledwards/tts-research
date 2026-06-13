@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { TEMPORARY_SOURCE_COPY } from "./temporary-source-copy";
+import type { TemporarySourceFailureCode } from "../types";
+import { TEMPORARY_SOURCE_COPY, temporarySourceFailureCopy } from "./temporary-source-copy";
 
 describe("temporary source copy", () => {
   it("publishes the trust vocabulary for temporary source persistence", () => {
@@ -48,5 +49,44 @@ describe("temporary source copy", () => {
     expect(copy).not.toMatch(/"Import"/);
     expect(copy).not.toMatch(/"Discard"/);
     expect(copy).not.toMatch(/"History"/);
+  });
+
+  it("maps every temporary failure code to safe scoped recovery copy", () => {
+    const codes: TemporarySourceFailureCode[] = [
+      "unsafe_url",
+      "fetch_failed",
+      "extraction_failed",
+      "unsupported_file",
+      "file_too_large",
+      "metadata_required",
+      "source_not_ready",
+      "generation_failed",
+      "provider_unavailable",
+      "alignment_failed",
+      "expired",
+      "discarded",
+      "cleanup_failed",
+      "promotion_failed",
+    ];
+
+    for (const code of codes) {
+      const copy = temporarySourceFailureCopy(code, "Generic project-source recovery failed.");
+      expect(copy).toMatch(/temporary source/i);
+      expect(copy).not.toContain("project-source");
+      expect(copy).not.toContain(["/", "tmp", "/"].join(""));
+      expect(copy).not.toContain("Generic project-source recovery");
+    }
+    expect(temporarySourceFailureCopy("metadata_required")).toBe(
+      "This temporary source is not ready for review or audio.",
+    );
+    expect(temporarySourceFailureCopy("expired")).toBe(
+      "Temporary source expired after inactivity. Extend expiry before reopening it.",
+    );
+    expect(temporarySourceFailureCopy("discarded")).toBe(
+      "Temporary source was discarded. Start Quick Listen again to create a new temporary source.",
+    );
+    expect(temporarySourceFailureCopy("promotion_failed")).toBe(
+      "Unable to keep temporary source in the project. No project history was changed.",
+    );
   });
 });
