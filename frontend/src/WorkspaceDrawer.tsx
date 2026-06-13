@@ -22,6 +22,7 @@ import {
   visibleTemporaryCommandCenterJobs,
 } from "./features/command-center";
 import { TEMPORARY_SOURCE_COPY } from "./features/temporary-source-copy";
+import { temporaryPromotionDisabledReason } from "./features/featureFlags";
 import {
   buildHealthReport,
   type HealthReport,
@@ -114,6 +115,7 @@ export function WorkspaceDrawer({
   ttsEngines,
   temporarySources,
   temporaryStorageUsage,
+  temporaryPromotionEnabled = true,
   temporaryWorkEnabled = true,
   onCreateProject,
   onCancelJob,
@@ -191,6 +193,7 @@ export function WorkspaceDrawer({
   ttsEngines: TTSEngineDiagnostics[];
   temporarySources: TemporarySourceSession[];
   temporaryStorageUsage: TemporaryStorageUsageSummary | null;
+  temporaryPromotionEnabled?: boolean;
   temporaryWorkEnabled?: boolean;
   onCreateProject: (name: string) => Promise<void>;
   onCancelJob: () => Promise<void>;
@@ -742,6 +745,7 @@ export function WorkspaceDrawer({
                   sessions={visibleTemporarySources}
                   totalSessions={temporarySources.length}
                   storageUsage={temporaryStorageUsage}
+                  promotionEnabled={temporaryPromotionEnabled}
                   onDiscard={onDiscardTemporarySource}
                   onFilterChange={setTemporaryWorkFilter}
                   onKeep={onKeepTemporarySource}
@@ -883,6 +887,7 @@ function TemporaryWorkShelf({
   sessions,
   storageUsage,
   totalSessions,
+  promotionEnabled,
   onDiscard,
   onFilterChange,
   onKeep,
@@ -893,6 +898,7 @@ function TemporaryWorkShelf({
   sessions: TemporarySourceSession[];
   storageUsage: TemporaryStorageUsageSummary | null;
   totalSessions: number;
+  promotionEnabled: boolean;
   onDiscard: (session: TemporarySourceSession) => Promise<void>;
   onFilterChange: (filter: TemporaryWorkFilter) => void;
   onKeep: (session: TemporarySourceSession) => void;
@@ -960,6 +966,7 @@ function TemporaryWorkShelf({
               onDiscard={onDiscard}
               onKeep={onKeep}
               onOpen={onOpen}
+              promotionEnabled={promotionEnabled}
             />
           ))
         ) : (
@@ -981,6 +988,7 @@ function TemporarySourceCard({
   onDiscard,
   onKeep,
   onOpen,
+  promotionEnabled,
 }: Readonly<{
   jobs: VoiceJob[];
   session: TemporarySourceSession;
@@ -988,6 +996,7 @@ function TemporarySourceCard({
   onDiscard: (session: TemporarySourceSession) => Promise<void>;
   onKeep: (session: TemporarySourceSession) => void;
   onOpen: (session: TemporarySourceSession) => Promise<void>;
+  promotionEnabled: boolean;
 }>) {
   const audioReadiness = temporarySessionAudioReadiness(session, jobs);
   const isDiscarded = session.status === "discarded";
@@ -1000,6 +1009,8 @@ function TemporarySourceCard({
     keepDisabledReason = TEMPORARY_SOURCE_COPY.errors.discardedCannotKeep;
   } else if (isPromoted) {
     keepDisabledReason = "Temporary source is already kept in a project.";
+  } else if (!promotionEnabled) {
+    keepDisabledReason = temporaryPromotionDisabledReason();
   }
   let discardDisabledReason: string | undefined;
   if (isDiscarded) {
@@ -1064,7 +1075,7 @@ function TemporarySourceCard({
             data-testid={`ui-action-temporary-source-keep-${session.id}`}
             data-ui-action-owner="temporary-source"
             data-ui-action-surface="Command Center"
-            disabled={isDiscarded || isPromoted}
+            disabled={isDiscarded || isPromoted || !promotionEnabled}
             onClick={() => {
               onKeep(session);
             }}

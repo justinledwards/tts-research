@@ -1,6 +1,7 @@
 export interface TemporarySourcesFeatureFlags {
   cinema: boolean;
   premiumSurfaces: boolean;
+  promotion: boolean;
   quickListen: boolean;
 }
 
@@ -23,6 +24,7 @@ export const studioFeatureFlags: StudioFeatureFlags = {
     premiumSurfaces: enabledByDefault(
       featureFlagEnv.VITE_FEATURE_TEMPORARY_SOURCES_PREMIUM_SURFACES,
     ),
+    promotion: enabledByDefault(featureFlagEnv.VITE_FEATURE_TEMPORARY_SOURCES_PROMOTION),
     quickListen: enabledByDefault(featureFlagEnv.VITE_FEATURE_TEMPORARY_SOURCES_QUICK_LISTEN),
   },
 };
@@ -37,4 +39,8 @@ export function quickListenDisabledReason(): string {
 
 export function temporaryPremiumSurfacesDisabledReason(): string {
   return "Temporary Work management is disabled by the temporarySources.premiumSurfaces feature flag.";
+}
+
+export function temporaryPromotionDisabledReason(): string {
+  return "Keep in project is disabled by the temporarySources.promotion feature flag.";
 }

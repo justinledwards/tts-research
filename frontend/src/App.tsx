@@ -577,6 +577,7 @@ import {
   quickListenDisabledReason,
   studioFeatureFlags,
   temporaryCinemaDisabledReason,
+  temporaryPromotionDisabledReason,
 } from "./features/featureFlags";
 
 type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
@@ -2795,6 +2796,10 @@ export function App() {
   const quickListenEnabled = studioFeatureFlags.temporarySources.quickListen;
   const temporaryCinemaEnabled = studioFeatureFlags.temporarySources.cinema;
   const temporaryWorkEnabled = studioFeatureFlags.temporarySources.premiumSurfaces;
+  const temporaryPromotionEnabled = studioFeatureFlags.temporarySources.promotion;
+  const temporaryPromotionUnavailableReason = temporaryPromotionEnabled
+    ? undefined
+    : temporaryPromotionDisabledReason();
   const [hydratingPreparedSourceId, setHydratingPreparedSourceId] = useState<string | null>(null);
   const [isPreparingSource, setIsPreparingSource] = useState(false);
   const [sourcePrepError, setSourcePrepError] = useState<string | null>(null);
@@ -7106,42 +7111,66 @@ export function App() {
 
   const handleKeepTemporarySource = useCallback(
     (source: PreparedSource, titleOverride?: string) => {
+      if (!temporaryPromotionEnabled) {
+        const message = temporaryPromotionDisabledReason();
+        setTemporaryPromotionError(message);
+        setSourcePrepError(message);
+        announceAssertive(message);
+        return;
+      }
       if (!source.temporarySourceId) {
         return;
       }
       setTemporaryPromotionError(null);
       setPendingTemporaryPromotion({ origin: "prepared", source, titleOverride });
     },
-    [],
+    [announceAssertive, temporaryPromotionEnabled],
   );
 
   const handleKeepTemporaryBookSource = useCallback(
     (source: BookSource, titleOverride?: string) => {
+      if (!temporaryPromotionEnabled) {
+        const message = temporaryPromotionDisabledReason();
+        setTemporaryPromotionError(message);
+        setBookSourceError(message);
+        announceAssertive(message);
+        return;
+      }
       if (!source.temporarySourceId) {
         return;
       }
       setTemporaryPromotionError(null);
       setPendingTemporaryPromotion({ origin: "book", source, titleOverride });
     },
-    [],
+    [announceAssertive, temporaryPromotionEnabled],
   );
 
-  const handleKeepTemporarySession = useCallback((session: TemporarySourceSession) => {
-    setTemporaryPromotionError(null);
-    if (temporarySessionPrefersBookCinema(session)) {
+  const handleKeepTemporarySession = useCallback(
+    (session: TemporarySourceSession) => {
+      if (!temporaryPromotionEnabled) {
+        const message = temporaryPromotionDisabledReason();
+        setTemporaryPromotionError(message);
+        setQuickListenError(message);
+        announceAssertive(message);
+        return;
+      }
+      setTemporaryPromotionError(null);
+      if (temporarySessionPrefersBookCinema(session)) {
+        setPendingTemporaryPromotion({
+          origin: "book",
+          source: temporarySessionToBookSource(session),
+          titleOverride: session.title ?? session.sourceName,
+        });
+        return;
+      }
       setPendingTemporaryPromotion({
-        origin: "book",
-        source: temporarySessionToBookSource(session),
+        origin: "prepared",
+        source: temporarySessionToPreparedSource(session),
         titleOverride: session.title ?? session.sourceName,
       });
-      return;
-    }
-    setPendingTemporaryPromotion({
-      origin: "prepared",
-      source: temporarySessionToPreparedSource(session),
-      titleOverride: session.title ?? session.sourceName,
-    });
-  }, []);
+    },
+    [announceAssertive, temporaryPromotionEnabled],
+  );
 
   const handleConfirmTemporaryPromotion = useCallback(
     async (request: {
@@ -9033,6 +9062,7 @@ export function App() {
     preparedSources,
     activeTemporarySource,
     quickListenEnabled,
+    temporaryPromotionEnabled,
     temporarySources,
     temporaryStorageUsage,
     temporaryWorkEnabled,
@@ -9723,6 +9753,7 @@ export function App() {
             ttsEngines={ttsEngines}
             temporarySources={temporarySources}
             temporaryStorageUsage={temporaryStorageUsage}
+            temporaryPromotionEnabled={temporaryPromotionEnabled}
             temporaryWorkEnabled={temporaryWorkEnabled}
             onCancelJob={handleCancelVoiceJob}
             onCancelProfileSource={handleCancelVoiceProfileSource}
@@ -10150,6 +10181,7 @@ export function App() {
             }}
             onPlayPause={handleBookCinemaPlayPause}
             onHelpOpen={openContextualHelp}
+            keepTemporarySourceDisabledReason={temporaryPromotionUnavailableReason}
             onKeepTemporarySource={(book, title) => {
               handleKeepTemporaryBookSource(book, title);
             }}
@@ -10237,6 +10269,7 @@ export function App() {
             onPrepareFile={handlePrepareCinemaSourceFile}
             onPlayPause={handleBookCinemaPlayPause}
             onHelpOpen={openContextualHelp}
+            keepTemporarySourceDisabledReason={temporaryPromotionUnavailableReason}
             onRerunWebsiteExtraction={handleRerunWebsiteExtraction}
             onRestart={handleBookCinemaRestart}
             onResumeProgress={(progress) => {
@@ -10687,6 +10720,7 @@ export function App() {
                   handleKeepTemporarySource(activeNarrationPreparedSource);
                 }
               }}
+              keepTemporarySourceDisabledReason={temporaryPromotionUnavailableReason}
               onStageAction={runWorkspaceStageAction}
               onSpeechPolicyProfileChange={(profile) => {
                 void handleSpeechPolicyProfileChange(profile);
@@ -13696,6 +13730,7 @@ function SourceTextPanel({
   onStageAction,
   onOpenReviewRepair,
   onKeepTemporarySource,
+  keepTemporarySourceDisabledReason,
   onSpeechPolicyProfileChange,
   onReviewBlockChange,
   onEditedTextByBlockIdChange,
@@ -13801,6 +13836,7 @@ function SourceTextPanel({
   onStageAction: (actionId: WorkspaceStageActionId) => void;
   onOpenReviewRepair: () => void;
   onKeepTemporarySource: () => void;
+  keepTemporarySourceDisabledReason?: string;
   onSpeechPolicyProfileChange: (profile: string) => void;
   onReviewBlockChange: (blockId: string | null) => void;
   onEditedTextByBlockIdChange: Dispatch<SetStateAction<Record<string, string>>>;
@@ -13965,6 +14001,7 @@ function SourceTextPanel({
             onDiscardTemporarySource={onDiscardTemporarySource}
             onEditedTextByBlockIdChange={onEditedTextByBlockIdChange}
             onHistoryEntriesChange={onHistoryEntriesChange}
+            keepTemporarySourceDisabledReason={keepTemporarySourceDisabledReason}
             onKeepTemporarySource={onKeepTemporarySource}
             onPreviewSpeech={() => {
               onStageAction("previewSpeech");
@@ -17441,6 +17478,7 @@ function NarrationReviewWorkbench({
   onDiscardTemporarySource,
   onEditedTextByBlockIdChange,
   onHistoryEntriesChange,
+  keepTemporarySourceDisabledReason,
   onKeepTemporarySource,
   onPreviewSpeech,
   onReviewModeChange,
@@ -17475,6 +17513,7 @@ function NarrationReviewWorkbench({
   onDiscardTemporarySource: () => void;
   onEditedTextByBlockIdChange: Dispatch<SetStateAction<Record<string, string>>>;
   onHistoryEntriesChange: Dispatch<SetStateAction<RevisionHistoryEntry[]>>;
+  keepTemporarySourceDisabledReason?: string;
   onKeepTemporarySource: () => void;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
@@ -17749,6 +17788,7 @@ function NarrationReviewWorkbench({
           onEditedTextByBlockIdChange={onEditedTextByBlockIdChange}
           onHistoryEntriesChange={onHistoryEntriesChange}
           onInspectStructure={inspectStructure}
+          keepTemporarySourceDisabledReason={keepTemporarySourceDisabledReason}
           onKeepTemporarySource={temporaryReview ? onKeepTemporarySource : undefined}
           onNextIssue={moveToNextReviewIssue}
           onPreviewSpeech={onPreviewSpeech}

@@ -15,6 +15,7 @@ import type {
   SettingsCommandTarget,
   WorkspaceCommandTarget,
 } from "../navigation/commands";
+import { temporaryPromotionDisabledReason } from "../featureFlags";
 import {
   type CreateAndListenScope,
   createAndListenScopeLabel,
@@ -113,6 +114,7 @@ export interface CommandPaletteBuildContext {
   preparedSources: PreparedSource[];
   activeTemporarySource: TemporarySourceSession | null;
   quickListenEnabled?: boolean;
+  temporaryPromotionEnabled?: boolean;
   temporarySources: TemporarySourceSession[];
   temporaryStorageUsage: TemporaryStorageUsageSummary | null;
   temporaryWorkEnabled?: boolean;
@@ -165,6 +167,16 @@ export interface CommandPaletteHandlerContext {
   setCinemaTheatreExitSignal: (next: (current: number) => number) => void;
   setIsVoiceDashboardOpen: (open: boolean) => void;
   setSourceMode: (mode: SourceMode) => void;
+}
+
+function temporaryPromotionCommandDisabledReason(
+  activeTemporarySource: TemporarySourceSession | null,
+  temporaryPromotionEnabled: boolean,
+): string | undefined {
+  if (!temporaryPromotionEnabled) {
+    return temporaryPromotionDisabledReason();
+  }
+  return activeTemporarySource ? undefined : TEMPORARY_SOURCE_COPY.empty.noSession;
 }
 
 export function buildCommandPaletteHandlers({
@@ -403,6 +415,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     preparedSources,
     activeTemporarySource,
     quickListenEnabled = true,
+    temporaryPromotionEnabled = true,
     temporarySources,
     temporaryStorageUsage,
     temporaryWorkEnabled = true,
@@ -784,6 +797,10 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
     (activeTemporaryReady
       ? undefined
       : (activeTemporarySource?.error ?? "This temporary source is not ready."));
+  const temporaryPromotionUnavailableReason = temporaryPromotionCommandDisabledReason(
+    activeTemporarySource,
+    temporaryPromotionEnabled,
+  );
   const temporaryCommandEntries: CommandEntry[] = temporaryWorkEnabled
     ? [
         {
@@ -807,13 +824,13 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
         {
           category: "Source",
           detail: "Temporary source · Keep the active temporary source as durable project history.",
-          disabled: !activeTemporarySource,
-          disabledReason: currentTemporaryDisabledReason,
+          disabled: !activeTemporarySource || !temporaryPromotionEnabled,
+          disabledReason: temporaryPromotionUnavailableReason,
           id: "temporary-source:keep-in-project",
           keywords: ["temporary", "keep", "promote", "project", "durable"],
           owner: "temporary-source",
           perform: () => {
-            if (activeTemporarySource) {
+            if (activeTemporarySource && temporaryPromotionEnabled) {
               handlers.keepTemporarySourceInProject(activeTemporarySource);
             }
           },

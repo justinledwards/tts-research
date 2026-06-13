@@ -370,6 +370,56 @@ func TestTemporarySourcePromotionRejectsDuplicateProjectSourceUnlessKeepBoth(t *
 	}
 }
 
+func TestTemporarySourcePromotionFailureLeavesProjectHistoryUnchanged(t *testing.T) {
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	project, err := service.CreateProject("Rollback")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	temporary, err := service.CreateTemporarySource(context.Background(), pipeline.CreateTemporarySourceRequest{
+		Kind:       pipeline.PreparedSourceKindText,
+		Text:       "Temporary source with generated audio that will fail during promotion.",
+		SourceName: "rollback.md",
+	})
+	if err != nil {
+		t.Fatalf("CreateTemporarySource returned error: %v", err)
+	}
+	job, err := service.CreateTemporarySourceJob(context.Background(), temporary.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreateTemporarySourceJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if err := os.RemoveAll(filepath.Join(service.Options().TemporaryAudioDir, temporary.ID, completed.ID)); err != nil {
+		t.Fatalf("RemoveAll temporary job artifacts returned error: %v", err)
+	}
+
+	_, err = service.PromoteTemporarySource(context.Background(), temporary.ID, pipeline.TemporarySourcePromotionRequest{
+		ProjectID: project.ID,
+		Keep: pipeline.TemporarySourcePromotionKeep{
+			ExtractedSource: true,
+			GeneratedAudio:  true,
+		},
+		Title: "Rollback source",
+	})
+	if err == nil {
+		t.Fatal("PromoteTemporarySource returned nil error, want artifact failure")
+	}
+	sources, listErr := service.ListProjectPreparedSources(project.ID)
+	if listErr != nil {
+		t.Fatalf("ListProjectPreparedSources returned error: %v", listErr)
+	}
+	if len(sources) != 0 {
+		t.Fatalf("project sources = %#v, want no durable source after failed promotion", sources)
+	}
+	failedSession, getErr := service.GetTemporarySource(temporary.ID)
+	if getErr != nil {
+		t.Fatalf("GetTemporarySource returned error: %v", getErr)
+	}
+	if failedSession.PromotionStatus != pipeline.TemporarySourcePromotionFailed {
+		t.Fatalf("promotion status = %q, want failed", failedSession.PromotionStatus)
+	}
+}
+
 func TestTemporaryWebpageMetadataAndPromotion(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		response.Header().Set("Content-Type", "text/html; charset=utf-8")

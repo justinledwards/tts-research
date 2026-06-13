@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { temporaryPromotionDisabledReason } from "../featureFlags";
 import { buildSettingsCommandMetadata } from "../navigation";
 import { buildCommandEntries, type CommandPaletteHandlers } from "./commandPaletteHelpers";
 import { commandDisabledReason, searchCommandEntries, type CommandEntry } from "./commandRegistry";
@@ -193,6 +194,30 @@ describe("command palette helpers", () => {
     expect(entryIds).not.toContain("temporary-source:discard");
     expect(entryIds).not.toContain("temporary-source:clear-expired");
     expect(entryIds).not.toContain("temporary-source:recent:temp-article");
+  });
+
+  it("keeps promotion visible but disabled when temporarySources.promotion is disabled", async () => {
+    const calls: string[] = [];
+    const session = temporarySourceSession();
+    const entries = buildCommandEntries(
+      buildContext({
+        activeTemporarySource: session,
+        temporaryPromotionEnabled: false,
+        temporarySources: [session],
+        handlers: {
+          ...handlers,
+          keepTemporarySourceInProject: (source) => {
+            calls.push(source.id);
+          },
+        },
+      }),
+    );
+    const keepEntry = entryById(entries, "temporary-source:keep-in-project");
+
+    expect(keepEntry.disabled).toBe(true);
+    expect(commandDisabledReason(keepEntry)).toBe(temporaryPromotionDisabledReason());
+    await keepEntry.perform({ close: noop, source: "palette" });
+    expect(calls).toEqual([]);
   });
 
   it("labels recent temporary sources and makes them searchable by expert terms", () => {

@@ -19,6 +19,7 @@ export function CinemaFocusModeToolbar({
   onDiscardTemporarySource,
   onHelpGuide,
   onKeepTemporarySource,
+  keepTemporarySourceDisabledReason,
   onKeyboardShortcuts,
   onMenuOpen,
   onModeChange,
@@ -40,6 +41,7 @@ export function CinemaFocusModeToolbar({
   onDiscardTemporarySource?: () => void;
   onHelpGuide?: () => void;
   onKeepTemporarySource?: () => void;
+  keepTemporarySourceDisabledReason?: string;
   onKeyboardShortcuts?: () => void;
   onMenuOpen?: () => void;
   onModeChange: (mode: CinemaFocusMode) => void;
@@ -105,6 +107,7 @@ export function CinemaFocusModeToolbar({
         onCreateAudio={onCreateAudio}
         onDiscardTemporarySource={onDiscardTemporarySource}
         onHelpGuide={onHelpGuide}
+        keepTemporarySourceDisabledReason={keepTemporarySourceDisabledReason}
         onKeepTemporarySource={onKeepTemporarySource}
         onKeyboardShortcuts={onKeyboardShortcuts}
         onMenuOpen={onMenuOpen}

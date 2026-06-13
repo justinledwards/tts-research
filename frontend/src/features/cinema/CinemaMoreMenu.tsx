@@ -24,6 +24,7 @@ export interface CinemaMoreMenuProps {
   onDiscardTemporarySource?: () => void;
   onHelpGuide?: () => void;
   onKeepTemporarySource?: () => void;
+  keepTemporarySourceDisabledReason?: string;
   onKeyboardShortcuts?: () => void;
   onMenuOpen?: () => void;
   onOpenInspector?: () => void;
@@ -138,6 +139,7 @@ export function CinemaMoreMenu({
   onDiscardTemporarySource,
   onHelpGuide,
   onKeepTemporarySource,
+  keepTemporarySourceDisabledReason,
   onKeyboardShortcuts,
   onMenuOpen,
   onOpenInspector,
@@ -222,6 +224,9 @@ export function CinemaMoreMenu({
   };
 
   const disabledReasonFor = (action: CinemaMoreAction): string | undefined => {
+    if (action.id === "keep-temporary-source" && keepTemporarySourceDisabledReason) {
+      return keepTemporarySourceDisabledReason;
+    }
     return disabledReasonForCinemaMoreAction(action, handlerAvailability);
   };
 

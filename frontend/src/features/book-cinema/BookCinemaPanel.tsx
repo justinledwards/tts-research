@@ -890,6 +890,7 @@ export function BookCinemaOverlay({
   onHelpOpen,
   onImport,
   onInspectStructure,
+  keepTemporarySourceDisabledReason,
   onKeepTemporarySource,
   onShortcutCheatSheetOpen,
   onPlayPause,
@@ -954,6 +955,7 @@ export function BookCinemaOverlay({
   onHelpOpen?: () => void;
   onImport: (files: File[], options: BookSourceImportOptions) => Promise<void>;
   onInspectStructure: (book: BookSource) => void;
+  keepTemporarySourceDisabledReason?: string;
   onKeepTemporarySource?: (book: BookSource, title?: string) => void;
   onShortcutCheatSheetOpen?: () => void;
   onPlayPause: () => void;
@@ -1299,6 +1301,9 @@ export function BookCinemaOverlay({
   const isActiveBookJobGenerating = isBookJobGenerating(activeBookJob);
   const createAudioScope = pointerOption?.scope ?? normalizedScope;
   const isTemporarySource = book.sourceOwner === "temporary";
+  const keepDisabledReason =
+    keepTemporarySourceDisabledReason ??
+    (onKeepTemporarySource ? undefined : "This temporary source cannot be kept in project yet.");
   const playbackState = deriveCinemaPlaybackState({
     hasAudio: Boolean(activeBookJob?.audioUrl),
     isGenerating: isProcessing && !activeBookJob,
@@ -1510,23 +1515,32 @@ export function BookCinemaOverlay({
               <>
                 <button
                   className="cinema-touch-target w-full rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-3 text-sm font-semibold text-[var(--vs-action-primary)]"
-                  disabled={!onKeepTemporarySource}
+                  data-disabled-reason={keepDisabledReason}
+                  disabled={Boolean(keepDisabledReason)}
                   onClick={() => {
-                    onKeepTemporarySource?.(book);
+                    if (!keepDisabledReason) {
+                      onKeepTemporarySource?.(book);
+                    }
                   }}
+                  title={keepDisabledReason}
                   type="button"
                 >
                   Keep in project
                 </button>
                 <button
                   className="cinema-touch-target w-full rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-50 vs-border"
-                  disabled={!onKeepTemporarySource}
+                  data-disabled-reason={keepDisabledReason}
+                  disabled={Boolean(keepDisabledReason)}
                   onClick={() => {
+                    if (keepDisabledReason) {
+                      return;
+                    }
                     const title = globalThis.prompt("Rename before keeping", book.title);
                     if (title !== null) {
                       onKeepTemporarySource?.(book, title);
                     }
                   }}
+                  title={keepDisabledReason}
                   type="button"
                 >
                   Rename before keeping
@@ -2121,8 +2135,9 @@ export function BookCinemaOverlay({
                     : undefined
                 }
                 onHelpGuide={onHelpOpen}
+                keepTemporarySourceDisabledReason={keepDisabledReason}
                 onKeepTemporarySource={
-                  isTemporarySource && onKeepTemporarySource
+                  isTemporarySource && onKeepTemporarySource && !keepDisabledReason
                     ? () => {
                         onKeepTemporarySource(book);
                       }
@@ -2293,6 +2308,7 @@ export function BookCinemaOverlay({
             onBookmarkNavigate={handleBookmarkNavigate}
             onImport={onImport}
             onInspectStructure={onInspectStructure}
+            keepTemporarySourceDisabledReason={keepDisabledReason}
             onKeepTemporarySource={onKeepTemporarySource}
             onMobilePanelChange={setMobilePanel}
             onTheatreMode={handleTheatreMode}
@@ -2818,6 +2834,7 @@ function BookCinemaMobileSheet({
   onDiscardTemporarySource,
   onImport,
   onInspectStructure,
+  keepTemporarySourceDisabledReason,
   onKeepTemporarySource,
   onMobilePanelChange,
   onTheatreMode,
@@ -2847,6 +2864,7 @@ function BookCinemaMobileSheet({
   onDiscardTemporarySource?: (book: BookSource) => void;
   onImport: (files: File[], options: BookSourceImportOptions) => Promise<void>;
   onInspectStructure: (book: BookSource) => void;
+  keepTemporarySourceDisabledReason?: string;
   onKeepTemporarySource?: (book: BookSource, title?: string) => void;
   onMobilePanelChange: (panel: BookCinemaMobilePanel | null) => void;
   onTheatreMode: () => void;
@@ -2879,6 +2897,9 @@ function BookCinemaMobileSheet({
     book,
     book.kind === "markdown" ? "document" : "book",
   );
+  const keepDisabledReason =
+    keepTemporarySourceDisabledReason ??
+    (onKeepTemporarySource ? undefined : "This temporary source cannot be kept in project yet.");
   const panels: CinemaMobilePanelSpec<BookCinemaMobilePanel>[] = [
     {
       children: (
@@ -2931,23 +2952,32 @@ function BookCinemaMobileSheet({
               <div className="mt-3 grid gap-2 border-t pt-3 vs-border">
                 <button
                   className="cinema-touch-target rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-3 font-semibold text-[var(--vs-action-primary)]"
-                  disabled={!onKeepTemporarySource}
+                  data-disabled-reason={keepDisabledReason}
+                  disabled={Boolean(keepDisabledReason)}
                   onClick={() => {
-                    onKeepTemporarySource?.(book);
+                    if (!keepDisabledReason) {
+                      onKeepTemporarySource?.(book);
+                    }
                   }}
+                  title={keepDisabledReason}
                   type="button"
                 >
                   Keep in project
                 </button>
                 <button
                   className="cinema-touch-target rounded-md border px-3 font-semibold disabled:opacity-50 vs-border"
-                  disabled={!onKeepTemporarySource}
+                  data-disabled-reason={keepDisabledReason}
+                  disabled={Boolean(keepDisabledReason)}
                   onClick={() => {
+                    if (keepDisabledReason) {
+                      return;
+                    }
                     const title = globalThis.prompt("Rename before keeping", book.title);
                     if (title !== null) {
                       onKeepTemporarySource?.(book, title);
                     }
                   }}
+                  title={keepDisabledReason}
                   type="button"
                 >
                   Rename before keeping

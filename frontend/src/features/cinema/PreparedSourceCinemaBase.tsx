@@ -278,6 +278,7 @@ export function PreparedSourceCinemaOverlay({
   onHelpOpen,
   onInspectStructure,
   onKeepTemporarySource,
+  keepTemporarySourceDisabledReason,
   onPrepareFile,
   onPlayPause,
   onRerunWebsiteExtraction,
@@ -331,6 +332,7 @@ export function PreparedSourceCinemaOverlay({
   onHelpOpen?: () => void;
   onInspectStructure: (source: PreparedSource) => void;
   onKeepTemporarySource?: (source: PreparedSource, title?: string) => void;
+  keepTemporarySourceDisabledReason?: string;
   onPrepareFile: (file: File) => Promise<void>;
   onPlayPause: () => void;
   onRerunWebsiteExtraction?: (source: PreparedSource, containerSelector: string) => void;
@@ -493,6 +495,11 @@ export function PreparedSourceCinemaOverlay({
   const sourceDomain =
     urlProvenance.domain || domainFromHref(canonicalUrl) || preparedSourceCinemaDomain(source);
   const isTemporarySource = source.sourceOwner === "temporary";
+  const keepDisabledReason =
+    keepTemporarySourceDisabledReason ??
+    (!onKeepTemporarySource || source.temporarySourceId === undefined
+      ? "This temporary source cannot be kept in project yet."
+      : undefined);
   const websiteQuality = isWebsiteCinema ? websiteExtractionQuality(source) : null;
   let readabilityHealthLabel = source.warnings && source.warnings.length > 0 ? "Warnings" : "Good";
   if (websiteQuality) {
@@ -764,10 +771,10 @@ export function PreparedSourceCinemaOverlay({
             </Button>
             {isTemporarySource ? (
               <Button
-                disabled={!onKeepTemporarySource || source.temporarySourceId === undefined}
-                disabledReason="This temporary source cannot be kept in project yet."
+                disabled={Boolean(keepDisabledReason)}
+                disabledReason={keepDisabledReason}
                 onClick={
-                  onKeepTemporarySource
+                  onKeepTemporarySource && !keepDisabledReason
                     ? () => {
                         onKeepTemporarySource(source);
                       }
@@ -781,10 +788,10 @@ export function PreparedSourceCinemaOverlay({
             ) : null}
             {isTemporarySource ? (
               <Button
-                disabled={!onKeepTemporarySource || source.temporarySourceId === undefined}
-                disabledReason="This temporary source cannot be kept in project yet."
+                disabled={Boolean(keepDisabledReason)}
+                disabledReason={keepDisabledReason}
                 onClick={
-                  onKeepTemporarySource
+                  onKeepTemporarySource && !keepDisabledReason
                     ? () => {
                         const title = globalThis.prompt(
                           "Rename before keeping",
@@ -1350,8 +1357,9 @@ export function PreparedSourceCinemaOverlay({
                       : undefined
                   }
                   onHelpGuide={onHelpOpen}
+                  keepTemporarySourceDisabledReason={keepDisabledReason}
                   onKeepTemporarySource={
-                    isTemporarySource && onKeepTemporarySource
+                    isTemporarySource && onKeepTemporarySource && !keepDisabledReason
                       ? () => {
                           onKeepTemporarySource(source);
                         }
@@ -1484,6 +1492,7 @@ export function PreparedSourceCinemaOverlay({
             onBookmarkNavigate={handleBookmarkNavigate}
             onInspectStructure={onInspectStructure}
             onDiscardTemporarySource={onDiscardTemporarySource}
+            keepTemporarySourceDisabledReason={keepDisabledReason}
             onKeepTemporarySource={onKeepTemporarySource}
             onMobilePanelChange={setMobilePanel}
             onOutlineNavigate={handleWayfindingOutlineNavigate}
@@ -2178,6 +2187,7 @@ function PreparedSourceCinemaMobileSheet({
   onBookmarkNavigate,
   onDiscardTemporarySource,
   onInspectStructure,
+  keepTemporarySourceDisabledReason,
   onKeepTemporarySource,
   onMobilePanelChange,
   onOutlineNavigate,
@@ -2204,6 +2214,7 @@ function PreparedSourceCinemaMobileSheet({
   onBookmarkNavigate: (bookmark: ReaderBookmarkItem) => void;
   onDiscardTemporarySource?: (source: PreparedSource) => void;
   onInspectStructure: (source: PreparedSource) => void;
+  keepTemporarySourceDisabledReason?: string;
   onKeepTemporarySource?: (source: PreparedSource, title?: string) => void;
   onMobilePanelChange: (panel: PreparedSourceCinemaMobilePanel | null) => void;
   onOutlineNavigate: (item: ReaderOutlineItem<PreparedSourceCinemaOutlineItem>) => void;
@@ -2241,6 +2252,9 @@ function PreparedSourceCinemaMobileSheet({
     preparedSourceCinemaKind(source) === "website" ? "website" : "document",
   );
   const isTemporarySource = temporaryContract.isTemporary;
+  const keepDisabledReason =
+    keepTemporarySourceDisabledReason ??
+    (onKeepTemporarySource ? undefined : "This temporary source cannot be kept in project yet.");
   const panels: CinemaMobilePanelSpec<PreparedSourceCinemaMobilePanel>[] = [
     ...(isTemporarySource
       ? [
@@ -2257,9 +2271,12 @@ function PreparedSourceCinemaMobileSheet({
                 </div>
                 <Button
                   data-testid="ui-action-prepared-cinema-mobile-keep-temporary"
-                  disabled={!onKeepTemporarySource}
+                  disabled={Boolean(keepDisabledReason)}
+                  disabledReason={keepDisabledReason}
                   onClick={() => {
-                    onKeepTemporarySource?.(source);
+                    if (!keepDisabledReason) {
+                      onKeepTemporarySource?.(source);
+                    }
                   }}
                   size="md"
                   variant="secondary"
@@ -2268,8 +2285,12 @@ function PreparedSourceCinemaMobileSheet({
                 </Button>
                 <Button
                   data-testid="ui-action-prepared-cinema-mobile-rename-keep-temporary"
-                  disabled={!onKeepTemporarySource}
+                  disabled={Boolean(keepDisabledReason)}
+                  disabledReason={keepDisabledReason}
                   onClick={() => {
+                    if (keepDisabledReason) {
+                      return;
+                    }
                     const title = globalThis.prompt(
                       "Rename before keeping",
                       source.title ?? source.sourceName,
@@ -2369,9 +2390,12 @@ function PreparedSourceCinemaMobileSheet({
                   </div>
                   <StatusChip tone="metadata">{temporaryContract.expiryLabel}</StatusChip>
                   <Button
-                    disabled={!onKeepTemporarySource}
+                    disabled={Boolean(keepDisabledReason)}
+                    disabledReason={keepDisabledReason}
                     onClick={() => {
-                      onKeepTemporarySource?.(source);
+                      if (!keepDisabledReason) {
+                        onKeepTemporarySource?.(source);
+                      }
                     }}
                     size="md"
                     variant="primary"

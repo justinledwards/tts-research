@@ -2256,3 +2256,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] add focused regression coverage and evidence hooks
 - [x] run local review commands
 - Validation: focused frontend temporary voice/preview tests passed; frontend typecheck passed; `pnpm e2e:temporary-sources`, standalone `pnpm e2e:command-palette`, and `pnpm validate:local` passed. `pnpm check` reached backend tests and failed on transient pipeline temp-dir cleanup races in two different tests; focused rerun of the first failed test passed and `pnpm validate:local` backend tests passed. Screenshot evidence from e2e runs written under `output/accessibility/latest/responsive-snapshots`, `output/teleprompt-memory/latest`, `output/context-panel/latest`, and `output/command-palette/latest`.
+
+## 2026-06-13 16:35 CEST - Keep in Project Promotion Manifest
+
+- [x] map existing promotion route, dialog, and entry points
+- [x] implement explicit manifest, confirmation, conflicts, and rollback boundaries
+- [x] add focused regression coverage and evidence hooks
+- [x] run local review commands
+- Validation: focused backend promotion tests passed; focused frontend command palette tests passed; frontend typecheck passed; lint and format checks passed with existing Biome warnings/info. `pnpm e2e:temporary-sources` passed. `pnpm e2e:ui-actions` failed in the existing Preview generation recovery path waiting for `preview-generation-cockpit`. `pnpm validate:local` passed lint/type/package/frontend/adapters, then failed in existing backend `internal/pipeline` reload/TempDir cleanup flakes on separate runs.

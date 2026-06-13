@@ -954,15 +954,23 @@ func (service *Service) PromoteTemporarySource(ctx context.Context, id string, r
 		service.options.SourcePrepSentenceMaxRunes,
 	))
 	source = service.applySpeechRenderToPreparedSource(source, SpeechRenderOptions{ProjectID: project.ID})
-	service.updatePreparedSource(source)
 	if err := service.writePreparedSourceMetadata(source); err != nil {
+		_ = service.removePromotedPreparedSource(source.ID)
 		return PreparedSource{}, err
 	}
 	if err := service.writePreparedSourceContentIR(source); err != nil {
+		_ = service.removePromotedPreparedSource(source.ID)
 		return PreparedSource{}, err
 	}
+	service.updatePreparedSource(source)
+	var promotedJobID string
 	if keep.GeneratedAudio {
-		if _, err := service.promoteTemporarySourceJobArtifacts(session.ID, source, keep); err != nil {
+		promotedJob, err := service.promoteTemporarySourceJobArtifacts(session.ID, source, keep)
+		if err != nil {
+			_ = service.removePromotedPreparedSource(source.ID)
+			if promotedJobID != "" {
+				_ = service.removeJobsByID([]string{promotedJobID})
+			}
 			session.PromotionStatus = TemporarySourcePromotionFailed
 			session.Error = err.Error()
 			_ = service.persistTemporarySource(session)
@@ -971,6 +979,7 @@ func (service *Service) PromoteTemporarySource(ctx context.Context, id string, r
 			service.mu.Unlock()
 			return PreparedSource{}, err
 		}
+		promotedJobID = promotedJob.ID
 	}
 	session.Status = TemporarySourceStatePromoted
 	session.PromotionStatus = TemporarySourcePromoted
@@ -985,6 +994,17 @@ func (service *Service) PromoteTemporarySource(ctx context.Context, id string, r
 	service.temporary[session.ID] = cloneTemporarySourceSession(session)
 	service.mu.Unlock()
 	return source, nil
+}
+
+func (service *Service) removePromotedPreparedSource(id string) error {
+	cleanID := strings.TrimSpace(id)
+	if cleanID == "" {
+		return nil
+	}
+	service.mu.Lock()
+	delete(service.sourcePreps, cleanID)
+	service.mu.Unlock()
+	return os.RemoveAll(filepath.Join(service.options.SourcePrepDir, cleanID))
 }
 
 func promotionTitle(source PreparedSource, request TemporarySourcePromotionRequest) string {

@@ -120,12 +120,23 @@ export interface RevisionPanelProps {
   onEditedTextByBlockIdChange: Dispatch<SetStateAction<Record<string, string>>>;
   onHistoryEntriesChange: Dispatch<SetStateAction<RevisionHistoryEntry[]>>;
   onInspectStructure?: () => void;
+  keepTemporarySourceDisabledReason?: string;
   onKeepTemporarySource?: () => void;
   onNextIssue?: () => void;
   onPreviewSpeech: () => void;
   onReviewModeChange?: (mode: ReviewMode) => void;
   onStatusByBlockIdChange: Dispatch<SetStateAction<Record<string, RevisionStatus>>>;
   onTabChange?: (tabId: RevisionTabId) => void;
+}
+
+function temporaryReviewKeepDisabledReason(
+  handler: (() => void) | undefined,
+  flagDisabledReason: string | undefined,
+): string | undefined {
+  if (flagDisabledReason) {
+    return flagDisabledReason;
+  }
+  return handler ? undefined : "This temporary source cannot be kept in project yet.";
 }
 
 export function RevisionPanel({
@@ -155,6 +166,7 @@ export function RevisionPanel({
   onEditedTextByBlockIdChange,
   onHistoryEntriesChange,
   onInspectStructure,
+  keepTemporarySourceDisabledReason,
   onKeepTemporarySource,
   onNextIssue,
   onPreviewSpeech,
@@ -171,6 +183,10 @@ export function RevisionPanel({
   const [statusMessage, setStatusMessage] = useState("Revision workflow ready.");
   const [exportText, setExportText] = useState<string | null>(null);
   const handledReviewFocusRequestIdRef = useRef<number | null>(null);
+  const keepTemporaryDisabledReason = temporaryReviewKeepDisabledReason(
+    onKeepTemporarySource,
+    keepTemporarySourceDisabledReason,
+  );
   const pendingRepairFocusRef = useRef(false);
   const selectedRepairRef = useRef<HTMLElement | null>(null);
 
@@ -600,6 +616,8 @@ export function RevisionPanel({
                 </Button>
                 <Button
                   data-testid="ui-action-temporary-review-keep"
+                  disabled={Boolean(keepTemporaryDisabledReason)}
+                  disabledReason={keepTemporaryDisabledReason}
                   onClick={onKeepTemporarySource}
                   size="sm"
                   variant="secondary"
