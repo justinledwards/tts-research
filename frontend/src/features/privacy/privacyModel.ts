@@ -51,6 +51,7 @@ export const UI_MEMORY_EXPORT_OMITTED_ITEMS = [
   "model paths",
   "provider secrets",
   "private project content",
+  "temporary source content",
   "raw Teleprompt script snapshots",
 ] as const;
 
@@ -167,7 +168,8 @@ export function temporarySourcePrivacyBoundary(): PrivacyBoundary {
     facts: [
       {
         label: "Temporary content",
-        value: "Kept with this temporary source until expiry or Discard temporary source.",
+        value:
+          "Temporary source content stays local unless you generate audio or use another provider-backed feature.",
       },
       {
         label: "Keep in project",
@@ -194,7 +196,7 @@ export function temporarySourcePrivacyBoundary(): PrivacyBoundary {
     included: TEMPORARY_SOURCE_INCLUDED_ITEMS,
     status: "Session-owned",
     summary:
-      "Temporary sources are session-owned content with artifacts; they are not durable project source pins until Keep in project.",
+      "Temporary sources are session-owned content with artifacts. Temporary work is not project history.",
     title: "Temporary Source Boundary",
     tone: "warning",
   };

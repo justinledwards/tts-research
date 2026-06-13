@@ -25,6 +25,7 @@ import {
   cancelVoiceProfileSource,
   cleanupTemporarySource,
   clearExpiredTemporarySources,
+  clearTemporarySources,
   cancelVoiceProfileTarget,
   confirmBookSourceReadiness,
   confirmPreparedSourceReadiness,
@@ -6958,6 +6959,37 @@ export function App() {
     }
   }, [refreshTemporaryJobs, refreshTemporarySources, refreshTemporaryStorageUsage]);
 
+  const handleClearTemporarySources = useCallback(async () => {
+    if (
+      !globalThis.confirm(
+        "Clear temporary sources? This deletes temporary content and artifacts. Project sources are unchanged.",
+      )
+    ) {
+      return;
+    }
+    try {
+      const temporaryIds = new Set(
+        temporarySources.flatMap((source) => [source.id, source.temporarySourceId]),
+      );
+      await clearTemporarySources();
+      setTemporarySources([]);
+      setActiveTemporaryPreparedSource(null);
+      setActiveTemporaryBookSource(null);
+      setSelectedPreparedSourceId((currentId) =>
+        currentId && temporaryIds.has(currentId) ? null : currentId,
+      );
+      setSelectedBookSourceId((currentId) =>
+        currentId && temporaryIds.has(currentId) ? null : currentId,
+      );
+      await refreshTemporaryJobs();
+      await refreshTemporaryStorageUsage();
+    } catch (caughtError) {
+      setQuickListenError(
+        caughtError instanceof Error ? caughtError.message : "Unable to clear temporary sources.",
+      );
+    }
+  }, [refreshTemporaryJobs, refreshTemporaryStorageUsage, temporarySources]);
+
   const handleDiscardTemporaryPreparedSource = useCallback(
     async (source: PreparedSource) => {
       const temporarySourceId = source.temporarySourceId ?? source.id;
@@ -9769,6 +9801,7 @@ export function App() {
             telepromptTheatreSettings={telepromptTheatreSettings}
             teleprompterSettings={teleprompterSettings}
             temporarySourceBehavior={temporarySourceBehavior}
+            temporaryStorageUsage={temporaryStorageUsage}
             themeName={themeName}
             ttsEngineError={ttsEngineError}
             ttsEngines={ttsEngines}
@@ -9803,6 +9836,7 @@ export function App() {
             onTeleprompterSettingsChange={(settings) => {
               setTeleprompterSettings(normalizeTeleprompterHighlightSettings(settings));
             }}
+            onClearTemporarySources={handleClearTemporarySources}
             onTemporarySourceBehaviorChange={setTemporarySourceBehavior}
             onThemeChange={setThemeName}
             onUiMemoryExportPreferences={handleUiMemoryExportPreferences}

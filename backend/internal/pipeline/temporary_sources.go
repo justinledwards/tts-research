@@ -577,6 +577,29 @@ func (service *Service) ClearExpiredTemporarySources(now time.Time) (TemporarySo
 	}, nil
 }
 
+func (service *Service) ClearTemporarySources() (TemporarySourceCleanupResult, error) {
+	sources := service.temporarySourceSessionsIncludingExpired(time.Now().UTC())
+	ids := make([]string, 0, len(sources))
+	var removed int64
+	for _, source := range sources {
+		if service.temporarySourceHasActiveJob(source.ID) {
+			continue
+		}
+		bytes, err := service.removeTemporarySource(source, TemporarySourceStateDiscarded, true)
+		if err != nil {
+			return TemporarySourceCleanupResult{}, err
+		}
+		removed += bytes
+		ids = append(ids, source.ID)
+	}
+	return TemporarySourceCleanupResult{
+		Action:       TemporarySourceCleanupDiscardNow,
+		Status:       TemporarySourceStateDiscarded,
+		RemovedBytes: removed,
+		Message:      fmt.Sprintf("Cleared %d temporary source(s). Project sources are unchanged.", len(ids)),
+	}, nil
+}
+
 func (service *Service) expiredTemporarySourceSessions(now time.Time) []TemporarySourceSession {
 	service.mu.RLock()
 	sources := make([]TemporarySourceSession, 0, len(service.temporary))

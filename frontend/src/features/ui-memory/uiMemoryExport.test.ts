@@ -30,6 +30,8 @@ describe("UI memory export", () => {
     expect(payload.omitted).toContain("model paths");
     expect(payload.omitted).toContain("provider secrets");
     expect(payload.omitted).toContain("private project content");
+    expect(payload.omitted).toContain("temporary source content");
+    expect(JSON.stringify(payload)).not.toContain("Temporary route source");
   });
 
   it("honors disabled preference categories when exporting", () => {

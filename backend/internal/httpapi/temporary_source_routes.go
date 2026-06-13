@@ -94,6 +94,14 @@ func registerTemporarySourceRoutes(app *fiber.App, service *pipeline.Service) {
 		return ctx.JSON(result)
 	})
 
+	app.Post("/api/temporary-sources/clear", func(ctx fiber.Ctx) error {
+		result, err := service.ClearTemporarySources()
+		if err != nil {
+			return temporarySourceError(ctx, err)
+		}
+		return ctx.JSON(result)
+	})
+
 	app.Get("/api/temporary-sources", func(ctx fiber.Ctx) error {
 		sources := service.ListTemporarySources(time.Now().UTC())
 		envelopes := make([]pipeline.TemporarySourceEnvelope, 0, len(sources))

@@ -821,6 +821,16 @@ export async function clearExpiredTemporarySources(): Promise<TemporarySourceCle
   return response.json() as Promise<TemporarySourceCleanupResult>;
 }
 
+export async function clearTemporarySources(): Promise<TemporarySourceCleanupResult> {
+  const response = await fetch(`${apiBaseUrl}/api/temporary-sources/clear`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<TemporarySourceCleanupResult>;
+}
+
 export async function deleteTemporarySource(id: string): Promise<void> {
   const response = await fetch(`${apiBaseUrl}/api/temporary-sources/${encodeURIComponent(id)}`, {
     method: "DELETE",

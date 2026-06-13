@@ -77,6 +77,18 @@ function renderSettingsPanel(
       shortcutPreferences={DEFAULT_SHORTCUT_PREFERENCES}
       telepromptTheatreSettings={DEFAULT_TELEPROMPT_THEATRE_SETTINGS}
       teleprompterSettings={DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS}
+      temporaryStorageUsage={{
+        artifactBytes: 456,
+        audioBytes: 123,
+        expiredCount: 1,
+        generatingCount: 0,
+        progressBytes: 12,
+        sessions: [],
+        sourceBytes: 321,
+        temporaryCount: 2,
+        totalBytes: 912,
+        updatedAt: "2026-06-13T12:00:00Z",
+      }}
       themeName="light"
       ttsEngineError={null}
       ttsEngines={options.ttsEngines ?? []}
@@ -99,6 +111,7 @@ function renderSettingsPanel(
       onSubmit={noop}
       onTelepromptTheatreSettingsChange={noop}
       onTeleprompterSettingsChange={noop}
+      onClearTemporarySources={noop}
       onThemeChange={noop}
       onUiMemoryExportPreferences={() => "{}"}
       onUiMemoryImportPreferences={() => ({ message: "Imported.", ok: true })}
@@ -128,6 +141,11 @@ describe("SettingsPanel", () => {
     expect(markup).toContain("Apply preset defaults");
     expect(markup).toContain("Policy requires confirm");
     expect(markup).toContain("Preview sample");
+    expect(markup).toContain("Temporary work");
+    expect(markup).toContain(
+      "Keeps return position, bookmarks, and progress for temporary sources until they expire",
+    );
+    expect(markup).toContain("Temporary work is not project history.");
     expect(markup).toContain("Session");
     expect(markup).toContain("Project");
     expect(markup).toContain("Source");
@@ -144,14 +162,19 @@ describe("SettingsPanel", () => {
     });
 
     expect(markup).toContain("Temporary source behavior");
+    expect(markup).toContain("Remember temporary work for this session");
     expect(markup).toContain("Expiry duration");
-    expect(markup).toContain("Clear expired temporary work");
+    expect(markup).toContain("Clear temporary sources");
+    expect(markup).toContain("Project sources are unchanged.");
     expect(markup).toContain("Ask before discarding generated temporary audio");
     expect(markup).toContain("Default destination after creation");
     expect(markup).toContain("Default temporary webpage extraction");
     expect(markup).toContain("Promote with audio");
     expect(markup).toContain("UI memory for temporary return context");
     expect(markup).toContain("Temporary source privacy");
+    expect(markup).toContain(
+      "Temporary source content stays local unless you generate audio or use another provider-backed feature.",
+    );
     expect(markup).toContain("can send request text");
     expect(markup).toContain("does not delete temporary source content");
   });

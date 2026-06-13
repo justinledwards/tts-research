@@ -2241,3 +2241,10 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Run command palette and UI validation
 - [x] Allow intentional temporary command retry copy in recovery-copy guard
 - Validation: focused command palette helper tests, frontend typecheck, script tests, and `pnpm e2e:command-palette` passed. `pnpm e2e:ui-actions` failed late with a local API `ECONNREFUSED` during `workspace-preview-generation-running`; `pnpm validate:ux-final` passed command-palette, responsive, context-panel, accessibility, read-along, and teleprompt-memory gates but failed on existing UI action/surface-complexity findings.
+## 2026-06-13 15:59 CEST - Settings Temporary Work Controls
+
+- [x] trace existing Settings and temporary source behavior
+- [x] implement settings/privacy/cleanup behavior
+- [x] add or update focused regression coverage
+- [x] run local review commands
+- Validation: focused frontend settings/privacy/UI memory tests passed; focused backend temporary source tests passed; frontend typecheck passed; `pnpm e2e:settings-ia`, `pnpm e2e:teleprompt-memory`, `pnpm e2e:temporary-sources`, and `pnpm validate:local` passed. Screenshot evidence written to `output/settings-temporary-work-evidence/latest`.

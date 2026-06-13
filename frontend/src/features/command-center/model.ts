@@ -32,7 +32,7 @@ export const COMMAND_CENTER_ROUTES: readonly CommandCenterRouteDefinition[] = [
     detail: "Current work and routes",
     headline: "Project operations without cluttering narration",
     description:
-      "Use this surface for project-level actions, assets, activity, imports, exports, and reports. Closing returns to the current narration task.",
+      "Project library and current chapter context. Use this surface for project-level actions, assets, activity, imports, exports, and reports. Closing returns to the current narration task.",
   },
   {
     id: "projects",

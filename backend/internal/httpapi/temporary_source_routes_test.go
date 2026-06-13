@@ -2,6 +2,7 @@ package httpapi_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -197,6 +198,64 @@ func TestTemporarySourceRouteAcceptsMultipartFile(t *testing.T) {
 	supportedFile, ok := temporary.Metadata["supportedFile"].(map[string]any)
 	if !ok || supportedFile["extractionConfidence"] != "high" || supportedFile["filename"] != "upload.md" {
 		t.Fatalf("supported file metadata = %#v, want extraction confidence and filename", temporary.Metadata["supportedFile"])
+	}
+}
+
+func TestTemporarySourceRouteClearDeletesTemporarySourcesOnly(t *testing.T) {
+	service := newService(t)
+	app := httpapi.NewRouter(service)
+
+	preparedBefore, err := service.ListProjectPreparedSources("default")
+	if err != nil {
+		t.Fatalf("ListProjectPreparedSources(before) returned error: %v", err)
+	}
+	booksBefore, err := service.ListProjectBookSources("default")
+	if err != nil {
+		t.Fatalf("ListProjectBookSources(before) returned error: %v", err)
+	}
+	source, err := service.CreateTemporarySource(context.Background(), pipeline.CreateTemporarySourceRequest{
+		Kind:       pipeline.PreparedSourceKindText,
+		Text:       "Temporary source that should not become project history.",
+		SourceName: "clear-me.md",
+	})
+	if err != nil {
+		t.Fatalf("CreateTemporarySource returned error: %v", err)
+	}
+
+	request, err := http.NewRequest(http.MethodPost, "/api/temporary-sources/clear", nil)
+	if err != nil {
+		t.Fatalf("NewRequest(clear) returned error: %v", err)
+	}
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test(clear) returned error: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("clear status = %d, want %d, body = %s", response.StatusCode, http.StatusOK, payload)
+	}
+	var result pipeline.TemporarySourceCleanupResult
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		t.Fatalf("decode clear result: %v", err)
+	}
+	if result.Status != pipeline.TemporarySourceStateDiscarded ||
+		result.Action != pipeline.TemporarySourceCleanupDiscardNow {
+		t.Fatalf("clear result = %#v, want discarded cleanup result", result)
+	}
+	if _, err := service.GetTemporarySource(source.ID); err == nil {
+		t.Fatalf("GetTemporarySource(%q) succeeded after clear", source.ID)
+	}
+	preparedAfter, err := service.ListProjectPreparedSources("default")
+	if err != nil {
+		t.Fatalf("ListProjectPreparedSources(after) returned error: %v", err)
+	}
+	booksAfter, err := service.ListProjectBookSources("default")
+	if err != nil {
+		t.Fatalf("ListProjectBookSources(after) returned error: %v", err)
+	}
+	if len(preparedAfter) != len(preparedBefore) || len(booksAfter) != len(booksBefore) {
+		t.Fatalf("clear temporary sources mutated project sources: prepared %d->%d books %d->%d", len(preparedBefore), len(preparedAfter), len(booksBefore), len(booksAfter))
 	}
 }
 

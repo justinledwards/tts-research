@@ -78,6 +78,7 @@ import type {
   SpeechPolicyProfile,
   SpeechPolicySettings,
   SystemMetrics,
+  TemporaryStorageUsageSummary,
   ThemeName,
   TTSEngineDiagnostics,
   VoiceJob,
@@ -296,6 +297,7 @@ export function SettingsPanel({
   telepromptTheatreSettings,
   teleprompterSettings,
   temporarySourceBehavior,
+  temporaryStorageUsage,
   themeName,
   ttsEngineError,
   ttsEngines,
@@ -318,6 +320,7 @@ export function SettingsPanel({
   onSubmit,
   onTelepromptTheatreSettingsChange,
   onTeleprompterSettingsChange,
+  onClearTemporarySources,
   onTemporarySourceBehaviorChange,
   onThemeChange,
   onUiMemoryExportPreferences,
@@ -359,6 +362,7 @@ export function SettingsPanel({
   telepromptTheatreSettings: TelepromptTheatreSettings;
   teleprompterSettings: TeleprompterHighlightSettings;
   temporarySourceBehavior?: TemporarySourceBehaviorSettings;
+  temporaryStorageUsage?: TemporaryStorageUsageSummary | null;
   themeName: ThemeName;
   ttsEngineError: string | null;
   ttsEngines: TTSEngineDiagnostics[];
@@ -391,6 +395,7 @@ export function SettingsPanel({
   onSubmit: () => void;
   onTelepromptTheatreSettingsChange: (settings: TelepromptTheatreSettings) => void;
   onTeleprompterSettingsChange: (settings: TeleprompterHighlightSettings) => void;
+  onClearTemporarySources?: () => void | Promise<void>;
   onTemporarySourceBehaviorChange?: (settings: TemporarySourceBehaviorSettings) => void;
   onThemeChange: (theme: ThemeName) => void;
   onUiMemoryExportPreferences: () => Promise<string> | string;
@@ -501,6 +506,8 @@ export function SettingsPanel({
           speechPolicyProfile={speechPolicyProfile}
           speechPolicyProfiles={speechPolicyProfiles}
           telepromptTheatreSettings={telepromptTheatreSettings}
+          temporarySourceBehavior={temporarySourceBehavior ?? DEFAULT_TEMPORARY_SOURCE_BEHAVIOR}
+          temporaryStorageUsage={temporaryStorageUsage ?? null}
           themeName={themeName}
           ttsEngines={ttsEngines}
           onReaderAccessibilitySettingsChange={onReaderAccessibilitySettingsChange}
@@ -620,6 +627,7 @@ export function SettingsPanel({
                 temporarySourceBehavior={
                   temporarySourceBehavior ?? DEFAULT_TEMPORARY_SOURCE_BEHAVIOR
                 }
+                temporaryStorageUsage={temporaryStorageUsage ?? null}
                 onClearBookSourcePolicy={onClearBookSourcePolicy}
                 onClearPreparedSourcePolicy={onClearPreparedSourcePolicy}
                 onClearSpeechPolicyOverrides={onClearSpeechPolicyOverrides}
@@ -635,6 +643,7 @@ export function SettingsPanel({
                     // Optional in tests and legacy callers; App owns the live setting.
                   })
                 }
+                onClearTemporarySources={onClearTemporarySources}
                 onUpdateCustomSpeechPolicyProfile={onUpdateCustomSpeechPolicyProfile}
               />
             ) : null}
@@ -732,6 +741,8 @@ function QuickSettings({
   speechPolicyProfile,
   speechPolicyProfiles,
   telepromptTheatreSettings,
+  temporarySourceBehavior,
+  temporaryStorageUsage,
   themeName,
   ttsEngines,
   onReaderAccessibilitySettingsChange,
@@ -757,6 +768,8 @@ function QuickSettings({
   speechPolicyProfile: string;
   speechPolicyProfiles: SpeechPolicyProfile[];
   telepromptTheatreSettings: TelepromptTheatreSettings;
+  temporarySourceBehavior: TemporarySourceBehaviorSettings;
+  temporaryStorageUsage: TemporaryStorageUsageSummary | null;
   themeName: ThemeName;
   ttsEngines: TTSEngineDiagnostics[];
   onReaderAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
@@ -959,6 +972,34 @@ function QuickSettings({
           ))}
         </QuickSelect>
       </div>
+      <Panel
+        className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_auto]"
+        data-settings-command-targets="field-temporarySourceBehavior scope-temporarySource"
+        data-testid="settings-quick-temporary-work-row"
+        variant="metadata"
+      >
+        <div className="min-w-0">
+          <h4 className="flex items-center gap-2 text-sm font-semibold">
+            Temporary work
+            <ScopeBadge scope="temporarySource" />
+          </h4>
+          <p className="vs-muted mt-1 text-xs leading-5">
+            Keeps return position, bookmarks, and progress for temporary sources until they expire
+            or you clear them. Temporary work is not project history.
+          </p>
+        </div>
+        <div className="grid gap-1 text-xs md:text-right">
+          <span className="font-semibold">
+            {temporarySourceBehavior.returnContextMemory === "forgetOnClose"
+              ? "Recall off"
+              : "Recall on"}
+          </span>
+          <span className="vs-muted">
+            {temporaryExpiryLabel(temporarySourceBehavior.expiryDuration)} ·{" "}
+            {formatBytes(temporaryStorageUsage?.totalBytes ?? 0)}
+          </span>
+        </div>
+      </Panel>
       <ErgonomicPresetControls
         profileOptions={profileOptions}
         readerAccessibilitySettings={readerAccessibilitySettings}
@@ -1091,6 +1132,10 @@ function QuickSelect({
       </select>
     </label>
   );
+}
+
+function temporaryExpiryLabel(duration: TemporaryExpiryDuration): string {
+  return TEMPORARY_EXPIRY_OPTIONS.find((option) => option.value === duration)?.label ?? "24 hours";
 }
 
 function ErgonomicPresetControls({
@@ -1945,9 +1990,11 @@ function SourceSettingsGroup({
   speechPolicyProfile,
   speechPolicyProfiles,
   temporarySourceBehavior,
+  temporaryStorageUsage,
   onClearBookSourcePolicy,
   onClearPreparedSourcePolicy,
   onClearSpeechPolicyOverrides,
+  onClearTemporarySources,
   onCreateCustomSpeechPolicyProfile,
   onDeleteCustomSpeechPolicyProfile,
   onSaveBookSourcePolicy,
@@ -1970,9 +2017,11 @@ function SourceSettingsGroup({
   speechPolicyProfile: string;
   speechPolicyProfiles: SpeechPolicyProfile[];
   temporarySourceBehavior: TemporarySourceBehaviorSettings;
+  temporaryStorageUsage: TemporaryStorageUsageSummary | null;
   onClearBookSourcePolicy: (sourceId: string) => Promise<void>;
   onClearPreparedSourcePolicy: (sourceId: string) => Promise<void>;
   onClearSpeechPolicyOverrides: () => void;
+  onClearTemporarySources?: () => void | Promise<void>;
   onCreateCustomSpeechPolicyProfile: (
     name: string,
     settings: SpeechPolicySettings,
@@ -2047,7 +2096,9 @@ function SourceSettingsGroup({
       <TemporarySourceBehaviorPanel
         highlightedCommandToken={highlightedCommandToken}
         settings={temporarySourceBehavior}
+        storageUsage={temporaryStorageUsage}
         onChange={onTemporarySourceBehaviorChange}
+        onClearTemporarySources={onClearTemporarySources}
       />
       <SpeechPolicyWizard
         customProfiles={customSpeechPolicyProfiles}
@@ -2160,11 +2211,15 @@ function SourceSettingsGroup({
 function TemporarySourceBehaviorPanel({
   highlightedCommandToken,
   settings,
+  storageUsage,
   onChange,
+  onClearTemporarySources,
 }: Readonly<{
   highlightedCommandToken: string | null;
   settings: TemporarySourceBehaviorSettings;
+  storageUsage: TemporaryStorageUsageSummary | null;
   onChange: (settings: TemporarySourceBehaviorSettings) => void;
+  onClearTemporarySources?: () => void | Promise<void>;
 }>) {
   const boundary = temporarySourcePrivacyBoundary();
   const highlighted =
@@ -2197,6 +2252,15 @@ function TemporarySourceBehaviorPanel({
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
+        <Toggle
+          checked={settings.returnContextMemory !== "forgetOnClose"}
+          data-testid="settings-temporary-remember-session"
+          detail="Keeps return position, bookmarks, and progress for temporary sources until they expire or you clear them. Temporary work is not project history."
+          label="Remember temporary work for this session"
+          onChange={(checked) => {
+            patchSettings({ returnContextMemory: checked ? "rememberSurface" : "forgetOnClose" });
+          }}
+        />
         <TemporarySelect
           detail={
             TEMPORARY_EXPIRY_OPTIONS.find((option) => option.value === settings.expiryDuration)
@@ -2270,6 +2334,40 @@ function TemporarySourceBehaviorPanel({
         </TemporarySelect>
       </div>
 
+      <Panel
+        className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_auto]"
+        data-testid="settings-temporary-storage-summary"
+        variant="management"
+      >
+        <div className="grid gap-2">
+          <p className="text-sm font-semibold">Temporary storage summary</p>
+          <div className="grid gap-2 text-xs sm:grid-cols-4">
+            <DiagnosticLine label="Sources" value={String(storageUsage?.temporaryCount ?? 0)} />
+            <DiagnosticLine label="Total" value={formatBytes(storageUsage?.totalBytes ?? 0)} />
+            <DiagnosticLine label="Audio" value={formatBytes(storageUsage?.audioBytes ?? 0)} />
+            <DiagnosticLine label="Expired" value={String(storageUsage?.expiredCount ?? 0)} />
+          </div>
+          <p className="vs-muted text-xs leading-5">Project sources are unchanged.</p>
+        </div>
+        <Button
+          data-confirm="Clear temporary sources? This deletes temporary content and artifacts. Project sources are unchanged."
+          data-testid="settings-clear-temporary-sources"
+          data-ui-action-surface="Settings"
+          disabled={!onClearTemporarySources || (storageUsage?.temporaryCount ?? 0) === 0}
+          disabledReason={
+            onClearTemporarySources
+              ? "No temporary sources are using storage."
+              : "Temporary cleanup is unavailable in this context."
+          }
+          onClick={() => {
+            void onClearTemporarySources?.();
+          }}
+          variant="secondary"
+        >
+          Clear temporary sources
+        </Button>
+      </Panel>
+
       <div className="grid gap-2 md:grid-cols-3">
         <Toggle
           checked={settings.autoClean}
@@ -2305,7 +2403,7 @@ function TemporarySourceBehaviorPanel({
         <p className="vs-muted leading-5">
           Reset UI memory clears preferences stored on this machine for panels and return context.
           It does not delete temporary source content; choose Discard temporary source or Clear
-          expired temporary work for that.
+          temporary sources for that.
         </p>
       </Panel>
 

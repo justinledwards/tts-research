@@ -70,9 +70,9 @@ export const UI_MEMORY_RESET_LABELS: Record<UiMemoryResetScope, string> = {
 };
 
 export const UI_MEMORY_RESET_CONFIRMATION: Record<UiMemoryResetScope, string> = {
-  all: "Reset all UI memory on this machine? This clears remembered layout, theme, reader preferences, last project, Teleprompt return memory, Theatre settings, panel pins, and tutorial launcher visibility.",
+  all: "Reset all UI memory on this machine? This clears remembered layout, theme, reader preferences, last project, Teleprompt return memory, Theatre settings, panel pins, and tutorial launcher visibility. It does not delete temporary source content.",
   reader:
-    "Reset reader preferences on this machine? Typography, spacing, contrast, and motion preferences will return to defaults.",
+    "Reset reader preferences on this machine? Typography, spacing, contrast, and motion preferences will return to defaults. Temporary source content is unchanged.",
   workspace:
-    "Reset workspace layout memory on this machine? Workspace density, Custom density, advanced panel pins, and Review detail tabs will return to defaults.",
+    "Reset workspace layout memory on this machine? Workspace density, Custom density, advanced panel pins, and Review detail tabs will return to defaults. Temporary source content is unchanged.",
 };

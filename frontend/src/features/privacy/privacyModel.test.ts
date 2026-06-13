@@ -36,6 +36,7 @@ describe("privacy model", () => {
     expect(UI_MEMORY_EXPORT_OMITTED_ITEMS).toContain("model paths");
     expect(UI_MEMORY_EXPORT_OMITTED_ITEMS).toContain("provider secrets");
     expect(UI_MEMORY_EXPORT_OMITTED_ITEMS).toContain("private project content");
+    expect(UI_MEMORY_EXPORT_OMITTED_ITEMS).toContain("temporary source content");
   });
 
   it("describes provider-backed runtime as a warning boundary", () => {
@@ -65,7 +66,7 @@ describe("privacy model", () => {
     expect(boundary.status).toBe("Session-owned");
     expect(boundary.summary).toContain("session-owned content");
     expect(boundary.facts.map((fact) => fact.value).join(" ")).toContain(
-      "Kept with this temporary source",
+      "Temporary source content stays local",
     );
     expect(boundary.facts.map((fact) => fact.value).join(" ")).toContain("can send request text");
     expect(boundary.excluded).toContain(
