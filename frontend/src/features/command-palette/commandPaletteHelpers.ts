@@ -451,12 +451,13 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
             handlers.openQuickListen("paste");
           },
           section: "Sources",
+          shortcutCommandId: "temporary.quickListen",
           title: "Temporary source · Start Quick Listen",
         },
         {
           category: "Source",
           detail:
-            "Temporary source · Paste scratch text into Quick Listen without adding it to project history.",
+            "Temporary source · Paste text into Quick Listen; work stays temporary until Keep in project.",
           id: "temporary-source:paste",
           keywords: ["temporary", "paste", "text", "scratch", "quick listen", "article"],
           owner: "temporary-source",
@@ -464,12 +465,12 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
             handlers.openQuickListen("paste");
           },
           section: "Sources",
-          title: "Paste text as temporary source",
+          title: "Temporary source · Paste text",
         },
         {
           category: "Source",
           detail:
-            "Temporary webpage · Open a URL in Quick Listen without adding a durable project source.",
+            "Temporary source · Open webpage in Quick Listen; work stays temporary until Keep in project.",
           id: "temporary-source:open-url",
           keywords: ["temporary", "url", "webpage", "website", "article", "quick listen", "open"],
           owner: "temporary-source",
@@ -477,12 +478,12 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
             handlers.openQuickListen("url");
           },
           section: "Sources",
-          title: "Open webpage temporarily",
+          title: "Temporary source · Open webpage",
         },
         {
           category: "Source",
           detail:
-            "Temporary source · Upload a file into Quick Listen without adding it to project history.",
+            "Temporary source · Upload file into Quick Listen; work stays temporary until Keep in project.",
           id: "temporary-source:upload-file",
           keywords: ["temporary", "upload", "file", "document", "pdf", "epub", "quick listen"],
           owner: "temporary-source",
@@ -490,7 +491,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
             handlers.openQuickListen("file");
           },
           section: "Sources",
-          title: "Upload file temporarily",
+          title: "Temporary source · Upload file",
         },
       ]
     : [];
@@ -801,7 +802,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
             void handlers.openTemporarySourceInReview(temporarySources[0]);
           },
           section: "Sources",
-          title: "Reopen recent temporary source",
+          title: "Temporary source · Reopen recent temporary source",
         },
         {
           category: "Source",
@@ -818,7 +819,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
           },
           section: "Sources",
           shortcutCommandId: "temporary.keepInProject",
-          title: "Keep temporary source in project",
+          title: "Temporary source · Keep in project",
         },
         {
           category: "Source",
@@ -835,7 +836,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
             }
           },
           section: "Sources",
-          title: "Discard temporary source",
+          title: "Temporary source · Discard temporary source",
         },
         {
           category: "Source",
@@ -853,7 +854,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
             void handlers.clearExpiredTemporarySources();
           },
           section: "Sources",
-          title: TEMPORARY_SOURCE_COPY.actions.clearExpired,
+          title: "Temporary storage · Clear expired temporary work",
         },
         {
           category: "Review",
@@ -869,7 +870,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
             }
           },
           section: "Sources",
-          title: "Open temporary source in Review",
+          title: "Temporary source · Open in Review",
         },
         {
           category: "Playback",
@@ -885,7 +886,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
             }
           },
           section: "Sources",
-          title: "Open temporary source in Preview",
+          title: "Temporary source · Open in Preview",
         },
         {
           category: "Playback",
@@ -901,7 +902,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
             }
           },
           section: "Sources",
-          title: "Open temporary source in Cinema",
+          title: "Temporary source · Open in Cinema",
         },
         {
           capabilityGate: "tts",
@@ -921,8 +922,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
             handlers.createAndListenFromCurrentSource();
           },
           section: "Sources",
-          shortcutCommandId: "temporary.quickListen",
-          title: "Create audio for temporary source",
+          title: "Temporary source · Create audio",
         },
         {
           capabilityGate: "tts",
@@ -941,7 +941,7 @@ export function buildCommandEntries(context: CommandPaletteBuildContext): Comman
             handlers.createAndListenFromCurrentSource();
           },
           section: "Sources",
-          title: "Retry temporary audio",
+          title: "Temporary source · Retry audio",
         },
         {
           category: "Source",

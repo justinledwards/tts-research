@@ -240,6 +240,7 @@ describe("operational status model", () => {
     ];
     const allowedActionInventoryCopy = new Map<string, ReadonlySet<string>>([
       ["../cinema/cinemaMoreActions.ts", new Set(["Retry audio"])],
+      ["../command-palette/commandPaletteHelpers.ts", new Set(["Retry audio"])],
       ["../ui-audit/actionMetadataCatalog.ts", new Set(["Retry audio"])],
     ]);
     const violations = Object.entries(productionSources).flatMap(([path, source]) => {

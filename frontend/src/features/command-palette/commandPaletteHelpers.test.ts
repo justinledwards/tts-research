@@ -34,23 +34,34 @@ describe("command palette helpers", () => {
 
   it("exposes temporary source commands with ownership and disabled reasons", () => {
     const entries = buildCommandEntries(buildContext());
+    const requiredTemporaryCommands = [
+      ["temporary-source:new", "Temporary source · Start Quick Listen"],
+      ["temporary-source:paste", "Temporary source · Paste text"],
+      ["temporary-source:open-url", "Temporary source · Open webpage"],
+      ["temporary-source:upload-file", "Temporary source · Upload file"],
+      ["temporary-source:reopen-recent", "Temporary source · Reopen recent temporary source"],
+      ["temporary-source:open-review", "Temporary source · Open in Review"],
+      ["temporary-source:open-preview", "Temporary source · Open in Preview"],
+      ["temporary-source:open-cinema", "Temporary source · Open in Cinema"],
+      ["temporary-source:create-audio", "Temporary source · Create audio"],
+      ["temporary-source:retry-audio", "Temporary source · Retry audio"],
+      ["temporary-source:keep-in-project", "Temporary source · Keep in project"],
+      ["temporary-source:discard", "Temporary source · Discard temporary source"],
+      ["temporary-source:clear-expired", "Temporary storage · Clear expired temporary work"],
+    ] as const;
 
-    const newTemporarySourceCommand = entryById(entries, "temporary-source:new");
-    expect(newTemporarySourceCommand).toMatchObject({
-      category: "Source",
-      owner: "temporary-source",
-      title: "Temporary source · Start Quick Listen",
-    });
-    expect(newTemporarySourceCommand.detail).toContain("Temporary source");
-    expect(entries.find((entry) => entry.id === "temporary-source:paste")).toMatchObject({
-      title: "Paste text as temporary source",
-    });
-    expect(entries.find((entry) => entry.id === "temporary-source:open-url")).toMatchObject({
-      title: "Open webpage temporarily",
-    });
-    expect(entries.find((entry) => entry.id === "temporary-source:upload-file")).toMatchObject({
-      title: "Upload file temporarily",
-    });
+    for (const [id, title] of requiredTemporaryCommands) {
+      const entry = entryById(entries, id);
+      expect(entry).toMatchObject({
+        owner: "temporary-source",
+        title,
+      });
+      expect(
+        entry.detail?.startsWith(
+          id === "temporary-source:clear-expired" ? "Temporary storage" : "Temporary source",
+        ),
+      ).toBe(true);
+    }
     expect(commandDisabledReason(entryById(entries, "temporary-source:open-review"))).toBe(
       "Open or select a temporary source first.",
     );
@@ -60,9 +71,94 @@ describe("command palette helpers", () => {
     expect(entryById(entries, "temporary-source:keep-in-project").shortcutCommandId).toBe(
       "temporary.keepInProject",
     );
-    expect(entryById(entries, "temporary-source:create-audio").shortcutCommandId).toBe(
+    expect(entryById(entries, "temporary-source:new").shortcutCommandId).toBe(
       "temporary.quickListen",
     );
+  });
+
+  it("routes temporary commands through the same handler contract as visible actions", async () => {
+    const calls: string[] = [];
+    const session = temporarySourceSession();
+    const entries = buildCommandEntries(
+      buildContext({
+        activeTemporarySource: session,
+        canCreateCurrentSource: true,
+        temporarySources: [session],
+        temporaryStorageUsage: {
+          artifactBytes: 0,
+          audioBytes: 0,
+          expiredCount: 1,
+          generatingCount: 0,
+          progressBytes: 0,
+          sessions: [],
+          sourceBytes: 2048,
+          temporaryCount: 1,
+          totalBytes: 2048,
+          updatedAt: "2026-06-12T10:00:00Z",
+        },
+        handlers: {
+          ...handlers,
+          clearExpiredTemporarySources: () => {
+            calls.push("clearExpiredTemporarySources");
+          },
+          createAndListenFromCurrentSource: () => {
+            calls.push("createAndListenFromCurrentSource");
+          },
+          discardTemporarySource: (source) => {
+            calls.push(`discardTemporarySource:${source.id}`);
+          },
+          keepTemporarySourceInProject: (source) => {
+            calls.push(`keepTemporarySourceInProject:${source.id}`);
+          },
+          openQuickListen: (mode) => {
+            calls.push(`openQuickListen:${mode ?? "default"}`);
+          },
+          openTemporarySourceCinema: (source) => {
+            calls.push(`openTemporarySourceCinema:${source.id}`);
+          },
+          openTemporarySourceInPreview: (source) => {
+            calls.push(`openTemporarySourceInPreview:${source.id}`);
+          },
+          openTemporarySourceInReview: (source) => {
+            calls.push(`openTemporarySourceInReview:${source.id}`);
+          },
+        },
+      }),
+    );
+
+    for (const id of [
+      "temporary-source:new",
+      "temporary-source:paste",
+      "temporary-source:open-url",
+      "temporary-source:upload-file",
+      "temporary-source:reopen-recent",
+      "temporary-source:open-review",
+      "temporary-source:open-preview",
+      "temporary-source:open-cinema",
+      "temporary-source:create-audio",
+      "temporary-source:retry-audio",
+      "temporary-source:keep-in-project",
+      "temporary-source:discard",
+      "temporary-source:clear-expired",
+    ]) {
+      await entryById(entries, id).perform({ close: noop, source: "palette" });
+    }
+
+    expect(calls).toEqual([
+      "openQuickListen:paste",
+      "openQuickListen:paste",
+      "openQuickListen:url",
+      "openQuickListen:file",
+      "openTemporarySourceInReview:temp-article",
+      "openTemporarySourceInReview:temp-article",
+      "openTemporarySourceInPreview:temp-article",
+      "openTemporarySourceCinema:temp-article",
+      "createAndListenFromCurrentSource",
+      "createAndListenFromCurrentSource",
+      "keepTemporarySourceInProject:temp-article",
+      "discardTemporarySource:temp-article",
+      "clearExpiredTemporarySources",
+    ]);
   });
 
   it("hides Quick Listen commands when temporarySources.quickListen is disabled", () => {

@@ -708,6 +708,9 @@ export function WorkspaceDrawer({
                     <button
                       className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
                       data-confirm="Clear expired temporary work? This deletes only expired temporary content and artifacts. Project sources are unchanged."
+                      data-testid="ui-action-temporary-source-clear-expired"
+                      data-ui-action-owner="temporary-source"
+                      data-ui-action-surface="Command Center"
                       disabled={(temporaryStorageUsage?.expiredCount ?? 0) === 0}
                       onClick={() => {
                         void onClearExpiredTemporarySources();
@@ -719,6 +722,9 @@ export function WorkspaceDrawer({
                     {quickListenEnabled ? (
                       <button
                         className="h-9 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] vs-accent-bg"
+                        data-testid="ui-action-temporary-source-start-quick-listen"
+                        data-ui-action-owner="temporary-source"
+                        data-ui-action-surface="Command Center"
                         onClick={onOpenQuickListen}
                         type="button"
                       >

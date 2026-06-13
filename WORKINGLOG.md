@@ -2233,3 +2233,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Review scoped work package files
 - [x] Stage scoped work package files
 - [x] Commit scoped work package
+
+## 2026-06-13 14:16 CEST - Command Palette Temporary Source Commands
+- [x] Map command palette temporary-source contract gaps
+- [x] Wire missing temporary commands to shared handlers
+- [x] Add focused command and action matrix coverage
+- [x] Run command palette and UI validation
+- [x] Allow intentional temporary command retry copy in recovery-copy guard
+- Validation: focused command palette helper tests, frontend typecheck, script tests, and `pnpm e2e:command-palette` passed. `pnpm e2e:ui-actions` failed late with a local API `ECONNREFUSED` during `workspace-preview-generation-running`; `pnpm validate:ux-final` passed command-palette, responsive, context-panel, accessibility, read-along, and teleprompt-memory gates but failed on existing UI action/surface-complexity findings.

@@ -201,6 +201,70 @@ async function runCommandPaletteAudit(browser, projectId, screenshots) {
       failures.push("Command palette exposed direct Open Teleprompt Theatre route.");
     }
 
+    const temporaryInventory = await searchPalette(page, dialog, "temporary");
+    commandsObserved.push(...temporaryInventory.commands);
+    disabledCommands.push(...temporaryInventory.commands.filter((command) => command.disabled));
+    await capture("command-palette-search-temporary");
+    if (
+      !temporaryInventory.commands.some(
+        (command) => command.id === "temporary-source:new" && command.category === "Source",
+      )
+    ) {
+      failures.push("Command palette did not expose categorized temporary source commands.");
+    }
+
+    const quickListenInventory = await searchPalette(page, dialog, "quick listen");
+    commandsObserved.push(...quickListenInventory.commands);
+    disabledCommands.push(...quickListenInventory.commands.filter((command) => command.disabled));
+    await capture("command-palette-search-quick-listen");
+    if (!quickListenInventory.commands.some((command) => command.id === "temporary-source:new")) {
+      failures.push("Command palette did not expose Quick Listen as a temporary-source command.");
+    }
+
+    const keepTemporaryInventory = await searchPalette(page, dialog, "temporary keep project");
+    commandsObserved.push(...keepTemporaryInventory.commands);
+    disabledCommands.push(...keepTemporaryInventory.commands.filter((command) => command.disabled));
+    await capture("command-palette-temporary-keep-in-project");
+    const keepTemporaryCommand = keepTemporaryInventory.commands.find(
+      (command) => command.id === "temporary-source:keep-in-project",
+    );
+    if (!keepTemporaryCommand) {
+      failures.push("Command palette did not expose Keep in project for temporary sources.");
+    } else if (
+      keepTemporaryCommand.disabled &&
+      !/temporary source/i.test(keepTemporaryCommand.reason)
+    ) {
+      failures.push("Disabled Keep in project command did not explain missing temporary context.");
+    }
+
+    const clearExpiredInventory = await searchPalette(page, dialog, "temporary clear expired work");
+    commandsObserved.push(...clearExpiredInventory.commands);
+    disabledCommands.push(...clearExpiredInventory.commands.filter((command) => command.disabled));
+    await capture("command-palette-temporary-clear-expired");
+    if (
+      !clearExpiredInventory.commands.some(
+        (command) => command.id === "temporary-source:clear-expired",
+      )
+    ) {
+      failures.push("Command palette did not expose Clear expired temporary work.");
+    }
+
+    const disabledTemporaryInventory = await searchPalette(page, dialog, "temporary open review");
+    commandsObserved.push(...disabledTemporaryInventory.commands);
+    disabledCommands.push(
+      ...disabledTemporaryInventory.commands.filter((command) => command.disabled),
+    );
+    await capture("command-palette-temporary-disabled-reason");
+    const disabledTemporaryCommand = disabledTemporaryInventory.commands.find(
+      (command) => command.id === "temporary-source:open-review",
+    );
+    if (
+      !disabledTemporaryCommand?.disabled ||
+      !/temporary source/i.test(disabledTemporaryCommand.reason)
+    ) {
+      failures.push("Disabled temporary command did not show a missing-context reason.");
+    }
+
     for (const { commandId, query } of contractCommandSearchQueries()) {
       if (commandId === "command.palette") {
         continue;
