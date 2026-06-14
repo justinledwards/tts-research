@@ -25,6 +25,71 @@ const (
 	JobStatusCancelled    JobStatus = "cancelled"
 )
 
+type JobPipelinePhase string
+
+const (
+	JobPipelinePhaseSubmit          JobPipelinePhase = "submit"
+	JobPipelinePhaseExtract         JobPipelinePhase = "extract"
+	JobPipelinePhaseStructure       JobPipelinePhase = "structure"
+	JobPipelinePhaseRenderSpoken    JobPipelinePhase = "render_spoken_form"
+	JobPipelinePhaseSegment         JobPipelinePhase = "segment"
+	JobPipelinePhaseSynthesize      JobPipelinePhase = "synthesize_segment"
+	JobPipelinePhaseAlign           JobPipelinePhase = "align_segment"
+	JobPipelinePhaseCheck           JobPipelinePhase = "check_segment"
+	JobPipelinePhaseAssemble        JobPipelinePhase = "assemble"
+	JobPipelinePhaseComplete        JobPipelinePhase = "complete"
+)
+
+var allJobPipelinePhases = []JobPipelinePhase{
+	JobPipelinePhaseSubmit,
+	JobPipelinePhaseExtract,
+	JobPipelinePhaseStructure,
+	JobPipelinePhaseRenderSpoken,
+	JobPipelinePhaseSegment,
+	JobPipelinePhaseSynthesize,
+	JobPipelinePhaseAlign,
+	JobPipelinePhaseCheck,
+	JobPipelinePhaseAssemble,
+	JobPipelinePhaseComplete,
+}
+
+var jobPipelinePhaseIndex = map[JobPipelinePhase]int{}
+
+func init() {
+	for index, phase := range allJobPipelinePhases {
+		jobPipelinePhaseIndex[phase] = index
+	}
+}
+
+func ParseJobPipelinePhase(value string) JobPipelinePhase {
+	clean := JobPipelinePhase(value)
+	if _, ok := jobPipelinePhaseIndex[clean]; ok {
+		return clean
+	}
+	return ""
+}
+
+func IsValidJobPipelinePhase(value string) bool {
+	return ParseJobPipelinePhase(value) != ""
+}
+
+func isJobPipelinePhaseRetryCandidate(retryPhase, failedPhase JobPipelinePhase) bool {
+	retryIndex := JobPipelinePhaseSortOrder(retryPhase)
+	failedIndex := JobPipelinePhaseSortOrder(failedPhase)
+	if retryIndex < 0 || failedIndex < 0 {
+		return false
+	}
+
+	return retryIndex >= failedIndex
+}
+
+func JobPipelinePhaseSortOrder(phase JobPipelinePhase) int {
+	if index, ok := jobPipelinePhaseIndex[phase]; ok {
+		return index
+	}
+	return -1
+}
+
 type JobTerminalReason string
 
 const (
@@ -84,6 +149,10 @@ type CreateJobRequest struct {
 	SpeechPolicyOverrides policy.Overrides         `json:"speechPolicyOverrides,omitempty"`
 	Locale                string                   `json:"locale,omitempty"`
 	SpeechRenderApplied   bool                     `json:"speechRenderApplied,omitempty"`
+}
+
+type RetryVoiceJobRequest struct {
+	Phase JobPipelinePhase `json:"phase,omitempty"`
 }
 
 type VoiceKind string

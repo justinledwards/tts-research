@@ -648,6 +648,10 @@ func (service *Service) CreateJob(ctx context.Context, request CreateJobRequest)
 }
 
 func (service *Service) RetryJob(ctx context.Context, id string) (VoiceJob, error) {
+	return service.RetryJobWithPhase(ctx, id, "")
+}
+
+func (service *Service) RetryJobWithPhase(ctx context.Context, id string, phase JobPipelinePhase) (VoiceJob, error) {
 	sourceJob, err := service.GetJob(id)
 	if err != nil {
 		return VoiceJob{}, err
@@ -659,10 +663,22 @@ func (service *Service) RetryJob(ctx context.Context, id string) (VoiceJob, erro
 		return VoiceJob{}, ErrJobNotRetriable
 	}
 
-	job, err := service.prepareCreateJob(createRetryJobRequest(sourceJob))
+	retryPhase := phase
+	if retryPhase == "" {
+		retryPhase = sourceJob.FailedPhase
+	}
+	if retryPhase == "" {
+		retryPhase = JobPipelinePhaseCheck
+	}
+	if sourceJob.FailedPhase != "" && !isJobPipelinePhaseRetryCandidate(retryPhase, sourceJob.FailedPhase) {
+		return VoiceJob{}, ErrJobNotRetriable
+	}
+	job, err := service.prepareCreateJob(createRetryJobRequest(sourceJob, retryPhase))
 	if err != nil {
 		return VoiceJob{}, err
 	}
+	job.Phase = retryPhase
+	job.FailedPhase = sourceJob.FailedPhase
 	job.RetryOfJobID = sourceJob.ID
 	job.Progress.Message = "Queued retry"
 	job.Progress.Detail = "Waiting to resume generation from reusable ready segments."
@@ -721,9 +737,13 @@ func (service *Service) CancelJob(id string) error {
 	return nil
 }
 
-func createRetryJobRequest(job VoiceJob) CreateJobRequest {
+func createRetryJobRequest(job VoiceJob, retryPhase JobPipelinePhase) CreateJobRequest {
+	sourceText := job.InputText
+	if strings.TrimSpace(job.OptimizedText) != "" && retryPhase != JobPipelinePhaseSubmit {
+		sourceText = job.OptimizedText
+	}
 	return CreateJobRequest{
-		Text:                  job.InputText,
+		Text:                  sourceText,
 		VoiceID:               job.VoiceID,
 		ProjectID:             job.ProjectID,
 		BookSourceID:          job.BookSourceID,

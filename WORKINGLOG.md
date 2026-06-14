@@ -8,6 +8,41 @@
 - [ ] add diagnostics timing timeline and visibility for processing phases
 - [ ] add phase-focused e2e coverage for EPUB/DOCX/PDF/Website + resume
 
+## 2026-06-14 12:56 CEST - Source Processing Phase Orchestration and Resumable Failure Model
+
+- [x] inspect current phase-retry implementation and identify required backend/frontend touchpoints
+- [ ] implement backend phase fields and resumable retry contract
+- [ ] add retry endpoint parsing for optional phase hints
+- [ ] thread phase state through run and failure records
+- [ ] update frontend recovery copy and retry action wiring for phase hints
+- [ ] align diagnostics messaging to phase failures
+
+## 2026-06-14 13:09 CEST - Source Processing Phase Orchestration and Resumable Failure Model
+
+- [x] add phase validation helper for retry candidacy
+- [ ] thread phase-aware retry payload from API through backend retry path
+- [ ] add resumable run restart logic by phase in synthesis pipeline
+- [ ] surface phase-specific recovery labels and details across Preview/workspace UI
+- [ ] keep user-facing fallback text for unsupported job metadata
+
+## 2026-06-14 14:22 CEST - Source Processing Phase Orchestration and Resumable Failure Model
+
+- [x] commit current partial phase orchestration changes
+- [ ] thread phase-aware retry payload through backend retry route
+- [ ] add resumable run restart logic by phase in synthesis pipeline
+- [ ] persist failed-phase metadata and use it for safe resume/invalidation
+- [ ] wire phase-specific recovery actions/copy in cinema/preview/workspace
+- [ ] preserve ready segments across retry and report failure phase in diagnostics
+
+## 2026-06-14 13:21 CEST - Source Processing Phase Orchestration Continuation
+
+- [x] finalize and commit existing phase-orchestration prep changes
+- [ ] thread phase-aware retry payload through backend retry route
+- [ ] add resumable run restart logic by phase in synthesis pipeline
+- [ ] persist failed-phase metadata and use it for safe resume/invalidation
+- [ ] wire phase-specific recovery actions/copy in cinema/preview/workspace
+- [ ] preserve ready segments across retry and report failure phase in diagnostics
+
 ## 2026-06-13 21:57 CEST - Final Review Bundle Gate Closure
 
 - [x] inspect review bundle and UX gate scripts

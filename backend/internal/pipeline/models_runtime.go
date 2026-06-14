@@ -423,6 +423,9 @@ type VoiceJob struct {
 	Locale                  string                `json:"locale,omitempty"`
 	SpeechRenderApplied     bool                  `json:"speechRenderApplied,omitempty"`
 	Status                  JobStatus             `json:"status"`
+	Phase                   JobPipelinePhase      `json:"phase,omitempty"`
+	FailedPhase             JobPipelinePhase      `json:"failedPhase,omitempty"`
+	RetryPhase              JobPipelinePhase      `json:"retryPhase,omitempty"`
 	Stages                  PipelineStages        `json:"stages"`
 	AdaptiveMode            bool                  `json:"adaptiveMode"`
 	RunMode                 RunMode               `json:"runMode"`

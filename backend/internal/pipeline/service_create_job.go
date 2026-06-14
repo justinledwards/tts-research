@@ -140,6 +140,7 @@ func (service *Service) prepareCreateJob(request CreateJobRequest) (storedJob, e
 			Locale:                request.Locale,
 			SpeechRenderApplied:   request.SpeechRenderApplied,
 			Status:                JobStatusQueued,
+			Phase:                 JobPipelinePhaseSubmit,
 			Stages:                initialStages(),
 			AdaptiveMode:          adaptiveMode,
 			RunMode:               config.runMode,
