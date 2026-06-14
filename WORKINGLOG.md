@@ -1,3 +1,13 @@
+## 2026-06-14 12:43 CEST - Source Processing Phase Orchestration and Resumable Failure Model
+
+- [ ] add phase-oriented backend model and phase-aware job state
+- [ ] add per-phase retry endpoints and validation for resumable retries
+- [ ] add stable phase artifact hashes and invalidation rules
+- [ ] add queue isolation for extraction, synthesis, alignment, and checking
+- [ ] add frontend phase failure recovery copy for Preview/Cinema/Inspector
+- [ ] add diagnostics timing timeline and visibility for processing phases
+- [ ] add phase-focused e2e coverage for EPUB/DOCX/PDF/Website + resume
+
 ## 2026-06-13 21:57 CEST - Final Review Bundle Gate Closure
 
 - [x] inspect review bundle and UX gate scripts
