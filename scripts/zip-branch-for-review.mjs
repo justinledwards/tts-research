@@ -175,7 +175,35 @@ async function listReviewFiles(repoRoot, trackedOnly) {
     encoding: "buffer",
     maxBuffer: 50 * 1024 * 1024,
   });
-  return [...new Set(stdout.toString("utf8").split("\0").filter(Boolean))].sort();
+  return [
+    ...new Set([
+      ...stdout.toString("utf8").split("\0").filter(Boolean),
+      ...(trackedOnly ? [] : await existingMandatoryEvidenceFiles(repoRoot)),
+    ]),
+  ].sort();
+}
+
+async function existingMandatoryEvidenceFiles(repoRoot) {
+  const candidates = [
+    "output/e2e-book-cinema/summary.json",
+    "output/accessibility/latest/responsive-snapshots/responsive-results.json",
+    "output/accessibility/latest/responsive-snapshots/overlay-collisions.json",
+    "output/accessibility/latest/responsive-snapshots/overlay-collisions.md",
+    "output/screenshots/latest/manifest.json",
+    "output/screenshots/latest/state-mismatches.md",
+  ];
+  const existing = [];
+  for (const candidate of candidates) {
+    try {
+      const stats = await lstat(path.join(repoRoot, candidate));
+      if (stats.isFile()) {
+        existing.push(candidate);
+      }
+    } catch {
+      // Missing evidence is reported by the review manifest; only package files that exist.
+    }
+  }
+  return existing;
 }
 
 function resolveOutputPath(repoRoot, options, branchSlug, shortSha) {

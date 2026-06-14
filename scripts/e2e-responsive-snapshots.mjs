@@ -60,11 +60,34 @@ main().catch(async (error) => {
   const message = error instanceof Error ? error.stack || error.message : String(error);
   console.error(message);
   await mkdir(outputDir, { recursive: true }).catch(() => {});
+  await writeJson(path.join(outputDir, "overlay-collisions.json"), {
+    error: message,
+    generatedAt: new Date().toISOString(),
+    reports: [],
+    schemaVersion: "overlay-collisions.v1",
+    status: "failed",
+    summary: { failures: 1, reports: 0 },
+  }).catch(() => {});
+  await writeFile(
+    path.join(outputDir, "overlay-collisions.md"),
+    `# Overlay Collision Report\n\nResponsive snapshot capture failed before collision data could be collected.\n\n${message}\n`,
+  ).catch(() => {});
   await writeJson(path.join(outputDir, "responsive-results.json"), {
     error: message,
     generatedAt: new Date().toISOString(),
+    results: [],
     schemaVersion: "responsive-snapshots.v1",
     status: "failed",
+    summary: {
+      failures: 1,
+      layoutFailures: 0,
+      overlayCollisionFailures: 1,
+      screenshotStateMismatches: 0,
+      screenshots: 0,
+      telepromptTheatreFailures: 0,
+      viewports: 0,
+      websiteCalmReadFailures: 0,
+    },
   }).catch(() => {});
   process.exitCode = 1;
 });
@@ -308,6 +331,9 @@ async function captureViewport(browser, viewport, websiteCalmFixture, teleprompt
       };
     }, minInteractiveSize);
     const overlayCollision = await collectOverlayCollisionReport(page);
+    const performanceEvidence = await collectResponsivePerformanceEvidence(page, viewport, {
+      phase: "workspace-layout",
+    });
     const issues = blockingPageIssues(pageIssues);
     const layoutPassed =
       !layout.horizontalOverflow &&
@@ -328,6 +354,7 @@ async function captureViewport(browser, viewport, websiteCalmFixture, teleprompt
         websiteCalmRead.summary.failures === 0 &&
         telepromptTheatre.summary.failures === 0,
       quickListen,
+      performanceEvidence,
       screenshots,
       telepromptTheatre,
       viewport,
@@ -336,6 +363,21 @@ async function captureViewport(browser, viewport, websiteCalmFixture, teleprompt
   } finally {
     await context.close();
   }
+}
+
+async function collectResponsivePerformanceEvidence(page, viewport, detail = {}) {
+  const metrics = await page
+    .evaluate(() => globalThis.__ttsResearchPerformance?.metrics ?? [])
+    .catch(() => []);
+  return {
+    metricCount: metrics.length,
+    metrics,
+    schemaVersion: "responsive-performance-evidence.v1",
+    sourceScript: "scripts/e2e-responsive-snapshots.mjs",
+    unit: "ms",
+    viewport: { height: viewport.height, id: viewport.id, width: viewport.width },
+    ...detail,
+  };
 }
 
 async function verifyPhoneQuickListenCreation(browser, viewport) {

@@ -3149,7 +3149,18 @@ async function writePerformanceArtifacts(summary) {
   await mkdir(performanceArtifactDir, { recursive: true });
   await writeFile(
     path.join(performanceArtifactDir, "timing.json"),
-    `${JSON.stringify(summary.readerTiming.metrics, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        evidenceContract: summary.readerTiming.evidenceContract,
+        metrics: summary.readerTiming.metrics,
+        schemaVersion: "tts-research.performance-timing-artifact.v1",
+        sourceScript: "scripts/e2e-book-cinema.mjs",
+        thresholds: summary.readerTiming.thresholds,
+        unit: "ms",
+      },
+      null,
+      2,
+    )}\n`,
   );
   await writeFile(
     path.join(performanceArtifactDir, "reader-resume.json"),

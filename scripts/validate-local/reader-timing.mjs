@@ -23,6 +23,7 @@ export function evaluateReaderTimingSummary(summary, thresholds, options = {}) {
   const metrics = summarizeReaderTimingSummary(summary);
   const comparisons = compareReaderTimingBudgets(metrics, thresholds, options);
   return {
+    evidenceContract: buildReaderTimingEvidenceContract(metrics),
     failures: summarizeReaderTimingFailures(comparisons),
     metrics,
     output: formatReaderTimingReport(metrics, comparisons),
@@ -71,14 +72,18 @@ export function summarizeReaderTimingSummary(summary) {
       missingMetrics.push(metricName);
       byName[metricName] = {
         byKind: {},
+        bySourceType: {},
         count: 0,
         maxMs: null,
         meanMs: null,
         minMs: null,
         observations: [],
         p50Ms: null,
+        p75Ms: null,
         p95Ms: null,
         p99Ms: null,
+        sourceScript: "scripts/e2e-book-cinema.mjs",
+        unit: "ms",
       };
       continue;
     }
@@ -93,13 +98,18 @@ export function summarizeReaderTimingSummary(summary) {
     lowResourceMode: Boolean(summary?.lowResourceMode),
     degradedStates: summarizeDegradedStates(degradedStateItems),
     metrics: byName,
+    missingMetricCount: missingMetrics.length,
     missingMetrics,
+    requiredMetrics: readerTimingMetricNames,
+    sourceScript: "scripts/e2e-book-cinema.mjs",
+    unit: "ms",
   };
 }
 
 export function compareReaderTimingBudgets(metrics, thresholds = {}, options = {}) {
   const allowBlockingWaivers =
     options.allowBlockingWaivers ?? isExplicitBlockingWaiverEnabled(process.env);
+  const strictMarkers = options.strictMarkers ?? isStrictMarkerEnforcementEnabled(process.env);
   const comparisons = [];
   for (const [threshold, metricName] of thresholdMappings) {
     if (thresholds[threshold] === undefined) {
@@ -109,7 +119,7 @@ export function compareReaderTimingBudgets(metrics, thresholds = {}, options = {
     const actual = metric.maxMs ?? null;
     const expected = thresholds[threshold];
     const passed = typeof actual === "number" && actual <= expected;
-    const policy = policyForComparison(metricName, actual, { allowBlockingWaivers });
+    const policy = policyForComparison(metricName, actual, { allowBlockingWaivers, strictMarkers });
     comparisons.push({
       actual,
       blocking: !passed && policy.blocking,
@@ -118,6 +128,7 @@ export function compareReaderTimingBudgets(metrics, thresholds = {}, options = {
       expected,
       firstRunMaxMs: metric.byRunPhase?.["first-run"]?.maxMs ?? null,
       p50Ms: metric.p50Ms ?? null,
+      p75Ms: metric.p75Ms ?? null,
       p95Ms: metric.p95Ms ?? null,
       p99Ms: metric.p99Ms ?? null,
       metric: `${metricName}.maxMs`,
@@ -165,15 +176,15 @@ export function formatInteractionBudgetMarkdown(metrics, comparisons = []) {
     `Mode: ${metrics.lowResourceMode ? "low-resource" : "standard"}`,
     `Fixtures: ${metrics.fixtureKinds.join(", ") || "none"}`,
     "",
-    "| Interaction | Status | Max | P50 | P95 | P99 | First run | Warm run | Budget | Classification | Waiver |",
-    "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |",
+    "| Interaction | Status | Max | P50 | P75 | P95 | P99 | First run | Warm run | Budget | Classification | Waiver |",
+    "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |",
   ];
   for (const comparison of comparisons) {
     const status = comparison.passed ? "PASS" : comparison.blocking ? "BLOCKING" : "WAIVED";
     lines.push(
       `| ${comparison.metric} | ${status} | ${formatMs(comparison.actual)} | ${formatMs(
         comparison.p50Ms,
-      )} | ${formatMs(comparison.p95Ms)} | ${formatMs(comparison.p99Ms)} | ${formatMs(
+      )} | ${formatMs(comparison.p75Ms)} | ${formatMs(comparison.p95Ms)} | ${formatMs(comparison.p99Ms)} | ${formatMs(
         comparison.firstRunMaxMs,
       )} | ${formatMs(comparison.warmRunMaxMs)} | ${formatMs(
         comparison.expected,
@@ -258,6 +269,7 @@ export function buildLowResourceWaiverBurndown(metrics, comparisons = []) {
       metric: `${metricName}.maxMs`,
       owner: policy.owner,
       p50Ms: metric?.p50Ms ?? null,
+      p75Ms: metric?.p75Ms ?? null,
       p95Ms: metric?.p95Ms ?? null,
       p99Ms: metric?.p99Ms ?? null,
       reviewDate: policy.reviewDate,
@@ -325,7 +337,7 @@ export function formatReaderTimingReport(metrics, comparisons = []) {
     lines.push(
       `- ${metricName}: max=${formatMs(metric.maxMs)} p50=${formatMs(
         metric.p50Ms,
-      )} p95=${formatMs(metric.p95Ms)} p99=${formatMs(
+      )} p75=${formatMs(metric.p75Ms)} p95=${formatMs(metric.p95Ms)} p99=${formatMs(
         metric.p99Ms,
       )} first=${formatMs(metric.byRunPhase?.["first-run"]?.maxMs)} warm=${formatMs(
         metric.byRunPhase?.["warm-run"]?.maxMs,
@@ -369,10 +381,14 @@ export function formatReaderTimingReport(metrics, comparisons = []) {
   return lines.join("\n");
 }
 
-function policyForComparison(metricName, actual, { allowBlockingWaivers = false } = {}) {
+function policyForComparison(
+  metricName,
+  actual,
+  { allowBlockingWaivers = false, strictMarkers = true } = {},
+) {
   if (typeof actual !== "number" || !Number.isFinite(actual)) {
     return {
-      blocking: true,
+      blocking: strictMarkers,
       classification: "blocking regression",
       owner: "local QA",
       reason: "Required interaction metric was not recorded.",
@@ -429,6 +445,10 @@ function normalizeRunPhase(value) {
 
 function isExplicitBlockingWaiverEnabled(env) {
   return env?.[explicitBlockingWaiverEnv] === "1";
+}
+
+function isStrictMarkerEnforcementEnabled(env) {
+  return env?.PERFORMANCE_EVIDENCE_STRICT_MARKERS !== "0";
 }
 
 function collectDegradedStates(value, kind, output) {
@@ -489,11 +509,15 @@ function formatDegradedDetail(detail) {
 function summarizeObservations(observations) {
   const values = observations.map((observation) => observation.durationMs);
   const byKind = {};
+  const bySourceType = {};
   for (const observation of observations) {
     byKind[observation.kind] = Math.max(byKind[observation.kind] ?? 0, observation.durationMs);
+    const sourceType = sourceTypeForKind(observation.kind);
+    bySourceType[sourceType] = Math.max(bySourceType[sourceType] ?? 0, observation.durationMs);
   }
   return {
     byKind,
+    bySourceType,
     byRunPhase: {
       "first-run": summarizeObservationSubset(
         observations.filter((observation) => observation.runPhase === "first-run"),
@@ -508,8 +532,11 @@ function summarizeObservations(observations) {
     minMs: roundMs(Math.min(...values)),
     observations,
     p50Ms: roundMs(percentile(values, 50)),
+    p75Ms: roundMs(percentile(values, 75)),
     p95Ms: roundMs(percentile(values, 95)),
     p99Ms: roundMs(percentile(values, 99)),
+    sourceScript: "scripts/e2e-book-cinema.mjs",
+    unit: "ms",
   };
 }
 
@@ -521,6 +548,7 @@ function summarizeObservationSubset(observations) {
       meanMs: null,
       minMs: null,
       p50Ms: null,
+      p75Ms: null,
       p95Ms: null,
       p99Ms: null,
     };
@@ -532,9 +560,42 @@ function summarizeObservationSubset(observations) {
     meanMs: roundMs(values.reduce((sum, value) => sum + value, 0) / values.length),
     minMs: roundMs(Math.min(...values)),
     p50Ms: roundMs(percentile(values, 50)),
+    p75Ms: roundMs(percentile(values, 75)),
     p95Ms: roundMs(percentile(values, 95)),
     p99Ms: roundMs(percentile(values, 99)),
   };
+}
+
+function buildReaderTimingEvidenceContract(metrics) {
+  const missingMetrics = metrics.missingMetrics ?? [];
+  return {
+    missingMetricCount: missingMetrics.length,
+    missingMetrics,
+    requiredMetrics: readerTimingMetricNames.map((metricName) => ({
+      metric: metricName,
+      present: !missingMetrics.includes(metricName),
+      sourceScript: "scripts/e2e-book-cinema.mjs",
+      unit: "ms",
+    })),
+    schemaVersion: "tts-research.reader-timing-evidence-contract.v1",
+    status: missingMetrics.length === 0 ? "complete" : "missing-markers",
+  };
+}
+
+function sourceTypeForKind(kind) {
+  if (typeof kind !== "string") {
+    return "unknown";
+  }
+  if (kind.startsWith("temp-") || kind.includes("temporary") || kind.includes("preview")) {
+    return "temporary-source";
+  }
+  if (kind.includes("website")) {
+    return "temporary-source";
+  }
+  if (kind === "unknown") {
+    return "unknown";
+  }
+  return "project-source";
 }
 
 function percentile(values, p) {

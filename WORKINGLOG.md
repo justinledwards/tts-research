@@ -2321,3 +2321,22 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] clarify non-destructive temporary behavior settings metadata
 - [x] run local review commands
 - Validation: `pnpm check`, `pnpm e2e:workspace-flow`, and `pnpm e2e:surface-complexity` passed. `pnpm e2e:ui-actions` refreshed 28 scenarios, 39 screenshots, and 63 temporary-source actions with zero metadata, disabled-reason, or destructive-confirmation findings, then failed on existing activation/duplicate findings plus two Preview inventory timeouts. `REVIEW_ALLOW_DIRTY=1 pnpm review:local` reran checks and hit a transient backend `internal/pipeline` TempDir cleanup failure; isolated `go test ./internal/pipeline` passed.
+
+## 2026-06-14 11:31 CEST - Reviewer prep artifacts
+- [x] remove untracked reviewer brief
+- [x] generate screenshots for app screens
+- [x] create reviewer-ready project ZIP
+- [x] summarize artifact locations for reviewer
+
+## 2026-06-14 11:35 CEST - Reviewer premium handoff prep
+- [x] create screenshot manifest
+- [x] create reviewer workpackage instructions
+- [x] reference manifest + instructions to reviewer
+
+## 2026-06-14 12:01 CEST - Performance Evidence Contract
+- [x] Inspect existing performance markers and evidence scripts
+- [x] Add deterministic missing evidence artifact generation
+- [x] Enforce reader timing marker completeness with fallback reporting
+- [x] Update performance evidence documentation
+- [x] Run project checks
+- Validation: focused script tests passed; `pnpm format:check`, `pnpm lint`, and `pnpm typecheck` passed. Full `pnpm test` passed package, script, adapter, and most backend tests, then hit the known transient backend `internal/pipeline` TempDir cleanup failure; isolated `go test ./internal/pipeline` passed and `pnpm --filter @tts-research/frontend test` passed. `node scripts/zip-branch-for-review.mjs --output /tmp/tts-research-review-smoke.zip --prefix tts-research-review-smoke` passed.

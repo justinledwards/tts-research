@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildLowResourceWaiverBurndown,
   compareReaderTimingBudgets,
+  evaluateReaderTimingSummary,
   formatBudgetFailuresMarkdown,
   formatLowResourceWaiverBurndownMarkdown,
   formatReaderTimingReport,
@@ -89,7 +90,11 @@ test("summarizes reader timing metrics across Book Cinema fixtures", () => {
   assert.equal(metrics.metrics["book-cinema-open"].byKind.pdf, 270.1);
   assert.equal(metrics.metrics["book-cinema-open"].count, 3);
   assert.equal(metrics.metrics["book-cinema-open"].p50Ms, 235.3);
+  assert.equal(metrics.metrics["book-cinema-open"].p75Ms, 270.1);
   assert.equal(metrics.metrics["book-cinema-open"].p99Ms, 270.1);
+  assert.equal(metrics.metrics["book-cinema-open"].unit, "ms");
+  assert.equal(metrics.metrics["book-cinema-open"].sourceScript, "scripts/e2e-book-cinema.mjs");
+  assert.equal(metrics.metrics["book-cinema-open"].bySourceType["project-source"], 270.1);
   assert.equal(metrics.metrics["book-cinema-open"].byRunPhase["first-run"].maxMs, 230.3);
   assert.equal(metrics.metrics["book-cinema-open"].byRunPhase["warm-run"].maxMs, 270.1);
   assert.equal(metrics.metrics["preview-cinema-open"].maxMs, 330);
@@ -101,7 +106,52 @@ test("summarizes reader timing metrics across Book Cinema fixtures", () => {
   assert.equal(metrics.metrics["studio-route-switch"].byKind.epub, 80);
   assert.equal(metrics.degradedStates.total, 1);
   assert.equal(metrics.degradedStates.byName["low-confidence-highlight"], 1);
+  assert.equal(metrics.missingMetricCount, 0);
   assert.deepEqual(metrics.missingMetrics, []);
+});
+
+test("exposes a machine-readable reader timing evidence contract", () => {
+  const summary = evaluateReaderTimingSummary(
+    {
+      performance: [
+        {
+          kind: "epub",
+          metrics: {
+            resumed: {
+              metrics: [{ durationMs: 1800, name: "app-cold-usable" }],
+            },
+          },
+        },
+      ],
+    },
+    { maxAppColdUsableMs: 2200, maxSourceSwitchMs: 1200 },
+  );
+
+  assert.equal(
+    summary.evidenceContract.schemaVersion,
+    "tts-research.reader-timing-evidence-contract.v1",
+  );
+  assert.equal(summary.evidenceContract.status, "missing-markers");
+  assert.equal(summary.evidenceContract.missingMetricCount, 12);
+  assert.equal(summary.metrics.missingMetricCount, 12);
+  assert.deepEqual(summary.evidenceContract.requiredMetrics[0], {
+    metric: "app-cold-usable",
+    present: true,
+    sourceScript: "scripts/e2e-book-cinema.mjs",
+    unit: "ms",
+  });
+});
+
+test("can downgrade missing marker enforcement for rollback", () => {
+  const metrics = summarizeReaderTimingSummary({ performance: [] });
+  const comparisons = compareReaderTimingBudgets(
+    metrics,
+    { maxSourceSwitchMs: 1200 },
+    { strictMarkers: false },
+  );
+
+  assert.equal(comparisons[0].passed, false);
+  assert.equal(comparisons[0].blocking, false);
 });
 
 test("fails configured reader timing budgets when metrics are slow or missing", () => {

@@ -47,6 +47,20 @@ The stable reviewer artifacts are written under `output/performance/latest/`:
 - `bundle.json`: production bundle graph, gzip sizes, and lazy-loading status.
 - `degraded-states.md`: explainable slow, fallback, and lazy-loading states seen during the run.
 
+The reviewer ZIP evidence contract also includes these generated JSON/Markdown artifacts when they
+exist locally:
+
+- `output/e2e-book-cinema/summary.json`
+- `output/accessibility/latest/responsive-snapshots/responsive-results.json`
+- `output/accessibility/latest/responsive-snapshots/overlay-collisions.json`
+- `output/accessibility/latest/responsive-snapshots/overlay-collisions.md`
+- `output/screenshots/latest/manifest.json`
+
+Responsive snapshot generation writes `responsive-results.json`, `overlay-collisions.json`, and
+`overlay-collisions.md` even when capture fails before all viewports finish. Failed artifacts include
+the error, `status: "failed"`, and a deterministic summary so `review:local` and review ZIP creation
+can still show which evidence is present.
+
 ## Budgets
 
 Current local bundle gates:
@@ -77,6 +91,21 @@ Reader timing metrics are exposed through `window.__ttsResearchPerformance.metri
 from the Book Cinema E2E smoke. The gate uses the worst observed value across the EPUB, DOCX, and PDF
 fixtures. Missing metrics fail the threshold check, so new reader flows must keep emitting the same
 markers when the UX changes.
+
+`summary.json#readerTiming` is the machine-readable marker contract. It must include:
+
+- `evidenceContract.missingMetricCount`: target `0`.
+- `metrics.requiredMetrics`: every documented marker key.
+- Per-marker `count`, `minMs`, `maxMs`, `meanMs`, `p50Ms`, `p75Ms`, `p95Ms`, and `p99Ms`.
+- Per-marker `unit: "ms"` and `sourceScript: "scripts/e2e-book-cinema.mjs"`.
+- `bySourceType` values that distinguish `project-source` from `temporary-source` evidence when the
+  fixture kind identifies source ownership.
+- Threshold rows with p50/p75/p95/p99 values so workpackage reviewers can quote measured values
+  without opening screenshots.
+
+Strict marker enforcement is on by default. Set `PERFORMANCE_EVIDENCE_STRICT_MARKERS=0` only as a
+temporary rollback if marker enforcement itself is breaking capture; the missing markers remain in
+the JSON contract and should be fixed before review handoff.
 
 The low-resource smoke records the broader interaction set once per run and keeps the reader/Cinema
 open/resume metrics across all Book fixtures. The interaction metrics use mock providers and browser
