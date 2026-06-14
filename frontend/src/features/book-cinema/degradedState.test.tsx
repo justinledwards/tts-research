@@ -100,6 +100,26 @@ describe("Book Cinema degraded-state UI", () => {
     ).toContain("Generation failed");
   });
 
+  it("labels playable in-progress narration as partial readiness", () => {
+    const job = {
+      audioPartialUrl: "/api/voice-jobs/job-1/audio/partial",
+      audioReadySegments: 2,
+      id: "job-1",
+      partialAudioManifest: {
+        audioUrl: "/api/voice-jobs/job-1/audio/partial",
+        completeEnough: false,
+        readySegments: 2,
+        status: "partialReady",
+        totalSegments: 5,
+      },
+      status: "synthesizing",
+    } as VoiceJob;
+
+    expect(
+      renderToStaticMarkup(<BookCinemaStatusChip hasPlayableAudio isPlaying={false} job={job} />),
+    ).toContain("Partial ready");
+  });
+
   it("maps provider timeouts to timeout-specific retry copy", () => {
     const job = {
       error: "Kokoro synthesis timed out after 3600 seconds",

@@ -2340,3 +2340,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] Update performance evidence documentation
 - [x] Run project checks
 - Validation: focused script tests passed; `pnpm format:check`, `pnpm lint`, and `pnpm typecheck` passed. Full `pnpm test` passed package, script, adapter, and most backend tests, then hit the known transient backend `internal/pipeline` TempDir cleanup failure; isolated `go test ./internal/pipeline` passed and `pnpm --filter @tts-research/frontend test` passed. `node scripts/zip-branch-for-review.mjs --output /tmp/tts-research-review-smoke.zip --prefix tts-research-review-smoke` passed.
+
+## 2026-06-14 12:10 CEST - Streaming-First Playback
+
+- [x] map current partial audio and playback readiness paths
+- [x] implement partialReady manifest and UI state
+- [x] add focused backend and frontend regression coverage
+- [x] run project checks
+- Validation: focused backend partial-audio tests passed; focused frontend playback/Book Cinema/Preview Vitest run passed; `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, and `git diff --check` passed. `pnpm e2e:book-cinema` passed Markdown and Website paths, then failed waiting for the Book Cinema Intake button in `openBookCinemaOverlay`.

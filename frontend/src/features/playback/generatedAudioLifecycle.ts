@@ -201,10 +201,11 @@ export function generatedAudioReadySegmentCount(job: VoiceJob | null | undefined
   if (!job) {
     return 0;
   }
+  const readyByManifest = job.partialAudioManifest?.readySegments ?? 0;
   const readyBySegments = (job.segments ?? []).filter(
     (segment) => segment.status === "ready",
   ).length;
-  return Math.max(0, job.audioReadySegments ?? 0, readyBySegments);
+  return Math.max(0, readyByManifest, job.audioReadySegments ?? 0, readyBySegments);
 }
 
 export function generatedAudioTotalSegmentCount(job: VoiceJob | null | undefined): number {
@@ -212,7 +213,12 @@ export function generatedAudioTotalSegmentCount(job: VoiceJob | null | undefined
     return 0;
   }
   const legacyRetries = (job as { retries?: { totalSegments?: number } }).retries;
-  return Math.max(0, legacyRetries?.totalSegments ?? 0, job.segments?.length ?? 0);
+  return Math.max(
+    0,
+    job.partialAudioManifest?.totalSegments ?? 0,
+    legacyRetries?.totalSegments ?? 0,
+    job.segments?.length ?? 0,
+  );
 }
 
 export function completedJobHasPlayableAudio(job: VoiceJob | null | undefined): boolean {
@@ -244,7 +250,11 @@ export function isGeneratedAudioPartiallyPlayable(job: VoiceJob | null | undefin
   if (!job || job.status === "completed") {
     return false;
   }
-  return generatedAudioReadySegmentCount(job) > 0 && (job.audioPartialUrl?.trim() ?? "").length > 0;
+  return (
+    generatedAudioReadySegmentCount(job) > 0 &&
+    ((job.audioPartialUrl?.trim() ?? "").length > 0 ||
+      (job.partialAudioManifest?.audioUrl?.trim() ?? "").length > 0)
+  );
 }
 
 export function canQueueGeneratedAudioPlayback(job: VoiceJob | null | undefined): boolean {

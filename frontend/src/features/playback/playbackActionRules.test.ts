@@ -91,6 +91,24 @@ describe("playback ownership model", () => {
     expect(canQueueGeneratedAudioPlayback(unplannedJob)).toBe(false);
   });
 
+  it("uses the partial manifest to unlock streaming-first playback", () => {
+    const manifestJob = {
+      audioPartialUrl: "",
+      partialAudioManifest: {
+        audioUrl: "/api/voice-jobs/job-1/audio/partial",
+        completeEnough: false,
+        firstPlayableAt: "2026-06-14T10:10:30Z",
+        readySegments: 2,
+        status: "partialReady",
+        totalSegments: 5,
+      },
+      status: "checking",
+    } as VoiceJob;
+
+    expect(isGeneratedAudioPartiallyPlayable(manifestJob)).toBe(true);
+    expect(canQueueGeneratedAudioPlayback(manifestJob)).toBe(true);
+  });
+
   it("keeps stale generated audio visually distinct from ready audio", () => {
     expect(generatedAudioLifecycleVisualClassName("stale")).not.toBe(
       generatedAudioLifecycleVisualClassName("ready"),

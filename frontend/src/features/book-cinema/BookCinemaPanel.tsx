@@ -3234,6 +3234,9 @@ function bookCinemaStatusLabel({
     return "Playing";
   }
   if (hasPlayableAudio) {
+    if (job && isBookJobGenerating(job) && bookJobPlayableSegments(job) > 0) {
+      return "Partial ready";
+    }
     return "Audio ready";
   }
   if (!job) {

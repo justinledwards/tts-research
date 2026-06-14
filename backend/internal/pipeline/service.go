@@ -1103,7 +1103,7 @@ func (service *Service) GetJob(id string) (VoiceJob, error) {
 		return VoiceJob{}, err
 	}
 
-	return service.hydrateTimingSummary(job.VoiceJob), nil
+	return normalizePartialAudioManifest(service.hydrateTimingSummary(job.VoiceJob)), nil
 }
 
 func (service *Service) GetAudio(id string) ([]byte, string, error) {
@@ -1516,6 +1516,21 @@ func (service *Service) hydratePersistedSegmentAudio(job *storedJob) {
 		return
 	}
 	job.AudioReadySegments = len(job.audioSegments)
+	for index := 1; index <= job.AudioReadySegments && index <= len(job.Segments); index += 1 {
+		segment := &job.Segments[index-1]
+		if segment.Status == "" {
+			segment.Status = "ready"
+		}
+		if segment.AudioURL == "" {
+			segment.AudioURL = jobSegmentAudioURL(job.ID, index)
+		}
+		if segment.TimingStatus == "" {
+			segment.TimingStatus = partialSegmentTimingStatus(job.VoiceJob, index)
+		}
+		if segment.TimingConfidence == "" {
+			segment.TimingConfidence = partialSegmentTimingConfidence(job.VoiceJob, index)
+		}
+	}
 	if len(pcmBytes) > 0 && specSet {
 		job.audioPartialPCM = pcmBytes
 		job.audioPartialSpec = partialSpec
@@ -1523,6 +1538,8 @@ func (service *Service) hydratePersistedSegmentAudio(job *storedJob) {
 		if strings.TrimSpace(job.AudioPartialURL) == "" {
 			job.AudioPartialURL = fmt.Sprintf("/api/voice-jobs/%s/audio/partial", job.ID)
 		}
+		ensureFirstPlayableAt(job)
+		job.VoiceJob = normalizePartialAudioManifest(job.VoiceJob)
 	}
 }
 
@@ -2112,6 +2129,7 @@ func (service *Service) synthesizeUntilComplete(
 				job.audioPartialSpec = reusable.audioSpec
 				job.audioPartialReady = true
 				job.AudioPartialURL = fmt.Sprintf("/api/voice-jobs/%s/audio/partial", job.ID)
+				ensureFirstPlayableAt(job)
 				job.AudioSegmentDurationsMS = append(job.AudioSegmentDurationsMS, reusable.durationMS)
 				job.AudioSegmentLatenciesMS = append(job.AudioSegmentLatenciesMS, reusable.latencyMS)
 				job.ContentType = reusable.contentType
@@ -2123,6 +2141,9 @@ func (service *Service) synthesizeUntilComplete(
 				job.VoiceCheck = toVoiceCheck(reusable.check)
 				updateJobSegment(job, reusable.index, func(segment *JobSegment) {
 					segment.Status = "ready"
+					segment.AudioURL = jobSegmentAudioURL(job.ID, reusable.index)
+					segment.TimingStatus = "checking"
+					segment.TimingConfidence = "phrase"
 					segment.Attempts = reusable.attempts
 					segment.DurationMS = reusable.durationMS
 					segment.LatencyMS = reusable.latencyMS
@@ -2280,6 +2301,7 @@ func (service *Service) synthesizeUntilComplete(
 				job.audioPartialPCM = append(job.audioPartialPCM, nextResult.audioPCM...)
 				job.audioPartialSpec = nextResult.audioSpec
 				job.audioPartialReady = true
+				ensureFirstPlayableAt(job)
 				job.nativeTimingEvents = append(
 					job.nativeTimingEvents,
 					alignment.OffsetNativeEvents(nextResult.nativeTimingEvents, segmentStartMS, nextSegment)...,
@@ -2294,6 +2316,9 @@ func (service *Service) synthesizeUntilComplete(
 				)
 				updateJobSegment(job, nextSegment, func(segment *JobSegment) {
 					segment.Status = "ready"
+					segment.AudioURL = jobSegmentAudioURL(job.ID, nextSegment)
+					segment.TimingStatus = "checking"
+					segment.TimingConfidence = "phrase"
 					segment.Attempts = nextResult.attempts
 					segment.DurationMS = nextResult.audioDurationMS
 					segment.LatencyMS = nextResult.latencyMS
@@ -2444,6 +2469,102 @@ func jobSegmentAudioFilename(index int) string {
 	return fmt.Sprintf("segment-%06d.wav", index)
 }
 
+func jobSegmentAudioURL(jobID string, index int) string {
+	if strings.TrimSpace(jobID) == "" || index <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("/api/voice-jobs/%s/audio/segment/%d", jobID, index)
+}
+
+func ensureFirstPlayableAt(job *storedJob) {
+	if job == nil || job.AudioReadySegments <= 0 {
+		return
+	}
+	if job.FirstPlayableAt != nil {
+		return
+	}
+	now := time.Now().UTC()
+	job.FirstPlayableAt = &now
+}
+
+func normalizePartialAudioManifest(job VoiceJob) VoiceJob {
+	totalSegments := len(job.Segments)
+	readySegments := max(0, min(job.AudioReadySegments, totalSegments))
+	if readySegments <= 0 && strings.TrimSpace(job.AudioPartialURL) == "" {
+		job.PartialAudioManifest = nil
+		return job
+	}
+
+	segments := make([]PartialAudioSegmentManifest, 0, totalSegments)
+	for index := 1; index <= totalSegments; index += 1 {
+		segment := job.Segments[index-1]
+		status := strings.TrimSpace(segment.Status)
+		if status == "" {
+			status = "pending"
+		}
+		audioURL := ""
+		if index <= readySegments {
+			status = "ready"
+			audioURL = firstNonEmpty(segment.AudioURL, jobSegmentAudioURL(job.ID, index))
+			job.Segments[index-1].Status = "ready"
+			job.Segments[index-1].AudioURL = audioURL
+			if job.Segments[index-1].TimingStatus == "" {
+				job.Segments[index-1].TimingStatus = partialSegmentTimingStatus(job, index)
+			}
+			if job.Segments[index-1].TimingConfidence == "" {
+				job.Segments[index-1].TimingConfidence = partialSegmentTimingConfidence(job, index)
+			}
+			segment = job.Segments[index-1]
+		}
+		timingConfidence := firstNonEmpty(segment.TimingConfidence, partialSegmentTimingConfidence(job, index))
+		segments = append(segments, PartialAudioSegmentManifest{
+			Index:            index,
+			Status:           status,
+			AudioURL:         audioURL,
+			DurationMS:       segment.DurationMS,
+			TimingAvailable:  partialSegmentTimingStatus(job, index) == "ready",
+			TimingConfidence: timingConfidence,
+		})
+	}
+
+	manifestStatus := "partialReady"
+	if readySegments >= totalSegments && totalSegments > 0 && job.Status == JobStatusCompleted {
+		manifestStatus = "ready"
+	} else if readySegments <= 0 {
+		manifestStatus = "pending"
+	}
+	job.PartialAudioManifest = &PartialAudioManifest{
+		Status:          manifestStatus,
+		AudioURL:        job.AudioPartialURL,
+		ReadySegments:   readySegments,
+		TotalSegments:   totalSegments,
+		FirstPlayableAt: job.FirstPlayableAt,
+		CompleteEnough:  readySegments >= totalSegments && totalSegments > 0,
+		Segments:        segments,
+	}
+	return job
+}
+
+func partialSegmentTimingStatus(job VoiceJob, index int) string {
+	if index <= 0 || index > job.AudioReadySegments {
+		return "pending"
+	}
+	if job.Timing != nil && job.Timing.Summary.FragmentCount > 0 {
+		return "ready"
+	}
+	return "checking"
+}
+
+func partialSegmentTimingConfidence(job VoiceJob, index int) string {
+	if index <= 0 || index > job.AudioReadySegments {
+		return "unavailable"
+	}
+	if job.Timing != nil && job.Timing.Summary.Mode == "word" && !job.Timing.Summary.LowConfidence {
+		return "word"
+	}
+	return "phrase"
+}
+
 func (service *Service) readJobSegmentAudio(id string, index int) ([]byte, error) {
 	if index <= 0 {
 		return nil, ErrAudioNotReady
@@ -2481,6 +2602,7 @@ func (service *Service) writeJobMetadata(job VoiceJob) error {
 	if strings.TrimSpace(job.ID) == "" {
 		return ErrJobNotFound
 	}
+	job = normalizePartialAudioManifest(job)
 
 	outputDir := ""
 	if strings.TrimSpace(job.AudioPath) != "" {
@@ -3173,7 +3295,7 @@ func (service *Service) snapshot(id string) (VoiceJob, error) {
 		return VoiceJob{}, ErrJobNotFound
 	}
 
-	return job.VoiceJob, nil
+	return normalizePartialAudioManifest(job.VoiceJob), nil
 }
 
 func (service *Service) failJobByID(id string, err error) {
@@ -3330,6 +3452,7 @@ func (service *Service) updateJob(id string, mutate func(*storedJob)) {
 
 	mutate(&job)
 	job.UpdatedAt = time.Now().UTC()
+	job.VoiceJob = normalizePartialAudioManifest(job.VoiceJob)
 	service.jobs[id] = job
 }
 

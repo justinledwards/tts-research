@@ -1074,7 +1074,10 @@ export interface PipelineOptions {
 export interface JobSegment {
   index: number;
   text: string;
-  status?: "pending" | "running" | "checking" | "ready" | "failed";
+  status?: "pending" | "running" | "checking" | "retrying" | "ready" | "failed" | "skipped";
+  audioUrl?: string;
+  timingStatus?: "pending" | "checking" | "ready" | "failed";
+  timingConfidence?: "word" | "phrase" | "unavailable";
   attempts?: number;
   durationMs?: number;
   latencyMs?: number;
@@ -1082,6 +1085,25 @@ export interface JobSegment {
   reason?: string;
   reusedFromJobId?: string;
   warnings?: string[];
+}
+
+export interface PartialAudioSegmentManifest {
+  index: number;
+  status: "pending" | "running" | "checking" | "retrying" | "ready" | "failed" | "skipped";
+  audioUrl?: string;
+  durationMs?: number;
+  timingAvailable: boolean;
+  timingConfidence: "word" | "phrase" | "unavailable";
+}
+
+export interface PartialAudioManifest {
+  status: "pending" | "partialReady" | "ready";
+  audioUrl?: string;
+  readySegments: number;
+  totalSegments: number;
+  firstPlayableAt?: string;
+  completeEnough: boolean;
+  segments?: PartialAudioSegmentManifest[];
 }
 
 export type VoiceProfileStatus = "ready" | "error" | "pending";
@@ -1637,6 +1659,8 @@ export interface VoiceJob {
   optimizer: string;
   audioUrl: string;
   audioPartialUrl?: string;
+  partialAudioManifest?: PartialAudioManifest;
+  firstPlayableAt?: string;
   audioPath?: string;
   audioReadySegments?: number;
   audioSegmentDurationsMs?: number[];

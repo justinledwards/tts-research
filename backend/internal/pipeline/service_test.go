@@ -3134,6 +3134,27 @@ func TestCreateJobPublishesPartialAudioWhileSynthesizing(t *testing.T) {
 	if processingJob.AudioReadySegments < 1 {
 		t.Fatalf("partial audio should be available after at least one segment, got %d", processingJob.AudioReadySegments)
 	}
+	if processingJob.FirstPlayableAt == nil {
+		t.Fatal("partial audio should record firstPlayableAt once the first segment is ready")
+	}
+	if processingJob.PartialAudioManifest == nil {
+		t.Fatal("partial audio should expose a manifest while synthesis continues")
+	}
+	if processingJob.PartialAudioManifest.Status != "partialReady" {
+		t.Fatalf("partial manifest status = %q, want partialReady", processingJob.PartialAudioManifest.Status)
+	}
+	if processingJob.PartialAudioManifest.ReadySegments != processingJob.AudioReadySegments {
+		t.Fatalf("partial manifest ready segments = %d, want %d", processingJob.PartialAudioManifest.ReadySegments, processingJob.AudioReadySegments)
+	}
+	if processingJob.PartialAudioManifest.FirstPlayableAt == nil {
+		t.Fatal("partial manifest should include firstPlayableAt")
+	}
+	if len(processingJob.PartialAudioManifest.Segments) == 0 || processingJob.PartialAudioManifest.Segments[0].AudioURL == "" {
+		t.Fatalf("partial manifest segments = %#v, want segment audio URL", processingJob.PartialAudioManifest.Segments)
+	}
+	if len(processingJob.Segments) == 0 || processingJob.Segments[0].AudioURL == "" {
+		t.Fatalf("job segments = %#v, want ready segment audio URL", processingJob.Segments)
+	}
 
 	partialAudio, partialType, err := service.GetPartialAudio(job.ID)
 	if err != nil {
