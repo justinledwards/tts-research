@@ -3,10 +3,12 @@ import {
   lazy,
   memo,
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
   useState,
+  useTransition,
   type CSSProperties,
   type Dispatch,
   type ReactNode,
@@ -2951,6 +2953,8 @@ export function App() {
   const [isDemoModeOpen, setIsDemoModeOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isWorkspaceNavigationPending, startWorkspaceNavigationTransition] = useTransition();
+  const [isCommandSurfacePending, startCommandSurfaceTransition] = useTransition();
   const [commandPaletteView, setCommandPaletteView] = useState<CommandPaletteView>("commands");
   const [shortcutPreferences, setShortcutPreferences] = useState<ShortcutPreferences>(() =>
     loadShortcutPreferences(),
@@ -2972,8 +2976,10 @@ export function App() {
     website: null,
   });
   const openCommandPalette = useCallback((view: CommandPaletteView = "commands") => {
-    setCommandPaletteView(view);
     setIsCommandPaletteOpen(true);
+    startCommandSurfaceTransition(() => {
+      setCommandPaletteView(view);
+    });
   }, []);
   const closeCommandPalette = useCallback(() => {
     setIsCommandPaletteOpen(false);
@@ -2987,8 +2993,10 @@ export function App() {
   }, []);
   const openShortcutSettings = useCallback(() => {
     closeCommandPalette();
-    setSettingsCommandTarget({ fieldId: "shortcuts", groupId: "reader", scope: "machine" });
     setIsSettingsOpen(true);
+    startCommandSurfaceTransition(() => {
+      setSettingsCommandTarget({ fieldId: "shortcuts", groupId: "reader", scope: "machine" });
+    });
   }, [closeCommandPalette]);
   const createAndListenFromCurrentSourceRef = useRef<() => void>(() => {
     return;
@@ -3020,10 +3028,12 @@ export function App() {
   );
   const openCommandCenter = useCallback(
     (section: CommandCenterSectionId = "overview") => {
-      setCommandCenterSection(
-        section === "temporary" && !temporaryWorkEnabled ? "overview" : section,
-      );
       setIsCommandCenterOpen(true);
+      startCommandSurfaceTransition(() => {
+        setCommandCenterSection(
+          section === "temporary" && !temporaryWorkEnabled ? "overview" : section,
+        );
+      });
     },
     [temporaryWorkEnabled],
   );
@@ -3115,9 +3125,11 @@ export function App() {
           rememberTelepromptReturnStage(currentMemory, activeProjectId, returnStage),
         );
       }
-      setWorkspaceContext((currentContext) =>
-        transitionWorkspaceContextForStageAction(currentContext, actionId),
-      );
+      startWorkspaceNavigationTransition(() => {
+        setWorkspaceContext((currentContext) =>
+          transitionWorkspaceContextForStageAction(currentContext, actionId),
+        );
+      });
       if (actionId === "openTheatre") {
         setTelepromptTheatreOpenSignal((currentSignal) => currentSignal + 1);
       }
@@ -9579,6 +9591,22 @@ export function App() {
     rightRailMode,
     stage: contentMode,
   });
+  const deferredCommandEntries = useDeferredValue(commandEntries);
+  const deferredAdapterDiagnostics = useDeferredValue(adapterDiagnostics);
+  const deferredBookSources = useDeferredValue(bookSources);
+  const deferredCustomSpeechPolicyProfiles = useDeferredValue(customSpeechPolicyProfiles);
+  const deferredJob = useDeferredValue(job);
+  const deferredMetrics = useDeferredValue(systemMetrics);
+  const deferredNarrationStatusModel = useDeferredValue(narrationStatusModel);
+  const deferredPreparedSources = useDeferredValue(preparedSources);
+  const deferredProjectJobs = useDeferredValue(projectJobs);
+  const deferredProjectStorage = useDeferredValue(projectStorage);
+  const deferredProjects = useDeferredValue(projects);
+  const deferredSpeechPolicyProfiles = useDeferredValue(speechPolicyProfiles);
+  const deferredTemporaryJobs = useDeferredValue(temporaryJobs);
+  const deferredTemporarySources = useDeferredValue(temporarySources);
+  const deferredTTSEngines = useDeferredValue(ttsEngines);
+  const commandSurfaceBusy = isCommandSurfacePending || isWorkspaceNavigationPending;
   let activityFooterReserve = "5rem";
   if (activityFooterMode === "compact") {
     activityFooterReserve = "9rem";
@@ -9598,6 +9626,7 @@ export function App() {
     <main
       className="vs-app flex h-screen min-h-0 flex-col overflow-hidden"
       data-theme={themeName}
+      data-workspace-navigation-pending={isWorkspaceNavigationPending ? "true" : undefined}
       data-overlay-reserved-zones={workspaceOverlay.reservedZones.join(" ")}
       style={workspaceOverlayStyle}
     >
@@ -9676,7 +9705,7 @@ export function App() {
       {isCommandPaletteOpen ? (
         <Suspense fallback={null}>
           <CommandPalette
-            entries={commandEntries}
+            entries={deferredCommandEntries}
             isOpen={isCommandPaletteOpen}
             shortcutPreferences={shortcutPreferences}
             view={commandPaletteView}
@@ -9740,33 +9769,34 @@ export function App() {
             activeScopeLabel={activeNarrationScopeLabel}
             activeSection={commandCenterSection}
             activeSourceLabel={activeNarrationSourceLabel}
-            adapterDiagnostics={adapterDiagnostics}
+            adapterDiagnostics={deferredAdapterDiagnostics}
             adapterDiagnosticsError={adapterDiagnosticsError}
-            bookSources={bookSources}
+            bookSources={deferredBookSources}
             bundleActivity={bundleOperationActivity}
             bundleReport={bundleOperationReport}
             canCreate={canRunCurrentGenerationAction}
+            hydrationBusy={commandSurfaceBusy}
             isOpen={isCommandCenterOpen}
-            job={job}
-            metrics={systemMetrics}
+            job={deferredJob}
+            metrics={deferredMetrics}
             metricsError={systemMetricsError}
-            narrationStatusModel={narrationStatusModel}
-            preparedSources={preparedSources}
+            narrationStatusModel={deferredNarrationStatusModel}
+            preparedSources={deferredPreparedSources}
             projectError={projectError}
-            projectJobs={[...projectJobs, ...temporaryJobs]}
-            projectStorage={projectStorage}
+            projectJobs={[...deferredProjectJobs, ...deferredTemporaryJobs]}
+            projectStorage={deferredProjectStorage}
             projectStorageError={projectStorageError}
-            projects={projects}
+            projects={deferredProjects}
             profileSource={profileSource}
             profiles={voiceProfiles}
             returnWorkspaceLabel={
               studioMode === "narration" ? "Narration Workbench" : "Voice Cloning Workbench"
             }
-            customSpeechPolicyProfiles={customSpeechPolicyProfiles}
+            customSpeechPolicyProfiles={deferredCustomSpeechPolicyProfiles}
             selectedBookScope={sourceMode === "book" ? selectedBookScope : null}
             speechPolicyProfile={speechPolicyProfile}
             speechPolicyOverrides={speechPolicyOverrides}
-            speechPolicyProfiles={speechPolicyProfiles}
+            speechPolicyProfiles={deferredSpeechPolicyProfiles}
             selectedBookSourceId={sourceMode === "book" ? selectedBookSourceId : null}
             selectedPreparedSourceId={sourceMode === "fileUrl" ? selectedPreparedSourceId : null}
             selectedEngineId={runConfiguration.ttsEngine}
@@ -9777,8 +9807,8 @@ export function App() {
             cancelingProfileSourceId={cancelingProfileSourceId}
             cancelingTargetKey={cancelingTargetKey}
             ttsEngineError={ttsEngineError}
-            ttsEngines={ttsEngines}
-            temporarySources={temporarySources}
+            ttsEngines={deferredTTSEngines}
+            temporarySources={deferredTemporarySources}
             temporaryStorageUsage={temporaryStorageUsage}
             temporaryPromotionEnabled={temporaryPromotionEnabled}
             temporaryWorkEnabled={temporaryWorkEnabled}
@@ -9935,19 +9965,20 @@ export function App() {
       {isSettingsOpen ? (
         <Suspense fallback={<LazySurfaceFallback label="Loading settings..." />}>
           <SettingsPanel
-            adapterDiagnostics={adapterDiagnostics}
+            adapterDiagnostics={deferredAdapterDiagnostics}
             adapterDiagnosticsError={adapterDiagnosticsError}
             canSubmit={canCreateCurrentSource}
             commandTarget={settingsCommandTarget}
-            customSpeechPolicyProfiles={customSpeechPolicyProfiles}
+            customSpeechPolicyProfiles={deferredCustomSpeechPolicyProfiles}
+            hydrationBusy={commandSurfaceBusy}
             isOpen={isSettingsOpen}
             isSpeechPolicyPreviewing={isSpeechPolicyPreviewing}
-            job={job}
-            metrics={systemMetrics}
+            job={deferredJob}
+            metrics={deferredMetrics}
             metricsError={systemMetricsError}
             profileSourceDiagnostics={profileSourceDiagnostics}
             profileSource={profileSource}
-            projectStorage={projectStorage}
+            projectStorage={deferredProjectStorage}
             projectStorageError={projectStorageError}
             readerAccessibilitySettings={readerAccessibilitySettings}
             readAlongPreferences={readAlongPreferences}
@@ -9965,7 +9996,7 @@ export function App() {
             speechPolicyError={speechPolicyError}
             speechPolicyOverrides={speechPolicyOverrides}
             speechPolicyProfile={speechPolicyProfile}
-            speechPolicyProfiles={speechPolicyProfiles}
+            speechPolicyProfiles={deferredSpeechPolicyProfiles}
             shortcutPreferences={shortcutPreferences}
             telepromptTheatreSettings={telepromptTheatreSettings}
             teleprompterSettings={teleprompterSettings}
@@ -9973,7 +10004,7 @@ export function App() {
             temporaryStorageUsage={temporaryStorageUsage}
             themeName={themeName}
             ttsEngineError={ttsEngineError}
-            ttsEngines={ttsEngines}
+            ttsEngines={deferredTTSEngines}
             uiMemory={uiMemory}
             onClearBookSourcePolicy={handleClearBookSourcePolicy}
             onClearPreparedSourcePolicy={handleClearPreparedSourcePolicy}

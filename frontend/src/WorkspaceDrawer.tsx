@@ -88,6 +88,7 @@ export function WorkspaceDrawer({
   bundleActivity,
   bundleReport,
   canCreate,
+  hydrationBusy = false,
   isOpen,
   job,
   metrics,
@@ -166,6 +167,7 @@ export function WorkspaceDrawer({
   bundleActivity: WorkspaceActivitySummary | null;
   bundleReport: BundleOperationReport | null;
   canCreate: boolean;
+  hydrationBusy?: boolean;
   isOpen: boolean;
   job: VoiceJob | null;
   metrics: SystemMetrics | null;
@@ -462,8 +464,10 @@ export function WorkspaceDrawer({
     <div className="fixed inset-0 z-40 bg-[var(--vs-surface-overlay)]" role="presentation">
       <aside
         aria-label="Command Center"
+        aria-busy={hydrationBusy ? "true" : undefined}
         aria-modal="true"
         className="vs-app vs-workbench mx-auto flex h-full w-full max-w-6xl flex-col border-r shadow-2xl md:w-[92vw] xl:w-[1120px]"
+        data-hydration-busy={hydrationBusy ? "true" : undefined}
         ref={drawerRef}
         role="dialog"
         tabIndex={-1}

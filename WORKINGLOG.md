@@ -2348,3 +2348,8 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] add focused backend and frontend regression coverage
 - [x] run project checks
 - Validation: focused backend partial-audio tests passed; focused frontend playback/Book Cinema/Preview Vitest run passed; `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, and `git diff --check` passed. `pnpm e2e:book-cinema` passed Markdown and Website paths, then failed waiting for the Book Cinema Intake button in `openBookCinemaOverlay`.
+## 2026-06-14 12:21 CEST - Navigation While Processing
+- [x] inspect route and active-job state paths
+- [x] implement non-blocking navigation surfaces
+- [x] add focused navigation-under-processing coverage
+- [x] run project checks

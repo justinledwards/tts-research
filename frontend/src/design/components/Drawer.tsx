@@ -3,6 +3,7 @@ import { cx } from "../tokens";
 import { Button } from "./Button";
 
 export interface DrawerProps {
+  busy?: boolean;
   children: ReactNode;
   className?: string;
   label: string;
@@ -17,6 +18,7 @@ export interface DrawerProps {
 
 export const Drawer = forwardRef<HTMLElement, DrawerProps>(function Drawer(
   {
+    busy = false,
     children,
     className,
     label,
@@ -46,6 +48,7 @@ export const Drawer = forwardRef<HTMLElement, DrawerProps>(function Drawer(
     >
       <aside
         aria-label={label}
+        aria-busy={busy ? "true" : undefined}
         aria-modal={modal ? true : undefined}
         className={cx(
           "pointer-events-auto vs-app vs-workbench ml-auto flex h-full w-full max-w-[860px] flex-col border-l border-[var(--vs-border-subtle)] shadow-2xl md:w-[820px]",

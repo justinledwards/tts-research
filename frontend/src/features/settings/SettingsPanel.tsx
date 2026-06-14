@@ -269,6 +269,7 @@ export function SettingsPanel({
   canSubmit,
   commandTarget,
   customSpeechPolicyProfiles,
+  hydrationBusy = false,
   isOpen,
   isSpeechPolicyPreviewing,
   job,
@@ -334,6 +335,7 @@ export function SettingsPanel({
   canSubmit: boolean;
   commandTarget?: SettingsCommandTarget | null;
   customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
+  hydrationBusy?: boolean;
   isOpen: boolean;
   isSpeechPolicyPreviewing: boolean;
   job: VoiceJob | null;
@@ -487,7 +489,7 @@ export function SettingsPanel({
     setActiveGroup(nextActiveGroupForLayer(layerId, activeGroup));
   };
   return (
-    <PanelShell label="Settings" title="Studio Settings" onClose={onClose}>
+    <PanelShell busy={hydrationBusy} label="Settings" title="Studio Settings" onClose={onClose}>
       <SettingsLayerSwitcher activeLayer={activeLayer} onSelectLayer={selectLayer} />
 
       {activeLayer === "quick" ? (
@@ -3276,11 +3278,13 @@ function ResearchModuleDiagnosticsList({
 }
 
 function PanelShell({
+  busy = false,
   children,
   label,
   onClose,
   title,
 }: Readonly<{
+  busy?: boolean;
   children: ReactNode;
   label: string;
   onClose: () => void;
@@ -3292,6 +3296,7 @@ function PanelShell({
 
   return (
     <Drawer
+      busy={busy}
       label={label}
       metadata={[{ label: "Groups", value: "Run, Reader, Voices, Sources, Runtime, Diagnostics" }]}
       onClose={onClose}

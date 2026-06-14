@@ -69,6 +69,7 @@
     "e2e:teleprompt-memory": "node scripts/e2e-teleprompt-memory.mjs",
     "e2e:context-panel": "node scripts/e2e-context-panel.mjs",
     "e2e:ui-action-inventory": "node scripts/e2e-ui-action-inventory.mjs",
+    "e2e:navigation-under-processing": "node scripts/e2e-navigation-under-processing.mjs",
     "e2e:ui-actions:quick": "UI_ACTION_AUDIT_QUICK=1 UI_ACTION_AUDIT_MAX_ACTIONS=8 UI_ACTION_AUDIT_WORKER_LIMIT=2 E2E_USE_EXISTING_SERVERS=1 UI_ACTION_AUDIT_SCENARIOS=workspace-review,workspace-preview,workspace-preview-generation-failed,workspace-preview-audition-404,book-docx-audio-ready UI_ACTION_AUDIT_SUMMARY_PATH=./output/ui-action-audit/quick/summary.json UI_ACTION_AUDIT_OUTPUT_DIR=./output/ui-action-audit/quick node scripts/e2e-ui-action-audit.mjs",
     "e2e:ui-actions:smoke": "UI_ACTION_AUDIT_QUICK=1 UI_ACTION_AUDIT_MAX_ACTIONS=4 UI_ACTION_AUDIT_WORKER_LIMIT=1 E2E_USE_EXISTING_SERVERS=1 UI_ACTION_AUDIT_SCENARIOS=workspace-preview UI_ACTION_AUDIT_SUMMARY_PATH=./output/ui-action-audit/smoke/summary.json UI_ACTION_AUDIT_OUTPUT_DIR=./output/ui-action-audit/smoke node scripts/e2e-ui-action-audit.mjs",
     "e2e:ui-actions:guard": "node scripts/e2e-ui-actions-guard.mjs",
