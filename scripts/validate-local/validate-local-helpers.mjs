@@ -183,7 +183,7 @@ export async function attachReaderTimingBudgets(step, thresholds) {
         ? `${step.error} One or more reader timing thresholds failed.`
         : "One or more blocking reader timing thresholds failed.";
     }
-  } catch (error) {
+  } catch (_error) {
     if (step.status === "passed") {
       step.status = "failed";
       step.exitCode = 1;
@@ -426,7 +426,7 @@ async function readValidationRuntimeHistory(historyPath) {
     const raw = await readFile(historyPath, "utf8");
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
+  } catch (_error) {
     return [];
   }
 }

@@ -1346,7 +1346,8 @@ export function BookCinemaOverlay({
     runtimeHighlightCue,
     displayedActiveWordIndex,
   );
-  const liveAnnouncement = useMemo(
+  const [transportAnnouncement, setTransportAnnouncement] = useState("");
+  const passageLiveAnnouncement = useMemo(
     () =>
       bookCinemaLiveAnnouncement({
         activeWordIndex: liveAnnouncementWordIndex,
@@ -1356,6 +1357,20 @@ export function BookCinemaOverlay({
       }),
     [book, runtimeHighlightCue?.fragmentIndex, liveAnnouncementWordIndex, normalizedScope],
   );
+  const liveAnnouncement = transportAnnouncement
+    ? `${passageLiveAnnouncement} ${transportAnnouncement}`
+    : passageLiveAnnouncement;
+  const announceTransportAction = useCallback((message: string) => {
+    setTransportAnnouncement(`${message} ${Date.now().toString()}`);
+  }, []);
+  const handlePlayPauseAction = useCallback(() => {
+    onPlayPause();
+    announceTransportAction("Cinema playback toggled.");
+  }, [announceTransportAction, onPlayPause]);
+  const handleRestartAction = useCallback(() => {
+    onRestart();
+    announceTransportAction("Cinema playback restarted.");
+  }, [announceTransportAction, onRestart]);
   const timingConfidence = useMemo(
     () => resolveTimingConfidenceDisplay(highlightMap),
     [highlightMap],
@@ -1819,8 +1834,8 @@ export function BookCinemaOverlay({
       }
       onClose();
     },
-    onPlayPause,
-    onRestart,
+    onPlayPause: handlePlayPauseAction,
+    onRestart: handleRestartAction,
     onSkip,
     onToggleTheatreControls: cinemaTheatre.active ? cinemaTheatre.toggleControls : undefined,
     playbackControls,
@@ -1968,7 +1983,7 @@ export function BookCinemaOverlay({
       mobileLabel: primaryTransportLabel,
       onClick: () => {
         if (isPlaybackTransport) {
-          onPlayPause();
+          handlePlayPauseAction();
         } else {
           onCreateAudio(book, createAudioScope);
         }
@@ -1990,7 +2005,7 @@ export function BookCinemaOverlay({
     restart: {
       disabled: !canUseTransportControls,
       icon: <RestartTinyIcon />,
-      onClick: onRestart,
+      onClick: handleRestartAction,
     },
     skipBackward: {
       disabled: !canUseSkipControls,

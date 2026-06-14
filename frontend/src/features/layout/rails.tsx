@@ -6,6 +6,7 @@ export interface RailMiniStackItem {
   readonly ariaLabel?: string;
   readonly detail: string;
   readonly label: string;
+  readonly noopReason?: string;
   readonly onClick?: () => void;
   readonly testId?: string;
   readonly tone?: "default" | "ready" | "warning";
@@ -90,6 +91,7 @@ function RailMiniStackCard({ item }: Readonly<{ item: RailMiniStackItem }>) {
     <button
       aria-label={item.ariaLabel ?? `${item.label}: ${item.value}`}
       className={className}
+      data-ui-noop-reason={item.noopReason}
       data-hit-target-min={minInteractiveSize}
       data-testid={item.testId}
       data-ui-action-surface={item.actionSurface}

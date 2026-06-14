@@ -115,6 +115,11 @@ export function NarrationStatusStrip({
           {model.primaryAction ? (
             <Button
               data-testid={`ui-action-status-strip-${model.primaryAction.id}`}
+              data-ui-noop-reason={
+                model.primaryAction.id === "openCinema"
+                  ? "Open Cinema is conditional on the current source retaining playable generated audio."
+                  : undefined
+              }
               disabled={actionDisabled}
               disabledReason={
                 actionDisabled

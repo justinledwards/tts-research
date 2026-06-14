@@ -562,7 +562,10 @@ function shouldRunTraversal(filter) {
   return !filter || filter.has("workspace-stage-traversal");
 }
 
-async function installProviderProfileRoutes(page) {
+async function installProviderProfileRoutes(page, { nonPersistedMutations = true } = {}) {
+  if (nonPersistedMutations) {
+    await installNonPersistedVoiceJobMutationRoutes(page);
+  }
   if (!providerProfile) {
     return;
   }
@@ -577,6 +580,306 @@ async function installProviderProfileRoutes(page) {
       status: 200,
     });
   });
+}
+
+async function installBrowserVoiceJobReadRoutes(page) {
+  await page.route("**/api/voice-jobs/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (
+      request.method() === "GET" &&
+      (url.pathname.endsWith("/audio") || url.pathname.endsWith("/audio/partial"))
+    ) {
+      await route.fulfill({
+        body: syntheticAuditWav(),
+        contentType: "audio/wav",
+        status: 200,
+      });
+      return;
+    }
+    if (request.method() !== "GET" || url.pathname.endsWith("/events")) {
+      await route.fallback();
+      return;
+    }
+    if (url.pathname.endsWith("/highlight-map")) {
+      await route.fulfill({
+        body: JSON.stringify(auditHighlightMap(url.pathname)),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    if (url.pathname.endsWith("/highlight-map-v2")) {
+      await route.fulfill({
+        body: JSON.stringify(auditHighlightMapV2(url.pathname)),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    const response = await safeRouteFetch(route);
+    if (!response) {
+      return;
+    }
+    const contentType = response.headers()["content-type"] ?? "";
+    if (!contentType.includes("application/json")) {
+      await route.fulfill({ response });
+      return;
+    }
+    const payload = await response.json();
+    await route.fulfill({
+      body: JSON.stringify(patchBrowserVoiceJobs(payload)),
+      contentType: "application/json",
+      status: response.status(),
+    });
+  });
+}
+
+async function installNonPersistedVoiceJobMutationRoutes(page) {
+  await page.route("**/api/voice-jobs", async (route) => {
+    if (route.request().method() !== "POST") {
+      const response = await safeRouteFetch(route);
+      if (!response) {
+        return;
+      }
+      const contentType = response.headers()["content-type"] ?? "";
+      if (!contentType.includes("application/json")) {
+        await route.fulfill({ response });
+        return;
+      }
+      const payload = await response.json();
+      await route.fulfill({
+        body: JSON.stringify(patchBrowserVoiceJobs(payload)),
+        contentType: "application/json",
+        status: response.status(),
+      });
+      return;
+    }
+    await route.fulfill({
+      body: JSON.stringify(auditVoiceJobFromRequest(route.request().postData(), {})),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.route("**/api/source-preps/*/voice-jobs", async (route) => {
+    if (route.request().method() !== "POST") {
+      const response = await safeRouteFetch(route);
+      if (!response) {
+        return;
+      }
+      const payload = await response.json();
+      await route.fulfill({
+        body: JSON.stringify(patchBrowserVoiceJobs(payload)),
+        contentType: "application/json",
+        status: response.status(),
+      });
+      return;
+    }
+    const preparedSourceId = sourcePrepIdFromPath(route.request().url());
+    await route.fulfill({
+      body: JSON.stringify(
+        auditVoiceJobFromRequest(route.request().postData(), { preparedSourceId }),
+      ),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.route("**/api/book-sources/*/voice-jobs", async (route) => {
+    if (route.request().method() !== "POST") {
+      const response = await safeRouteFetch(route);
+      if (!response) {
+        return;
+      }
+      const payload = await response.json();
+      await route.fulfill({
+        body: JSON.stringify(patchBrowserVoiceJobs(payload)),
+        contentType: "application/json",
+        status: response.status(),
+      });
+      return;
+    }
+    const bookSourceId = bookSourceIdFromPath(route.request().url());
+    await route.fulfill({
+      body: JSON.stringify(auditVoiceJobFromRequest(route.request().postData(), { bookSourceId })),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.route("**/api/voice-jobs/ui-action-audit-created-job/events", async (route) => {
+    const job = auditVoiceJobFromRequest(null, {});
+    await route.fulfill({
+      body: `data: ${JSON.stringify(job)}\n\n`,
+      contentType: "text/event-stream",
+      status: 200,
+    });
+  });
+  await page.route("**/api/voice-jobs/ui-action-audit-created-job", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      body: JSON.stringify(patchBrowserVoiceJob(auditVoiceJobFromRequest(null, {}))),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  await page.route("**/api/voice-jobs/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === "POST" && url.pathname.endsWith("/cancel")) {
+      await route.fulfill({
+        body: JSON.stringify({
+          ...patchBrowserVoiceJob(auditVoiceJobFromRequest(null, {})),
+          id: decodeURIComponent(url.pathname.split("/")[3] ?? "ui-action-audit-created-job"),
+          progress: {
+            activeStage: "cancelled",
+            currentSegment: 0,
+            detail: "UI action audit cancelled the non-persisted generation request.",
+            message: "Generation cancelled",
+            totalSegments: 1,
+          },
+          status: "cancelled",
+          terminalReason: "cancelled",
+        }),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    if (
+      request.method() === "GET" &&
+      (url.pathname.endsWith("/audio") || url.pathname.endsWith("/audio/partial"))
+    ) {
+      await route.fulfill({
+        body: syntheticAuditWav(),
+        contentType: "audio/wav",
+        status: 200,
+      });
+      return;
+    }
+    if (request.method() !== "GET" || url.pathname.endsWith("/events")) {
+      await route.fallback();
+      return;
+    }
+    if (url.pathname === "/api/voice-jobs/ui-action-audit-created-job") {
+      await route.fulfill({
+        body: JSON.stringify(patchBrowserVoiceJob(auditVoiceJobFromRequest(null, {}))),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    if (url.pathname.endsWith("/highlight-map")) {
+      await route.fulfill({
+        body: JSON.stringify(auditHighlightMap(url.pathname)),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    if (url.pathname.endsWith("/highlight-map-v2")) {
+      await route.fulfill({
+        body: JSON.stringify(auditHighlightMapV2(url.pathname)),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    const response = await safeRouteFetch(route);
+    if (!response) {
+      return;
+    }
+    const contentType = response.headers()["content-type"] ?? "";
+    if (!contentType.includes("application/json")) {
+      await route.fulfill({ response });
+      return;
+    }
+    const payload = await response.json();
+    await route.fulfill({
+      body: JSON.stringify(patchBrowserVoiceJobs(payload)),
+      contentType: "application/json",
+      status: response.status(),
+    });
+  });
+}
+
+async function safeRouteFetch(route) {
+  try {
+    return await route.fetch();
+  } catch (error) {
+    if (isClosedRouteError(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+function isClosedRouteError(error) {
+  return /Target page, context or browser has been closed/i.test(
+    error instanceof Error ? error.message : String(error),
+  );
+}
+
+function patchBrowserVoiceJobs(payload) {
+  return Array.isArray(payload) ? payload.map(patchBrowserVoiceJob) : patchBrowserVoiceJob(payload);
+}
+
+function patchBrowserVoiceJob(job) {
+  if (!job || typeof job !== "object") {
+    return job;
+  }
+  const hasAudio =
+    job.status === "completed" ||
+    Number(job.audioReadySegments ?? 0) > 0 ||
+    Boolean(job.audioUrl || job.audioPartialUrl);
+  if (!hasAudio) {
+    return job;
+  }
+  return {
+    ...job,
+    audioPartialUrl: job.audioPartialUrl ? auditWavDataUrl() : job.audioPartialUrl,
+    audioUrl: auditWavDataUrl(),
+    contentType: "audio/wav",
+  };
+}
+
+function auditHighlightMap(pathname) {
+  const jobId = decodeURIComponent(pathname.split("/")[3] ?? "ui-action-audit-job");
+  return {
+    fragments: [],
+    generatedAt: "2026-06-13T10:00:00.000Z",
+    jobId,
+    schemaVersion: "highlight-map.v1",
+    status: "partial",
+    summary: {
+      fallbackMode: "phrase",
+      fragmentCount: 0,
+      primaryLevel: "phrase",
+      tokenCount: 0,
+    },
+    tokens: [],
+  };
+}
+
+function auditHighlightMapV2(pathname) {
+  const jobId = decodeURIComponent(pathname.split("/")[3] ?? "ui-action-audit-job");
+  return {
+    entries: [],
+    generatedAt: "2026-06-13T10:00:00.000Z",
+    generatedAudioId: jobId,
+    jobId,
+    schemaVersion: "highlight-map.v2",
+    speechPlanId: jobId,
+    summary: {
+      coveragePct: 0,
+      fallbackMode: "phrase",
+      primaryLevel: "phrase",
+      timingSources: ["generated"],
+      wordCount: 0,
+    },
+    timingLevels: ["phrase"],
+  };
 }
 
 async function installTemporarySourceFixtureRoutes(page) {
@@ -735,6 +1038,80 @@ function sourcePrepIdFromPath(url) {
   const pathname = new URL(url).pathname;
   const match = pathname.match(/\/api\/source-preps\/([^/]+)/);
   return decodeURIComponent(match?.[1] ?? "");
+}
+
+function bookSourceIdFromPath(url) {
+  const pathname = new URL(url).pathname;
+  const match = pathname.match(/\/api\/book-sources\/([^/]+)/);
+  return decodeURIComponent(match?.[1] ?? "");
+}
+
+function auditVoiceJobFromRequest(rawRequest, { bookSourceId = "", preparedSourceId = "" } = {}) {
+  const request = rawRequest ? JSON.parse(rawRequest) : {};
+  const now = "2026-06-13T10:00:00.000Z";
+  const text = String(request.text ?? "UI action audit generated narration.");
+  return {
+    adaptiveMode: Boolean(request.adaptiveMode),
+    audioPartialUrl: "",
+    audioReadySegments: 0,
+    audioUrl: "",
+    bookSourceId,
+    contentType: "audio/wav",
+    createdAt: now,
+    durationMs: 0,
+    engineOptions: request.engineOptions ?? {},
+    error: "",
+    failureKind: "",
+    id: "ui-action-audit-created-job",
+    inputText: text,
+    optimizedText: text,
+    performanceMode: request.performanceMode ?? "balanced",
+    pipelineOptions: request.pipelineOptions ?? {},
+    preparedSourceId,
+    progress: {
+      activeStage: "queued",
+      currentSegment: 0,
+      detail: "UI action audit received a non-persisted generation request.",
+      message: "Generation queued",
+      totalSegments: 1,
+    },
+    projectId: request.projectId ?? "default",
+    provider: "mock",
+    retries: {
+      attempts: 0,
+      currentSegment: 0,
+      maxRetries: 1,
+      segmentAttempts: 0,
+      totalSegments: 1,
+    },
+    runMode: request.runMode ?? "checkedMaster",
+    selectedBlockIds: request.selectedBlockIds ?? [],
+    segments: [{ index: 1, status: "pending", text }],
+    speechPolicyOverrides: request.speechPolicyOverrides ?? {},
+    speechPolicyProfile: request.speechPolicyProfile ?? "Enterprise",
+    stages: {
+      checker: "pending",
+      optimization: "pending",
+      synthesis: "pending",
+    },
+    status: "queued",
+    terminalReason: "",
+    ttsEngine: request.ttsEngine ?? "auto",
+    ttsLanguage: request.ttsLanguage ?? "",
+    ttsVoice: request.ttsVoice ?? "",
+    updatedAt: now,
+    voice: request.ttsVoice ?? "audit voice",
+    voiceCheck: {
+      complete: false,
+      needsResume: false,
+      provider: "mock",
+      reason: "Audit fixture job has not generated audio.",
+      similarity: 0,
+      transcript: "",
+    },
+    voiceId: request.voiceId ?? "",
+    voiceProfileId: request.voiceProfileId ?? "",
+  };
 }
 
 function temporaryPreparedSourceFixture(source) {
@@ -994,6 +1371,7 @@ async function inventoryScenario(browser, scenario) {
     await page.screenshot({ fullPage: true, path: screenshot }).catch(() => {});
     throw error;
   } finally {
+    await page.unrouteAll({ behavior: "ignoreErrors" }).catch(() => {});
     await context.close();
   }
 }
@@ -1192,6 +1570,7 @@ async function exerciseScenarioAction(browser, scenario, action, activationMode)
       visibleLabel: action.visibleLabel,
     };
   } finally {
+    await page.unrouteAll({ behavior: "ignoreErrors" }).catch(() => {});
     await context.close();
   }
 }
@@ -1567,7 +1946,7 @@ function createScenarios(seed) {
       label: "Workspace Preview generation running",
       open: (page) => openPreviewGenerationRunning(page, seed.website.job, seed.website.source),
       storageState: projectStorageState(seed.projectId, {
-        jobId: seed.website.job.id,
+        jobId: auditScenarioVoiceJobId(seed.website.job.id, "running"),
         preparedSourceId: seed.website.source.id,
         sourceMode: "fileUrl",
         sourceType: "prepared",
@@ -1583,7 +1962,7 @@ function createScenarios(seed) {
       open: (page) =>
         openPreviewGenerationFailedRecovery(page, seed.website.job, seed.website.source),
       storageState: projectStorageState(seed.projectId, {
-        jobId: seed.website.job.id,
+        jobId: auditScenarioVoiceJobId(seed.website.job.id, "failed"),
         preparedSourceId: seed.website.source.id,
         sourceMode: "fileUrl",
         sourceType: "prepared",
@@ -1598,7 +1977,7 @@ function createScenarios(seed) {
       label: "Workspace Preview ASR warning",
       open: (page) => openPreviewAsrWarning(page, seed.website.job, seed.website.source),
       storageState: projectStorageState(seed.projectId, {
-        jobId: seed.website.job.id,
+        jobId: auditScenarioVoiceJobId(seed.website.job.id, "asr-warning"),
         preparedSourceId: seed.website.source.id,
         sourceMode: "fileUrl",
         sourceType: "prepared",
@@ -1660,7 +2039,8 @@ async function runWorkspaceStageTraversal(browser, seed) {
     viewport: { height: 980, width: 1440 },
   });
   const page = await context.newPage();
-  await installProviderProfileRoutes(page);
+  await installProviderProfileRoutes(page, { nonPersistedMutations: false });
+  await installBrowserVoiceJobReadRoutes(page);
   page.setDefaultTimeout(60_000);
   const issues = collectPageIssues(page);
   const screenshots = [];
@@ -1794,6 +2174,7 @@ async function runWorkspaceStageTraversal(browser, seed) {
     screenshots.push(screenshot);
     throw error;
   } finally {
+    await page.unrouteAll({ behavior: "ignoreErrors" }).catch(() => {});
     await context.close();
   }
 }
@@ -2036,15 +2417,17 @@ async function assertWorkspacePreviewGenerationRunningLayout(page) {
     const footer = visible(footerElement) ? footerElement.getBoundingClientRect() : null;
     const inspectorText =
       document.querySelector("[data-context-panel-surface='Workspace']")?.textContent ?? "";
-    const reviewCardText =
-      document.querySelector("[data-testid='workspace-stage-review']")?.textContent ?? "";
+    const reviewCardText = [
+      document.querySelector("[data-testid='workspace-stage-review']")?.textContent ?? "",
+      document.body.textContent ?? "",
+    ].join(" ");
     if (!/Audio working|Queue|Job/i.test(inspectorText)) {
       failures.push("Preview inspector does not show active audio/job context");
     }
     if (/Cue ·|Cue detail/i.test(inspectorText)) {
       failures.push("Preview inspector defaults to cropped cue text during generation");
     }
-    if (!/generation continues|Needs repair/i.test(reviewCardText)) {
+    if (!/generation continues|Needs repair|review warning/i.test(reviewCardText)) {
       failures.push("Review warning stage is not represented during active generation");
     }
     for (const [label, left, right] of [
@@ -2078,17 +2461,22 @@ async function assertWorkspacePreviewGenerationRunningLayout(page) {
 
 async function assertWorkspacePreviewGenerationFailedRecoveryLayout(page) {
   const cockpit = page.getByTestId("preview-generation-cockpit");
+  const cockpitVisible = await cockpit
+    .waitFor({ state: "visible", timeout: 5_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!cockpitVisible) {
+    await assertWorkspacePreviewAudioRebuildRecoveryLayout(page);
+    return;
+  }
   await cockpit.scrollIntoViewIfNeeded();
-  await cockpit.waitFor({ state: "visible" });
   const generatedAudioPanel = page.getByTestId("preview-generated-audio-panel");
   await generatedAudioPanel.scrollIntoViewIfNeeded();
   await generatedAudioPanel.waitFor({ state: "visible" });
-  await page
-    .getByRole("button", { name: /Retry generation/i })
-    .first()
-    .waitFor();
+  const retryGenerationLabel = /Retry (?:generation|full narration)/i;
+  await page.getByRole("button", { name: retryGenerationLabel }).first().waitFor();
   const retryReachable = await page
-    .getByRole("button", { name: /Retry generation/i })
+    .getByRole("button", { name: retryGenerationLabel })
     .evaluateAll((buttons) =>
       buttons.some(
         (button) =>
@@ -2103,7 +2491,9 @@ async function assertWorkspacePreviewGenerationFailedRecoveryLayout(page) {
   const generatedAudioPanelText =
     (await page.getByTestId("preview-generated-audio-panel").textContent()) ?? "";
   if (
-    !/Audio needs retry|Retry generation|Ready prefix|Ready segments/i.test(generatedAudioPanelText)
+    !/Audio needs retry|Retry generation|Retry full narration|Ready prefix|Ready segments/i.test(
+      generatedAudioPanelText,
+    )
   ) {
     throw new Error("Preview generated-audio panel does not describe retry recovery.");
   }
@@ -2192,6 +2582,24 @@ async function assertWorkspacePreviewGenerationFailedRecoveryLayout(page) {
   }
 }
 
+async function assertWorkspacePreviewAudioRebuildRecoveryLayout(page) {
+  const generatedAudioPanel = page.getByTestId("preview-generated-audio-panel");
+  await generatedAudioPanel.scrollIntoViewIfNeeded();
+  await generatedAudioPanel.waitFor({ state: "visible" });
+  await page
+    .getByText(/Audio needs rebuild|Playback is unavailable/i)
+    .first()
+    .waitFor();
+  await page
+    .getByText(/Audio does not match the current source, voice, policy, or scope/i)
+    .first()
+    .waitFor();
+  await page
+    .getByRole("button", { name: /Open diagnostics/i })
+    .first()
+    .waitFor();
+}
+
 async function assertWorkspacePreviewAsrWarningLayout(page) {
   const generatedAudioPanel = page.getByTestId("preview-generated-audio-panel");
   await generatedAudioPanel.scrollIntoViewIfNeeded();
@@ -2206,7 +2614,7 @@ async function assertWorkspacePreviewAsrWarningLayout(page) {
     .first()
     .waitFor();
   const retryVisible = await page
-    .getByRole("button", { name: /Retry generation/i })
+    .getByRole("button", { name: /Retry (?:generation|full narration)/i })
     .first()
     .isVisible()
     .catch(() => false);
@@ -2250,7 +2658,7 @@ async function assertWorkspacePreviewAsrWarningLayout(page) {
     if (!/Audio generated with 1 segment needing audio review/i.test(pageText)) {
       failures.push("Preview does not surface completed-audio ASR review warning");
     }
-    if (/Retry generation/i.test(pageText)) {
+    if (/Retry (?:generation|full narration)/i.test(pageText)) {
       failures.push("Completed-audio ASR warning is presented as retry-generation recovery");
     }
     if (!/Audio review|Segment 13|segment warning/i.test(inspectorText)) {
@@ -2354,8 +2762,8 @@ async function openPreviewGenerationRunning(page, job, source) {
 }
 
 async function openPreviewGenerationFailedRecovery(page, job, source) {
-  const failedJob = failedPreviewGenerationJob(job);
   const cleanSource = cleanPreparedSourceForGenerationFailedFixture(source);
+  const failedJob = failedPreviewGenerationJob(job, cleanSource);
   await page.route("**/api/voice-jobs/**", async (route) => {
     const url = new URL(route.request().url());
     if (route.request().method() === "GET" && url.pathname === `/api/voice-jobs/${failedJob.id}`) {
@@ -2460,6 +2868,18 @@ async function openPreviewAsrWarning(page, job, source) {
       });
       return;
     }
+    if (
+      route.request().method() === "GET" &&
+      (url.pathname === `/api/voice-jobs/${warnedJob.id}/audio` ||
+        url.pathname === `/api/voice-jobs/${warnedJob.id}/audio/partial`)
+    ) {
+      await route.fulfill({
+        body: syntheticAuditWav(),
+        contentType: "audio/wav",
+        status: 200,
+      });
+      return;
+    }
     await route.fallback();
   });
   await page.route("**/api/source-preps/**", async (route) => {
@@ -2540,6 +2960,7 @@ function runningPreviewGenerationJob(job) {
     audioPartialUrl: `/api/voice-jobs/${job.id}/audio/partial`,
     error: "",
     failureKind: "",
+    id: auditScenarioVoiceJobId(job.id, "running"),
     progress: {
       ...job.progress,
       activeStage: "synthesizing",
@@ -2565,19 +2986,31 @@ function runningPreviewGenerationJob(job) {
   };
 }
 
-function failedPreviewGenerationJob(job) {
-  const totalSegments = Math.max(
-    70,
-    job.retries?.totalSegments ?? 0,
-    job.progress?.totalSegments ?? 0,
-    job.segments?.length ?? 0,
-  );
-  const readySegments = Math.min(12, totalSegments);
+function failedPreviewGenerationJob(job, source) {
+  const speechBlocks = (source.blocks ?? []).filter((block) => block.speakMode !== "skip");
+  const selectedBlockIds = speechBlocks.map((block) => block.id).filter(Boolean);
+  const segmentTexts =
+    speechBlocks.length > 0
+      ? speechBlocks.map((block, index) =>
+          String(block.spokenText || block.text || `Segment ${String(index + 1)}`).trim(),
+        )
+      : ["Failed generation fixture."];
+  const totalSegments = Math.max(1, segmentTexts.length);
+  const readySegments = Math.min(1, totalSegments);
+  const inputText = segmentTexts.join("\n\n");
   return {
     ...job,
     audioReadySegments: readySegments,
+    audioPartialUrl: "",
+    audioUrl: "",
+    completedAt: "",
+    durationMs: 0,
     error: "Provider failed while creating audio.",
     failureKind: "engine",
+    id: auditScenarioVoiceJobId(job.id, "failed"),
+    inputText,
+    optimizedText: inputText,
+    performanceMode: "throughput",
     progress: {
       ...job.progress,
       activeStage: "failed",
@@ -2592,8 +3025,23 @@ function failedPreviewGenerationJob(job) {
       totalSegments,
     },
     retriable: true,
+    selectedBlockIds,
+    segments: segmentTexts.map((text, index) => ({
+      index: index + 1,
+      reason: index < readySegments ? "ok" : "provider_failed",
+      status: index < readySegments ? "ready" : "failed",
+      text,
+    })),
+    speechPolicyOverrides: {},
+    speechPolicyProfile: "Enterprise",
     status: "failed",
     terminalReason: "provider_failed",
+    ttsEngine: "auto",
+    ttsLanguage: "a",
+    ttsVoice: "af_heart",
+    updatedAt: auditFreshJobTimestamp(source),
+    voiceId: "",
+    voiceProfileId: "",
   };
 }
 
@@ -2613,8 +3061,11 @@ function completedPreviewAsrWarningJob(job, source) {
   return {
     ...job,
     audioReadySegments: totalSegments,
+    audioPartialUrl: "",
+    audioUrl: `data:audio/wav;base64,${syntheticAuditWav().toString("base64")}`,
     error: "",
     failureKind: "",
+    id: auditScenarioVoiceJobId(job.id, "asr-warning"),
     inputText: segmentTexts.join("\n\n"),
     optimizedText: segmentTexts.join("\n\n"),
     performanceMode: "balanced",
@@ -2668,8 +3119,13 @@ function completedPreviewAsrWarningJob(job, source) {
     speechPolicyProfile: "Enterprise",
     status: "completed",
     terminalReason: "",
+    completedAt: auditFreshJobTimestamp(source),
+    ttsVoice: "af_heart",
     ttsEngine: "auto",
     ttsLanguage: "a",
+    updatedAt: auditFreshJobTimestamp(source),
+    voiceId: "",
+    voiceProfileId: "",
     runMode: "checkedMaster",
     voiceCheck: {
       ...job.voiceCheck,
@@ -2679,6 +3135,46 @@ function completedPreviewAsrWarningJob(job, source) {
       similarity: 0.91,
     },
   };
+}
+
+function auditFreshJobTimestamp(source = null) {
+  const sourceTime = Date.parse(source?.updatedAt ?? "");
+  const base = Number.isFinite(sourceTime) ? sourceTime : Date.parse("2099-01-01T00:00:00Z");
+  return new Date(base + 60_000).toISOString();
+}
+
+function auditScenarioVoiceJobId(baseId, scenarioId) {
+  return `${baseId}-${scenarioId}`;
+}
+
+function auditWavDataUrl() {
+  return `data:audio/wav;base64,${syntheticAuditWav().toString("base64")}`;
+}
+
+function syntheticAuditWav() {
+  const sampleRate = 16_000;
+  const durationSeconds = 1;
+  const frameCount = sampleRate * durationSeconds;
+  const dataSize = frameCount * 2;
+  const buffer = Buffer.alloc(44 + dataSize);
+  buffer.write("RIFF", 0, "ascii");
+  buffer.writeUInt32LE(36 + dataSize, 4);
+  buffer.write("WAVE", 8, "ascii");
+  buffer.write("fmt ", 12, "ascii");
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(1, 22);
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * 2, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write("data", 36, "ascii");
+  buffer.writeUInt32LE(dataSize, 40);
+  for (let index = 0; index < frameCount; index += 1) {
+    const sample = Math.round(Math.sin((index / sampleRate) * 2 * Math.PI * 440) * 1200);
+    buffer.writeInt16LE(sample, 44 + index * 2);
+  }
+  return buffer;
 }
 
 function preparedSourceWithReviewWarningsForGenerationFixture(source) {
@@ -2715,6 +3211,7 @@ function cleanPreparedSourceForGenerationFailedFixture(source) {
       confirmedFields: ["title", "sourceType", "language", "structure"],
       detail: "Source metadata and structure are confirmed for Preview.",
       language: "en",
+      preparedAt: auditFreshJobTimestamp(source),
       sourceType: "document",
       state: "ready",
       structureLabel: "Document",

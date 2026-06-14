@@ -16,6 +16,7 @@ export type ButtonVariant =
 export type ButtonSize = "sm" | "md" | "lg" | "icon";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  "data-ui-noop-reason"?: string;
   align?: "center" | "start";
   disabledReason?: string;
   fullWidth?: boolean;
@@ -52,6 +53,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     align = "center",
     children,
     className,
+    "data-ui-noop-reason": explicitNoopReason,
     disabledReason,
     fullWidth = false,
     icon,
@@ -67,6 +69,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 ) {
   const shouldApplySelected =
     selected && variant !== "primary" && variant !== "destructive" && variant !== "warning";
+  const noopReason = explicitNoopReason ?? (selected ? "Already selected." : undefined);
   const scrollSafeStyle = {
     scrollMarginBottom: "calc(var(--overlay-activity-footer-reserved, 5rem) + 1rem)",
     ...style,
@@ -89,7 +92,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       )}
       data-disabled-reason={disabledReason}
       data-selected={selected ? "true" : undefined}
-      data-ui-noop-reason={selected ? "Already selected." : undefined}
+      data-ui-noop-reason={noopReason}
       ref={ref}
       style={scrollSafeStyle}
       title={title ?? (buttonProps.disabled && disabledReason ? disabledReason : undefined)}

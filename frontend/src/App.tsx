@@ -11353,6 +11353,7 @@ function NarrationRailMini({
           actionSurface: "Audio Rail",
           detail: audioDetail,
           label: "Audio",
+          noopReason: "Audio rail already shows the current generation state.",
           onClick: onOpenAudio,
           testId: "ui-action-rail-narration-audio",
           tone: audioReady ? "ready" : "default",

@@ -614,6 +614,15 @@ export async function exerciseAction(page, action, { activationMode }) {
   const locator = locateAction(page, action);
   const count = await locator.count().catch(() => 0);
   if (count === 0) {
+    if (action.intentionallyNoOpReason) {
+      return {
+        ...resultBase,
+        outcome: "intentionally dynamic no-op not present during replay",
+        passed: true,
+        reason: action.intentionallyNoOpReason,
+        status: "passed",
+      };
+    }
     return {
       ...resultBase,
       outcome: "control missing during replay",

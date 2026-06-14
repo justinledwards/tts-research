@@ -46,7 +46,7 @@ async function main() {
   const currentDurationMs = Number(
     summary.durationMs ??
       summary.phaseTimings?.totalMs ??
-      summary.phaseTimings?.["totalMs"] ??
+      summary.phaseTimings?.totalMs ??
       summary.totalMs ??
       summary.duration,
   );

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Button, Panel, StatusChip } from "../../design";
 import { overlayDataAttributes } from "../layout";
 import {
@@ -38,6 +38,7 @@ export function ContextPanel({
   onPinnedChange?: (pinned: boolean) => void;
   onTabChange: (tabId: ContextPanelTabId) => void;
 }>) {
+  const [displayAnnouncement, setDisplayAnnouncement] = useState("");
   const activeTab = selectContextPanelTab(tabs, activeTabId);
   if (!activeTab) {
     return null;
@@ -73,7 +74,11 @@ export function ContextPanel({
             </div>
             <Button
               className="shrink-0"
+              data-testid="ui-action-context-panel-expand"
+              data-ui-action-owner="context-panel"
+              data-ui-action-surface={surface}
               onClick={() => {
+                setDisplayAnnouncement(`Inspector expanded ${Date.now().toString()}`);
                 onDisplayStateChange?.("expanded");
               }}
               size="sm"
@@ -85,6 +90,9 @@ export function ContextPanel({
           {collapsedSummary ?? (
             <p className="text-xs leading-5 vs-muted">{activeTab.sections[0]?.detail}</p>
           )}
+          <span className="sr-only" role="status">
+            {displayAnnouncement}
+          </span>
         </div>
       </Panel>
     );
@@ -128,7 +136,11 @@ export function ContextPanel({
           {onDisplayStateChange && !pinned ? (
             <Button
               className="shrink-0"
+              data-testid="ui-action-context-panel-collapse"
+              data-ui-action-owner="context-panel"
+              data-ui-action-surface={surface}
               onClick={() => {
+                setDisplayAnnouncement(`Inspector collapsed ${Date.now().toString()}`);
                 onDisplayStateChange("collapsed");
               }}
               size="sm"
@@ -185,6 +197,9 @@ export function ContextPanel({
             {activeAdvancedReason}
           </div>
         ) : null}
+        <span className="sr-only" role="status">
+          {displayAnnouncement}
+        </span>
       </div>
       <div className="grid gap-3 p-3" id={tabPanelId} role="tabpanel">
         {activeTab.sections.map((section) => {

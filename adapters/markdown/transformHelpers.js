@@ -29,7 +29,7 @@ const CHATGPT_ARTIFACT_TOKEN_PATTERN = /\uE200(?!cite\b)[^\uE201]*\uE201/g;
 const CHATGPT_BRACKET_CITATION_PATTERN =
   /\[cite\]\s*\[\s*turn\d+(?:search|view|news|fetch|image)\d+\s*\]/gi;
 const CONTENT_REFERENCE_PATTERN = /:contentReference\[[^\]\n]+\]\{[^}\n]*\}/g;
-const MALFORMED_CITATION_PATTERN = /\[(?:cite|citation|source|reference)(?:\:[^\]\n]*)?\]/gi;
+const MALFORMED_CITATION_PATTERN = /\[(?:cite|citation|source|reference)(?::[^\]\n]*)?\]/gi;
 const TURN_CITATION_PATTERN = /\bturn\d+(?:search|view|news|fetch|image)\d+\b/g;
 const FOOTNOTE_REFERENCE_PATTERN = /\[\^[^\]\s]+\]/g;
 const REFERENCE_MARKER_PATTERN =

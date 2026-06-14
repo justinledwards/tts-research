@@ -113,22 +113,24 @@ export function SourcePolicyPinEditor({
   onClear,
   onSave,
 }: Readonly<SourcePolicyPinEditorProps>) {
-  const fallbackProfile = definition.profiles[0]?.name ?? "Enterprise";
-  const [profile, setProfile] = useState(sourceProfile?.trim() ? sourceProfile : fallbackProfile);
-  const [overrides, setOverrides] = useState<SpeechPolicyOverrides>(() =>
-    normalizeSpeechPolicyOverrides(sourceOverrides),
-  );
   const fields =
     definition.fields.length > 0 ? definition.fields : DEFAULT_SPEECH_POLICY_DEFINITION.fields;
   const options = useMemo(
     () => speechPolicyProfileOptions(definition, profiles, customProfiles),
     [customProfiles, definition, profiles],
   );
+  const fallbackProfile = options[0].name;
+  const [profile, setProfile] = useState(() =>
+    sourcePolicyProfileValue(sourceProfile, options, fallbackProfile),
+  );
+  const [overrides, setOverrides] = useState<SpeechPolicyOverrides>(() =>
+    normalizeSpeechPolicyOverrides(sourceOverrides),
+  );
 
   useEffect(() => {
-    setProfile(sourceProfile?.trim() ? sourceProfile : (options[0]?.name ?? "Enterprise"));
+    setProfile(sourcePolicyProfileValue(sourceProfile, options, fallbackProfile));
     setOverrides(normalizeSpeechPolicyOverrides(sourceOverrides));
-  }, [options, sourceOverrides, sourceProfile]);
+  }, [fallbackProfile, options, sourceOverrides, sourceProfile]);
 
   const hasPin =
     Boolean(sourceProfile) || Object.keys(compactSpeechPolicyOverrides(sourceOverrides)).length > 0;
@@ -253,6 +255,18 @@ function optionalOverrideValue(value: string): string | undefined {
     return trimmed;
   }
   return undefined;
+}
+
+function sourcePolicyProfileValue(
+  sourceProfile: string | undefined,
+  options: readonly { name: string }[],
+  fallbackProfile: string,
+): string {
+  const trimmed = sourceProfile?.trim() ?? "";
+  if (trimmed && options.some((option) => option.name === trimmed)) {
+    return trimmed;
+  }
+  return fallbackProfile;
 }
 
 function PolicyOverrideSelect({

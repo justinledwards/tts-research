@@ -256,6 +256,7 @@ function DocumentInlineArtifactChip({
         data-speech-mode="skip"
         data-testid={artifactActionId}
         data-ui-action-id={artifactActionId}
+        data-ui-noop-reason="Citation details may already be toggled during replay."
         onClick={() => {
           setOpen((current) => !current);
         }}

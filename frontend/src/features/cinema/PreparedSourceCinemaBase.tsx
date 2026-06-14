@@ -446,7 +446,8 @@ export function PreparedSourceCinemaOverlay({
     [progressItems, sourceLabels, temporaryContract],
   );
   const scrollBehavior = readerScrollBehavior(normalizedAccessibility);
-  const liveAnnouncement = useMemo(
+  const [transportAnnouncement, setTransportAnnouncement] = useState("");
+  const passageLiveAnnouncement = useMemo(
     () =>
       readerLiveAnnouncement({
         activeWordIndex: effectiveActiveWordIndex,
@@ -455,6 +456,20 @@ export function PreparedSourceCinemaOverlay({
       }),
     [cinemaLabel, displayBlock, effectiveActiveWordIndex, title],
   );
+  const liveAnnouncement = transportAnnouncement
+    ? `${passageLiveAnnouncement} ${transportAnnouncement}`
+    : passageLiveAnnouncement;
+  const announceTransportAction = useCallback((message: string) => {
+    setTransportAnnouncement(`${message} ${Date.now().toString()}`);
+  }, []);
+  const handlePlayPauseAction = useCallback(() => {
+    onPlayPause();
+    announceTransportAction("Cinema playback toggled.");
+  }, [announceTransportAction, onPlayPause]);
+  const handleRestartAction = useCallback(() => {
+    onRestart();
+    announceTransportAction("Cinema playback restarted.");
+  }, [announceTransportAction, onRestart]);
   const handleOutlineNavigate = (item: PreparedSourceCinemaOutlineItem) => {
     setPointedBlockId(item.blockId);
     scrollToCinemaBlock(item.blockId, scrollBehavior);
@@ -1132,8 +1147,8 @@ export function PreparedSourceCinemaOverlay({
       }
       onClose();
     },
-    onPlayPause,
-    onRestart,
+    onPlayPause: handlePlayPauseAction,
+    onRestart: handleRestartAction,
     onSkip,
     onToggleTheatreControls: cinemaTheatre.active ? cinemaTheatre.toggleControls : undefined,
     playbackControls,
@@ -1265,8 +1280,8 @@ export function PreparedSourceCinemaOverlay({
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
           onBookmark={onBookmark}
           onCreateAudio={onCreateAudio}
-          onPlayPause={onPlayPause}
-          onRestart={onRestart}
+          onPlayPause={handlePlayPauseAction}
+          onRestart={handleRestartAction}
           onSkip={onSkip}
           onTheatreMode={handleTheatreMode}
           onToggleMobilePanel={() => {
