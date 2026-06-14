@@ -34,6 +34,15 @@
 - [ ] wire phase-specific recovery actions/copy in cinema/preview/workspace
 - [ ] preserve ready segments across retry and report failure phase in diagnostics
 
+## 2026-06-14 14:45 CEST - Source Processing Phase Orchestration Execution
+
+- [ ] thread phase-aware retry payload through backend retry route
+- [ ] persist failed-phase metadata on error and gate retries by failed phase
+- [ ] resume jobs from known phase without rerunning completed upstream work
+- [ ] update API client models for phase-aware retry request
+- [ ] add phase-specific recovery actions/copy in preview and cinema controls
+- [ ] add diagnostics phase marker visibility for failed and resumed jobs
+
 ## 2026-06-14 13:21 CEST - Source Processing Phase Orchestration Continuation
 
 - [x] finalize and commit existing phase-orchestration prep changes
