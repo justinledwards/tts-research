@@ -1,13 +1,15 @@
 # ChatGPT Architecture Discussion Plan
 
-Status: ready for project-scoped ChatGPT run once the requested project URL is verified
-Updated: 2026-07-07 00:53 CEST
+Status: ready for project-scoped ChatGPT run
+Updated: 2026-07-07 01:09 CEST
 
 ## Intended ChatGPT project
 
-Requested by user: `Design for the Real World`.
+ChatGPT project: `TTS-Research`.
 
-Current verified browser state: ChatGPT account is logged in through Camofox profile `hermes-deep-research`; a pinned `TTS-Research` project is visible, but no `Design for the Real World` project URL has been verified yet. Do not start the official discussion loop until the requested project URL or an explicit replacement project is verified.
+URL: https://chatgpt.com/g/g-p-6a4c3396e3948191a15f9959895179d7-tts-research/project
+
+Voice Studio project context: `Design for the Real World` is an in-app TTS-Research / Voice Studio project, not a ChatGPT project. Architecture discussions should happen inside the ChatGPT `TTS-Research` project while treating `Design for the Real World` as the target app project/source context.
 
 ## Required input package
 

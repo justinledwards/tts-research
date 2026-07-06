@@ -2422,4 +2422,4 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] add ChatGPT review package command with mandatory complete-UI screenshot validation
 - [x] record product brief, ChatGPT discussion plan, and setup log
 - [x] update Linear project metadata and local capacity manifest
-- [ ] verify requested `Design for the Real World` ChatGPT project URL before official discussion loop
+- [x] verify ChatGPT `TTS-Research` project URL and record `Design for the Real World` as the target Voice Studio project context
