@@ -28,16 +28,16 @@ const (
 type JobPipelinePhase string
 
 const (
-	JobPipelinePhaseSubmit          JobPipelinePhase = "submit"
-	JobPipelinePhaseExtract         JobPipelinePhase = "extract"
-	JobPipelinePhaseStructure       JobPipelinePhase = "structure"
-	JobPipelinePhaseRenderSpoken    JobPipelinePhase = "render_spoken_form"
-	JobPipelinePhaseSegment         JobPipelinePhase = "segment"
-	JobPipelinePhaseSynthesize      JobPipelinePhase = "synthesize_segment"
-	JobPipelinePhaseAlign           JobPipelinePhase = "align_segment"
-	JobPipelinePhaseCheck           JobPipelinePhase = "check_segment"
-	JobPipelinePhaseAssemble        JobPipelinePhase = "assemble"
-	JobPipelinePhaseComplete        JobPipelinePhase = "complete"
+	JobPipelinePhaseSubmit       JobPipelinePhase = "submit"
+	JobPipelinePhaseExtract      JobPipelinePhase = "extract"
+	JobPipelinePhaseStructure    JobPipelinePhase = "structure"
+	JobPipelinePhaseRenderSpoken JobPipelinePhase = "render_spoken_form"
+	JobPipelinePhaseSegment      JobPipelinePhase = "segment"
+	JobPipelinePhaseSynthesize   JobPipelinePhase = "synthesize_segment"
+	JobPipelinePhaseAlign        JobPipelinePhase = "align_segment"
+	JobPipelinePhaseCheck        JobPipelinePhase = "check_segment"
+	JobPipelinePhaseAssemble     JobPipelinePhase = "assemble"
+	JobPipelinePhaseComplete     JobPipelinePhase = "complete"
 )
 
 var allJobPipelinePhases = []JobPipelinePhase{
@@ -67,6 +67,10 @@ func ParseJobPipelinePhase(value string) JobPipelinePhase {
 		return clean
 	}
 	return ""
+}
+
+func isKnownJobPipelinePhase(phase JobPipelinePhase) bool {
+	return JobPipelinePhaseSortOrder(phase) >= 0
 }
 
 func IsValidJobPipelinePhase(value string) bool {

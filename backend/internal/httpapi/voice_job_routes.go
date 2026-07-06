@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"strconv"
@@ -182,7 +183,13 @@ func registerVoiceJobRoutes(app *fiber.App, service *pipeline.Service) {
 	})
 
 	app.Post("/api/voice-jobs/:id/retry", func(ctx fiber.Ctx) error {
-		job, err := service.RetryJob(ctx.Context(), ctx.Params("id"))
+		var request pipeline.RetryVoiceJobRequest
+		if len(bytes.TrimSpace(ctx.Body())) > 0 {
+			if err := json.Unmarshal(ctx.Body(), &request); err != nil {
+				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+			}
+		}
+		job, err := service.RetryJobWithPhase(ctx.Context(), ctx.Params("id"), request.Phase)
 		if err != nil {
 			if errors.Is(err, pipeline.ErrJobNotRetriable) {
 				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))

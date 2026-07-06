@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "linear-project-setup.v1",
+  "updatedAt": "2026-07-07T00:53:00+02:00",
+  "project": {
+    "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+    "name": "TTS-Research",
+    "url": "https://linear.app/niklas-olsson/project/tts-research-9683c18e447c",
+    "state": "started",
+    "description": "Best-in-class TTS aid for instant read-along across books, documents, web and pasted sources. Capacity rule: <=20 active Linear issues; issue batch only after ChatGPT architecture agreement."
+  },
+  "team": {
+    "id": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+    "key": "QQP",
+    "name": "QQ-PWN"
+  },
+  "capacity": {
+    "activeIssueCap": 20,
+    "verifiedActiveIssueCount": 1,
+    "hasNextPage": false
+  },
+  "activeIssues": [
+    {
+      "id": "d60a8996-f8cf-423a-b70e-1d5e0025bb3f",
+      "identifier": "QQP-4",
+      "title": "Quick Narrate Pasted URL",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-4/quick-narrate-pasted-url",
+      "state": {
+        "name": "Todo",
+        "type": "unstarted"
+      }
+    }
+  ],
+  "issueCreationGate": "Create no new issue batch until ChatGPT returns AGREED ARCHITECTURE or user explicitly overrides.",
+  "referenceDocs": [
+    "docs/product/best-in-class-tts-aid-brief.md",
+    "docs/reviews/chatgpt-architecture-discussion-plan.md",
+    "docs/reviews/chatgpt-discussion-log.md",
+    "reviewer-screenshot-manifest.md",
+    "integrations/chatgpt/project.json"
+  ]
+}

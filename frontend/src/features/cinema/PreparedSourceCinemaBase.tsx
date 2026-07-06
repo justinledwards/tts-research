@@ -3010,11 +3010,20 @@ function alignmentRepairStorageKey(projectId: string, sourceId: string): string 
   return `tts-alignment-repair:${projectId}:${sourceId}`;
 }
 
-function loadAlignmentRepairMap(projectId: string, sourceId: string): AlignmentRepairMap | null {
-  if (!("localStorage" in globalThis)) {
+function browserLocalStorage(): Storage | null {
+  try {
+    return (globalThis as Partial<{ localStorage: Storage }>).localStorage ?? null;
+  } catch {
     return null;
   }
-  const raw = globalThis.localStorage.getItem(alignmentRepairStorageKey(projectId, sourceId));
+}
+
+function loadAlignmentRepairMap(projectId: string, sourceId: string): AlignmentRepairMap | null {
+  const storage = browserLocalStorage();
+  if (!storage) {
+    return null;
+  }
+  const raw = storage.getItem(alignmentRepairStorageKey(projectId, sourceId));
   if (!raw) {
     return null;
   }
@@ -3030,15 +3039,16 @@ function saveAlignmentRepairMap(
   sourceId: string,
   repairMap: AlignmentRepairMap | null,
 ) {
-  if (!("localStorage" in globalThis)) {
+  const storage = browserLocalStorage();
+  if (!storage) {
     return;
   }
   const key = alignmentRepairStorageKey(projectId, sourceId);
   if (!repairMap) {
-    globalThis.localStorage.removeItem(key);
+    storage.removeItem(key);
     return;
   }
-  globalThis.localStorage.setItem(key, serializeAlignmentRepairMap(repairMap));
+  storage.setItem(key, serializeAlignmentRepairMap(repairMap));
 }
 
 function CinemaFilmIcon() {

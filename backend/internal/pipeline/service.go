@@ -664,6 +664,9 @@ func (service *Service) RetryJobWithPhase(ctx context.Context, id string, phase 
 	}
 
 	retryPhase := phase
+	if retryPhase != "" && !IsValidJobPipelinePhase(string(retryPhase)) {
+		return VoiceJob{}, ErrJobNotRetriable
+	}
 	if retryPhase == "" {
 		retryPhase = sourceJob.FailedPhase
 	}
@@ -673,12 +676,14 @@ func (service *Service) RetryJobWithPhase(ctx context.Context, id string, phase 
 	if sourceJob.FailedPhase != "" && !isJobPipelinePhaseRetryCandidate(retryPhase, sourceJob.FailedPhase) {
 		return VoiceJob{}, ErrJobNotRetriable
 	}
+
 	job, err := service.prepareCreateJob(createRetryJobRequest(sourceJob, retryPhase))
 	if err != nil {
 		return VoiceJob{}, err
 	}
 	job.Phase = retryPhase
 	job.FailedPhase = sourceJob.FailedPhase
+	job.RetryPhase = retryPhase
 	job.RetryOfJobID = sourceJob.ID
 	job.Progress.Message = "Queued retry"
 	job.Progress.Detail = "Waiting to resume generation from reusable ready segments."
@@ -722,6 +727,9 @@ func (service *Service) CancelJob(id string) error {
 	job.TerminalReason = JobTerminalReasonUserCancelled
 	job.FailureKind = JobFailureKindCancellation
 	job.Retriable = true
+	if job.FailedPhase == "" && isKnownJobPipelinePhase(job.Phase) {
+		job.FailedPhase = job.Phase
+	}
 	job.CompletedAt = &now
 	setProgress(&job, string(JobStatusCancelled), "Job cancelled", "Processing was cancelled by user request.", job.Retries.CurrentSegment, job.Retries.TotalSegments)
 	service.jobs[id] = job
@@ -1242,16 +1250,46 @@ func (service *Service) runJob(ctx context.Context, id string) {
 		return
 	}
 	config := resolvedConfigFromJob(job)
+	runFromPhase := job.Phase
+	if !isKnownJobPipelinePhase(runFromPhase) {
+		runFromPhase = JobPipelinePhaseSubmit
+	}
+	runFromIndex := JobPipelinePhaseSortOrder(runFromPhase)
+	if runFromIndex < 0 {
+		runFromIndex = 0
+	}
+	startAtSegment := runFromIndex > JobPipelinePhaseSortOrder(JobPipelinePhaseRenderSpoken)
+	reusedText := strings.TrimSpace(job.OptimizedText)
+	if reusedText == "" {
+		reusedText = strings.TrimSpace(job.InputText)
+	}
 
-	service.updateJob(id, func(job *storedJob) {
-		job.Status = JobStatusOptimizing
-		job.Stages.Optimization = StageStatusRunning
-		job.Optimizer = optimizerName(service.optimizer)
-		setProgress(job, string(JobStatusOptimizing), "Optimizing source text", fmt.Sprintf("%d characters queued.", len([]rune(job.InputText))), 0, 0)
+	service.updateJob(id, func(snapshot *storedJob) {
+		if startAtSegment {
+			snapshot.Status = JobStatusSynthesizing
+			snapshot.Stages.Optimization = StageStatusDone
+			snapshot.Stages.Synthesis = StageStatusRunning
+			if snapshot.OptimizedText == "" {
+				snapshot.OptimizedText = reusedText
+			}
+			if runFromIndex > JobPipelinePhaseSortOrder(JobPipelinePhaseSegment) {
+				snapshot.Phase = JobPipelinePhaseSegment
+			} else {
+				snapshot.Phase = runFromPhase
+			}
+			snapshot.Phase = runFromPhase
+			setProgress(snapshot, string(JobStatusSynthesizing), "Resuming generation", fmt.Sprintf("Using reusable text from previous run for segment rebuild."), 0, 0)
+		} else {
+			snapshot.Status = JobStatusOptimizing
+			snapshot.Stages.Optimization = StageStatusRunning
+			snapshot.Optimizer = optimizerName(service.optimizer)
+			snapshot.Phase = JobPipelinePhaseExtract
+			setProgress(snapshot, string(JobStatusOptimizing), "Optimizing source text", fmt.Sprintf("%d characters queued.", len([]rune(snapshot.InputText))), 0, 0)
+		}
 	})
 
 	optimizedText := job.InputText
-	if config.pipelineOptions.TextPreprocess {
+	if !startAtSegment && config.pipelineOptions.TextPreprocess {
 		optimizedText, err = service.optimizeText(ctx, id, job.InputText)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
@@ -1266,15 +1304,17 @@ func (service *Service) runJob(ctx context.Context, id string) {
 			service.failJobByID(id, fmt.Errorf("optimize text: %w", err))
 			return
 		}
-	} else {
+	} else if !startAtSegment {
 		service.updateJob(id, func(job *storedJob) {
 			job.Optimizer = "disabled"
 			job.OptimizedText = job.InputText
 			setProgress(job, string(JobStatusOptimizing), "Using source text", "Text preprocessing is disabled for this run.", 0, 0)
 		})
+	} else {
+		optimizedText = reusedText
 	}
 
-	if !job.SpeechRenderApplied {
+	if !startAtSegment && !job.SpeechRenderApplied {
 		rendered := service.RenderSpeechText(optimizedText, SpeechRenderOptions{
 			ProjectID:      job.ProjectID,
 			VoiceProfileID: job.VoiceProfileID,
@@ -1295,8 +1335,18 @@ func (service *Service) runJob(ctx context.Context, id string) {
 		job.Stages.Optimization = StageStatusDone
 		job.Status = JobStatusSynthesizing
 		job.Stages.Synthesis = StageStatusRunning
+		job.Phase = JobPipelinePhaseSegment
 		setProgress(job, string(JobStatusSynthesizing), "Preparing synthesis segments", fmt.Sprintf("%d optimized characters ready.", len([]rune(optimizedText))), 0, 0)
 	})
+	if startAtSegment {
+		service.updateJob(id, func(snapshot *storedJob) {
+			if snapshot.OptimizedText == "" {
+				snapshot.OptimizedText = optimizedText
+			}
+			snapshot.Phase = JobPipelinePhaseSegment
+			setProgress(snapshot, string(JobStatusSynthesizing), "Preparing synthesis segments", "Resuming from reusable ready segments.", 0, 0)
+		})
+	}
 
 	profileID := strings.TrimSpace(job.VoiceProfileID)
 	profileRef := ""
@@ -3338,6 +3388,9 @@ func (service *Service) failJobByID(id string, err error) {
 		job.TerminalReason = reason
 		job.FailureKind = failureKind
 		job.Retriable = retriable
+		if job.FailedPhase == "" && isKnownJobPipelinePhase(job.Phase) {
+			job.FailedPhase = job.Phase
+		}
 		setProgress(job, string(JobStatusFailed), "Job failed", err.Error(), job.Retries.CurrentSegment, job.Retries.TotalSegments)
 	})
 	_ = service.persistJobMetadata(id)
@@ -3364,6 +3417,9 @@ func (service *Service) cancelJobByID(id string) {
 		job.TerminalReason = JobTerminalReasonUserCancelled
 		job.FailureKind = JobFailureKindCancellation
 		job.Retriable = true
+		if job.FailedPhase == "" && isKnownJobPipelinePhase(job.Phase) {
+			job.FailedPhase = job.Phase
+		}
 		setProgress(job, string(JobStatusCancelled), "Job cancelled", "Processing was cancelled by user request.", job.Retries.CurrentSegment, job.Retries.TotalSegments)
 	})
 	_ = service.persistJobMetadata(id)

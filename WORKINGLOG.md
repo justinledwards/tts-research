@@ -2407,3 +2407,19 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] implement non-blocking navigation surfaces
 - [x] add focused navigation-under-processing coverage
 - [x] run project checks
+
+## 2026-06-14 13:28 CEST - Source Processing Phase Orchestration and Resumable Failure Model
+- [x] implement backend phase-aware retry request body + resume-safe state transitions
+- [x] persist failed phase and enforce resumability constraints in pipeline
+- [ ] add frontend phase-specific failure recovery labels and retry actions
+- [ ] wire diagnostics timeline data to show phase failures/timings
+- [x] update tests and run required e2e validation commands as requested
+- Validation: `mise exec -- pnpm check` passed after repairing Node 26 no-localStorage SSR guard.
+
+## 2026-07-07 00:53 CEST - Repo Relocation and Review Governance
+- [x] move repo to `/home/phoenix/projects/repos/tts-research` and symlink `/home/phoenix/git/tts-research`
+- [x] verify canonical project checks
+- [x] add ChatGPT review package command with mandatory complete-UI screenshot validation
+- [x] record product brief, ChatGPT discussion plan, and setup log
+- [x] update Linear project metadata and local capacity manifest
+- [ ] verify requested `Design for the Real World` ChatGPT project URL before official discussion loop

@@ -1,0 +1,11 @@
+{
+  "requested_project_name": "Design for the Real World",
+  "verified": false,
+  "status": "pending_verified_chatgpt_project_url",
+  "notes": "Camofox profile hermes-deep-research is logged in. A pinned ChatGPT project named TTS-Research is visible, but the requested Design for the Real World project URL has not been verified.",
+  "camofox": {
+    "base_url": "http://127.0.0.1:9378",
+    "user_id": "hermes-deep-research",
+    "recommended_session_key": "tts-research-architecture-discussion"
+  }
+}
