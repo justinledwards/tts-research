@@ -2562,3 +2562,29 @@ duplicating every implementation detail from commits, PR text, or generated revi
   - [x] final gates passed at 2026-07-07 23:21 CEST: `mise exec -- pnpm check`, `git diff --check`
   - [x] commit created after final gates: initial `9f4c33f06dfcff00191d094ed7257057023e8e00`; commit hook reran `pnpm check` and passed
   - [x] final closeout docs amended into commit; push, remote verification, and Linear closeout handled by parent orchestrator
+
+## 2026-07-07 23:36 CEST - QQP-430 Frontend Source/Manifest Store
+- [x] preflight repo state: branch `niklas/voice-studio-follow-up`, local and remote both at `cac3d6dae0ec59ebfc7f841d366f1480bda2214a`, clean tree
+- [x] preflight Linear state: project page fetched with `hasNextPage=false`; QQP-423 through QQP-429 Done; QQP-430 Backlog
+- [x] selected next issue by agreed manifest order/dependencies: QQP-430 depends on QQP-429 and QQP-425, both Done
+- [x] wrote implementation plan: `docs/plans/linear/QQP-430-frontend-source-manifest-store.md`
+- [x] move QQP-430 to In Progress and dispatch focused implementation worker (`deleg_4eedf3cc`)
+- [ ] run parent inspection, focused verification, spec review, and quality review
+  - [x] implementation worker completed (`deleg_4eedf3cc`); parent inspected scoped frontend diff read-only
+  - [x] parent focused gates passed: `mise exec -- pnpm --filter @tts-research/frontend test -- sourceManifest`, `mise exec -- pnpm --filter @tts-research/frontend typecheck`, `git diff --check`
+  - [x] active-orchestrator policy aligned from MADI/Seedling sessions (`20260707_181411_b4f0f5`, `20260706_014226_37e855`): keep a concrete lane active, parent orchestrates/commits/Linear, product code via subagents, ChatGPT Project peer checkpoint via `integrations/chatgpt/project.json`
+  - [x] first independent spec review PASS from cache (`deleg_c6290bcd` / `subagent-summary-0-20260708_000532_854474.txt`), but parent subsequently made lint/format-only guard repairs; treat that review as stale for final approval
+  - [x] fresh guard verification after lint/format repair: `python3 -m json.tool integrations/chatgpt/project.json`, `git diff --check`, `mise exec -- pnpm format:check`, `mise exec -- pnpm lint`, `mise exec -- pnpm --filter @tts-research/frontend typecheck`, `mise exec -- pnpm --filter @tts-research/frontend test -- sourceManifest` all passed
+  - [x] fresh independent spec re-check PASS (`deleg_7235c4cd` / `subagent-summary-0-20260708_001859_094154.txt`)
+  - [x] quality review REQUEST_CHANGES (`deleg_0a9620bb` / `subagent-summary-0-20260708_001913_436172.txt`): backend restart/snapshot fallback can poison `latestSequence` because `replaceSourceSnapshot()` preserves previous client sequence with `Math.max(latestSequence, this.latestSequence(sourceId))`; if authoritative snapshot/backend sequence resets lower, reconnects use stale `afterSequence` and future low-sequence events are ignored
+  - [x] focused repair worker completed (`deleg_fbb944c2`): `replaceSourceSnapshot()` now treats snapshot fallback as authoritative for latest sequence reset; regression covers stale client sequence 4 resetting to authoritative 1 and accepting post-restart event 2
+  - [x] parent repair gates passed: `mise exec -- pnpm --filter @tts-research/frontend test -- sourceManifest` (111 files / 747 tests), `mise exec -- pnpm --filter @tts-research/frontend typecheck`, `mise exec -- pnpm lint`, `git diff --check`
+  - [x] targeted quality re-review APPROVED (`deleg_1b84aa64`)
+  - [x] final gates passed: `mise exec -- pnpm check`, `mise exec -- pnpm validate:ir`, `git diff --check`
+  - [x] ChatGPT Project peer checkpoint submitted with dirty-worktree archive `qqp430-peer-current-worktree.zip` (SHA256 `379ff1fea4ba5fa10ee2e3f861f221f196f6492d27876aada74baafda2f177ee`)
+  - [x] ChatGPT peer REQUEST_CHANGES saved to `docs/reviews/chatgpt/qqp430-peer-checkpoint.response.md`: snapshot fallback still uses `Math.max(snapshot.latestSequence, replay.latestSequence)`, so stale replay latest can override authoritative lower snapshot; non-gap replay with lower latest can leave stale cursor/cache
+  - [x] focused repair worker completed (`deleg_65fd0182`): `applyReplay()` now treats lower replay latest as reset/snapshot fallback and snapshot fallback uses authoritative snapshot latest; regressions cover stale gap replay latest 4 + snapshot latest 1 and lower non-gap replay latest 1
+  - [x] parent peer-repair gates passed: `mise exec -- pnpm --filter @tts-research/frontend test -- sourceManifest` (111 files / 748 tests), `mise exec -- pnpm --filter @tts-research/frontend typecheck`, `mise exec -- pnpm lint`, `git diff --check`
+  - [x] targeted peer-blocker re-review APPROVED (`deleg_84871c57` / `subagent-summary-0-20260708_005554_492953.txt`): no remaining blockers; authoritative snapshot sequence wins; lower non-gap replay reset covered; ordinary events remain monotonic
+  - [x] final closeout gates passed after peer repair/re-review: `python3 -m json.tool integrations/chatgpt/project.json`, `mise exec -- pnpm check`, `mise exec -- pnpm validate:ir`, `git diff --check`
+- [x] commit prepared locally after final gates; push/remote verification and Linear Done closeout next

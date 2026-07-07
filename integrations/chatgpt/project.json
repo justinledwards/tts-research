@@ -11,5 +11,15 @@
     "base_url": "http://127.0.0.1:9378",
     "user_id": "hermes-deep-research",
     "recommended_session_key": "tts-research-architecture-discussion"
+  },
+  "operating_mode": {
+    "style": "active_parent_orchestrator",
+    "learned_from_sessions": ["20260707_181411_b4f0f5", "20260706_014226_37e855"],
+    "rules": [
+      "Keep at least one concrete lane active while Linear issues remain: subagent delegation, tracked supervisor/process, or explicit waiting-on-peer item.",
+      "Parent session owns orchestration, PM, evidence, review dispatch, final gates, commit, push, and Linear closeout; focused subagents own product-code implementation and repair.",
+      "Use ChatGPT Project as an advisory peer checkpoint with fresh archive/checkpoint evidence; repo, Linear, and local gates remain source of truth.",
+      "Do not mark issues Done from implementation alone; require parent verification, independent review, and ChatGPT peer review when the slice needs external checkpoint evidence."
+    ]
   }
 }

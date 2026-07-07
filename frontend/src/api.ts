@@ -55,6 +55,12 @@ import type {
   VoiceProfileSourceDiagnostics,
   VoiceProject,
 } from "./types";
+import type {
+  ReadalongManifest,
+  ReadingUnitManifest,
+  SourceEnvelope,
+  SourceRevision,
+} from "@tts-research/schema";
 import type { ContentIRDocument, ContentIRSchemaVersion, SpeechPlanDocument } from "./content-ir";
 import type { HighlightMapV2 } from "./features/readalong";
 import {
@@ -109,6 +115,207 @@ export function isApiNotFoundError(error: unknown): boolean {
     return (error as { status?: unknown }).status === 404;
   }
   return error instanceof Error && /\b404\b/.test(error.message);
+}
+
+export type SourceManifestEventType =
+  | "source_revision_created"
+  | "extraction_revision_updated"
+  | "reading_unit_manifest_written"
+  | "readalong_manifest_written"
+  | "audio_artifact_updated"
+  | "progress_updated"
+  | "repair_overlay_created"
+  | "promotion_crosswalk_created"
+  | "artifact_interrupted_retriable";
+
+export interface SourceManifestEventSubject {
+  readonly sourceRevisionId?: string;
+  readonly extractionRevisionId?: string;
+  readonly readingUnitManifestId?: string;
+  readonly readalongManifestId?: string;
+  readonly audioArtifactId?: string;
+  readonly progressId?: string;
+  readonly repairOverlayId?: string;
+  readonly promotionCrosswalkId?: string;
+  readonly state?: string;
+}
+
+export interface SourceManifestEvent {
+  readonly schemaVersion: string;
+  readonly eventId: string;
+  readonly sourceId: string;
+  readonly sequence: number;
+  readonly occurredAt: string;
+  readonly eventType: SourceManifestEventType;
+  readonly snapshotAvailable: boolean;
+  readonly cursor?: string;
+  readonly subject: SourceManifestEventSubject;
+  readonly snapshotManifestId?: string;
+  readonly metadata?: Record<string, unknown>;
+}
+
+export interface SourceManifestEventReplay {
+  readonly sourceId: string;
+  readonly afterSequence: number;
+  readonly events: SourceManifestEvent[];
+  readonly gap: boolean;
+  readonly snapshotRequired: boolean;
+  readonly latestSequence: number;
+  readonly nextCursor?: string;
+}
+
+export interface SourceManifestSnapshotFallback {
+  readonly sourceId: string;
+  readonly sourceRevisionId?: string;
+  readonly cursor?: string;
+  readonly latestSequence: number;
+  readonly sourceEnvelope?: SourceEnvelope;
+  readonly sourceRevision?: SourceRevision;
+  readonly currentReadingUnitManifest?: ReadingUnitManifest;
+  readonly currentReadalongManifest?: ReadalongManifest;
+}
+
+export interface SourceManifestReplayRequest {
+  readonly sourceId: string;
+  readonly afterSequence?: number;
+  readonly limit?: number;
+}
+
+export interface SourceManifestSnapshotRequest {
+  readonly sourceId: string;
+  readonly sourceRevisionId?: string;
+}
+
+export interface SourceManifestStreamRequest extends SourceManifestReplayRequest {
+  readonly once?: boolean;
+}
+
+export interface SourceManifestStreamHandlers {
+  readonly onEvent: (event: SourceManifestEvent) => void;
+  readonly onGap: (replay: SourceManifestEventReplay) => void;
+  readonly onError: (error: Error) => void;
+}
+
+export interface SourceManifestEventSourceLike {
+  readonly readyState?: number;
+  addEventListener(type: string, listener: (event: Event | MessageEvent<string>) => void): void;
+  close(): void;
+}
+
+export interface SourceManifestSubscribeOptions {
+  readonly eventSourceFactory?: (url: string) => SourceManifestEventSourceLike;
+}
+
+export async function replaySourceManifestEvents(
+  request: SourceManifestReplayRequest,
+): Promise<SourceManifestEventReplay> {
+  const response = await fetch(sourceManifestEventsUrl("/api/source-manifest/events", request));
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<SourceManifestEventReplay>;
+}
+
+export async function getSourceManifestSnapshot(
+  request: SourceManifestSnapshotRequest,
+): Promise<SourceManifestSnapshotFallback> {
+  const response = await fetch(
+    apiEndpoint("/api/source-manifest/snapshot", {
+      sourceId: request.sourceId,
+      sourceRevisionId: request.sourceRevisionId,
+    }),
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<SourceManifestSnapshotFallback>;
+}
+
+export function sourceManifestEventsStreamUrl(request: SourceManifestStreamRequest): string {
+  return sourceManifestEventsUrl("/api/source-manifest/events/stream", request);
+}
+
+function defaultSourceManifestEventSourceFactory(url: string): SourceManifestEventSourceLike {
+  if (typeof EventSource === "undefined") {
+    throw new TypeError("EventSource is not available in this environment");
+  }
+  return new EventSource(url);
+}
+
+function noopSourceManifestDispose(): void {
+  return;
+}
+
+export function subscribeToSourceManifestEvents(
+  request: SourceManifestStreamRequest,
+  handlers: SourceManifestStreamHandlers,
+  options: SourceManifestSubscribeOptions = {},
+): () => void {
+  const factory = options.eventSourceFactory ?? defaultSourceManifestEventSourceFactory;
+
+  let eventSource: SourceManifestEventSourceLike;
+  try {
+    eventSource = factory(sourceManifestEventsStreamUrl(request));
+  } catch (error) {
+    handlers.onError(error instanceof Error ? error : new Error(String(error)));
+    return noopSourceManifestDispose;
+  }
+
+  let closed = false;
+  eventSource.addEventListener("source-manifest-event", (event) => {
+    parseSourceManifestSsePayload(
+      event,
+      (payload) => {
+        handlers.onEvent(payload as SourceManifestEvent);
+      },
+      handlers.onError,
+    );
+  });
+  eventSource.addEventListener("source-manifest-gap", (event) => {
+    parseSourceManifestSsePayload(
+      event,
+      (payload) => {
+        handlers.onGap(payload as SourceManifestEventReplay);
+      },
+      handlers.onError,
+    );
+  });
+  eventSource.addEventListener("error", () => {
+    if (!closed) {
+      handlers.onError(new Error("Source manifest event stream disconnected"));
+    }
+  });
+
+  return () => {
+    closed = true;
+    eventSource.close();
+  };
+}
+
+function sourceManifestEventsUrl(
+  path: string,
+  request: SourceManifestReplayRequest | SourceManifestStreamRequest,
+): string {
+  return apiEndpoint(path, {
+    sourceId: request.sourceId,
+    afterSequence:
+      typeof request.afterSequence === "number" ? String(request.afterSequence) : undefined,
+    limit: typeof request.limit === "number" ? String(request.limit) : undefined,
+    once: "once" in request && typeof request.once === "boolean" ? String(request.once) : undefined,
+  });
+}
+
+function parseSourceManifestSsePayload(
+  event: Event | MessageEvent<string>,
+  onPayload: (payload: unknown) => void,
+  onError: (error: Error) => void,
+): void {
+  const data = "data" in event && typeof event.data === "string" ? event.data : "";
+  try {
+    onPayload(JSON.parse(data));
+  } catch (error) {
+    onError(error instanceof Error ? error : new Error(String(error)));
+  }
 }
 
 export async function createVoiceJob(request: CreateVoiceJobRequest): Promise<VoiceJob> {
