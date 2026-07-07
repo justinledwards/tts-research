@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "extraction-revision.v1",
+  "extractionRevisionId": "er-ql-001",
+  "sourceId": "quicklisten-temp-001",
+  "sourceRevisionId": "sr-ql-001",
+  "adapter": "markdown",
+  "adapterVersion": "contract-fixture-v1",
+  "startedAt": "2026-05-17T00:58:02Z",
+  "completedAt": "2026-05-17T00:58:03Z",
+  "status": "complete",
+  "emittedUnitIds": ["unit-ql-0001"]
+}

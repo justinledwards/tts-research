@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "extraction-revision.v1",
+  "extractionRevisionId": "er-md-002",
+  "sourceId": "contract-markdown",
+  "sourceRevisionId": "sr-md-002",
+  "adapter": "markdown",
+  "adapterVersion": "contract-fixture-v1",
+  "startedAt": "2026-05-17T01:12:02Z",
+  "completedAt": "2026-05-17T01:12:03Z",
+  "status": "complete",
+  "emittedUnitIds": ["unit-md-0001"]
+}

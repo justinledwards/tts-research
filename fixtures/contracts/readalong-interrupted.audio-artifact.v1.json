@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "audio-artifact.v1",
+  "artifactId": "audio-md-interrupted",
+  "sourceId": "contract-markdown",
+  "sourceRevisionId": "sr-md-002",
+  "extractionRevisionId": "er-md-002",
+  "readalongManifestId": "ram-md-002",
+  "segmentIds": ["seg-0002"],
+  "state": "interrupted_retriable",
+  "generatedAt": "2026-05-17T01:14:00Z",
+  "provider": {
+    "name": "fixture-tts",
+    "voiceId": "voice-contract",
+    "model": "fixture-v1"
+  },
+  "format": "mp3",
+  "compatibilityKey": "ck-md-002-seg-0002",
+  "failureCode": "backend_restart",
+  "failureMessage": "orphaned synthesis marked interrupted after restart",
+  "retry": {
+    "retryable": true,
+    "scope": "segment",
+    "reason": "backend restart interrupted segment generation",
+    "attempt": 0
+  }
+}

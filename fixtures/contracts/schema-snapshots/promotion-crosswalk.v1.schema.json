@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tts-research.local/schemas/promotion-crosswalk.v1.schema.json",
+  "title": "PromotionCrosswalk v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "crosswalkId",
+    "promotedAt",
+    "fromSourceId",
+    "toSourceId",
+    "fromManifestId",
+    "toManifestId",
+    "identityMappings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "promotion-crosswalk.v1"
+    },
+    "crosswalkId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "promotedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "fromSourceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "toSourceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fromManifestId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "toManifestId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "identityMappings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceRevisionIds", "readingUnitIds", "audioArtifactIds", "progressIds"],
+      "properties": {
+        "sourceRevisionIds": {
+          "$ref": "#/$defs/idMapArray"
+        },
+        "extractionRevisionIds": {
+          "$ref": "#/$defs/idMapArray"
+        },
+        "readingUnitManifestIds": {
+          "$ref": "#/$defs/idMapArray"
+        },
+        "readalongManifestIds": {
+          "$ref": "#/$defs/idMapArray"
+        },
+        "readingUnitIds": {
+          "$ref": "#/$defs/idMapArray"
+        },
+        "audioArtifactIds": {
+          "$ref": "#/$defs/idMapArray"
+        },
+        "highlightMapIds": {
+          "$ref": "#/$defs/idMapArray"
+        },
+        "progressIds": {
+          "$ref": "#/$defs/idMapArray"
+        },
+        "repairOverlayIds": {
+          "$ref": "#/$defs/idMapArray"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "idMapArray": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to"],
+        "properties": {
+          "from": {
+            "type": "string",
+            "minLength": 1
+          },
+          "to": {
+            "type": "string",
+            "minLength": 1
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    }
+  }
+}

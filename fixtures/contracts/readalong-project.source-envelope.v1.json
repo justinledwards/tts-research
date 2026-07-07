@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "source-envelope.v1",
+  "sourceId": "contract-markdown",
+  "sourceKind": "project",
+  "origin": {
+    "method": "upload",
+    "fileName": "contract.md",
+    "contentType": "text/markdown",
+    "contentHash": "sha256:contract-md-v2",
+    "byteLength": 42
+  },
+  "projectId": "default",
+  "createdAt": "2026-05-17T01:00:00Z",
+  "currentRevisionId": "sr-md-002",
+  "lifecycle": "active",
+  "metadata": {
+    "title": "Markdown Contract"
+  }
+}

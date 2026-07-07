@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tts-research.local/schemas/artifact-compatibility.v1.schema.json",
+  "title": "ArtifactCompatibility v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "compatibilityId",
+    "artifactId",
+    "sourceId",
+    "sourceRevisionId",
+    "targetSourceRevisionId",
+    "decision",
+    "reuseAllowed",
+    "checkedAt",
+    "reasons"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "artifact-compatibility.v1"
+    },
+    "compatibilityId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifactId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceRevisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "targetSourceRevisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "decision": {
+      "enum": [
+        "compatible",
+        "compatible_with_degraded_sync",
+        "stale_due_to_revision",
+        "stale_due_to_repair",
+        "incompatible",
+        "replacement_required"
+      ]
+    },
+    "reuseAllowed": {
+      "type": "boolean"
+    },
+    "checkedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "compatibleUnitIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "staleUnitIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

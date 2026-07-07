@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "source-manifest-event.v1",
+  "eventId": "evt-md-0001",
+  "sourceId": "contract-markdown",
+  "sequence": 1,
+  "occurredAt": "2026-05-17T01:12:05Z",
+  "eventType": "readalong_manifest_written",
+  "snapshotAvailable": true,
+  "cursor": "contract-markdown:1",
+  "subject": {
+    "sourceRevisionId": "sr-md-002",
+    "extractionRevisionId": "er-md-002",
+    "readalongManifestId": "ram-md-002",
+    "state": "current"
+  },
+  "snapshotManifestId": "ram-md-002"
+}

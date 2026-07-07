@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "reading-unit-manifest.v1",
+  "manifestId": "rum-md-002",
+  "sourceId": "contract-markdown",
+  "sourceRevisionId": "sr-md-002",
+  "extractionRevisionId": "er-md-002",
+  "manifestRevision": 2,
+  "state": "current",
+  "generatedAt": "2026-05-17T01:12:04Z",
+  "units": [
+    {
+      "unitId": "unit-md-0001",
+      "orderKey": "00000001",
+      "nodeId": "md-0001",
+      "readiness": "alignable",
+      "contentIrId": "contract-markdown",
+      "locator": {
+        "type": "markdown",
+        "markdown": {
+          "path": "contract.md",
+          "lineStart": 3,
+          "lineEnd": 3,
+          "columnStart": 1,
+          "columnEnd": 28,
+          "astPath": "/children/1"
+        }
+      },
+      "fingerprint": "fp-unit-md-0001-v2",
+      "warnings": []
+    }
+  ],
+  "summary": {
+    "unitCount": 1,
+    "readableCount": 1,
+    "narratableCount": 1,
+    "blockedCount": 0,
+    "pendingCount": 0,
+    "degraded": false
+  }
+}

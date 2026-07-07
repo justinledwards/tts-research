@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tts-research.local/schemas/source-envelope.v1.schema.json",
+  "title": "SourceEnvelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "sourceId",
+    "sourceKind",
+    "origin",
+    "projectId",
+    "createdAt",
+    "currentRevisionId",
+    "lifecycle"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "source-envelope.v1"
+    },
+    "sourceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceKind": {
+      "enum": ["project", "quick_listen_temporary", "imported"]
+    },
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method"],
+      "properties": {
+        "method": {
+          "enum": ["upload", "url", "paste", "generated"]
+        },
+        "uri": {
+          "type": "string"
+        },
+        "fileName": {
+          "type": "string"
+        },
+        "contentType": {
+          "type": "string"
+        },
+        "contentHash": {
+          "type": "string"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "projectId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "currentRevisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "lifecycle": {
+      "enum": ["active", "temporary", "promoted", "archived", "deleted"]
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "promotedToSourceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

@@ -188,17 +188,17 @@ flowchart LR
 | `locator-envelope.v1` | yes | use for progress/bookmarks/highlights; add source/manifest binding in sidecars if needed |
 | `speech-plan.v1` | yes | link segments to source/revision/manifest/unit identity through sidecars or compatible metadata |
 | `highlight-map.v2` | yes: `backend/internal/contentir/schema/highlight-map.v2.schema.json` and `packages/schema/schemas/highlight-map.v2.schema.json` | reuse timing/highlight shape; stale/fidelity gates live in sidecars |
-| `SourceEnvelope` | partial temporary-source docs | formalize source-neutral contract |
-| `SourceRevision` / `ExtractionRevision` | no | add sidecar contract |
-| `ReadingUnitManifest` / `ReadalongManifest` | no | add sidecar contract and snapshots |
-| `AudioArtifact` | partial pipeline state | formalize checked/unchecked/stale/replaced/failed/retryable state shape |
-| `ArtifactCompatibility` | no | add source/audio/highlight staleness/reuse contract |
-| `RevisionMap` | no | add remap sidecar for repairs/extraction correction |
-| `RepairOverlay` | no | add immutable minimal overlay contract |
-| `PromotionCrosswalk` | partial temporary-source docs | formalize temporary-to-project identity map |
-| `SourceManifestEvent` | no | add sequenced event + snapshot fallback contract |
-| `DurableProgress` / `ResumeResolution` | partial progress/locator docs | add canonical durable progress + deterministic reopen/resume contract |
-| `SyncFidelityDecision` | partial highlight-map/degraded fixtures | add explicit decision record unless fully covered by highlight-map v2 plus artifact compatibility sidecars |
+| `SourceEnvelope` | yes: `source-envelope.v1` | source-neutral durable/temporary identity sidecar; see `docs/contracts/readalong-sidecars.md` |
+| `SourceRevision` / `ExtractionRevision` | yes: `source-revision.v1`, `extraction-revision.v1` | source revision and adapter extraction revision sidecars |
+| `ReadingUnitManifest` / `ReadalongManifest` | yes: `reading-unit-manifest.v1`, `readalong-manifest.v1` | reading/readalong manifest sidecars and snapshots |
+| `AudioArtifact` | yes: `audio-artifact.v1` | checked/unchecked/stale/replaced/failed/retryable/interrupted artifact state shape |
+| `ArtifactCompatibility` | yes: `artifact-compatibility.v1` | source/audio/highlight staleness/reuse contract |
+| `RevisionMap` | yes: `revision-map.v1` | remap sidecar for repairs/extraction correction |
+| `RepairOverlay` | yes: `repair-overlay.v1` | immutable minimal overlay contract |
+| `PromotionCrosswalk` | yes: `promotion-crosswalk.v1` | temporary-to-project identity map |
+| `SourceManifestEvent` | yes: `source-manifest-event.v1` | sequenced event + snapshot fallback contract |
+| `DurableProgress` / `ResumeResolution` | yes: `durable-progress.v1`, `resume-resolution.v1` | canonical durable progress + deterministic reopen/resume contract |
+| `SyncFidelityDecision` | yes: `sync-fidelity-decision.v1` | explicit sync fidelity gate decision record |
 
 ## Linear seeding gate
 

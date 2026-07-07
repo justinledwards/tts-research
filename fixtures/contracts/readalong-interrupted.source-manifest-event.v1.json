@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "source-manifest-event.v1",
+  "eventId": "evt-md-0002",
+  "sourceId": "contract-markdown",
+  "sequence": 2,
+  "occurredAt": "2026-05-17T01:14:05Z",
+  "eventType": "artifact_interrupted_retriable",
+  "snapshotAvailable": true,
+  "cursor": "contract-markdown:2",
+  "subject": {
+    "readalongManifestId": "ram-md-002",
+    "audioArtifactId": "audio-md-interrupted",
+    "state": "interrupted_retriable"
+  },
+  "snapshotManifestId": "ram-md-002"
+}

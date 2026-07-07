@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "repair-overlay.v1",
+  "overlayId": "repair-md-001",
+  "sourceId": "contract-markdown",
+  "sourceRevisionId": "sr-md-001",
+  "targetRevisionId": "sr-md-002",
+  "createdAt": "2026-05-17T01:10:00Z",
+  "createdBy": "fixture",
+  "immutable": true,
+  "changes": [
+    {
+      "changeId": "repair-change-001",
+      "op": "replace_text",
+      "unitId": "unit-md-0001",
+      "locator": {
+        "type": "markdown",
+        "markdown": {
+          "path": "contract.md",
+          "lineStart": 3,
+          "lineEnd": 3,
+          "columnStart": 1,
+          "columnEnd": 22,
+          "astPath": "/children/1"
+        }
+      },
+      "beforeText": "Dr Nguyen shipped v1.",
+      "afterText": "Doctor Nguyen shipped version one.",
+      "reason": "expand abbreviation and version for readalong clarity"
+    }
+  ],
+  "summary": "Immutable repair overlay expands source text without mutating the original manifest."
+}

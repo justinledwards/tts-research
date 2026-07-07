@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tts-research.local/schemas/durable-progress.v1.schema.json",
+  "title": "DurableProgress v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "progressId",
+    "sourceId",
+    "readalongManifestId",
+    "sourceRevisionId",
+    "kind",
+    "state",
+    "updatedAt",
+    "canonical",
+    "locatorEnvelope",
+    "position"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "durable-progress.v1"
+    },
+    "progressId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "readalongManifestId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceRevisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "audioArtifactId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "enum": ["resume", "bookmark", "highlight"]
+    },
+    "state": {
+      "enum": [
+        "current",
+        "degraded",
+        "stale",
+        "superseded",
+        "failed",
+        "interrupted_retriable",
+        "remapped"
+      ]
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "canonical": {
+      "type": "boolean"
+    },
+    "locatorEnvelope": {
+      "$ref": "locator-envelope.v1.schema.json"
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unitId"],
+      "properties": {
+        "unitId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "segmentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "activeWordIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "audioOffsetMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "textQuote": {
+          "type": "string"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

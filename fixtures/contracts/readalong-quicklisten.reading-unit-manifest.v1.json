@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "reading-unit-manifest.v1",
+  "manifestId": "rum-ql-001",
+  "sourceId": "quicklisten-temp-001",
+  "sourceRevisionId": "sr-ql-001",
+  "extractionRevisionId": "er-ql-001",
+  "manifestRevision": 1,
+  "state": "current",
+  "generatedAt": "2026-05-17T00:58:04Z",
+  "units": [
+    {
+      "unitId": "unit-ql-0001",
+      "orderKey": "00000001",
+      "nodeId": "md-0001",
+      "readiness": "narratable",
+      "contentIrId": "contract-markdown",
+      "locator": {
+        "type": "markdown",
+        "markdown": {
+          "path": "contract.md",
+          "lineStart": 3,
+          "lineEnd": 3,
+          "columnStart": 1,
+          "columnEnd": 22,
+          "astPath": "/children/1"
+        }
+      },
+      "fingerprint": "fp-unit-ql-0001"
+    }
+  ],
+  "summary": {
+    "unitCount": 1,
+    "readableCount": 1,
+    "narratableCount": 1,
+    "blockedCount": 0,
+    "pendingCount": 0,
+    "degraded": false
+  }
+}

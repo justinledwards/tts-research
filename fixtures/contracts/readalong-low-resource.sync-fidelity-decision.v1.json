@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "sync-fidelity-decision.v1",
+  "decisionId": "sync-md-low-resource",
+  "sourceId": "contract-markdown",
+  "sourceRevisionId": "sr-md-002",
+  "readalongManifestId": "ram-md-002",
+  "audioArtifactId": "audio-md-checked",
+  "generatedAt": "2026-05-17T01:13:33Z",
+  "fidelity": "block",
+  "exactAllowed": false,
+  "fallbackReason": "low-resource mode downgraded exact word sync to block highlighting",
+  "evidence": {
+    "sourceRevisionCurrent": true,
+    "mappingValid": true,
+    "timingConfidence": true,
+    "lowResourceMode": true,
+    "artifactCompatible": true,
+    "confidence": 0.96,
+    "driftBudgetMs": 150
+  }
+}

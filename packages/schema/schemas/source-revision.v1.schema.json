@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tts-research.local/schemas/source-revision.v1.schema.json",
+  "title": "SourceRevision v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "revisionId",
+    "sourceId",
+    "createdAt",
+    "revisionOrdinal",
+    "revisionState",
+    "contentHash",
+    "rawArtifact"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "source-revision.v1"
+    },
+    "revisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "revisionOrdinal": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "revisionState": {
+      "enum": ["current", "superseded", "archived"]
+    },
+    "contentHash": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceFingerprint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rawArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifactId", "uri", "sha256"],
+      "properties": {
+        "artifactId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contentType": {
+          "type": "string"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "supersedesRevisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "supersededByRevisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "repairOverlayId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

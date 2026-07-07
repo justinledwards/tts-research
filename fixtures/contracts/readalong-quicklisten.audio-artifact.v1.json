@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "audio-artifact.v1",
+  "artifactId": "audio-ql-001",
+  "sourceId": "quicklisten-temp-001",
+  "sourceRevisionId": "sr-ql-001",
+  "extractionRevisionId": "er-ql-001",
+  "readalongManifestId": "ram-ql-001",
+  "segmentIds": ["seg-0001"],
+  "state": "unchecked",
+  "generatedAt": "2026-05-17T00:59:00Z",
+  "provider": {
+    "name": "fixture-tts"
+  },
+  "format": "mp3",
+  "durationMs": 1700,
+  "compatibilityKey": "ck-ql-001-seg-0001",
+  "retry": {
+    "retryable": true,
+    "scope": "artifact",
+    "reason": "unchecked temporary audio can be replaced",
+    "attempt": 0
+  }
+}

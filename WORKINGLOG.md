@@ -2436,3 +2436,19 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] create orchestrator control instructions for sub-agent execution
 - [x] add sub-agent task and review templates
 - [x] verify formatting/checks and commit handoff docs
+
+## 2026-07-07 12:21 CEST - First Batch Orchestrated Execution
+- [x] confirm clean branch state, remote, Linear active count, and manifest identifiers
+- [x] write QQP-423 implementation plan
+- [x] implement readalong contract pack with deterministic fixtures and validation
+- [x] run independent spec and quality reviews
+- [x] run parent gates, update Linear, commit, and push
+
+## 2026-07-07 12:24 CEST - QQP-423 Readalong Contracts
+- [x] inspect existing contract generator, schemas, fixtures, and validation
+- [x] add readalong sidecar schema contract pack and docs
+- [x] add representative sidecar fixtures and semantic validation
+- [x] generate public mirrors and run focused verification
+- [x] spec review: PASS
+- [x] quality review: APPROVED after semantic cross-reference hardening
+- [x] verification: `mise exec -- pnpm validate:ir && mise exec -- pnpm test:scripts && mise exec -- pnpm check`, `git diff --check`

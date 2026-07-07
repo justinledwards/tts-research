@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tts-research.local/schemas/readalong-manifest.v1.schema.json",
+  "title": "ReadalongManifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "manifestId",
+    "sourceId",
+    "sourceRevisionId",
+    "extractionRevisionId",
+    "readingUnitManifestId",
+    "manifestRevision",
+    "state",
+    "generatedAt",
+    "unitIds"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "readalong-manifest.v1"
+    },
+    "manifestId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceRevisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "extractionRevisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "readingUnitManifestId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "manifestRevision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "state": {
+      "enum": ["current", "degraded", "superseded", "stale", "failed", "interrupted_retriable"]
+    },
+    "supersededByManifestId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "unitIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "speechPlanIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "audioArtifactIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "highlightMapIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "artifactCompatibilityIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "syncFidelityDecisionIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "progressIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "repairOverlayIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

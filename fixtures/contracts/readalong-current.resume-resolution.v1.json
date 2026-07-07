@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "resume-resolution.v1",
+  "resolutionId": "resume-md-current",
+  "progressId": "progress-md-current",
+  "sourceId": "contract-markdown",
+  "requestedAt": "2026-05-17T01:20:00Z",
+  "decision": "auto_resume_current",
+  "reason": "progress manifest is current and checked audio is compatible",
+  "resolvedReadalongManifestId": "ram-md-002",
+  "resolvedLocatorEnvelope": {
+    "schemaVersion": "locator-envelope.v1",
+    "kind": "resume",
+    "sourceId": "contract-markdown",
+    "nodeId": "md-0001",
+    "scopeKey": "document",
+    "activeWordIndex": 1,
+    "locator": {
+      "type": "markdown",
+      "markdown": {
+        "path": "contract.md",
+        "lineStart": 3,
+        "lineEnd": 3,
+        "columnStart": 1,
+        "columnEnd": 28,
+        "astPath": "/children/1"
+      }
+    },
+    "textQuote": "Doctor Nguyen shipped version one."
+  }
+}

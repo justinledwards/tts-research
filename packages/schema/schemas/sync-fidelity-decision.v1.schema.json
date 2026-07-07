@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tts-research.local/schemas/sync-fidelity-decision.v1.schema.json",
+  "title": "SyncFidelityDecision v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "decisionId",
+    "sourceId",
+    "sourceRevisionId",
+    "readalongManifestId",
+    "audioArtifactId",
+    "generatedAt",
+    "fidelity",
+    "exactAllowed",
+    "evidence"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "sync-fidelity-decision.v1"
+    },
+    "decisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceRevisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "readalongManifestId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "audioArtifactId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "highlightMapId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "fidelity": {
+      "enum": ["exact_word", "phrase", "block", "audio_only", "source_only", "none"]
+    },
+    "exactAllowed": {
+      "type": "boolean"
+    },
+    "fallbackReason": {
+      "type": "string"
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceRevisionCurrent",
+        "mappingValid",
+        "timingConfidence",
+        "lowResourceMode",
+        "artifactCompatible",
+        "confidence"
+      ],
+      "properties": {
+        "sourceRevisionCurrent": {
+          "type": "boolean"
+        },
+        "mappingValid": {
+          "type": "boolean"
+        },
+        "timingConfidence": {
+          "type": "boolean"
+        },
+        "lowResourceMode": {
+          "type": "boolean"
+        },
+        "artifactCompatible": {
+          "type": "boolean"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "driftBudgetMs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

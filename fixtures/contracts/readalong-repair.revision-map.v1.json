@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "revision-map.v1",
+  "revisionMapId": "revmap-md-001",
+  "sourceId": "contract-markdown",
+  "fromSourceRevisionId": "sr-md-001",
+  "toSourceRevisionId": "sr-md-002",
+  "generatedAt": "2026-05-17T01:12:06Z",
+  "cause": "repair_overlay",
+  "overlayId": "repair-md-001",
+  "confidence": 0.94,
+  "unitMappings": [
+    {
+      "fromUnitId": "unit-md-0001",
+      "toUnitId": "unit-md-0001",
+      "confidence": 0.97,
+      "status": "changed"
+    },
+    {
+      "fromUnitId": "unit-md-0002",
+      "toUnitId": "unit-md-0002",
+      "confidence": 0.2,
+      "status": "blocked"
+    }
+  ],
+  "locatorMappings": [
+    {
+      "fromLocator": {
+        "type": "markdown",
+        "markdown": {
+          "path": "contract.md",
+          "lineStart": 3,
+          "lineEnd": 3,
+          "columnStart": 1,
+          "columnEnd": 22,
+          "astPath": "/children/1"
+        }
+      },
+      "toLocator": {
+        "type": "markdown",
+        "markdown": {
+          "path": "contract.md",
+          "lineStart": 3,
+          "lineEnd": 3,
+          "columnStart": 1,
+          "columnEnd": 28,
+          "astPath": "/children/1"
+        }
+      },
+      "confidence": 0.94,
+      "textQuote": "Dr Nguyen shipped v1."
+    }
+  ],
+  "progressMappings": [
+    {
+      "fromProgressId": "progress-md-stale",
+      "toProgressId": "progress-md-remapped",
+      "confidence": 0.93
+    }
+  ]
+}

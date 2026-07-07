@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "source-revision.v1",
+  "revisionId": "sr-md-001",
+  "sourceId": "contract-markdown",
+  "createdAt": "2026-05-17T01:00:00Z",
+  "revisionOrdinal": 1,
+  "revisionState": "superseded",
+  "contentHash": "sha256:contract-md-v1",
+  "sourceFingerprint": "fp-md-original",
+  "rawArtifact": {
+    "artifactId": "raw-md-001",
+    "uri": "file://sources/contract-md/v1.md",
+    "sha256": "sha256:contract-md-v1",
+    "contentType": "text/markdown",
+    "byteLength": 31
+  },
+  "supersededByRevisionId": "sr-md-002"
+}

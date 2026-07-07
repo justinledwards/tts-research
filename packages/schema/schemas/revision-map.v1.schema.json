@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tts-research.local/schemas/revision-map.v1.schema.json",
+  "title": "RevisionMap v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "revisionMapId",
+    "sourceId",
+    "fromSourceRevisionId",
+    "toSourceRevisionId",
+    "generatedAt",
+    "cause",
+    "confidence",
+    "unitMappings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "revision-map.v1"
+    },
+    "revisionMapId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fromSourceRevisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "toSourceRevisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "cause": {
+      "enum": ["repair_overlay", "extraction_correction", "promotion"]
+    },
+    "overlayId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "unitMappings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fromUnitId", "toUnitId", "confidence"],
+        "properties": {
+          "fromUnitId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "toUnitId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "status": {
+            "enum": ["matched", "changed", "deleted", "inserted", "blocked"]
+          }
+        }
+      }
+    },
+    "locatorMappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fromLocator", "toLocator", "confidence"],
+        "properties": {
+          "fromLocator": {
+            "$ref": "content-ir.v1.schema.json#/$defs/locator"
+          },
+          "toLocator": {
+            "$ref": "content-ir.v1.schema.json#/$defs/locator"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "textQuote": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "progressMappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fromProgressId", "toProgressId", "confidence"],
+        "properties": {
+          "fromProgressId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "toProgressId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}
