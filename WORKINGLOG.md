@@ -2431,3 +2431,8 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] produce final Linear issue manifest only after ChatGPT agreement
 - [x] create 19 Linear issues under the cap and update local manifests
 - [x] run checks/review packaging and commit documentation state
+
+## 2026-07-07 11:54 CEST - Orchestrator Handoff
+- [x] create orchestrator control instructions for sub-agent execution
+- [x] add sub-agent task and review templates
+- [x] verify formatting/checks and commit handoff docs
