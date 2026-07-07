@@ -230,6 +230,7 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	registerProjectRoutes(app, service)
 	registerVoiceJobRoutes(app, service)
 	registerTemporarySourceRoutes(app, service)
+	registerSourceManifestRoutes(app, service)
 
 	app.Get("/api/projects/:id/book-sources", func(ctx fiber.Ctx) error {
 		summary := strings.EqualFold(ctx.Query("summary"), "1") ||
@@ -1279,6 +1280,7 @@ func notFound(ctx fiber.Ctx, err error) error {
 		errors.Is(err, pipeline.ErrBookSourceNotFound) ||
 		errors.Is(err, pipeline.ErrPreparedSourceNotFound) ||
 		errors.Is(err, pipeline.ErrContentIRNotFound) ||
+		errors.Is(err, pipeline.ErrSourceLifecycleNotFound) ||
 		errors.Is(err, pipeline.ErrProgressNotFound) ||
 		errors.Is(err, pipeline.ErrPlaybackSessionNotFound) ||
 		errors.Is(err, pipeline.ErrResearchModuleNotFound) {

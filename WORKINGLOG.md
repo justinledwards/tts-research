@@ -2544,3 +2544,21 @@ duplicating every implementation detail from commits, PR text, or generated revi
   - [x] final gates passed at 2026-07-07 22:25 CEST: `mise exec -- pnpm check`, `git diff --check`
   - [x] commit created after final gates: initial `2cdbcdaa1dbda34babb330e18b53d2572aa5f9b9`; commit hook reran `pnpm check` and passed
   - [x] final closeout docs amended into commit; push, remote verification, and Linear closeout handled by parent orchestrator
+
+## 2026-07-07 22:34 CEST - QQP-429 Source and Manifest Backend Event Stream
+- [x] preflight repo state: branch `niklas/voice-studio-follow-up`, local and remote both at `710cfbecb1dad375fe6cae206681789dc16dd009`, clean tree
+- [x] preflight Linear state: project page fetched with `hasNextPage=false`; QQP-423 through QQP-428 Done; QQP-429 Backlog
+- [x] selected next issue by agreed manifest order/dependencies: QQP-429 depends on QQP-423 and QQP-425, both Done, with QQP-428 producer path now Done
+- [x] wrote implementation plan: `docs/plans/linear/QQP-429-source-manifest-event-stream.md`
+- [x] move QQP-429 to In Progress and dispatch focused implementation worker (`deleg_0fd98176`)
+- [x] run parent inspection, focused verification, spec review, and quality review
+  - [x] implementation worker timed out (`deleg_0fd98176`) but left coherent partial QQP-429 diff; parent inspected read-only
+  - [x] parent focused gates passed: focused pipeline event/snapshot tests, focused httpapi event/stream tests, full pipeline package, full httpapi package, `mise exec -- pnpm validate:ir`, `git diff --check`
+  - [x] independent spec review PASS (`deleg_7a571654`)
+  - [x] independent quality review REQUEST_CHANGES (`deleg_6fef2cc2`): important blockers on SSE replay limit silently skipping backlog and restart/empty-log replay failing to require snapshot fallback
+  - [x] focused repair worker timed out (`deleg_3b197fbc`) but left coherent partial repair diff; parent inspected read-only and verified targeted repair gates
+  - [x] targeted quality re-review APPROVED (`deleg_fdfbcb12`)
+- [x] run final gates, update Linear, commit, and push
+  - [x] final gates passed at 2026-07-07 23:21 CEST: `mise exec -- pnpm check`, `git diff --check`
+  - [x] commit created after final gates: initial `9f4c33f06dfcff00191d094ed7257057023e8e00`; commit hook reran `pnpm check` and passed
+  - [x] final closeout docs amended into commit; push, remote verification, and Linear closeout handled by parent orchestrator

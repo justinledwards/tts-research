@@ -62,6 +62,8 @@ var (
 	ErrResearchModuleUnavailable      = errors.New("research module is not installed")
 	ErrManifestSnapshotNotFound       = errors.New("manifest snapshot not found")
 	ErrManifestSnapshotInvalid        = errors.New("manifest snapshot is invalid")
+	ErrSourceLifecycleNotFound        = errors.New("source lifecycle not found")
+	ErrSourceManifestEventInvalid     = errors.New("source manifest event request is invalid")
 )
 
 type VoiceOptimizer interface {
@@ -259,6 +261,7 @@ type Service struct {
 	readalongs                      map[string]ReadalongManifest
 	currentManifests                map[manifestCurrentKey]string
 	readalongsByReadingUnitManifest map[string]map[string]struct{}
+	sourceManifestEvents            *sourceManifestEventLog
 	temporary                       map[string]TemporarySourceSession
 	books                           map[string]storedBookSource
 	sourcePreps                     map[string]PreparedSource
@@ -575,6 +578,7 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 		readalongs:                      map[string]ReadalongManifest{},
 		currentManifests:                map[manifestCurrentKey]string{},
 		readalongsByReadingUnitManifest: map[string]map[string]struct{}{},
+		sourceManifestEvents:            newSourceManifestEventLog(sourceManifestEventReplayLimit),
 		temporary:                       map[string]TemporarySourceSession{},
 		books:                           map[string]storedBookSource{},
 		sourcePreps:                     map[string]PreparedSource{},

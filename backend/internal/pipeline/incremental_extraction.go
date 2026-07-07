@@ -295,6 +295,8 @@ func (service *Service) persistIncrementalManifestSnapshotPair(readingUnit Readi
 	if previousWriteErr != nil {
 		return cloneReadingUnitManifest(normalizedReadingUnit), cloneReadalongManifest(normalizedReadalong), previousWriteErr
 	}
+	publishReadingUnitManifestEvent(service, normalizedReadingUnit)
+	publishReadalongManifestEvent(service, normalizedReadalong)
 	return cloneReadingUnitManifest(normalizedReadingUnit), cloneReadalongManifest(normalizedReadalong), nil
 }
 

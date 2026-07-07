@@ -156,6 +156,7 @@ func (service *Service) PersistReadingUnitManifest(manifest ReadingUnitManifest)
 		if previousWriteErr != nil {
 			return cloneReadingUnitManifest(normalized), previousWriteErr
 		}
+		publishReadingUnitManifestEvent(service, normalized)
 		return cloneReadingUnitManifest(normalized), nil
 	}
 
@@ -166,6 +167,7 @@ func (service *Service) PersistReadingUnitManifest(manifest ReadingUnitManifest)
 	service.readingUnits[normalized.ManifestID] = cloneReadingUnitManifest(normalized)
 	service.rebuildManifestIndexesLocked()
 	service.mu.Unlock()
+	publishReadingUnitManifestEvent(service, normalized)
 	return cloneReadingUnitManifest(normalized), nil
 }
 
@@ -209,6 +211,7 @@ func (service *Service) PersistReadalongManifest(manifest ReadalongManifest) (Re
 		if previousWriteErr != nil {
 			return cloneReadalongManifest(normalized), previousWriteErr
 		}
+		publishReadalongManifestEvent(service, normalized)
 		return cloneReadalongManifest(normalized), nil
 	}
 
@@ -219,6 +222,7 @@ func (service *Service) PersistReadalongManifest(manifest ReadalongManifest) (Re
 	service.readalongs[normalized.ManifestID] = cloneReadalongManifest(normalized)
 	service.rebuildManifestIndexesLocked()
 	service.mu.Unlock()
+	publishReadalongManifestEvent(service, normalized)
 	return cloneReadalongManifest(normalized), nil
 }
 

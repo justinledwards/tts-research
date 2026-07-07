@@ -317,6 +317,8 @@ func (service *Service) PersistSourceLifecycle(request SourceLifecyclePersistReq
 	service.sourceRevisions[revisionID] = cloneSourceRevision(revision)
 	service.mu.Unlock()
 
+	publishSourceLifecycleCreatedEvent(service, envelope, revision)
+
 	return cloneSourceEnvelope(envelope), cloneSourceRevision(revision), nil
 }
 
@@ -368,6 +370,9 @@ func (service *Service) UpdateSourceLifecycleWorkStatus(sourceID string, revisio
 		service.sourceRevisions[cleanRevisionID] = cloneSourceRevision(revision)
 	}
 	service.mu.Unlock()
+	if hasEnvelope && hasRevision {
+		publishSourceLifecycleStatusEvent(service, envelope, revision, status)
+	}
 	return nil
 }
 
