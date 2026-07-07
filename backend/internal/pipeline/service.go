@@ -60,6 +60,8 @@ var (
 	ErrProjectBundleInvalid           = errors.New("project bundle is invalid")
 	ErrResearchModuleNotFound         = errors.New("research module not found")
 	ErrResearchModuleUnavailable      = errors.New("research module is not installed")
+	ErrManifestSnapshotNotFound       = errors.New("manifest snapshot not found")
+	ErrManifestSnapshotInvalid        = errors.New("manifest snapshot is invalid")
 )
 
 type VoiceOptimizer interface {
@@ -241,29 +243,33 @@ type storedBookSource struct {
 }
 
 type Service struct {
-	optimizer       VoiceOptimizer
-	tts             TTSAgent
-	ttsEngines      map[string]TTSEngineRegistration
-	defaultTTS      string
-	checker         VoiceChecker
-	options         Options
-	mu              sync.RWMutex
-	jobs            map[string]storedJob
-	projects        map[string]VoiceProject
-	sourceEnvelopes map[string]SourceEnvelope
-	sourceRevisions map[string]SourceRevision
-	temporary       map[string]TemporarySourceSession
-	books           map[string]storedBookSource
-	sourcePreps     map[string]PreparedSource
-	progress        map[string]PlaybackProgress
-	sessions        map[string]PlaybackSession
-	profiles        map[string]storedVoiceProfile
-	sources         map[string]storedVoiceProfileSource
-	voices          map[string]Voice
-	jobCancels      map[string]context.CancelFunc
-	jobDone         map[string]chan struct{}
-	sourceCancels   map[string]context.CancelFunc
-	targetCancels   map[string]context.CancelFunc
+	optimizer                       VoiceOptimizer
+	tts                             TTSAgent
+	ttsEngines                      map[string]TTSEngineRegistration
+	defaultTTS                      string
+	checker                         VoiceChecker
+	options                         Options
+	mu                              sync.RWMutex
+	jobs                            map[string]storedJob
+	projects                        map[string]VoiceProject
+	sourceEnvelopes                 map[string]SourceEnvelope
+	sourceRevisions                 map[string]SourceRevision
+	readingUnits                    map[string]ReadingUnitManifest
+	readalongs                      map[string]ReadalongManifest
+	currentManifests                map[manifestCurrentKey]string
+	readalongsByReadingUnitManifest map[string]map[string]struct{}
+	temporary                       map[string]TemporarySourceSession
+	books                           map[string]storedBookSource
+	sourcePreps                     map[string]PreparedSource
+	progress                        map[string]PlaybackProgress
+	sessions                        map[string]PlaybackSession
+	profiles                        map[string]storedVoiceProfile
+	sources                         map[string]storedVoiceProfileSource
+	voices                          map[string]Voice
+	jobCancels                      map[string]context.CancelFunc
+	jobDone                         map[string]chan struct{}
+	sourceCancels                   map[string]context.CancelFunc
+	targetCancels                   map[string]context.CancelFunc
 }
 
 type resolvedJobConfig struct {
@@ -554,32 +560,37 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	defaultTTS, ttsEngines := initializeTTSEngines(options.DefaultTTSEngine, tts, options.TTSEngines)
 
 	service := &Service{
-		optimizer:       optimizer,
-		tts:             tts,
-		ttsEngines:      ttsEngines,
-		defaultTTS:      defaultTTS,
-		checker:         checker,
-		options:         options,
-		jobs:            map[string]storedJob{},
-		projects:        map[string]VoiceProject{},
-		sourceEnvelopes: map[string]SourceEnvelope{},
-		sourceRevisions: map[string]SourceRevision{},
-		temporary:       map[string]TemporarySourceSession{},
-		books:           map[string]storedBookSource{},
-		sourcePreps:     map[string]PreparedSource{},
-		progress:        map[string]PlaybackProgress{},
-		sessions:        map[string]PlaybackSession{},
-		profiles:        map[string]storedVoiceProfile{},
-		sources:         map[string]storedVoiceProfileSource{},
-		voices:          map[string]Voice{},
-		jobCancels:      map[string]context.CancelFunc{},
-		jobDone:         map[string]chan struct{}{},
-		sourceCancels:   map[string]context.CancelFunc{},
-		targetCancels:   map[string]context.CancelFunc{},
+		optimizer:                       optimizer,
+		tts:                             tts,
+		ttsEngines:                      ttsEngines,
+		defaultTTS:                      defaultTTS,
+		checker:                         checker,
+		options:                         options,
+		jobs:                            map[string]storedJob{},
+		projects:                        map[string]VoiceProject{},
+		sourceEnvelopes:                 map[string]SourceEnvelope{},
+		sourceRevisions:                 map[string]SourceRevision{},
+		readingUnits:                    map[string]ReadingUnitManifest{},
+		readalongs:                      map[string]ReadalongManifest{},
+		currentManifests:                map[manifestCurrentKey]string{},
+		readalongsByReadingUnitManifest: map[string]map[string]struct{}{},
+		temporary:                       map[string]TemporarySourceSession{},
+		books:                           map[string]storedBookSource{},
+		sourcePreps:                     map[string]PreparedSource{},
+		progress:                        map[string]PlaybackProgress{},
+		sessions:                        map[string]PlaybackSession{},
+		profiles:                        map[string]storedVoiceProfile{},
+		sources:                         map[string]storedVoiceProfileSource{},
+		voices:                          map[string]Voice{},
+		jobCancels:                      map[string]context.CancelFunc{},
+		jobDone:                         map[string]chan struct{}{},
+		sourceCancels:                   map[string]context.CancelFunc{},
+		targetCancels:                   map[string]context.CancelFunc{},
 	}
 	service.loadCloneVoices()
 	service.reloadProjects()
 	service.reloadSourceLifecycle()
+	service.reloadManifestSnapshots()
 	service.reloadTemporarySources()
 	service.reloadBookSources()
 	service.reloadSourcePreps()

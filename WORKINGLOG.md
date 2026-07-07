@@ -2493,3 +2493,20 @@ duplicating every implementation detail from commits, PR text, or generated revi
   - [x] dispatch and verify focused backend golden fixture update worker (`deleg_0d73c878`); golden drift fixed, focused golden test passes, full check now blocked by prepared-source job TempDir cleanup race
   - [x] dispatch and verify focused prepared-source job test lifecycle repair worker (`deleg_8338fcff`); focused tests, pipeline package, full `mise exec -- pnpm check`, and `git diff --check` passed
   - [x] commit created after final gates; Linear completion and push handled by parent orchestrator
+
+## 2026-07-07 19:28 CEST - QQP-425 Manifest Snapshot Storage API
+- [x] preflight repo state: branch `niklas/voice-studio-follow-up`, local and remote both at `2f91894f99a6bcb3f67afa17cda03d64b41c1e85`, clean tree
+- [x] preflight Linear state: project page fetched with `hasNextPage=false`; QQP-423, QQP-424, and QQP-426 Done; QQP-425 Backlog
+- [x] selected next issue by manifest dependencies: QQP-425 `manifest-snapshot-storage-api` depends on QQP-423 and QQP-424, both Done
+- [x] wrote implementation plan: `docs/plans/linear/QQP-425-manifest-snapshot-storage-api.md`
+- [x] move QQP-425 to In Progress and dispatch focused backend implementation worker (`deleg_01e22733`)
+- [ ] run parent inspection, focused verification, spec review, and quality review
+  - [x] implementation worker timed out (`deleg_01e22733`) but left coherent partial QQP-425 diff; parent inspected read-only
+  - [x] parent gates passed: focused manifest/pipeline Go tests, full pipeline package Go test, `validate:ir`, `git diff --check`
+  - [x] independent spec review PASS (`deleg_0d1fd192`)
+  - [x] independent quality review REQUEST_CHANGES (`deleg_8a7664ec`): important blockers on crash-unsafe supersession write ordering and shallow nested metadata/locator/provenance clone aliasing
+  - [x] focused repair worker completed (`deleg_0b07d494`); parent inspected read-only and verified targeted repair gates
+  - [x] targeted quality re-review APPROVED (`deleg_5f6b97a4`)
+- [x] run final gates, update Linear, commit, and push
+  - [x] final gates passed at 2026-07-07 20:25 CEST: `mise exec -- pnpm check`, `git diff --check`
+  - [x] commit created after final gates; push and Linear closeout handled by parent orchestrator
