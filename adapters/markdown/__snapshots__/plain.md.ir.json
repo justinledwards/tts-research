@@ -4,7 +4,7 @@
     {
       "confidence": 0.98,
       "endOffset": 16,
-      "id": "block-0001",
+      "id": "markdown-heading-plainmdheadingplain-markdown-plain-markdown-6d862a796d6b",
       "index": 1,
       "kind": "heading",
       "label": "Plain Markdown",
@@ -15,18 +15,23 @@
         "columnStart": 1,
         "lineEnd": 1,
         "lineStart": 1,
-        "sourceSlice": "# Plain Markdown"
+        "sourceSlice": "# Plain Markdown",
+        "fingerprint": "5134babbe54a1025ccd7a373d10f0f19",
+        "identityAnchor": "plain.md|heading|Plain Markdown|# Plain Markdown",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:0"
       },
       "speakMode": "speak",
       "spokenText": "Plain Markdown",
       "startOffset": 0,
       "text": "# Plain Markdown",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000001024"
     },
     {
       "confidence": 0.98,
       "endOffset": 113,
-      "id": "block-0002",
+      "id": "markdown-body-plainmdbodyplain-markdownthis-paragraph-has-strong-text-inline-code-and-a-reference-linkhttpsexamplecom-02954e54a42b",
       "index": 2,
       "kind": "body",
       "label": "This paragraph has strong text, inline code, and",
@@ -61,18 +66,23 @@
         "columnStart": 1,
         "lineEnd": 3,
         "lineStart": 3,
-        "sourceSlice": "This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com)."
+        "sourceSlice": "This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com).",
+        "fingerprint": "73405547fce0940705ff50e46b9f7df6",
+        "identityAnchor": "plain.md|body|Plain Markdown|This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com).",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:18"
       },
       "speakMode": "speak",
       "spokenText": "This paragraph has strong text, inline code, and a reference link.",
       "startOffset": 18,
       "text": "This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com).",
-      "warnings": ["inline_code_policy", "link_reference"]
+      "warnings": ["inline_code_policy", "link_reference"],
+      "orderKey": "000000019457"
     },
     {
       "confidence": 0.98,
       "endOffset": 112,
-      "id": "block-0003",
+      "id": "markdown-reference-plainmdreferenceplain-markdownreference-linkhttpsexamplecom-316d0fe08a14",
       "index": 3,
       "kind": "reference",
       "label": "Link",
@@ -92,18 +102,23 @@
         "columnStart": 58,
         "lineEnd": 3,
         "lineStart": 3,
-        "sourceSlice": "[reference link](https://example.com)"
+        "sourceSlice": "[reference link](https://example.com)",
+        "fingerprint": "bed48c8c9dd4500488f9cf188f3a0891",
+        "identityAnchor": "plain.md|reference|Plain Markdown|[reference link](https://example.com)",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:75"
       },
       "speakMode": "skip",
       "spokenText": "",
       "startOffset": 75,
       "text": "[reference link](https://example.com)",
-      "warnings": ["inline_artifact", "link_reference", "reference_policy"]
+      "warnings": ["inline_artifact", "link_reference", "reference_policy"],
+      "orderKey": "000000077826"
     },
     {
       "confidence": 0.98,
       "endOffset": 156,
-      "id": "block-0004",
+      "id": "markdown-quote-plainmdquoteplain-markdown-a-quoted-line-should-remain-narratable-6a3bc4eb98c4",
       "index": 4,
       "kind": "quote",
       "label": "Quote",
@@ -114,18 +129,23 @@
         "columnStart": 1,
         "lineEnd": 5,
         "lineStart": 5,
-        "sourceSlice": "> A quoted line should remain narratable."
+        "sourceSlice": "> A quoted line should remain narratable.",
+        "fingerprint": "fc354a8b61231d5a4d7d5b5b5974204d",
+        "identityAnchor": "plain.md|quote|Plain Markdown|> A quoted line should remain narratable.",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:115"
       },
       "speakMode": "speak",
       "spokenText": "A quoted line should remain narratable.",
       "startOffset": 115,
       "text": "> A quoted line should remain narratable.",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000118787"
     },
     {
       "confidence": 0.98,
       "endOffset": 170,
-      "id": "block-0005",
+      "id": "markdown-body-plainmdbodyplain-markdown-first-item-b7f8b2c4b12a",
       "index": 5,
       "kind": "body",
       "label": "First item",
@@ -138,18 +158,23 @@
         "columnStart": 1,
         "lineEnd": 7,
         "lineStart": 7,
-        "sourceSlice": "- First item"
+        "sourceSlice": "- First item",
+        "fingerprint": "9e00cf14245e55e4835182eac6a7bb22",
+        "identityAnchor": "plain.md|body|Plain Markdown|- First item",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:158"
       },
       "speakMode": "speak",
       "spokenText": "First item",
       "startOffset": 158,
       "text": "- First item",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000162820"
     },
     {
       "confidence": 0.98,
       "endOffset": 184,
-      "id": "block-0006",
+      "id": "markdown-body-plainmdbodyplain-markdown-second-item-3b22e30e450e",
       "index": 6,
       "kind": "body",
       "label": "Second item",
@@ -162,13 +187,18 @@
         "columnStart": 1,
         "lineEnd": 8,
         "lineStart": 8,
-        "sourceSlice": "- Second item"
+        "sourceSlice": "- Second item",
+        "fingerprint": "9d6c7a9bb1583b809ca76d9e3cef1052",
+        "identityAnchor": "plain.md|body|Plain Markdown|- Second item",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:171"
       },
       "speakMode": "speak",
       "spokenText": "Second item",
       "startOffset": 171,
       "text": "- Second item",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000176133"
     }
   ],
   "document": {
@@ -200,11 +230,15 @@
           "columnStart": 1,
           "lineEnd": 1,
           "lineStart": 1,
-          "sourceSlice": "# Plain Markdown"
+          "sourceSlice": "# Plain Markdown",
+          "fingerprint": "5134babbe54a1025ccd7a373d10f0f19",
+          "identityAnchor": "plain.md|heading|Plain Markdown|# Plain Markdown",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:0"
         },
-        "nodeId": "block-0001",
+        "nodeId": "markdown-heading-plainmdheadingplain-markdown-plain-markdown-6d862a796d6b",
         "normalisedText": "# Plain Markdown",
-        "orderKey": "00000001",
+        "orderKey": "000000001024",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -222,6 +256,13 @@
           "offsets": {
             "end": 16,
             "start": 0
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "plain"
         },
@@ -288,11 +329,15 @@
           "columnStart": 1,
           "lineEnd": 3,
           "lineStart": 3,
-          "sourceSlice": "This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com)."
+          "sourceSlice": "This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com).",
+          "fingerprint": "73405547fce0940705ff50e46b9f7df6",
+          "identityAnchor": "plain.md|body|Plain Markdown|This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com).",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:18"
         },
-        "nodeId": "block-0002",
+        "nodeId": "markdown-body-plainmdbodyplain-markdownthis-paragraph-has-strong-text-inline-code-and-a-reference-linkhttpsexamplecom-02954e54a42b",
         "normalisedText": "This paragraph has **strong text**, `inline code`, and a [reference link](https://example.com).",
-        "orderKey": "00000002",
+        "orderKey": "000000019457",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -310,6 +355,13 @@
           "offsets": {
             "end": 113,
             "start": 18
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "plain"
         },
@@ -361,11 +413,15 @@
           "columnStart": 58,
           "lineEnd": 3,
           "lineStart": 3,
-          "sourceSlice": "[reference link](https://example.com)"
+          "sourceSlice": "[reference link](https://example.com)",
+          "fingerprint": "bed48c8c9dd4500488f9cf188f3a0891",
+          "identityAnchor": "plain.md|reference|Plain Markdown|[reference link](https://example.com)",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:75"
         },
-        "nodeId": "block-0003",
+        "nodeId": "markdown-reference-plainmdreferenceplain-markdownreference-linkhttpsexamplecom-316d0fe08a14",
         "normalisedText": "[reference link](https://example.com)",
-        "orderKey": "00000003",
+        "orderKey": "000000077826",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -383,6 +439,13 @@
           "offsets": {
             "end": 112,
             "start": 75
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "plain"
         },
@@ -425,11 +488,15 @@
           "columnStart": 1,
           "lineEnd": 5,
           "lineStart": 5,
-          "sourceSlice": "> A quoted line should remain narratable."
+          "sourceSlice": "> A quoted line should remain narratable.",
+          "fingerprint": "fc354a8b61231d5a4d7d5b5b5974204d",
+          "identityAnchor": "plain.md|quote|Plain Markdown|> A quoted line should remain narratable.",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:115"
         },
-        "nodeId": "block-0004",
+        "nodeId": "markdown-quote-plainmdquoteplain-markdown-a-quoted-line-should-remain-narratable-6a3bc4eb98c4",
         "normalisedText": "> A quoted line should remain narratable.",
-        "orderKey": "00000004",
+        "orderKey": "000000118787",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -447,6 +514,13 @@
           "offsets": {
             "end": 156,
             "start": 115
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "plain"
         },
@@ -491,11 +565,15 @@
           "columnStart": 1,
           "lineEnd": 7,
           "lineStart": 7,
-          "sourceSlice": "- First item"
+          "sourceSlice": "- First item",
+          "fingerprint": "9e00cf14245e55e4835182eac6a7bb22",
+          "identityAnchor": "plain.md|body|Plain Markdown|- First item",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:158"
         },
-        "nodeId": "block-0005",
+        "nodeId": "markdown-body-plainmdbodyplain-markdown-first-item-b7f8b2c4b12a",
         "normalisedText": "- First item",
-        "orderKey": "00000005",
+        "orderKey": "000000162820",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -513,6 +591,13 @@
           "offsets": {
             "end": 170,
             "start": 158
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "plain"
         },
@@ -557,11 +642,15 @@
           "columnStart": 1,
           "lineEnd": 8,
           "lineStart": 8,
-          "sourceSlice": "- Second item"
+          "sourceSlice": "- Second item",
+          "fingerprint": "9d6c7a9bb1583b809ca76d9e3cef1052",
+          "identityAnchor": "plain.md|body|Plain Markdown|- Second item",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:171"
         },
-        "nodeId": "block-0006",
+        "nodeId": "markdown-body-plainmdbodyplain-markdown-second-item-3b22e30e450e",
         "normalisedText": "- Second item",
-        "orderKey": "00000006",
+        "orderKey": "000000176133",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -579,6 +668,13 @@
           "offsets": {
             "end": 184,
             "start": 171
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "plain"
         },
@@ -629,7 +725,7 @@
   "parseMode": "strict",
   "skippedItems": [
     {
-      "id": "block-0003",
+      "id": "markdown-reference-plainmdreferenceplain-markdownreference-linkhttpsexamplecom-316d0fe08a14",
       "kind": "reference",
       "offset": 75,
       "reason": "reference marker available through citation policy",

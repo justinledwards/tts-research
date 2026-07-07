@@ -2470,3 +2470,26 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] update main orchestrator handoff to make main Agent orchestration-only
 - [x] record rule: all product-code implementation/repair work must be delegated to sub-agents
 - [x] record immediate QQP-424 continuation path: dispatch repair implementer for quality blockers before any more code changes
+
+## 2026-07-07 17:01 CEST - QQP-426 Stable Unit Identity
+- [x] preflight repo state: branch `niklas/voice-studio-follow-up`, local and remote both at `90444a75138a8be76e2230630054f66fd7a1cf59`, clean tree
+- [x] preflight Linear state: project page fetched with `hasNextPage=false`, 20 unarchived project issues, QQP-423 and QQP-424 Done
+- [x] selected next issue by handoff wave/dependencies: QQP-426 `stable-unit-ir-core-adapters` before QQP-425 manifest snapshot work
+- [x] wrote implementation plan: `docs/plans/linear/QQP-426-stable-unit-ir-core-adapters.md`
+- [x] move QQP-426 to In Progress and dispatch focused core-adapter implementation worker (`deleg_80f00183`)
+- [x] run parent inspection, focused verification, spec review, and quality review
+  - [x] parent focused verification passed: `test:adapters`, `validate:ir`, schema `test:core`, `git diff --check`
+  - [x] spec review PASS (`deleg_f6f93e71`)
+  - [x] quality review REQUEST_CHANGES (`deleg_51239600`): HTML duplicate explicit id/name node IDs; HTML no-id fallback identity unstable under sibling insertion
+  - [x] dispatch and verify focused repair worker for quality blockers (`deleg_53340319`); parent ad-hoc probes confirm duplicate explicit HTML IDs uniquified and no-id sibling insertion keeps stable nodeId/fingerprint; gates rerun passed
+  - [x] targeted quality re-review after repair REQUEST_CHANGES (`deleg_f2d13c2f`): no-explicit-id HTML identity still churns when preceding sibling slug-collides via document-order fragment uniquification
+  - [x] dispatch and verify second focused repair worker for slug-colliding no-id HTML fallback identity (`deleg_fb6c3c99`); parent probe confirms stable nodeId/fingerprint while locator fragment may change from base to `-2`; gates rerun passed
+  - [x] targeted quality re-review after second repair QUALITY APPROVED (`deleg_74f3f163`)
+- [x] run final gates, update Linear, commit, and push
+  - [x] final quality review APPROVED (`deleg_74f3f163`)
+  - [x] final functional gates passed: HTML adapter test, `test:adapters`, `validate:ir`, schema `test:core`, `git diff --check`
+  - [x] final `mise exec -- pnpm check` found formatting-only failures
+  - [x] dispatch and verify formatting-only repair worker (`deleg_62974cce`); formatting gate clean, full check now reaches backend golden fixture drift
+  - [x] dispatch and verify focused backend golden fixture update worker (`deleg_0d73c878`); golden drift fixed, focused golden test passes, full check now blocked by prepared-source job TempDir cleanup race
+  - [x] dispatch and verify focused prepared-source job test lifecycle repair worker (`deleg_8338fcff`); focused tests, pipeline package, full `mise exec -- pnpm check`, and `git diff --check` passed
+  - [x] commit created after final gates; Linear completion and push handled by parent orchestrator

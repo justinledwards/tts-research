@@ -119,6 +119,7 @@ export function extractHTMLBlocks(source, options = {}) {
     sectionIndex: 1,
     sourceName: options.sourceName ?? "source.html",
     usedFragments: new Set(),
+    usedNodeIds: new Set(),
     usedSectionIds: new Set(),
     warnings: [],
   };

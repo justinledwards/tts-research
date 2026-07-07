@@ -4,7 +4,7 @@
     {
       "confidence": 0.95,
       "endOffset": 39,
-      "id": "block-0001",
+      "id": "markdown-frontmatter-frontmatter-tomlmdfrontmatterdocument-title-toml-title-weight-3-64c4f5d87442",
       "index": 1,
       "kind": "frontmatter",
       "label": "TOML frontmatter",
@@ -21,18 +21,23 @@
         "columnStart": 1,
         "lineEnd": 4,
         "lineStart": 1,
-        "sourceSlice": "+++\ntitle = \"TOML Title\"\nweight = 3\n+++"
+        "sourceSlice": "+++\ntitle = \"TOML Title\"\nweight = 3\n+++",
+        "fingerprint": "d96efd3f9cfdedb5063f6e0b1a01377c",
+        "identityAnchor": "frontmatter-toml.md|frontmatter|document|+++ title = \"TOML Title\" weight = 3 +++",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:0"
       },
       "speakMode": "skip",
       "spokenText": "",
       "startOffset": 0,
       "text": "+++\ntitle = \"TOML Title\"\nweight = 3\n+++",
-      "warnings": ["frontmatter_metadata"]
+      "warnings": ["frontmatter_metadata"],
+      "orderKey": "000000001024"
     },
     {
       "confidence": 0.98,
       "endOffset": 53,
-      "id": "block-0002",
+      "id": "markdown-heading-frontmatter-tomlmdheadingtoml-title-toml-title-5fb8fef111e4",
       "index": 2,
       "kind": "heading",
       "label": "TOML Title",
@@ -43,18 +48,23 @@
         "columnStart": 1,
         "lineEnd": 6,
         "lineStart": 6,
-        "sourceSlice": "# TOML Title"
+        "sourceSlice": "# TOML Title",
+        "fingerprint": "7216bafed8af2d2dfcf27a3c79036f2c",
+        "identityAnchor": "frontmatter-toml.md|heading|TOML Title|# TOML Title",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:41"
       },
       "speakMode": "speak",
       "spokenText": "TOML Title",
       "startOffset": 41,
       "text": "# TOML Title",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000043009"
     },
     {
       "confidence": 0.98,
       "endOffset": 103,
-      "id": "block-0003",
+      "id": "markdown-body-frontmatter-tomlmdbodytoml-titlethe-toml-metadata-should-not-be-spoken-as-prose-a906f60302ce",
       "index": 3,
       "kind": "body",
       "label": "The TOML metadata should not be spoken as",
@@ -65,13 +75,18 @@
         "columnStart": 1,
         "lineEnd": 8,
         "lineStart": 8,
-        "sourceSlice": "The TOML metadata should not be spoken as prose."
+        "sourceSlice": "The TOML metadata should not be spoken as prose.",
+        "fingerprint": "f6839e72c3c9b0811aacf569e2dbf9dd",
+        "identityAnchor": "frontmatter-toml.md|body|TOML Title|The TOML metadata should not be spoken as prose.",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:55"
       },
       "speakMode": "speak",
       "spokenText": "The TOML metadata should not be spoken as prose.",
       "startOffset": 55,
       "text": "The TOML metadata should not be spoken as prose.",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000057346"
     }
   ],
   "document": {
@@ -118,11 +133,15 @@
           "columnStart": 1,
           "lineEnd": 4,
           "lineStart": 1,
-          "sourceSlice": "+++\ntitle = \"TOML Title\"\nweight = 3\n+++"
+          "sourceSlice": "+++\ntitle = \"TOML Title\"\nweight = 3\n+++",
+          "fingerprint": "d96efd3f9cfdedb5063f6e0b1a01377c",
+          "identityAnchor": "frontmatter-toml.md|frontmatter|document|+++ title = \"TOML Title\" weight = 3 +++",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:0"
         },
-        "nodeId": "block-0001",
+        "nodeId": "markdown-frontmatter-frontmatter-tomlmdfrontmatterdocument-title-toml-title-weight-3-64c4f5d87442",
         "normalisedText": "+++ title = \"TOML Title\" weight = 3 +++",
-        "orderKey": "00000001",
+        "orderKey": "000000001024",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -140,6 +159,13 @@
           "offsets": {
             "end": 39,
             "start": 0
+          },
+          "extraction": {
+            "confidence": 0.95,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "frontmatter-toml"
         },
@@ -182,11 +208,15 @@
           "columnStart": 1,
           "lineEnd": 6,
           "lineStart": 6,
-          "sourceSlice": "# TOML Title"
+          "sourceSlice": "# TOML Title",
+          "fingerprint": "7216bafed8af2d2dfcf27a3c79036f2c",
+          "identityAnchor": "frontmatter-toml.md|heading|TOML Title|# TOML Title",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:41"
         },
-        "nodeId": "block-0002",
+        "nodeId": "markdown-heading-frontmatter-tomlmdheadingtoml-title-toml-title-5fb8fef111e4",
         "normalisedText": "# TOML Title",
-        "orderKey": "00000002",
+        "orderKey": "000000043009",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -204,6 +234,13 @@
           "offsets": {
             "end": 53,
             "start": 41
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "frontmatter-toml"
         },
@@ -246,11 +283,15 @@
           "columnStart": 1,
           "lineEnd": 8,
           "lineStart": 8,
-          "sourceSlice": "The TOML metadata should not be spoken as prose."
+          "sourceSlice": "The TOML metadata should not be spoken as prose.",
+          "fingerprint": "f6839e72c3c9b0811aacf569e2dbf9dd",
+          "identityAnchor": "frontmatter-toml.md|body|TOML Title|The TOML metadata should not be spoken as prose.",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:55"
         },
-        "nodeId": "block-0003",
+        "nodeId": "markdown-body-frontmatter-tomlmdbodytoml-titlethe-toml-metadata-should-not-be-spoken-as-prose-a906f60302ce",
         "normalisedText": "The TOML metadata should not be spoken as prose.",
-        "orderKey": "00000003",
+        "orderKey": "000000057346",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -268,6 +309,13 @@
           "offsets": {
             "end": 103,
             "start": 55
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "frontmatter-toml"
         },
@@ -327,7 +375,7 @@
   "parseMode": "strict",
   "skippedItems": [
     {
-      "id": "block-0001",
+      "id": "markdown-frontmatter-frontmatter-tomlmdfrontmatterdocument-title-toml-title-weight-3-64c4f5d87442",
       "kind": "frontmatter",
       "offset": 0,
       "reason": "frontmatter kept as metadata",

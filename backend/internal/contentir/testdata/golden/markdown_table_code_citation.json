@@ -20,7 +20,7 @@
   },
   "nodes": [
     {
-      "nodeId": "block-0001",
+      "nodeId": "markdown-heading-researchmdheadingfindings-findings-0e531ba6bbcc",
       "parentId": "",
       "orderKey": "00000001",
       "kind": "heading",
@@ -79,8 +79,12 @@
         "astPath": "/children/0",
         "columnEnd": 11,
         "columnStart": 1,
+        "fingerprint": "d82577f121698840e621fbefd6a1bbe8",
+        "identityAnchor": "research.md|heading|Findings|# Findings",
+        "identityVersion": "stable-unit-identity.v1",
         "lineEnd": 1,
         "lineStart": 1,
+        "orderAnchor": "byte:0",
         "policySpeechText": "Findings",
         "sourceSlice": "# Findings",
         "speechRender": {
@@ -104,7 +108,7 @@
       "adapterVersion": "markdown-adapter-v2"
     },
     {
-      "nodeId": "block-0002",
+      "nodeId": "markdown-table-researchmdtablefindings-metric-value-latency-12ms-36bb321f84f5",
       "parentId": "",
       "orderKey": "00000002",
       "kind": "table",
@@ -164,9 +168,13 @@
         "astPath": "/children/1",
         "columnEnd": 19,
         "columnStart": 1,
+        "fingerprint": "b7696790b2d704964c860b00c0cac188",
         "headers": ["Metric", "Value"],
+        "identityAnchor": "research.md|table|Findings|| Metric | Value | |---|---| | Latency | 12ms |",
+        "identityVersion": "stable-unit-identity.v1",
         "lineEnd": 5,
         "lineStart": 3,
+        "orderAnchor": "byte:12",
         "policySpeechText": "A table appears here with columns: Metric, Value.",
         "rows": [["Latency", "12ms"]],
         "sourceSlice": "| Metric | Value |\n|---|---|\n| Latency | 12ms |",
@@ -191,7 +199,7 @@
       "adapterVersion": "markdown-adapter-v2"
     },
     {
-      "nodeId": "block-0003",
+      "nodeId": "markdown-code-researchmdcodefindingsgo-fmtprintlnskip-353e5c2dce85",
       "parentId": "",
       "orderKey": "00000003",
       "kind": "code",
@@ -251,16 +259,20 @@
         "codeMeta": "",
         "columnEnd": 4,
         "columnStart": 1,
+        "fingerprint": "514856d741709290b37d769e725c0089",
+        "identityAnchor": "research.md|code|Findings|```go fmt.Println(\"skip\") ```",
+        "identityVersion": "stable-unit-identity.v1",
         "language": "go",
         "lineEnd": 9,
         "lineStart": 7,
+        "orderAnchor": "byte:61",
         "policySpeechText": "",
         "sourceSlice": "```go\nfmt.Println(\"skip\")\n```"
       },
       "adapterVersion": "markdown-adapter-v2"
     },
     {
-      "nodeId": "block-0004",
+      "nodeId": "markdown-citation-researchmdcitationfindingsciteturn1search0-2adbc59052ed",
       "parentId": "",
       "orderKey": "00000004",
       "kind": "citation",
@@ -319,6 +331,9 @@
         "astPath": "/children/3",
         "columnEnd": 20,
         "columnStart": 1,
+        "fingerprint": "80990436861765dceae5e931a99893c6",
+        "identityAnchor": "research.md|citation|Findings|citeturn1search0",
+        "identityVersion": "stable-unit-identity.v1",
         "inlineArtifacts": [
           {
             "endOffset": 117,
@@ -334,6 +349,7 @@
         ],
         "lineEnd": 11,
         "lineStart": 11,
+        "orderAnchor": "byte:92",
         "policySpeechText": "",
         "sourceSlice": "citeturn1search0"
       },

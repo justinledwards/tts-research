@@ -63,7 +63,52 @@ test("EPUB adapter traverses package spine, nav labels, fragments, and media ove
   assert.deepEqual(await speechFidelitySnapshot(emitted), await speechFidelityGolden());
 });
 
-async function fixtureEPUB() {
+test("EPUB adapter stable unit identity survives append insertions", async () => {
+  const base = await emitEPUBAdapter(await fixtureEPUB(), {
+    sourceId: "epub-stable",
+    sourceName: "stable.epub",
+  });
+  const appended = await emitEPUBAdapter(
+    await fixtureEPUB({ introExtra: `<p id="p-extra">Append-only EPUB paragraph.</p>` }),
+    {
+      sourceId: "epub-stable",
+      sourceName: "stable.epub",
+    },
+  );
+
+  for (const fragment of ["intro-heading", "p-intro", "p-ssml", "p-css"]) {
+    const before = epubNodeByFragment(base, fragment);
+    const after = epubNodeByFragment(appended, fragment);
+    assert.equal(after.nodeId, before.nodeId, fragment);
+    assert.equal(after.orderKey, before.orderKey, fragment);
+    assert.equal(after.metadata.fingerprint, before.metadata.fingerprint, fragment);
+    assert.equal(after.provenance.sourceId, "epub-stable");
+    assert.equal(after.provenance.locator.epub.href, "EPUB/intro.xhtml");
+    assert.equal(after.provenance.locator.epub.spineId, "intro");
+    assert(after.metadata.htmlLocator, "EPUB nodes should retain source-local HTML locators");
+  }
+  assertSortedSparseOrderKeys(appended.document.nodes);
+});
+
+function epubNodeByFragment(emitted, fragment) {
+  const node = emitted.document.nodes.find(
+    (item) => item.provenance.locator.epub.fragment === fragment,
+  );
+  assert(node, `missing EPUB node for ${fragment}`);
+  return node;
+}
+
+function assertSortedSparseOrderKeys(nodes) {
+  const keys = nodes.map((node) => Number.parseInt(node.orderKey, 10));
+  assert(keys.every(Number.isFinite), "order keys should be numeric strings");
+  assert.deepEqual(
+    [...keys].sort((left, right) => left - right),
+    keys,
+  );
+  assert(keys.slice(1).every((key, index) => key - keys[index] > 1));
+}
+
+async function fixtureEPUB({ introExtra = "" } = {}) {
   const zip = new JSZip();
   zip.file(
     "META-INF/container.xml",
@@ -110,6 +155,7 @@ async function fixtureEPUB() {
       <p id="p-ssml" ssml:ph="iːpʌb θriː spiːtʃ ˈmɛtədəɪtə" style="speak-as: spell-out; pause-before: 250ms;">EPUB 3 speech metadata.</p>
       <p id="p-inherited">Inherited alphabet keeps <span ssml:ph="nɛstɪd tɝm">nested term</span> pronunciation.</p>
       <p id="p-css" style="speak-as: digits; pause: 100ms 220ms; voice-rate: slow;">CSS speech hints are inline.</p>
+      ${introExtra}
       <figure><img src="cover.jpg" alt="Cover alt text" /><figcaption>Opening image caption.</figcaption></figure>
     </body></html>`,
   );

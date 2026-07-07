@@ -51,7 +51,7 @@ export async function emitEPUBAdapter(bytes, options = {}) {
   const pronunciationLexicons = [];
   const warnings = [];
   let chapterIndex = 1;
-  for (const item of spine) {
+  for (const [spineIndex, item] of spine.entries()) {
     if (!item?.href || !htmlMedia(item.mediaType, item.href)) {
       continue;
     }
@@ -76,7 +76,7 @@ export async function emitEPUBAdapter(bytes, options = {}) {
       navLabels.get(stripFragment(item.href)) ??
       extracted.title ??
       `Chapter ${String(chapterIndex)}`;
-    const sectionId = `epub-${String(chapterIndex).padStart(4, "0")}`;
+    const sectionId = `epub-${slugify(item.idref ?? item.id ?? stripFragment(item.href), "spine")}`;
     const chapterBlocks = extracted.blocks.map((block, index) =>
       epubBlock(block, {
         chapterIndex,
@@ -85,6 +85,7 @@ export async function emitEPUBAdapter(bytes, options = {}) {
         index,
         item,
         sectionId,
+        spineIndex,
         total: extracted.blocks.length,
       }),
     );
@@ -177,6 +178,9 @@ function epubBlock(block, context) {
   const localId = block.nodeId ?? `${block.kind}-${String(context.index + 1).padStart(4, "0")}`;
   const nodeId = `${hrefSlug}-${localId}`;
   const progression = context.total <= 1 ? 0 : context.index / Math.max(1, context.total - 1);
+  const spineSlot = (context.spineIndex + 1) * 1_000_000_000;
+  const localSlot = Number.parseInt(block.orderKey ?? "0", 10) || (context.index + 1) * 1024;
+  const orderKey = String(spineSlot + localSlot).padStart(12, "0");
   return {
     ...block,
     locator: {
@@ -185,6 +189,7 @@ function epubBlock(block, context) {
         epubCfi: bestEffortCFI(context.item.idref ?? context.item.id, localId),
         href: context.href,
         progression,
+        spineId: context.item.idref ?? context.item.id,
         textQuote: block.locator.html?.textQuote ?? textQuote(block.displayText),
       },
       type: "epub",
@@ -194,8 +199,11 @@ function epubBlock(block, context) {
       chapterIndex: context.chapterIndex,
       chapterTitle: context.chapterTitle,
       epubCfiBestEffort: true,
+      htmlLocator: block.locator.html,
+      identityAnchor: [context.href, context.item.idref ?? context.item.id, localId].join("|"),
       manifestId: context.item.id,
       mediaOverlayId: context.item.mediaOverlayId,
+      orderAnchor: `spine:${String(context.spineIndex)}:${block.orderKey ?? context.index}`,
       sectionId: context.sectionId,
       sectionIndex: context.chapterIndex - 1,
       sectionKind: "chapter",
@@ -204,6 +212,7 @@ function epubBlock(block, context) {
       spineIdref: context.item.idref,
     },
     nodeId,
+    orderKey,
     section: {
       chapterIndex: context.chapterIndex,
       id: context.sectionId,

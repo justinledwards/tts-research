@@ -2,6 +2,9 @@ import {
   inlineText,
   estimateDurationMs,
   normalizeText,
+  stableHash,
+  stableOrderKeyFromPosition,
+  stableUnitNodeId,
   textQuote,
   uniqueSlug,
   wordCount,
@@ -179,6 +182,15 @@ export function sectionId(context, node, text) {
 export function fragmentForBlock(context, node, text) {
   const preferred = attr(node, "id") ?? attr(node, "name") ?? text;
   return uniqueSlug(preferred, context.usedFragments, "node");
+}
+
+function identityAnchorForBlock({ block, context, explicitNodeId, fragment, section, text }) {
+  if (explicitNodeId) {
+    return [context.href, block.kind, section.id, fragment, text].filter(Boolean).join("|");
+  }
+  return [context.href, block.kind, section.kind, section.title, `text:${inlineText(text)}`]
+    .filter(Boolean)
+    .join("|");
 }
 
 export function sectionsFromBlocks(blocks) {
@@ -421,6 +433,41 @@ export function pushBlock(context, block) {
   const section = context.currentSection;
   const words = wordCount(text);
   const speechMetadata = block.speechMetadata ?? {};
+  const location = sourceLocation(block.element);
+  const explicitNodeId = attr(block.element, "id") || attr(block.element, "name");
+  const identityAnchor = identityAnchorForBlock({
+    block,
+    context,
+    explicitNodeId,
+    fragment,
+    section,
+    text,
+  });
+  const nodeId = explicitNodeId
+    ? uniqueSlug(explicitNodeId, context.usedNodeIds, "unit")
+    : stableUnitNodeId({
+        anchor: identityAnchor,
+        format: context.locatorType,
+        kind: block.kind,
+        text,
+        usedIds: context.usedNodeIds,
+      });
+  const fingerprint = explicitNodeId
+    ? undefined
+    : stableHash(
+        {
+          anchor: identityAnchor,
+          displayText: inlineText(text),
+          format: context.locatorType,
+          href: context.href,
+          kind: block.kind,
+          nodeId,
+          speechText: inlineText(block.speechText ?? text),
+          version: "html-no-explicit-id-unit-fingerprint.v1",
+        },
+        32,
+      );
+  const orderKey = stableOrderKeyFromPosition(location?.startOffset, context.blocks.length);
   context.blocks.push({
     alphabet: speechMetadata.alphabet,
     confidence: block.confidence ?? 0.92,
@@ -444,6 +491,7 @@ export function pushBlock(context, block) {
         ? { pronunciationRefs: speechMetadata.pronunciationRefs }
         : {}),
       estimatedDurationMs: estimateDurationMs(words),
+      ...(fingerprint ? { fingerprint } : {}),
       htmlPath: block.htmlPath,
       ...(context.pronunciationLexicons.length
         ? { pronunciationLexicons: context.pronunciationLexicons }
@@ -452,10 +500,17 @@ export function pushBlock(context, block) {
       sectionIndex: section.index,
       sectionKind: section.kind,
       sectionTitle: section.title,
-      sourceLocation: sourceLocation(block.element),
+      sourceLocation: location,
       wordCount: words,
+      fingerprintAnchor: identityAnchor,
+      identityAnchor,
+      identityVersion: "stable-unit-identity.v1",
+      orderAnchor: location
+        ? `byte:${String(location.startOffset)}`
+        : `block:${String(context.blocks.length)}`,
     },
-    nodeId: fragment,
+    nodeId,
+    orderKey,
     pauseAfterMs: speechMetadata.pauseAfterMs,
     pauseBeforeMs: speechMetadata.pauseBeforeMs,
     phoneme: speechMetadata.phoneme,
@@ -465,6 +520,15 @@ export function pushBlock(context, block) {
     section,
     speechMode: block.speechMode ?? "speak",
     speechText: text,
+    startOffset: location?.startOffset,
+    endOffset: location?.endOffset,
+    extraction: {
+      confidence: block.confidence ?? 0.92,
+      extractor: context.locatorType === "epub" ? "epub-html" : "html",
+      extractorVersion: context.locatorType === "epub" ? "epub-adapter-v1" : "html-adapter-v1",
+      step: context.locatorType === "epub" ? "epub-spine-html-to-content-ir" : "html-to-content-ir",
+      supportTier: "core",
+    },
     warnings: block.warnings,
   });
 }

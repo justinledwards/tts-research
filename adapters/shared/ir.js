@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 export const CONTENT_IR_SCHEMA_VERSION = "content-ir.v1";
 
 export function normalizeText(value) {
@@ -66,6 +68,100 @@ export function compactStringArray(values) {
   return [...new Set((values ?? []).map((item) => String(item ?? "").trim()).filter(Boolean))];
 }
 
+export function stableHash(value, length = 16) {
+  const digest = createHash("sha256").update(stableStringify(value)).digest("hex");
+  return length > 0 ? digest.slice(0, length) : digest;
+}
+
+export function stableStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value)
+      .filter(([, entryValue]) => entryValue !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableStringify(entryValue)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+export function stableUnitNodeId({ format, kind, anchor = "", text = "", usedIds }) {
+  const anchorSlug = slugify(anchor, "unit");
+  const textDigest = stableHash(inlineText(text), 12);
+  const base = slugify(`${format}-${kind}-${anchorSlug}-${textDigest}`, "unit");
+  if (!usedIds) {
+    return base;
+  }
+  let candidate = base;
+  let index = 2;
+  while (usedIds.has(candidate)) {
+    candidate = `${base}-${String(index)}`;
+    index += 1;
+  }
+  usedIds.add(candidate);
+  return candidate;
+}
+
+export function stableOrderKeyFromPosition(position, fallbackIndex, stride = 1024) {
+  const numericPosition =
+    Number.isFinite(position) && position >= 0 ? Math.floor(position) : fallbackIndex;
+  const slot = (numericPosition + 1) * stride + Math.max(0, fallbackIndex);
+  return String(slot).padStart(12, "0");
+}
+
+export function stableFingerprint({
+  displayText,
+  format,
+  kind,
+  locator,
+  nodeId,
+  sourceId,
+  speechText,
+}) {
+  return stableHash(
+    {
+      displayText: inlineText(displayText),
+      format,
+      kind,
+      locator: stableLocatorFingerprint(locator),
+      nodeId,
+      sourceId,
+      speechText: inlineText(speechText ?? displayText),
+      version: "content-ir-unit-fingerprint.v1",
+    },
+    32,
+  );
+}
+
+export function stableLocatorFingerprint(locator = {}) {
+  const type = locator.type;
+  if (type === "markdown") {
+    return {
+      path: locator.markdown?.path ?? "",
+      type,
+    };
+  }
+  if (type === "html") {
+    return {
+      fragment: locator.html?.fragment ?? "",
+      href: locator.html?.href ?? "",
+      type,
+    };
+  }
+  if (type === "epub") {
+    return {
+      epubCfi: locator.epub?.epubCfi ?? "",
+      fragment: locator.epub?.fragment ?? "",
+      href: locator.epub?.href ?? "",
+      spineId: locator.epub?.spineId ?? "",
+      type,
+    };
+  }
+  return { type };
+}
+
 export function createDocument({
   adapterVersion,
   generatedAt,
@@ -101,9 +197,15 @@ export function nodesFromBlocks(blocks, options) {
     }
     const displayText = normalizeText(block.displayText ?? block.text ?? "");
     const speechText = normalizeText(block.speechText ?? displayText);
-    const start = offset;
-    const end = start + displayText.length;
-    offset = end;
+    const computedStart = offset;
+    const computedEnd = computedStart + displayText.length;
+    const start = Number.isFinite(block.startOffset)
+      ? Math.max(0, Math.floor(block.startOffset))
+      : computedStart;
+    const end = Number.isFinite(block.endOffset)
+      ? Math.max(start, Math.floor(block.endOffset))
+      : computedEnd;
+    offset = computedEnd;
     return createNode({
       adapterVersion,
       confidence: block.confidence ?? 0.92,
@@ -116,6 +218,7 @@ export function nodesFromBlocks(blocks, options) {
       locator: block.locator,
       metadata: block.metadata,
       nodeId: block.nodeId,
+      orderKey: block.orderKey,
       parentId: block.parentId,
       alphabet: block.alphabet,
       emphasis: block.emphasis,
@@ -132,6 +235,7 @@ export function nodesFromBlocks(blocks, options) {
       speechText,
       start,
       end,
+      extraction: block.extraction,
       warnings: block.warnings,
     });
   });
@@ -143,6 +247,7 @@ export function createNode({
   dir = "ltr",
   displayText,
   end,
+  extraction,
   format,
   index,
   kind,
@@ -150,6 +255,7 @@ export function createNode({
   locator,
   metadata = {},
   nodeId,
+  orderKey,
   parentId = "",
   alphabet = "",
   emphasis = "",
@@ -169,6 +275,18 @@ export function createNode({
 }) {
   const cleanDisplayText = normalizeText(displayText);
   const cleanSpeechText = normalizeText(speechText ?? cleanDisplayText);
+  const resolvedNodeId = nodeId || `${kind}-${String(index + 1).padStart(4, "0")}`;
+  const unitFingerprint =
+    metadata.fingerprint ??
+    stableFingerprint({
+      displayText: cleanDisplayText,
+      format,
+      kind,
+      locator,
+      nodeId: resolvedNodeId,
+      sourceId,
+      speechText: cleanSpeechText,
+    });
   const node = {
     adapterVersion,
     ...(alphabet ? { alphabet } : {}),
@@ -177,10 +295,14 @@ export function createNode({
     displayText: cleanDisplayText,
     kind,
     lang,
-    metadata,
-    nodeId: nodeId || `${kind}-${String(index + 1).padStart(4, "0")}`,
+    metadata: {
+      ...metadata,
+      fingerprint: unitFingerprint,
+      identityVersion: metadata.identityVersion ?? "stable-unit-identity.v1",
+    },
+    nodeId: resolvedNodeId,
     normalisedText: inlineText(cleanDisplayText),
-    orderKey: String(index + 1).padStart(8, "0"),
+    orderKey: orderKey ?? String(index + 1).padStart(8, "0"),
     parentId,
     provenance: {
       format,
@@ -189,6 +311,7 @@ export function createNode({
         end: Math.max(start, end),
         start: Math.max(0, start),
       },
+      ...(extraction ? { extraction } : {}),
       sourceId,
     },
     rights: {

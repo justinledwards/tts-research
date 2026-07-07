@@ -581,6 +581,7 @@ func TestPreparedSourceJobDefensivelyExcludesOnDemandSelectedBlocks(t *testing.T
 		!strings.Contains(job.InputText, "Tail body stays speakable.") {
 		t.Fatalf("job input text = %q, want surrounding body narration", job.InputText)
 	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
 }
 
 func TestPreparedSourceJobIgnoresUnknownSelectionIDsAndExcludesSkippedBlocks(t *testing.T) {
@@ -657,6 +658,7 @@ func TestPreparedSourceJobIgnoresUnknownSelectionIDsAndExcludesSkippedBlocks(t *
 	if !strings.Contains(strings.Join(job.SegmentationWarnings, ","), "selected block id not speakable: "+footnote.ID) {
 		t.Fatalf("job segmentation warnings = %#v, want non-speakable selected block warning", job.SegmentationWarnings)
 	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
 }
 
 func TestPreparedSourcePolicyPinFollowsPrecedenceOrder(t *testing.T) {

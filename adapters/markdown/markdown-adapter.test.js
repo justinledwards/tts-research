@@ -91,6 +91,77 @@ test("reference-only cue leaks stay non-speaking", async () => {
   assert.equal(imageToken?.spokenText, "");
 });
 
+test("markdown stable unit identity survives append insertions", () => {
+  const base = emitMarkdownAdapter("# Stable\n\nAlpha paragraph.\n\nBeta paragraph.", {
+    includeDocument: true,
+    sourceId: "markdown-stable",
+    sourceName: "stable.md",
+  });
+  const appended = emitMarkdownAdapter(
+    "# Stable\n\nAlpha paragraph.\n\nBeta paragraph.\n\nAppended paragraph.",
+    {
+      includeDocument: true,
+      sourceId: "markdown-stable",
+      sourceName: "stable.md",
+    },
+  );
+
+  for (const text of ["# Stable", "Alpha paragraph.", "Beta paragraph."]) {
+    const before = nodeByText(base, text);
+    const after = nodeByText(appended, text);
+    assert.equal(after.nodeId, before.nodeId, text);
+    assert.equal(after.orderKey, before.orderKey, text);
+    assert.equal(after.metadata.fingerprint, before.metadata.fingerprint, text);
+    assert.equal(after.provenance.sourceId, "markdown-stable");
+    assert.equal(after.provenance.locator.type, "markdown");
+  }
+  assertSortedSparseOrderKeys(appended.document.nodes);
+});
+
+test("markdown stable unit identity survives unrelated middle insertion", () => {
+  const base = emitMarkdownAdapter("# Stable\n\nAlpha paragraph.\n\nBeta paragraph.", {
+    includeDocument: true,
+    sourceId: "markdown-stable",
+    sourceName: "stable.md",
+  });
+  const inserted = emitMarkdownAdapter(
+    "# Stable\n\nAlpha paragraph.\n\nInserted paragraph.\n\nBeta paragraph.",
+    {
+      includeDocument: true,
+      sourceId: "markdown-stable",
+      sourceName: "stable.md",
+    },
+  );
+
+  for (const text of ["# Stable", "Alpha paragraph.", "Beta paragraph."]) {
+    const before = nodeByText(base, text);
+    const after = nodeByText(inserted, text);
+    assert.equal(after.nodeId, before.nodeId, text);
+    assert.equal(after.metadata.fingerprint, before.metadata.fingerprint, text);
+  }
+  assertSortedSparseOrderKeys(inserted.document.nodes);
+});
+
+function nodeByText(emitted, text) {
+  const node = emitted.document.nodes.find((item) => item.displayText === text);
+  assert(node, `missing node for ${text}`);
+  return node;
+}
+
+function assertSortedSparseOrderKeys(nodes) {
+  const keys = nodes.map((node) => Number.parseInt(node.orderKey, 10));
+  assert(keys.every(Number.isFinite), "order keys should be numeric strings");
+  assert.deepEqual(
+    [...keys].sort((left, right) => left - right),
+    keys,
+    "order keys should preserve reading order",
+  );
+  assert(
+    keys.slice(1).every((key, index) => key - keys[index] > 1),
+    "order keys should be sparse",
+  );
+}
+
 async function markdownFixtures() {
   return (await readdir(fixtureDir)).filter((file) => file.endsWith(".md")).sort();
 }

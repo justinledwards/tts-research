@@ -4,7 +4,7 @@
     {
       "confidence": 0.98,
       "endOffset": 9,
-      "id": "block-0001",
+      "id": "markdown-heading-calloutmdheadingcallout-callout-ecefd4fc92b9",
       "index": 1,
       "kind": "heading",
       "label": "Callout",
@@ -15,18 +15,23 @@
         "columnStart": 1,
         "lineEnd": 1,
         "lineStart": 1,
-        "sourceSlice": "# Callout"
+        "sourceSlice": "# Callout",
+        "fingerprint": "1428878456e927062ca1c09c99d73994",
+        "identityAnchor": "callout.md|heading|Callout|# Callout",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:0"
       },
       "speakMode": "speak",
       "spokenText": "Callout",
       "startOffset": 0,
       "text": "# Callout",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000001024"
     },
     {
       "confidence": 0.98,
       "endOffset": 83,
-      "id": "block-0002",
+      "id": "markdown-admonition-calloutmdadmonitioncallout-important-migration-window-readers-should-hear-this-callout-body-e1ccd5b36767",
       "index": 2,
       "kind": "admonition",
       "label": "Migration window",
@@ -39,13 +44,18 @@
         "columnStart": 1,
         "lineEnd": 4,
         "lineStart": 3,
-        "sourceSlice": "> [!IMPORTANT] Migration window\n> Readers should hear this callout body."
+        "sourceSlice": "> [!IMPORTANT] Migration window\n> Readers should hear this callout body.",
+        "fingerprint": "ff73b6a63da0be3563dab12749d0afbb",
+        "identityAnchor": "callout.md|admonition|Callout|> [!IMPORTANT] Migration window > Readers should hear this callout body.",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:11"
       },
       "speakMode": "speak",
       "spokenText": "Migration window Readers should hear this callout body.",
       "startOffset": 11,
       "text": "> [!IMPORTANT] Migration window\n> Readers should hear this callout body.",
-      "warnings": ["admonition_callout"]
+      "warnings": ["admonition_callout"],
+      "orderKey": "000000012289"
     }
   ],
   "document": {
@@ -77,11 +87,15 @@
           "columnStart": 1,
           "lineEnd": 1,
           "lineStart": 1,
-          "sourceSlice": "# Callout"
+          "sourceSlice": "# Callout",
+          "fingerprint": "1428878456e927062ca1c09c99d73994",
+          "identityAnchor": "callout.md|heading|Callout|# Callout",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:0"
         },
-        "nodeId": "block-0001",
+        "nodeId": "markdown-heading-calloutmdheadingcallout-callout-ecefd4fc92b9",
         "normalisedText": "# Callout",
-        "orderKey": "00000001",
+        "orderKey": "000000001024",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -99,6 +113,13 @@
           "offsets": {
             "end": 9,
             "start": 0
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "callout"
         },
@@ -143,11 +164,15 @@
           "columnStart": 1,
           "lineEnd": 4,
           "lineStart": 3,
-          "sourceSlice": "> [!IMPORTANT] Migration window\n> Readers should hear this callout body."
+          "sourceSlice": "> [!IMPORTANT] Migration window\n> Readers should hear this callout body.",
+          "fingerprint": "ff73b6a63da0be3563dab12749d0afbb",
+          "identityAnchor": "callout.md|admonition|Callout|> [!IMPORTANT] Migration window > Readers should hear this callout body.",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:11"
         },
-        "nodeId": "block-0002",
+        "nodeId": "markdown-admonition-calloutmdadmonitioncallout-important-migration-window-readers-should-hear-this-callout-body-e1ccd5b36767",
         "normalisedText": "> [!IMPORTANT] Migration window > Readers should hear this callout body.",
-        "orderKey": "00000002",
+        "orderKey": "000000012289",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -165,6 +190,13 @@
           "offsets": {
             "end": 83,
             "start": 11
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "callout"
         },

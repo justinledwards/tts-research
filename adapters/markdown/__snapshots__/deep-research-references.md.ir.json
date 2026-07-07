@@ -4,7 +4,7 @@
     {
       "confidence": 0.98,
       "endOffset": 22,
-      "id": "block-0001",
+      "id": "markdown-heading-deep-research-referencesmdheadingdeep-research-export-deep-research-export-3c5788e5b69b",
       "index": 1,
       "kind": "heading",
       "label": "Deep Research Export",
@@ -15,18 +15,23 @@
         "columnStart": 1,
         "lineEnd": 1,
         "lineStart": 1,
-        "sourceSlice": "# Deep Research Export"
+        "sourceSlice": "# Deep Research Export",
+        "fingerprint": "42fff683a43658805250e655ab0f8f07",
+        "identityAnchor": "deep-research-references.md|heading|Deep Research Export|# Deep Research Export",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:0"
       },
       "speakMode": "speak",
       "spokenText": "Deep Research Export",
       "startOffset": 0,
       "text": "# Deep Research Export",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000001024"
     },
     {
       "confidence": 0.98,
       "endOffset": 81,
-      "id": "block-0002",
+      "id": "markdown-body-deep-research-referencesmdbodydeep-research-exportthe-narrative-section-should-remain-available-for-speech-ccbb1421478e",
       "index": 2,
       "kind": "body",
       "label": "The narrative section should remain available for speech.",
@@ -37,18 +42,23 @@
         "columnStart": 1,
         "lineEnd": 3,
         "lineStart": 3,
-        "sourceSlice": "The narrative section should remain available for speech."
+        "sourceSlice": "The narrative section should remain available for speech.",
+        "fingerprint": "efea6fabd4fb396abf53d3e295e5f5aa",
+        "identityAnchor": "deep-research-references.md|body|Deep Research Export|The narrative section should remain available for speech.",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:24"
       },
       "speakMode": "speak",
       "spokenText": "The narrative section should remain available for speech.",
       "startOffset": 24,
       "text": "The narrative section should remain available for speech.",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000025601"
     },
     {
       "confidence": 0.98,
       "endOffset": 93,
-      "id": "block-0003",
+      "id": "markdown-reference-deep-research-referencesmdreferencedeep-research-exportreferences-a52848021f82",
       "index": 3,
       "kind": "reference",
       "label": "References",
@@ -63,18 +73,23 @@
         "columnStart": 1,
         "lineEnd": 5,
         "lineStart": 5,
-        "sourceSlice": "References"
+        "sourceSlice": "References",
+        "fingerprint": "ba569d1f7c313e015b24548ccef2d6d9",
+        "identityAnchor": "deep-research-references.md|reference|Deep Research Export|References",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:83"
       },
       "speakMode": "skip",
       "spokenText": "",
       "startOffset": 83,
       "text": "References",
-      "warnings": ["reference_section", "reference_on_demand"]
+      "warnings": ["reference_section", "reference_on_demand"],
+      "orderKey": "000000086018"
     },
     {
       "confidence": 0.72,
       "endOffset": 133,
-      "id": "block-0004",
+      "id": "markdown-embedded-deep-research-referencesmdembeddeddeep-research-export-deep-research-referencesstart-aba12a5a611f",
       "index": 4,
       "kind": "embedded",
       "label": "HTML embedded html",
@@ -87,18 +102,23 @@
         "columnStart": 1,
         "lineEnd": 6,
         "lineStart": 6,
-        "sourceSlice": "<!-- deep-research-references:start -->"
+        "sourceSlice": "<!-- deep-research-references:start -->",
+        "fingerprint": "ae717376ea8cc2958c7c28ceec31c134",
+        "identityAnchor": "deep-research-references.md|embedded|Deep Research Export|<!-- deep-research-references:start -->",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:94"
       },
       "speakMode": "skip",
       "spokenText": "",
       "startOffset": 94,
       "text": "<!-- deep-research-references:start -->",
-      "warnings": ["embedded_fallback"]
+      "warnings": ["embedded_fallback"],
+      "orderKey": "000000097283"
     },
     {
       "confidence": 0.98,
       "endOffset": 381,
-      "id": "block-0005",
+      "id": "markdown-reference-deep-research-referencesmdreferencedeep-research-exporthttpsopentelemetryiodocswhat-is-opentelemetry-httpswwwcsumdedubenpapersshneiderman1996eyespdf-httpswwww3orgtrtrace-context-httpswwwnasagovhuman-systems-integration-divisionnasa-task-load-index-tlx-c4389cca54b7",
       "index": 5,
       "kind": "reference",
       "label": "Reference section",
@@ -112,18 +132,23 @@
         "columnStart": 1,
         "lineEnd": 11,
         "lineStart": 8,
-        "sourceSlice": "    https://opentelemetry.io/docs/what-is-opentelemetry/\n    https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf\n    https://www.w3.org/TR/trace-context/\n    https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/"
+        "sourceSlice": "    https://opentelemetry.io/docs/what-is-opentelemetry/\n    https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf\n    https://www.w3.org/TR/trace-context/\n    https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/",
+        "fingerprint": "c9909385e45012202e0d39a384a13b30",
+        "identityAnchor": "deep-research-references.md|reference|Deep Research Export|https://opentelemetry.io/docs/what-is-opentelemetry/ https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf https://www.w3.org/TR/trace-context/ https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:135"
       },
       "speakMode": "skip",
       "spokenText": "",
       "startOffset": 135,
       "text": "    https://opentelemetry.io/docs/what-is-opentelemetry/\n    https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf\n    https://www.w3.org/TR/trace-context/\n    https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/",
-      "warnings": ["reference_section", "reference_on_demand"]
+      "warnings": ["reference_section", "reference_on_demand"],
+      "orderKey": "000000139268"
     },
     {
       "confidence": 0.72,
       "endOffset": 420,
-      "id": "block-0006",
+      "id": "markdown-embedded-deep-research-referencesmdembeddeddeep-research-export-deep-research-referencesend-d73bdb6732af",
       "index": 6,
       "kind": "embedded",
       "label": "HTML embedded html",
@@ -136,18 +161,23 @@
         "columnStart": 1,
         "lineEnd": 13,
         "lineStart": 13,
-        "sourceSlice": "<!-- deep-research-references:end -->"
+        "sourceSlice": "<!-- deep-research-references:end -->",
+        "fingerprint": "1e741e25cd568eec01272f26cbb92748",
+        "identityAnchor": "deep-research-references.md|embedded|Deep Research Export|<!-- deep-research-references:end -->",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:383"
       },
       "speakMode": "skip",
       "spokenText": "",
       "startOffset": 383,
       "text": "<!-- deep-research-references:end -->",
-      "warnings": ["embedded_fallback"]
+      "warnings": ["embedded_fallback"],
+      "orderKey": "000000393221"
     },
     {
       "confidence": 0.98,
       "endOffset": 491,
-      "id": "block-0007",
+      "id": "markdown-body-deep-research-referencesmdbodydeep-research-exportthis-paragraph-follows-the-reference-list-and-should-still-be-spoken-429abab6e23e",
       "index": 7,
       "kind": "body",
       "label": "This paragraph follows the reference list and should",
@@ -158,13 +188,18 @@
         "columnStart": 1,
         "lineEnd": 15,
         "lineStart": 15,
-        "sourceSlice": "This paragraph follows the reference list and should still be spoken."
+        "sourceSlice": "This paragraph follows the reference list and should still be spoken.",
+        "fingerprint": "0a4f2ca90c6b2cf0ae43541fd2155eb5",
+        "identityAnchor": "deep-research-references.md|body|Deep Research Export|This paragraph follows the reference list and should still be spoken.",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:422"
       },
       "speakMode": "speak",
       "spokenText": "This paragraph follows the reference list and should still be spoken.",
       "startOffset": 422,
       "text": "This paragraph follows the reference list and should still be spoken.",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000433158"
     }
   ],
   "document": {
@@ -196,11 +231,15 @@
           "columnStart": 1,
           "lineEnd": 1,
           "lineStart": 1,
-          "sourceSlice": "# Deep Research Export"
+          "sourceSlice": "# Deep Research Export",
+          "fingerprint": "42fff683a43658805250e655ab0f8f07",
+          "identityAnchor": "deep-research-references.md|heading|Deep Research Export|# Deep Research Export",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:0"
         },
-        "nodeId": "block-0001",
+        "nodeId": "markdown-heading-deep-research-referencesmdheadingdeep-research-export-deep-research-export-3c5788e5b69b",
         "normalisedText": "# Deep Research Export",
-        "orderKey": "00000001",
+        "orderKey": "000000001024",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -218,6 +257,13 @@
           "offsets": {
             "end": 22,
             "start": 0
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "deep-research-references"
         },
@@ -260,11 +306,15 @@
           "columnStart": 1,
           "lineEnd": 3,
           "lineStart": 3,
-          "sourceSlice": "The narrative section should remain available for speech."
+          "sourceSlice": "The narrative section should remain available for speech.",
+          "fingerprint": "efea6fabd4fb396abf53d3e295e5f5aa",
+          "identityAnchor": "deep-research-references.md|body|Deep Research Export|The narrative section should remain available for speech.",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:24"
         },
-        "nodeId": "block-0002",
+        "nodeId": "markdown-body-deep-research-referencesmdbodydeep-research-exportthe-narrative-section-should-remain-available-for-speech-ccbb1421478e",
         "normalisedText": "The narrative section should remain available for speech.",
-        "orderKey": "00000002",
+        "orderKey": "000000025601",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -282,6 +332,13 @@
           "offsets": {
             "end": 81,
             "start": 24
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "deep-research-references"
         },
@@ -328,11 +385,15 @@
           "columnStart": 1,
           "lineEnd": 5,
           "lineStart": 5,
-          "sourceSlice": "References"
+          "sourceSlice": "References",
+          "fingerprint": "ba569d1f7c313e015b24548ccef2d6d9",
+          "identityAnchor": "deep-research-references.md|reference|Deep Research Export|References",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:83"
         },
-        "nodeId": "block-0003",
+        "nodeId": "markdown-reference-deep-research-referencesmdreferencedeep-research-exportreferences-a52848021f82",
         "normalisedText": "References",
-        "orderKey": "00000003",
+        "orderKey": "000000086018",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -350,6 +411,13 @@
           "offsets": {
             "end": 93,
             "start": 83
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "deep-research-references"
         },
@@ -394,11 +462,15 @@
           "columnStart": 1,
           "lineEnd": 6,
           "lineStart": 6,
-          "sourceSlice": "<!-- deep-research-references:start -->"
+          "sourceSlice": "<!-- deep-research-references:start -->",
+          "fingerprint": "ae717376ea8cc2958c7c28ceec31c134",
+          "identityAnchor": "deep-research-references.md|embedded|Deep Research Export|<!-- deep-research-references:start -->",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:94"
         },
-        "nodeId": "block-0004",
+        "nodeId": "markdown-embedded-deep-research-referencesmdembeddeddeep-research-export-deep-research-referencesstart-aba12a5a611f",
         "normalisedText": "<!-- deep-research-references:start -->",
-        "orderKey": "00000004",
+        "orderKey": "000000097283",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -416,6 +488,13 @@
           "offsets": {
             "end": 133,
             "start": 94
+          },
+          "extraction": {
+            "confidence": 0.72,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "deep-research-references"
         },
@@ -461,11 +540,15 @@
           "columnStart": 1,
           "lineEnd": 11,
           "lineStart": 8,
-          "sourceSlice": "    https://opentelemetry.io/docs/what-is-opentelemetry/\n    https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf\n    https://www.w3.org/TR/trace-context/\n    https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/"
+          "sourceSlice": "    https://opentelemetry.io/docs/what-is-opentelemetry/\n    https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf\n    https://www.w3.org/TR/trace-context/\n    https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/",
+          "fingerprint": "c9909385e45012202e0d39a384a13b30",
+          "identityAnchor": "deep-research-references.md|reference|Deep Research Export|https://opentelemetry.io/docs/what-is-opentelemetry/ https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf https://www.w3.org/TR/trace-context/ https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:135"
         },
-        "nodeId": "block-0005",
+        "nodeId": "markdown-reference-deep-research-referencesmdreferencedeep-research-exporthttpsopentelemetryiodocswhat-is-opentelemetry-httpswwwcsumdedubenpapersshneiderman1996eyespdf-httpswwww3orgtrtrace-context-httpswwwnasagovhuman-systems-integration-divisionnasa-task-load-index-tlx-c4389cca54b7",
         "normalisedText": "https://opentelemetry.io/docs/what-is-opentelemetry/ https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf https://www.w3.org/TR/trace-context/ https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/",
-        "orderKey": "00000005",
+        "orderKey": "000000139268",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -483,6 +566,13 @@
           "offsets": {
             "end": 381,
             "start": 135
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "deep-research-references"
         },
@@ -527,11 +617,15 @@
           "columnStart": 1,
           "lineEnd": 13,
           "lineStart": 13,
-          "sourceSlice": "<!-- deep-research-references:end -->"
+          "sourceSlice": "<!-- deep-research-references:end -->",
+          "fingerprint": "1e741e25cd568eec01272f26cbb92748",
+          "identityAnchor": "deep-research-references.md|embedded|Deep Research Export|<!-- deep-research-references:end -->",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:383"
         },
-        "nodeId": "block-0006",
+        "nodeId": "markdown-embedded-deep-research-referencesmdembeddeddeep-research-export-deep-research-referencesend-d73bdb6732af",
         "normalisedText": "<!-- deep-research-references:end -->",
-        "orderKey": "00000006",
+        "orderKey": "000000393221",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -549,6 +643,13 @@
           "offsets": {
             "end": 420,
             "start": 383
+          },
+          "extraction": {
+            "confidence": 0.72,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "deep-research-references"
         },
@@ -591,11 +692,15 @@
           "columnStart": 1,
           "lineEnd": 15,
           "lineStart": 15,
-          "sourceSlice": "This paragraph follows the reference list and should still be spoken."
+          "sourceSlice": "This paragraph follows the reference list and should still be spoken.",
+          "fingerprint": "0a4f2ca90c6b2cf0ae43541fd2155eb5",
+          "identityAnchor": "deep-research-references.md|body|Deep Research Export|This paragraph follows the reference list and should still be spoken.",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:422"
         },
-        "nodeId": "block-0007",
+        "nodeId": "markdown-body-deep-research-referencesmdbodydeep-research-exportthis-paragraph-follows-the-reference-list-and-should-still-be-spoken-429abab6e23e",
         "normalisedText": "This paragraph follows the reference list and should still be spoken.",
-        "orderKey": "00000007",
+        "orderKey": "000000433158",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -613,6 +718,13 @@
           "offsets": {
             "end": 491,
             "start": 422
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "deep-research-references"
         },
@@ -663,28 +775,28 @@
   "parseMode": "strict",
   "skippedItems": [
     {
-      "id": "block-0003",
+      "id": "markdown-reference-deep-research-referencesmdreferencedeep-research-exportreferences-a52848021f82",
       "kind": "reference",
       "offset": 83,
       "reason": "reference marker available through citation policy",
       "text": "References"
     },
     {
-      "id": "block-0004",
+      "id": "markdown-embedded-deep-research-referencesmdembeddeddeep-research-export-deep-research-referencesstart-aba12a5a611f",
       "kind": "embedded",
       "offset": 94,
       "reason": "embedded construct kept as safe fallback",
       "text": "<!-- deep-research-references:start -->"
     },
     {
-      "id": "block-0005",
+      "id": "markdown-reference-deep-research-referencesmdreferencedeep-research-exporthttpsopentelemetryiodocswhat-is-opentelemetry-httpswwwcsumdedubenpapersshneiderman1996eyespdf-httpswwww3orgtrtrace-context-httpswwwnasagovhuman-systems-integration-divisionnasa-task-load-index-tlx-c4389cca54b7",
       "kind": "reference",
       "offset": 135,
       "reason": "reference marker available through citation policy",
       "text": "    https://opentelemetry.io/docs/what-is-opentelemetry/\n    https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf\n    https://www.w3.org/TR/trace-context/\n    https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/"
     },
     {
-      "id": "block-0006",
+      "id": "markdown-embedded-deep-research-referencesmdembeddeddeep-research-export-deep-research-referencesend-d73bdb6732af",
       "kind": "embedded",
       "offset": 383,
       "reason": "embedded construct kept as safe fallback",
