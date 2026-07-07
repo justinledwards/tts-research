@@ -125,28 +125,66 @@ func (service *Service) CreateBookSourceWithOptions(
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
+	sourceRevisionID := bookSourceRevisionID(book.ID)
+	if incrementalBookSourceKind(kind) {
+		if len(sourcePaths) == 0 {
+			return BookSource{}, fmt.Errorf("%s incremental extraction requires a persisted source file", kind)
+		}
+		if _, revision, err := service.PersistSourceLifecycle(sourceLifecycleRequestFromBookSource(book, sourcePaths[0], sourceRevisionID)); err != nil {
+			return BookSource{}, fmt.Errorf("persist %s source lifecycle: %w", kind, err)
+		} else {
+			sourceRevisionID = revision.RevisionID
+		}
+	}
+	var incrementalCompletionStatus SourceLifecycleWorkStatus
 	document, extractErr := service.extractBookSourceIR(ctx, kind, sourcePaths, sourceFileName, book, now, options)
 	if extractErr != nil {
 		book.Status = BookSourceStatusFailed
 		book.Error = extractErr.Error()
 		readiness := bookSourceFailedReadiness(book, SourceReadinessFailureExtraction, extractErr.Error())
 		book.SourceReadiness = &readiness
+		if incrementalBookSourceKind(kind) {
+			if statusErr := service.UpdateSourceLifecycleWorkStatus(book.ID, sourceRevisionID, SourceLifecycleWorkStatusFailed); statusErr != nil {
+				return BookSource{}, statusErr
+			}
+		}
 	} else {
 		book = BookSourceFromIR(document, book)
 		readiness := bookSourceNeedsMetadataReadiness(book)
 		book.SourceReadiness = &readiness
+		if incrementalBookSourceKind(kind) {
+			if err := service.persistIncrementalBookSourceManifests(ctx, book, document, sourceRevisionID, now); err != nil {
+				_ = service.UpdateSourceLifecycleWorkStatus(book.ID, sourceRevisionID, SourceLifecycleWorkStatusFailed)
+				return BookSource{}, fmt.Errorf("persist %s incremental manifest snapshots: %w", kind, err)
+			}
+			incrementalCompletionStatus = SourceLifecycleWorkStatusComplete
+			if len(incrementalDocumentWarnings(document)) > 0 {
+				incrementalCompletionStatus = SourceLifecycleWorkStatusCompleteWithWarnings
+			}
+		}
 	}
 
 	service.updateBookSource(storedBookSource{BookSource: book})
 	if err := service.writeBookSourceMetadata(book); err != nil {
+		if incrementalBookSourceKind(kind) && extractErr == nil {
+			_ = service.UpdateSourceLifecycleWorkStatus(book.ID, sourceRevisionID, SourceLifecycleWorkStatusFailed)
+		}
 		return BookSource{}, err
 	}
 	if extractErr == nil {
 		if err := service.writeBookSourceContentIRDocument(book.ID, document); err != nil {
+			if incrementalBookSourceKind(kind) {
+				_ = service.UpdateSourceLifecycleWorkStatus(book.ID, sourceRevisionID, SourceLifecycleWorkStatusFailed)
+			}
 			return BookSource{}, err
 		}
 	} else {
 		if err := service.writeBookSourceContentIR(book); err != nil {
+			return BookSource{}, err
+		}
+	}
+	if incrementalBookSourceKind(kind) && extractErr == nil {
+		if err := service.UpdateSourceLifecycleWorkStatus(book.ID, sourceRevisionID, incrementalCompletionStatus); err != nil {
 			return BookSource{}, err
 		}
 	}

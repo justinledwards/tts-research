@@ -2526,3 +2526,21 @@ duplicating every implementation detail from commits, PR text, or generated revi
   - [x] final gates passed at 2026-07-07 21:40 CEST: `mise exec -- pnpm validate:ir`, `mise exec -- pnpm check`, `git diff --check`
   - [x] commit created after final gates: initial `704f8c222011db1543ae18570b6489e57b0fadbd`; commit hook reran `pnpm check` and passed
   - [x] final closeout docs amended into commit; push, remote verification, and Linear closeout handled by parent orchestrator
+
+## 2026-07-07 21:47 CEST - QQP-428 Incremental Extraction Proof for HTML and EPUB
+- [x] preflight repo state: branch `niklas/voice-studio-follow-up`, local and remote both at `bc301285c14ccd82b3054623f6821944c555532a`, clean tree
+- [x] preflight Linear state: project page fetched with `hasNextPage=false`; QQP-423, QQP-424, QQP-425, QQP-426, and QQP-427 Done; QQP-428 Backlog
+- [x] selected next issue by agreed manifest order/dependencies: QQP-428 depends on QQP-424, QQP-425, and QQP-426, all Done
+- [x] wrote implementation plan: `docs/plans/linear/QQP-428-incremental-extraction-proof-html-epub.md`
+- [x] move QQP-428 to In Progress and dispatch focused implementation worker (`deleg_3cab9afe`)
+- [x] run parent inspection, focused verification, spec review, and quality review
+  - [x] implementation worker timed out (`deleg_3cab9afe`) but left coherent partial QQP-428 diff; parent inspected read-only
+  - [x] parent focused gates passed: focused pipeline Go tests, full pipeline package Go test, `mise exec -- pnpm test:adapters`, `mise exec -- pnpm validate:ir`, `git diff --check`
+  - [x] independent spec review PASS (`deleg_5188d9ee`)
+  - [x] independent quality review REQUEST_CHANGES (`deleg_48736b3c`): important blockers on half-paired reading-unit/readalong snapshot failure consistency and source lifecycle completion before book/Content IR durability
+  - [x] focused repair worker completed (`deleg_83fb3dcb`); parent inspected read-only and verified targeted repair gates
+  - [x] targeted quality re-review APPROVED (`deleg_27e4393c`)
+- [x] run final gates, update Linear, commit, and push
+  - [x] final gates passed at 2026-07-07 22:25 CEST: `mise exec -- pnpm check`, `git diff --check`
+  - [x] commit created after final gates: initial `2cdbcdaa1dbda34babb330e18b53d2572aa5f9b9`; commit hook reran `pnpm check` and passed
+  - [x] final closeout docs amended into commit; push, remote verification, and Linear closeout handled by parent orchestrator

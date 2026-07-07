@@ -185,6 +185,7 @@ type Options struct {
 	Alignment                            AlignmentOptions
 	DefaultTTSEngine                     string
 	TTSEngines                           []TTSEngineRegistration
+	incrementalExtractionObserver        func(context.Context, IncrementalExtractionSnapshot)
 }
 
 const (
