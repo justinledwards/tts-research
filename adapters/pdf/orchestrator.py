@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import (
+    contract_fit,
     detect_tagged_pdf,
     extract_tables_with_pdfplumber,
     extract_with_pymupdf,
@@ -78,6 +79,14 @@ def emit_adapter(payload: dict[str, Any]) -> dict[str, Any]:
     if not nodes:
         raise RuntimeError("No readable text was extracted from this source.")
     chain = _extractor_chain(strategy, confidence, warnings)
+    contract_fit_report = contract_fit.create_lower_tier_contract_fit_report(
+        adapter_id="pdf",
+        adapter_version=ADAPTER_VERSION,
+        evidence={"fixtureIds": payload.get("contractFixtureIds") or [], "sourceNames": [source_name]},
+        extraction_path=strategy.extractor_id,
+        source_kind="ocr" if strategy.extractor_id == "ocr" or kind == "image" else "pdf",
+        support_tier_label=strategy.label,
+    )
     metadata = {
         "title": extracted.get("title") or Path(source_name).stem,
         "author": extracted.get("author") or "",
@@ -89,6 +98,7 @@ def emit_adapter(payload: dict[str, Any]) -> dict[str, Any]:
         "importProfile": import_profile,
         "pdfTableMode": table_mode,
         "capabilities": capabilities(),
+        "contractFitReport": contract_fit_report,
     }
     document = {
         "schemaVersion": "content-ir.v1",
@@ -102,11 +112,14 @@ def emit_adapter(payload: dict[str, Any]) -> dict[str, Any]:
         "metadata": metadata,
         "nodes": nodes,
     }
+    adapter_diagnostics = diagnostics()
+    adapter_diagnostics["contractFitReport"] = contract_fit_report
     return {
         "adapterVersion": ADAPTER_VERSION,
         "author": metadata["author"],
         "capabilities": capabilities(),
-        "diagnostics": diagnostics(),
+        "contractFitReport": contract_fit_report,
+        "diagnostics": adapter_diagnostics,
         "document": document,
         "metadata": metadata,
         "title": metadata["title"],

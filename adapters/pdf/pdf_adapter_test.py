@@ -21,6 +21,7 @@ class PDFAdapterTests(unittest.TestCase):
                 "sourceName": path.name,
                 "sourceType": "bookSource",
                 "generatedAt": "2026-05-16T12:00:00Z",
+                "contractFixtureIds": ["pdf-fixture.content-ir.v1"],
                 **options,
             }
         )
@@ -41,6 +42,25 @@ class PDFAdapterTests(unittest.TestCase):
         kinds = [node["kind"] for node in result["document"]["nodes"]]
         self.assertIn("table", kinds)
 
+    def test_emits_pdf_contract_fit_report_without_best_in_class_claims(self):
+        result = self.emit("fixtures/pdf/tagged_fixture.pdf")
+        report = result["contractFitReport"]
+
+        self.assertEqual(report["schemaVersion"], "adapter-contract-fit-report.v1")
+        self.assertEqual(report["adapter"]["id"], "pdf")
+        self.assertEqual(report["adapter"]["sourceKind"], "pdf")
+        self.assertEqual(report["adapter"]["supportTier"], "lower-tier")
+        self.assertEqual(report["status"], "lower_tier_with_gaps")
+        self.assertEqual(report["evidence"]["fixtureIds"], ["pdf-fixture.content-ir.v1"])
+        self.assertEqual(report["evidence"]["sourceNames"], ["tagged_fixture.pdf"])
+        self.assertIn("best_in_class_pdf", report["nonClaims"])
+        self.assertIn("exact_word_sync_ready", report["nonClaims"])
+        self.assertIn("pdf_reading_order_degraded", {gap["id"] for gap in report["gaps"]})
+        self.assertIn("no_best_in_class_claim", {warning["code"] for warning in report["warnings"]})
+        self.assertIn("content_ir_v1_output", {feature["id"] for feature in report["supportedFeatures"]})
+        self.assertEqual(result["metadata"]["contractFitReport"], report)
+        self.assertEqual(result["diagnostics"]["contractFitReport"], report)
+
     def test_classifies_obvious_text_layer_headings_from_metrics(self):
         result = self.emit("fixtures/pdf/heading_metrics_fixture.pdf")
         nodes = result["document"]["nodes"]
@@ -56,6 +76,12 @@ class PDFAdapterTests(unittest.TestCase):
         result = self.emit("fixtures/pdf/scanned_fixture.pdf")
         self.assertEqual(result["metadata"]["supportTier"], "C")
         self.assertEqual(result["document"]["nodes"][0]["provenance"]["locator"]["type"], "ocr")
+        report = result["contractFitReport"]
+        self.assertEqual(report["adapter"]["sourceKind"], "ocr")
+        self.assertEqual(report["adapter"]["extractionPath"], "ocr")
+        self.assertIn("best_in_class_ocr", report["nonClaims"])
+        self.assertIn("ocr_text_confidence_degraded", {gap["id"] for gap in report["gaps"]})
+        self.assertIn("ocr_lower_tier_contract_fit", {warning["code"] for warning in report["warnings"]})
 
     def test_uses_scholarly_fast_path_when_requested(self):
         result = self.emit("fixtures/pdf/scholarly_fixture.pdf", importProfile="scholarly")
@@ -74,11 +100,17 @@ class PDFAdapterTests(unittest.TestCase):
                 "sourceName": "image-batch",
                 "sourceType": "bookSource",
                 "generatedAt": "2026-05-16T12:00:00Z",
+                "contractFixtureIds": ["ocr-image-set.content-ir.v1"],
             }
         )
         self.assertEqual(result["metadata"]["supportTier"], "D")
         text = "\n".join(node["speechText"] for node in result["document"]["nodes"])
         self.assertLess(text.index("first image page"), text.index("second image page"))
+        report = result["contractFitReport"]
+        self.assertEqual(report["adapter"]["sourceKind"], "ocr")
+        self.assertEqual(report["evidence"]["fixtureIds"], ["ocr-image-set.content-ir.v1"])
+        self.assertEqual(report["evidence"]["sourceNames"], ["image-batch"])
+        self.assertIn("best_in_class_ocr", report["nonClaims"])
 
     @unittest.skipUnless(shutil.which("tesseract"), "local Tesseract is unavailable")
     def test_tesseract_smoke_when_available(self):

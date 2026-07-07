@@ -2510,3 +2510,19 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] run final gates, update Linear, commit, and push
   - [x] final gates passed at 2026-07-07 20:25 CEST: `mise exec -- pnpm check`, `git diff --check`
   - [x] commit created after final gates; push and Linear closeout handled by parent orchestrator
+
+## 2026-07-07 21:14 CEST - QQP-427 Lower-Tier Adapter Contract-Fit Reports
+- [x] preflight repo state: branch `niklas/voice-studio-follow-up`, local and remote both at `c7a593e7b95837256a329e06b8a62e09fdcee9a0`, clean tree
+- [x] preflight Linear state: project page fetched with `hasNextPage=false`; QQP-423, QQP-424, QQP-425, and QQP-426 Done; QQP-427 Backlog; active unarchived issue count remains within cap (20 including QQP-4)
+- [x] selected next issue by agreed manifest order/dependencies: QQP-427 `lower-tier-adapter-contract-fit` depends on QQP-423, Done
+- [x] wrote implementation plan: `docs/plans/linear/QQP-427-lower-tier-adapter-contract-fit.md`
+- [x] move QQP-427 to In Progress and dispatch focused implementation worker (`deleg_dd69a287`)
+- [x] run parent inspection, focused verification, spec review, and quality review
+  - [x] implementation worker timed out (`deleg_dd69a287`) but left coherent partial QQP-427 diff; parent inspected read-only
+  - [x] parent focused gates passed: `mise exec -- pnpm test:adapters`, `mise exec -- pnpm validate:ir`, `git diff --check`
+  - [x] independent spec review PASS (`deleg_76d7fd87`)
+  - [x] independent quality review APPROVED (`deleg_25827e9f`)
+- [x] run final gates, update Linear, commit, and push
+  - [x] final gates passed at 2026-07-07 21:40 CEST: `mise exec -- pnpm validate:ir`, `mise exec -- pnpm check`, `git diff --check`
+  - [x] commit created after final gates: initial `704f8c222011db1543ae18570b6489e57b0fadbd`; commit hook reran `pnpm check` and passed
+  - [x] final closeout docs amended into commit; push, remote verification, and Linear closeout handled by parent orchestrator

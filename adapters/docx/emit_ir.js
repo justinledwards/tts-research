@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { XMLParser } from "fast-xml-parser";
 import JSZip from "jszip";
+import { createLowerTierContractFitReport } from "../shared/contract_fit.js";
 import {
   createDocument,
   estimateDurationMs,
@@ -50,10 +51,20 @@ export async function emitDOCXAdapter(bytes, options = {}) {
     lang: "und",
     sourceId,
   });
+  const contractFitReport = createLowerTierContractFitReport({
+    adapterId: "docx",
+    adapterVersion: DOCX_ADAPTER_VERSION,
+    evidence: {
+      fixtureIds: options.contractFixtureIds ?? [],
+      sourceNames: [sourceName],
+    },
+    sourceKind: "docx",
+  });
   const metadata = {
     ...core,
     capabilities: docxCapabilities(),
     comments: [...comments.values()],
+    contractFitReport,
     endnotes: [...endnotes.values()],
     footnotes: [...footnotes.values()],
     sections: sectionsFromBlocks(parsed.blocks),
@@ -62,10 +73,12 @@ export async function emitDOCXAdapter(bytes, options = {}) {
     adapterVersion: DOCX_ADAPTER_VERSION,
     author: core.author,
     capabilities: docxCapabilities(),
+    contractFitReport,
     diagnostics: {
       adapterId: "docx",
       available: true,
       commentCount: comments.size,
+      contractFitReport,
       endnoteCount: endnotes.size,
       footnoteCount: footnotes.size,
       status: "available",
