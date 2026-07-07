@@ -1,0 +1,562 @@
+{
+  "status": "agreed_ready_for_linear_creation",
+  "project": {
+    "name": "TTS-Research",
+    "url": "https://linear.app/niklas-olsson/project/tts-research-9683c18e447c",
+    "team_key": "QQP",
+    "id": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+  },
+  "cap": {
+    "active_cap": 20,
+    "existing_active_issue": "QQP-4",
+    "existing_active_count": 1,
+    "max_new_active_issues": 19,
+    "planned_new_active_issues": 19,
+    "active_total_after_creation": 20,
+    "remaining_capacity_after_creation": 0
+  },
+  "do_not_create_duplicate_quick_listen_issue": true,
+  "agreement": {
+    "chatgpt_response": "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+    "marker": "AGREED ATOMIC FLOW AND LINEAR BATCH"
+  },
+  "validated_commands": [
+    {
+      "command": "mise exec -- pnpm generate:contracts",
+      "status": "passed"
+    },
+    {
+      "command": "mise exec -- pnpm validate:ir",
+      "status": "passed"
+    },
+    {
+      "command": "mise exec -- pnpm test:adapters",
+      "status": "passed"
+    }
+  ],
+  "linear_creation_state": "created",
+  "issues": [
+    {
+      "order": 1,
+      "slug": "readalong-contracts",
+      "title": "Readalong source, manifest, artifact, repair, promotion, event, and progress contract pack",
+      "priority": 1,
+      "dependencies": [],
+      "atomic_deliverable": "Add the complete first-batch sidecar contract pack with docs, schemas, fixtures, and validation, without runtime implementation.",
+      "scope": "Contracts include SourceEnvelope, SourceRevision, ExtractionRevision, ReadingUnitManifest, ReadalongManifest, AudioArtifact state, ArtifactCompatibility, RepairOverlay, RevisionMap, PromotionCrosswalk, SourceManifestEvent, DurableProgress, ResumeResolution, and optionally SyncFidelityDecision if not fully represented elsewhere.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "2895b459-d032-459a-93ac-520145d4dd6e",
+        "identifier": "QQP-423",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-423/readalong-source-manifest-artifact-repair-promotion-event-and-progress",
+        "created_now": true
+      }
+    },
+    {
+      "order": 2,
+      "slug": "source-lifecycle-storage",
+      "title": "Backend source lifecycle storage and startup interruption marking",
+      "priority": 1,
+      "dependencies": ["readalong-contracts"],
+      "atomic_deliverable": "Persist source identity, source revisions, raw source artifacts, and startup interrupted_retriable marking for orphaned active work.",
+      "scope": "Backend only: no manifest snapshot API, audio retry implementation, or frontend store.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "25fe5eb8-f811-4dc0-8415-34c19388e269",
+        "identifier": "QQP-424",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-424/backend-source-lifecycle-storage-and-startup-interruption-marking",
+        "created_now": true
+      }
+    },
+    {
+      "order": 3,
+      "slug": "manifest-snapshot-storage-api",
+      "title": "Manifest snapshot storage API",
+      "priority": 1,
+      "dependencies": ["readalong-contracts", "source-lifecycle-storage"],
+      "atomic_deliverable": "Persist and retrieve reading-unit/readalong manifest snapshots by source/revision/manifest identity.",
+      "scope": "Backend storage/API with current/superseded semantics; no SSE/client store.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "933a5453-3e73-4da3-b778-10be5a40fd84",
+        "identifier": "QQP-425",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-425/manifest-snapshot-storage-api",
+        "created_now": true
+      }
+    },
+    {
+      "order": 4,
+      "slug": "stable-unit-ir-core-adapters",
+      "title": "Stable unit identity for core adapters",
+      "priority": 1,
+      "dependencies": ["readalong-contracts"],
+      "atomic_deliverable": "Make HTML, EPUB, and Markdown core adapters emit stable unit IDs, order keys, fingerprints, locators, and provenance.",
+      "scope": "No PDF/DOCX/OCR best-in-class work.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "5b4996d8-2104-4806-9453-9c74decf70bc",
+        "identifier": "QQP-426",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-426/stable-unit-identity-for-core-adapters",
+        "created_now": true
+      }
+    },
+    {
+      "order": 5,
+      "slug": "lower-tier-adapter-contract-fit",
+      "title": "Lower-tier adapter contract-fit reports",
+      "priority": 2,
+      "dependencies": ["readalong-contracts"],
+      "atomic_deliverable": "Produce deterministic contract-fit reports and warnings for non-core adapters without claiming best-in-class behavior.",
+      "scope": "DOCX/PDF/OCR report/warning lane only.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "20f9755e-e146-4db2-a08c-55425b333ab7",
+        "identifier": "QQP-427",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-427/lower-tier-adapter-contract-fit-reports",
+        "created_now": true
+      }
+    },
+    {
+      "order": 6,
+      "slug": "epub-html-incremental-extraction",
+      "title": "Incremental extraction proof for HTML and EPUB",
+      "priority": 1,
+      "dependencies": [
+        "source-lifecycle-storage",
+        "manifest-snapshot-storage-api",
+        "stable-unit-ir-core-adapters"
+      ],
+      "atomic_deliverable": "Emit readable HTML/EPUB units incrementally and write manifest snapshots as units become available.",
+      "scope": "First long-form proof path only; no unrelated adapter upgrades.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "dadca4ff-fe65-48d0-9d69-b9625cf9bc4e",
+        "identifier": "QQP-428",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-428/incremental-extraction-proof-for-html-and-epub",
+        "created_now": true
+      }
+    },
+    {
+      "order": 7,
+      "slug": "source-manifest-event-stream",
+      "title": "Source and manifest backend event stream",
+      "priority": 1,
+      "dependencies": ["readalong-contracts", "manifest-snapshot-storage-api"],
+      "atomic_deliverable": "Implement a sequenced backend source/manifest event protocol with deterministic tests and snapshot fallback.",
+      "scope": "Backend event stream only; no frontend store.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "278dba07-6e7a-4219-8b58-006db0376d71",
+        "identifier": "QQP-429",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-429/source-and-manifest-backend-event-stream",
+        "created_now": true
+      }
+    },
+    {
+      "order": 8,
+      "slug": "frontend-source-manifest-store",
+      "title": "Frontend source/manifest store",
+      "priority": 1,
+      "dependencies": ["source-manifest-event-stream", "manifest-snapshot-storage-api"],
+      "atomic_deliverable": "Add a frontend store keyed by source/revision/manifest identity with reconnect and snapshot fallback behavior.",
+      "scope": "Disposable frontend cache/store and render coalescing.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "a0919f90-c26f-4456-a18a-5dbbda09a643",
+        "identifier": "QQP-430",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-430/frontend-sourcemanifest-store",
+        "created_now": true
+      }
+    },
+    {
+      "order": 9,
+      "slug": "incremental-speech-plan-segmentation",
+      "title": "Incremental speech-plan segmentation for first narratable prefix",
+      "priority": 1,
+      "dependencies": [
+        "readalong-contracts",
+        "manifest-snapshot-storage-api",
+        "epub-html-incremental-extraction"
+      ],
+      "atomic_deliverable": "Generate speech-plan segments tied to source/revision/manifest/unit identity from the earliest contiguous narratable prefix.",
+      "scope": "Backend/contracted data slice; no audio artifact state implementation.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "d84345cd-6109-4d61-a5ca-3f5f72079885",
+        "identifier": "QQP-431",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-431/incremental-speech-plan-segmentation-for-first-narratable-prefix",
+        "created_now": true
+      }
+    },
+    {
+      "order": 10,
+      "slug": "partial-audio-artifact-states",
+      "title": "Partial audio artifact states and replacement semantics",
+      "priority": 1,
+      "dependencies": ["incremental-speech-plan-segmentation"],
+      "atomic_deliverable": "Persist segment-level audio artifact states and replacement/reuse semantics for unchecked, checked, stale, replaced, failed, and retryable audio.",
+      "scope": "Audio artifact state machine only; no sync fidelity UI.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "2a0b110f-287c-485b-a8d4-34fba39bddc8",
+        "identifier": "QQP-432",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-432/partial-audio-artifact-states-and-replacement-semantics",
+        "created_now": true
+      }
+    },
+    {
+      "order": 11,
+      "slug": "sync-fidelity-gates",
+      "title": "Sync fidelity gates for exact, phrase, block, audio-only, and source-only modes",
+      "priority": 1,
+      "dependencies": ["partial-audio-artifact-states"],
+      "atomic_deliverable": "Gate sync/highlight fidelity so exact word highlighting is only allowed with sufficient revision, mapping, timing, and resource evidence.",
+      "scope": "Decision layer only.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "b4b0aaa6-4cbd-48dc-b07f-93fa1a4fc07e",
+        "identifier": "QQP-433",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-433/sync-fidelity-gates-for-exact-phrase-block-audio-only-and-source-only",
+        "created_now": true
+      }
+    },
+    {
+      "order": 12,
+      "slug": "durable-progress-resume-resolver",
+      "title": "Durable progress and manifest-aware resume resolver",
+      "priority": 1,
+      "dependencies": [
+        "source-lifecycle-storage",
+        "manifest-snapshot-storage-api",
+        "sync-fidelity-gates"
+      ],
+      "atomic_deliverable": "Persist canonical progress and deterministically resolve reopen/resume state across current, stale, degraded, failed, interrupted, remapped, and superseded manifests.",
+      "scope": "Browser localStorage remains non-authoritative.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "7c679e9f-e4ea-4cb8-8990-b8bba75b06b6",
+        "identifier": "QQP-434",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-434/durable-progress-and-manifest-aware-resume-resolver",
+        "created_now": true
+      }
+    },
+    {
+      "order": 13,
+      "slug": "retry-interrupted-artifact-semantics",
+      "title": "Retry and interrupted artifact semantics",
+      "priority": 1,
+      "dependencies": [
+        "source-lifecycle-storage",
+        "partial-audio-artifact-states",
+        "durable-progress-resume-resolver"
+      ],
+      "atomic_deliverable": "Implement artifact/segment-scoped retry behavior across cancellation, provider failure, backend restart, checking failure, and compatible reuse.",
+      "scope": "No broad job orchestration rewrite.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "98600d49-e72e-4164-82c2-d4cc6dfc6a79",
+        "identifier": "QQP-435",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-435/retry-and-interrupted-artifact-semantics",
+        "created_now": true
+      }
+    },
+    {
+      "order": 14,
+      "slug": "minimal-repair-overlay-supersession",
+      "title": "Minimal repair overlay and manifest supersession",
+      "priority": 2,
+      "dependencies": [
+        "readalong-contracts",
+        "manifest-snapshot-storage-api",
+        "durable-progress-resume-resolver",
+        "retry-interrupted-artifact-semantics"
+      ],
+      "atomic_deliverable": "Add immutable repair overlays, superseding manifests, affected-artifact stale marking, and revision-map-based progress remap.",
+      "scope": "No full repair UI/workbench.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "5f4a077e-a800-4b9f-8edc-eba53d862873",
+        "identifier": "QQP-436",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-436/minimal-repair-overlay-and-manifest-supersession",
+        "created_now": true
+      }
+    },
+    {
+      "order": 15,
+      "slug": "quick-listen-promotion-crosswalk",
+      "title": "Quick Listen to project promotion crosswalk",
+      "priority": 1,
+      "dependencies": [
+        "QQP-4",
+        "source-lifecycle-storage",
+        "manifest-snapshot-storage-api",
+        "partial-audio-artifact-states",
+        "durable-progress-resume-resolver"
+      ],
+      "atomic_deliverable": "Promote temporary Quick Listen sources into durable project sources while preserving mapped progress, artifacts, highlights, and source identity.",
+      "scope": "Links/rescopes QQP-4 as capture anchor; do not duplicate Quick Listen capture.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "links_existing_issue": "QQP-4",
+      "linear": {
+        "id": "fe4dea9d-cf6e-4424-a9b7-5f0977e82a4a",
+        "identifier": "QQP-437",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-437/quick-listen-to-project-promotion-crosswalk",
+        "created_now": true
+      }
+    },
+    {
+      "order": 16,
+      "slug": "reader-shell-state-vocabulary",
+      "title": "Reader shell state vocabulary and mode labels",
+      "priority": 1,
+      "dependencies": ["frontend-source-manifest-store"],
+      "atomic_deliverable": "Add Reader shell labels/state vocabulary for source-only, generating, unchecked, checked, degraded, stale, failed, retryable, and superseded states.",
+      "scope": "No visual redesign.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "c58a01f3-9c9e-4b29-99dd-be9266a55667",
+        "identifier": "QQP-438",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-438/reader-shell-state-vocabulary-and-mode-labels",
+        "created_now": true
+      }
+    },
+    {
+      "order": 17,
+      "slug": "reader-transport-state-machine",
+      "title": "Reader transport state machine",
+      "priority": 1,
+      "dependencies": ["partial-audio-artifact-states", "reader-shell-state-vocabulary"],
+      "atomic_deliverable": "Add shared Reader transport states for pre-audio, generating, unchecked, checked, stale/replaced, failed/retryable, and degraded playback.",
+      "scope": "Shared transport state mapping; no unrelated UI redesign.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "1615aafd-1886-4cb1-a5fa-0baa5590f4d1",
+        "identifier": "QQP-439",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-439/reader-transport-state-machine",
+        "created_now": true
+      }
+    },
+    {
+      "order": 18,
+      "slug": "reader-windowing-highlight-scheduling",
+      "title": "Reader windowing and highlight scheduling",
+      "priority": 1,
+      "dependencies": [
+        "sync-fidelity-gates",
+        "reader-shell-state-vocabulary",
+        "reader-transport-state-machine"
+      ],
+      "atomic_deliverable": "Implement internal reader windowing, high-frequency highlight isolation, and low-resource fidelity downgrade behavior.",
+      "scope": "No new visual design system.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "906d0ddf-17cb-4484-a9ab-63d1e70a259f",
+        "identifier": "QQP-440",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-440/reader-windowing-and-highlight-scheduling",
+        "created_now": true
+      }
+    },
+    {
+      "order": 19,
+      "slug": "active-processing-evidence-gates",
+      "title": "First-batch active-processing and canonical fixture evidence gate",
+      "priority": 2,
+      "dependencies": [
+        "quick-listen-promotion-crosswalk",
+        "reader-windowing-highlight-scheduling",
+        "retry-interrupted-artifact-semantics",
+        "minimal-repair-overlay-supersession",
+        "lower-tier-adapter-contract-fit"
+      ],
+      "atomic_deliverable": "Produce the final deterministic evidence package for the canonical fixture, performance budgets, degraded modes, screenshots, logs, and review handoff.",
+      "scope": "Evidence-only: screenshots, budgets, fixture runs, logs, and review package; no feature implementation beyond test/evidence harnesses.",
+      "reference_docs": [
+        "docs/architecture/source-reader-flow-invariants.md",
+        "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+        "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
+      ],
+      "verification_evidence": [
+        "deterministic tests or evidence named in issue body",
+        "mise exec -- pnpm check before completion",
+        "mise exec -- pnpm review:chatgpt for screenshot/evidence-impacting work"
+      ],
+      "linear": {
+        "id": "45b1cc50-6a65-43fd-a16a-a6e0631aeb7c",
+        "identifier": "QQP-441",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-441/first-batch-active-processing-and-canonical-fixture-evidence-gate",
+        "created_now": true
+      }
+    }
+  ],
+  "existing_issue_update": {
+    "identifier": "QQP-4",
+    "comment_added": true,
+    "comment_id": "15fc2be2-e40a-4662-8baf-2bfaac136796",
+    "comment_url": "https://linear.app/niklas-olsson/issue/QQP-4/quick-narrate-pasted-url#comment-15fc2be2"
+  },
+  "created_at": "2026-07-07T11:58:00+02:00",
+  "created_issue_count": 19,
+  "skipped_existing_count": 0
+}

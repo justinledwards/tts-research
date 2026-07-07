@@ -2423,3 +2423,11 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] record product brief, ChatGPT discussion plan, and setup log
 - [x] update Linear project metadata and local capacity manifest
 - [x] verify ChatGPT `TTS-Research` project URL and record `Design for the Real World` as the target Voice Studio project context
+
+## 2026-07-07 11:27 CEST - Atomic Issue Flow Review
+- [x] process ChatGPT Linear batch response into local atomicity, invariant, and flow artifacts
+- [x] validate existing contract/scripts coverage before issue creation
+- [x] discuss atomic issue breakdown, flowchart, invariants, and contracts with ChatGPT
+- [x] produce final Linear issue manifest only after ChatGPT agreement
+- [x] create 19 Linear issues under the cap and update local manifests
+- [x] run checks/review packaging and commit documentation state

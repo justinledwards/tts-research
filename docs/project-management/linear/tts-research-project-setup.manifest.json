@@ -1,6 +1,6 @@
 {
   "schemaVersion": "linear-project-setup.v1",
-  "updatedAt": "2026-07-07T00:53:00+02:00",
+  "updatedAt": "2026-07-07T11:58:00+02:00",
   "project": {
     "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
     "name": "TTS-Research",
@@ -15,8 +15,9 @@
   },
   "capacity": {
     "activeIssueCap": 20,
-    "verifiedActiveIssueCount": 1,
-    "hasNextPage": false
+    "verifiedActiveIssueCount": 20,
+    "hasNextPage": false,
+    "capIsFull": true
   },
   "activeIssues": [
     {
@@ -24,18 +25,227 @@
       "identifier": "QQP-4",
       "title": "Quick Narrate Pasted URL",
       "url": "https://linear.app/niklas-olsson/issue/QQP-4/quick-narrate-pasted-url",
+      "priority": 0,
       "state": {
         "name": "Todo",
         "type": "unstarted"
       }
+    },
+    {
+      "id": "2895b459-d032-459a-93ac-520145d4dd6e",
+      "identifier": "QQP-423",
+      "title": "Readalong source, manifest, artifact, repair, promotion, event, and progress contract pack",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-423/readalong-source-manifest-artifact-repair-promotion-event-and-progress",
+      "priority": 1,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "25fe5eb8-f811-4dc0-8415-34c19388e269",
+      "identifier": "QQP-424",
+      "title": "Backend source lifecycle storage and startup interruption marking",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-424/backend-source-lifecycle-storage-and-startup-interruption-marking",
+      "priority": 1,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "933a5453-3e73-4da3-b778-10be5a40fd84",
+      "identifier": "QQP-425",
+      "title": "Manifest snapshot storage API",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-425/manifest-snapshot-storage-api",
+      "priority": 1,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "5b4996d8-2104-4806-9453-9c74decf70bc",
+      "identifier": "QQP-426",
+      "title": "Stable unit identity for core adapters",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-426/stable-unit-identity-for-core-adapters",
+      "priority": 1,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "20f9755e-e146-4db2-a08c-55425b333ab7",
+      "identifier": "QQP-427",
+      "title": "Lower-tier adapter contract-fit reports",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-427/lower-tier-adapter-contract-fit-reports",
+      "priority": 2,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "dadca4ff-fe65-48d0-9d69-b9625cf9bc4e",
+      "identifier": "QQP-428",
+      "title": "Incremental extraction proof for HTML and EPUB",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-428/incremental-extraction-proof-for-html-and-epub",
+      "priority": 1,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "278dba07-6e7a-4219-8b58-006db0376d71",
+      "identifier": "QQP-429",
+      "title": "Source and manifest backend event stream",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-429/source-and-manifest-backend-event-stream",
+      "priority": 1,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "a0919f90-c26f-4456-a18a-5dbbda09a643",
+      "identifier": "QQP-430",
+      "title": "Frontend source/manifest store",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-430/frontend-sourcemanifest-store",
+      "priority": 1,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "d84345cd-6109-4d61-a5ca-3f5f72079885",
+      "identifier": "QQP-431",
+      "title": "Incremental speech-plan segmentation for first narratable prefix",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-431/incremental-speech-plan-segmentation-for-first-narratable-prefix",
+      "priority": 1,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "2a0b110f-287c-485b-a8d4-34fba39bddc8",
+      "identifier": "QQP-432",
+      "title": "Partial audio artifact states and replacement semantics",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-432/partial-audio-artifact-states-and-replacement-semantics",
+      "priority": 1,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "b4b0aaa6-4cbd-48dc-b07f-93fa1a4fc07e",
+      "identifier": "QQP-433",
+      "title": "Sync fidelity gates for exact, phrase, block, audio-only, and source-only modes",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-433/sync-fidelity-gates-for-exact-phrase-block-audio-only-and-source-only",
+      "priority": 1,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "7c679e9f-e4ea-4cb8-8990-b8bba75b06b6",
+      "identifier": "QQP-434",
+      "title": "Durable progress and manifest-aware resume resolver",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-434/durable-progress-and-manifest-aware-resume-resolver",
+      "priority": 1,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "98600d49-e72e-4164-82c2-d4cc6dfc6a79",
+      "identifier": "QQP-435",
+      "title": "Retry and interrupted artifact semantics",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-435/retry-and-interrupted-artifact-semantics",
+      "priority": 1,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "5f4a077e-a800-4b9f-8edc-eba53d862873",
+      "identifier": "QQP-436",
+      "title": "Minimal repair overlay and manifest supersession",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-436/minimal-repair-overlay-and-manifest-supersession",
+      "priority": 2,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "fe4dea9d-cf6e-4424-a9b7-5f0977e82a4a",
+      "identifier": "QQP-437",
+      "title": "Quick Listen to project promotion crosswalk",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-437/quick-listen-to-project-promotion-crosswalk",
+      "priority": 1,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "c58a01f3-9c9e-4b29-99dd-be9266a55667",
+      "identifier": "QQP-438",
+      "title": "Reader shell state vocabulary and mode labels",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-438/reader-shell-state-vocabulary-and-mode-labels",
+      "priority": 1,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "1615aafd-1886-4cb1-a5fa-0baa5590f4d1",
+      "identifier": "QQP-439",
+      "title": "Reader transport state machine",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-439/reader-transport-state-machine",
+      "priority": 1,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "906d0ddf-17cb-4484-a9ab-63d1e70a259f",
+      "identifier": "QQP-440",
+      "title": "Reader windowing and highlight scheduling",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-440/reader-windowing-and-highlight-scheduling",
+      "priority": 1,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
+    },
+    {
+      "id": "45b1cc50-6a65-43fd-a16a-a6e0631aeb7c",
+      "identifier": "QQP-441",
+      "title": "First-batch active-processing and canonical fixture evidence gate",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-441/first-batch-active-processing-and-canonical-fixture-evidence-gate",
+      "priority": 2,
+      "state": {
+        "name": "Backlog",
+        "type": "backlog"
+      }
     }
   ],
-  "issueCreationGate": "Create no new issue batch until ChatGPT returns AGREED ARCHITECTURE or user explicitly overrides.",
+  "issueCreationGate": "Do not create more active issues while verifiedActiveIssueCount >= activeIssueCap. Archive/remove completed batch work locally and in Linear first.",
   "referenceDocs": [
-    "docs/product/best-in-class-tts-aid-brief.md",
-    "docs/reviews/chatgpt-architecture-discussion-plan.md",
-    "docs/reviews/chatgpt-discussion-log.md",
-    "reviewer-screenshot-manifest.md",
-    "integrations/chatgpt/project.json"
+    "docs/architecture/source-reader-flow-invariants.md",
+    "docs/project-management/linear/tts-research-first-batch-atomicity-review.md",
+    "docs/project-management/linear/tts-research-first-batch.draft.manifest.json",
+    "docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md"
   ]
 }
