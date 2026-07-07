@@ -186,6 +186,7 @@ func pipelineServiceFromEnv(
 			ReferenceWorkerCount:                 referenceWorkerCount,
 			JobDataDir:                           envWithDefault("VOICE_JOB_DATA_DIR", "./data/jobs"),
 			ProjectDataDir:                       envWithDefault("VOICE_PROJECT_DATA_DIR", "./data/projects"),
+			SourceLifecycleDataDir:               envWithDefault("VOICE_SOURCE_LIFECYCLE_DATA_DIR", "./data/source-lifecycle"),
 			BookSourceDir:                        envWithDefault("VOICE_BOOK_SOURCE_DATA_DIR", "./data/book-sources"),
 			SourcePrepDir:                        envWithDefault("VOICE_SOURCE_PREP_DATA_DIR", "./data/source-preps"),
 			ProgressDataDir:                      envWithDefault("VOICE_PROGRESS_DATA_DIR", "./data/progress"),

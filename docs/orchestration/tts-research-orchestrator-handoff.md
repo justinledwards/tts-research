@@ -1,13 +1,17 @@
 # TTS-Research Orchestrator Handoff
 
 Status: ready for orchestrated sub-agent execution  
-Updated: 2026-07-07 11:54 CEST
+Updated: 2026-07-07 16:18 CEST
+
+Latest session-specific handover: `docs/orchestration/session-20260707_122027_0bfb3a-handover.md`
 
 ## Purpose
 
 This handoff is for an orchestrator Agent that keeps the TTS-Research / Voice Studio first batch under control while delegating implementation details to focused sub-agents.
 
-The orchestrator owns sequencing, scope, Linear state, verification, review loops, commits, and user-facing status. Sub-agents own narrow implementation/review tasks only.
+The orchestrator owns sequencing, scope, Linear state, verification, review loops, commits, and user-facing status. Sub-agents own all implementation and review tasks.
+
+The main Agent session is orchestration-only. Product-code edits must be performed by focused sub-agents, not by the main Agent.
 
 ## Non-negotiable operating model
 
@@ -18,9 +22,11 @@ The orchestrator owns sequencing, scope, Linear state, verification, review loop
 5. Active Linear issue cap is full: 20 active issues. Do not create more active issues until completed batch work is archived/removed from the active set.
 6. Work one dependency wave at a time; do not start downstream issues until prerequisite artifacts are merged and verified.
 7. Use fresh sub-agents per implementation/review task. Do not let a worker self-review replace independent review.
-8. Stop on no-progress liveness. Before restart require facts/logs, RCA, executable anti-stall fix, and a revised prompt.
-9. No hidden continuation. Stop when asked; do not run periodic review loops unless explicitly requested.
-10. Success reports require artifact-backed verification on intended infrastructure.
+8. Main Agent product-code edits are prohibited. Product-code work includes backend/frontend code, tests, scripts, schemas, fixtures, generated outputs, and migrations.
+9. Main Agent may edit orchestration artifacts only: handovers, issue plans, WORKINGLOG entries, Linear comments, and prompt templates.
+10. Stop on no-progress liveness. Before restart require facts/logs, RCA, executable anti-stall fix, and a revised prompt.
+11. No hidden continuation. Stop when asked; do not run periodic review loops unless explicitly requested.
+12. Success reports require artifact-backed verification on intended infrastructure.
 
 ## Repo and branch
 
@@ -162,6 +168,28 @@ For each issue:
 13. Update `WORKINGLOG.md`, local plan status, and Linear comments with evidence.
 14. Commit and push only reviewed/verified changes.
 15. Move Linear state only after evidence is attached/commented.
+
+## Main-agent code boundary
+
+The main Agent is the controller, not the coder.
+
+Allowed in the main session:
+
+- preflight discovery and dependency selection;
+- Linear comments/state changes;
+- issue plans, handover docs, WORKINGLOG entries, and prompt templates;
+- read-only diff/file inspection;
+- verification commands;
+- final commit/push after review and verification.
+
+Not allowed in the main session:
+
+- backend/frontend implementation edits;
+- test, fixture, schema, script, generator, migration, or generated-output edits;
+- “quick fixes” after reviewer feedback;
+- recovery-by-coding after a worker timeout.
+
+If code must change, dispatch a focused implementer or repair sub-agent with the exact scope, prior findings, current dirty-tree state, and verification commands.
 
 ## Sub-agent roles
 

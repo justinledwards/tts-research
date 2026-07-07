@@ -85,6 +85,7 @@ func (service *Service) CreateTemporarySource(ctx context.Context, request Creat
 	localPath := strings.TrimSpace(request.LocalPath)
 	contentType := strings.TrimSpace(request.SourceContentType)
 	sourceBytes := request.SourceBytes
+	rawLifecycleBytes := []byte(sourceText)
 	var urlSafety *sourceprep.URLSafetyReport
 
 	if kind == PreparedSourceKindURL {
@@ -92,6 +93,7 @@ func (service *Service) CreateTemporarySource(ctx context.Context, request Creat
 		if err != nil {
 			return TemporarySourceSession{}, err
 		}
+		rawLifecycleBytes = append([]byte(nil), fetched.Bytes...)
 		sourceText = string(fetched.Bytes)
 		sourceName = fetched.Filename
 		sourceURL = fetched.URL
@@ -110,6 +112,7 @@ func (service *Service) CreateTemporarySource(ctx context.Context, request Creat
 			sourceName = filepath.Base(localPath)
 		}
 		sourceBytes = int64(len(data))
+		rawLifecycleBytes = append([]byte(nil), data...)
 		if kind == "" || kind == PreparedSourceKindText {
 			kind = PreparedSourceKindFile
 		}
@@ -210,7 +213,14 @@ func (service *Service) CreateTemporarySource(ctx context.Context, request Creat
 		CreatedAt: now,
 		ExpiresAt: &session.ExpiresAt,
 	})
+	if _, _, err := service.PersistSourceLifecycle(sourceLifecycleRequestFromTemporarySource(session, storedSourceText, rawLifecycleBytes, SourceLifecycleWorkStatusRunning)); err != nil {
+		return TemporarySourceSession{}, err
+	}
 	if err := service.persistTemporarySource(session); err != nil {
+		_ = service.UpdateSourceLifecycleWorkStatus(session.ID, session.ID+"-rev", SourceLifecycleWorkStatusFailed)
+		return TemporarySourceSession{}, err
+	}
+	if err := service.UpdateSourceLifecycleWorkStatus(session.ID, session.ID+"-rev", SourceLifecycleWorkStatusComplete); err != nil {
 		return TemporarySourceSession{}, err
 	}
 	service.mu.Lock()

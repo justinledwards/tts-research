@@ -134,6 +134,7 @@ type Options struct {
 	ReferenceWorkerCount                 int
 	JobDataDir                           string
 	ProjectDataDir                       string
+	SourceLifecycleDataDir               string
 	TemporarySourceDataDir               string
 	TemporaryArtifactDir                 string
 	TemporaryAudioDir                    string
@@ -194,6 +195,7 @@ const (
 	defaultSourcePrepSentenceMaxRunes          = 420
 	defaultJobDataDir                          = "./data/jobs"
 	defaultProjectDataDir                      = "./data/projects"
+	defaultSourceLifecycleDataDir              = "./data/source-lifecycle"
 	defaultTemporarySourceDataDir              = "./data/temporary-sources"
 	defaultTemporaryArtifactDir                = "./data/temporary-artifacts"
 	defaultTemporaryAudioDir                   = "./data/temporary-audio"
@@ -239,27 +241,29 @@ type storedBookSource struct {
 }
 
 type Service struct {
-	optimizer     VoiceOptimizer
-	tts           TTSAgent
-	ttsEngines    map[string]TTSEngineRegistration
-	defaultTTS    string
-	checker       VoiceChecker
-	options       Options
-	mu            sync.RWMutex
-	jobs          map[string]storedJob
-	projects      map[string]VoiceProject
-	temporary     map[string]TemporarySourceSession
-	books         map[string]storedBookSource
-	sourcePreps   map[string]PreparedSource
-	progress      map[string]PlaybackProgress
-	sessions      map[string]PlaybackSession
-	profiles      map[string]storedVoiceProfile
-	sources       map[string]storedVoiceProfileSource
-	voices        map[string]Voice
-	jobCancels    map[string]context.CancelFunc
-	jobDone       map[string]chan struct{}
-	sourceCancels map[string]context.CancelFunc
-	targetCancels map[string]context.CancelFunc
+	optimizer       VoiceOptimizer
+	tts             TTSAgent
+	ttsEngines      map[string]TTSEngineRegistration
+	defaultTTS      string
+	checker         VoiceChecker
+	options         Options
+	mu              sync.RWMutex
+	jobs            map[string]storedJob
+	projects        map[string]VoiceProject
+	sourceEnvelopes map[string]SourceEnvelope
+	sourceRevisions map[string]SourceRevision
+	temporary       map[string]TemporarySourceSession
+	books           map[string]storedBookSource
+	sourcePreps     map[string]PreparedSource
+	progress        map[string]PlaybackProgress
+	sessions        map[string]PlaybackSession
+	profiles        map[string]storedVoiceProfile
+	sources         map[string]storedVoiceProfileSource
+	voices          map[string]Voice
+	jobCancels      map[string]context.CancelFunc
+	jobDone         map[string]chan struct{}
+	sourceCancels   map[string]context.CancelFunc
+	targetCancels   map[string]context.CancelFunc
 }
 
 type resolvedJobConfig struct {
@@ -377,6 +381,7 @@ func resolvedConfigFromJob(job VoiceJob) resolvedJobConfig {
 
 func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, options Options) *Service {
 	requestedStudioSegmentWorkers := options.StudioSegmentWorkers
+	requestedJobDataDir := strings.TrimSpace(options.JobDataDir)
 	if options.MaxRetries <= 0 {
 		options.MaxRetries = 3
 	}
@@ -419,6 +424,12 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	}
 	if strings.TrimSpace(options.ProjectDataDir) == "" {
 		options.ProjectDataDir = defaultProjectDataDir
+	}
+	if strings.TrimSpace(options.SourceLifecycleDataDir) == "" {
+		options.SourceLifecycleDataDir = defaultSourceLifecycleDataDir
+		if requestedJobDataDir != "" && requestedJobDataDir != defaultJobDataDir {
+			options.SourceLifecycleDataDir = filepath.Join(requestedJobDataDir, "source-lifecycle")
+		}
 	}
 	if strings.TrimSpace(options.TemporarySourceDataDir) == "" {
 		options.TemporarySourceDataDir = defaultTemporarySourceDataDir
@@ -543,29 +554,32 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	defaultTTS, ttsEngines := initializeTTSEngines(options.DefaultTTSEngine, tts, options.TTSEngines)
 
 	service := &Service{
-		optimizer:     optimizer,
-		tts:           tts,
-		ttsEngines:    ttsEngines,
-		defaultTTS:    defaultTTS,
-		checker:       checker,
-		options:       options,
-		jobs:          map[string]storedJob{},
-		projects:      map[string]VoiceProject{},
-		temporary:     map[string]TemporarySourceSession{},
-		books:         map[string]storedBookSource{},
-		sourcePreps:   map[string]PreparedSource{},
-		progress:      map[string]PlaybackProgress{},
-		sessions:      map[string]PlaybackSession{},
-		profiles:      map[string]storedVoiceProfile{},
-		sources:       map[string]storedVoiceProfileSource{},
-		voices:        map[string]Voice{},
-		jobCancels:    map[string]context.CancelFunc{},
-		jobDone:       map[string]chan struct{}{},
-		sourceCancels: map[string]context.CancelFunc{},
-		targetCancels: map[string]context.CancelFunc{},
+		optimizer:       optimizer,
+		tts:             tts,
+		ttsEngines:      ttsEngines,
+		defaultTTS:      defaultTTS,
+		checker:         checker,
+		options:         options,
+		jobs:            map[string]storedJob{},
+		projects:        map[string]VoiceProject{},
+		sourceEnvelopes: map[string]SourceEnvelope{},
+		sourceRevisions: map[string]SourceRevision{},
+		temporary:       map[string]TemporarySourceSession{},
+		books:           map[string]storedBookSource{},
+		sourcePreps:     map[string]PreparedSource{},
+		progress:        map[string]PlaybackProgress{},
+		sessions:        map[string]PlaybackSession{},
+		profiles:        map[string]storedVoiceProfile{},
+		sources:         map[string]storedVoiceProfileSource{},
+		voices:          map[string]Voice{},
+		jobCancels:      map[string]context.CancelFunc{},
+		jobDone:         map[string]chan struct{}{},
+		sourceCancels:   map[string]context.CancelFunc{},
+		targetCancels:   map[string]context.CancelFunc{},
 	}
 	service.loadCloneVoices()
 	service.reloadProjects()
+	service.reloadSourceLifecycle()
 	service.reloadTemporarySources()
 	service.reloadBookSources()
 	service.reloadSourcePreps()

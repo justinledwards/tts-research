@@ -131,6 +131,7 @@ func (service *Service) CreatePreparedSource(
 	sourceURL := strings.TrimSpace(request.URL)
 	contentType := strings.TrimSpace(request.SourceContentType)
 	sourceBytes := request.SourceBytes
+	lifecycleRawBytes := []byte(sourceText)
 	var urlSafety *sourceprep.URLSafetyReport
 
 	if kind == PreparedSourceKindURL {
@@ -138,6 +139,7 @@ func (service *Service) CreatePreparedSource(
 		if err != nil {
 			return PreparedSource{}, err
 		}
+		lifecycleRawBytes = append([]byte(nil), fetched.Bytes...)
 		sourceText = string(fetched.Bytes)
 		sourceName = fetched.Filename
 		sourceURL = fetched.URL
@@ -205,12 +207,20 @@ func (service *Service) CreatePreparedSource(
 	})
 	readiness := preparedSourceNeedsMetadataReadiness(prepared)
 	prepared.SourceReadiness = &readiness
+	if _, _, err := service.PersistSourceLifecycle(sourceLifecycleRequestFromPreparedSource(prepared, sourceText, lifecycleRawBytes, SourceLifecycleWorkStatusRunning)); err != nil {
+		return PreparedSource{}, err
+	}
 
 	service.updatePreparedSource(prepared)
 	if err := service.writePreparedSourceMetadata(prepared); err != nil {
+		_ = service.UpdateSourceLifecycleWorkStatus(prepared.ID, prepared.ID+"-rev", SourceLifecycleWorkStatusFailed)
 		return PreparedSource{}, err
 	}
 	if err := service.writePreparedSourceContentIR(prepared); err != nil {
+		_ = service.UpdateSourceLifecycleWorkStatus(prepared.ID, prepared.ID+"-rev", SourceLifecycleWorkStatusFailed)
+		return PreparedSource{}, err
+	}
+	if err := service.UpdateSourceLifecycleWorkStatus(prepared.ID, prepared.ID+"-rev", SourceLifecycleWorkStatusComplete); err != nil {
 		return PreparedSource{}, err
 	}
 	return prepared, nil

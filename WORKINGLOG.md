@@ -2452,3 +2452,21 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] spec review: PASS
 - [x] quality review: APPROVED after semantic cross-reference hardening
 - [x] verification: `mise exec -- pnpm validate:ir && mise exec -- pnpm test:scripts && mise exec -- pnpm check`, `git diff --check`
+
+## 2026-07-07 14:36 CEST - QQP-424 Source Lifecycle Storage
+- [x] selected next unblocked issue after QQP-423: QQP-424 `source-lifecycle-storage`
+- [x] preflight repo state: branch `niklas/voice-studio-follow-up`, clean against `fork/niklas/voice-studio-follow-up`
+- [x] preflight Linear state: project page fetched with `hasNextPage=false`, 20 unarchived project issues, QQP-423 Done, QQP-424 Backlog
+- [x] wrote implementation plan: `docs/plans/linear/QQP-424-source-lifecycle-storage.md`
+- [x] move QQP-424 to In Progress and dispatch focused backend implementation worker (`deleg_8347344a`; timed out with no backend changes, replacement `deleg_47c5bece` left coherent backend implementation)
+- [x] parent focused verification after implementation: `mise exec -- pnpm --filter @tts-research/backend test`, `git diff --check`
+- [x] spec review: PASS (`deleg_e51d1c39`)
+- [x] quality review: APPROVED (`deleg_5df602dc`; original REQUEST_CHANGES `deleg_d91cffb9`, repair worker `deleg_592a7cf3` timed out but left parent-verified partial repair)
+- [x] parent gates: `cd backend && mise exec -- go test ./internal/pipeline -count=1`, `mise exec -- pnpm --filter @tts-research/backend test`, `mise exec -- pnpm check`, `git diff --check`
+- [x] commit created after final gates (`1244096`); Linear completion and push handled by parent orchestrator
+
+## 2026-07-07 16:18 CEST - Session Handover and Orchestration Boundary
+- [x] create session handover from `20260707_122027_0bfb3a`: `docs/orchestration/session-20260707_122027_0bfb3a-handover.md`
+- [x] update main orchestrator handoff to make main Agent orchestration-only
+- [x] record rule: all product-code implementation/repair work must be delegated to sub-agents
+- [x] record immediate QQP-424 continuation path: dispatch repair implementer for quality blockers before any more code changes
