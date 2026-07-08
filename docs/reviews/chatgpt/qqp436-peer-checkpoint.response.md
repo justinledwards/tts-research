@@ -1,0 +1,155 @@
+# ChatGPT peer checkpoint — QQP-436 minimal repair overlay and manifest supersession
+
+- ChatGPT Project: https://chatgpt.com/g/g-p-6a4c3396e3948191a15f9959895179d7-tts-research/project
+- Conversation: https://chatgpt.com/g/g-p-6a4c3396e3948191a15f9959895179d7-tts-research/c/6a4e6a74-9e90-83eb-9420-3621fe610096
+- Archive: `/tmp/tts-research-qqp436-peer-20260708T151404Z.zip`
+- Archive SHA256: `a2d49ae33336d1ef5cec4821bb899586f5fd20e41bef2775dad8fdb28376353f`
+- Verdict: `PEER REQUEST_CHANGES`
+
+```text
+heading "ChatGPT said:" [level=4]
+  - paragraph: I’ll treat the archive as authoritative, verify integrity, inspect the relevant implementation/tests against the base and contract invariants, and focus on release-blocking state, identity, and ordering gaps.
+  - paragraph: Archive SHA256 matches the prompt. I’m tracing repair application and resume remap paths, especially failure ordering around overlay/revision-map evidence, progress supersession, and manifest current-state promotion.
+  - button "Thought for 14m 9s" [e75]
+  - paragraph: PEER REQUEST_CHANGES
+  - list:
+    - listitem:
+      - paragraph:
+        - strong:
+          - text: Affected durable progress can remain
+          - code: current
+          - text: after a successful repair and later resume as current/exact against the superseded manifest.
+        - strong: "Evidence:"
+        - code: backend/internal/pipeline/repair_overlay.go::ApplyRepairOverlay
+        - text: derives stale audio only from caller-supplied
+        - code: request.AudioArtifacts
+        - text: at lines 206 and 449-477.
+        - code: supersedeRepairAffectedProgress
+        - text: then only supersedes an affected progress record with an
+        - code: AudioArtifactID
+        - text: if that artifact ID was present in
+        - code: staleArtifacts
+        - text: lines 502-521. If audio evidence is omitted or mismatched, the affected progress is silently preserved, and
+        - code: ApplyRepairOverlay
+        - text: still supersedes old manifests at lines 212-216. On resume,
+        - code: progress.go::resolveReadalongForResume
+        - text: falls back to the old readalong manifest when no current manifest exists for the old revision lines 683-692, and
+        - code: resolveCurrentManifestResume
+        - text: does not reject
+        - code: ManifestSnapshotStateSuperseded
+        - text: ; checked audio evidence can return
+        - code: auto_resume_current
+        - text: lines 740-744.
+        - strong: "Risk:"
+        - text: A repaired unit can leave old durable progress canonical/current. Later Reader/resume code can interpret superseded source/audio as current playback evidence, violating fail-closed repair semantics.
+        - strong: "Minimal fix:"
+        - text: For every durable progress record bound by exact source/revision/readalong/progress/unit evidence and a high-confidence repair
+        - code: ProgressMapping
+        - text: ", either supersede it regardless of audio-artifact evidence, or fail"
+        - code: ApplyRepairOverlay
+        - text: before publishing target/current state when the progress references an audio artifact that cannot be exactly proven stale. Also make the current resume path reject
+        - code: superseded
+        - text: /
+        - code: stale
+        - text: manifests unless going through revision-map remap.
+        - strong: "Focused verification:"
+        - text: Add a repair test with affected mapped progress whose
+        - code: AudioArtifactID
+        - text: is in the old readalong but omitted from
+        - code: AudioArtifacts
+        - text: ; assert the repair fails closed or the progress is superseded, and assert resolving that progress with old checked audio evidence does
+        - strong: not
+        - text: return
+        - code: auto_resume_current
+        - text: .
+    - listitem:
+      - paragraph:
+        - strong:
+          - code: ApplyRepairOverlay
+          - text: is still not fail-closed on late partial failures; it exposes the repaired source revision and target manifests before progress and old-manifest finalization are durable.
+        - strong: "Evidence:"
+        - code: ApplyRepairOverlay
+        - text: persists overlay and revision map at lines 176-183, then mutates source lifecycle/current revision at lines 185-195, persists target reading/readalong manifests as current at lines 198-204, and only afterward writes progress supersession and old-manifest supersession at lines 208-216.
+        - code: PersistSourceLifecycle
+        - text: writes the new source envelope/current revision and supersedes the previous source revision before returning lines 298-325. The existing progress-failure test only asserts old manifests and old progress remain current lines 456-472; it does not assert the target source revision or target manifests are absent/non-current after the failed apply.
+        - strong: "Risk:"
+        - text: A returned error can still leave the source envelope pointing at the repaired revision and target manifests current. Retry/resume/runtime code can observe a half-applied repair as authoritative even though progress supersession or old-manifest supersession failed. A later retry can also overwrite the already-current target revision path.
+        - strong: "Minimal fix:"
+        - text: Make target source/current manifest promotion the final step after all required repair/progress evidence is durable, or add explicit rollback/compensating writes for source envelope, source revisions, target manifests, and any old-manifest supersession. The failed state must not expose target source/manifests as current.
+        - strong: "Focused verification:"
+        - text: Extend failure-injection tests for durable-progress supersession, target readalong write failure, old reading supersession failure, and old readalong supersession failure. After each error, assert no target source revision is current, no target reading/readalong manifest is current, old source revision remains current, old manifests remain current, and old progress state is unchanged unless the operation explicitly completed.
+    - listitem:
+      - paragraph:
+        - strong: Repair application can silently change source-envelope identity/lifecycle, including out-of-scope temporary-to-active promotion.
+        - strong: "Evidence:"
+        - code: ApplyRepairOverlay
+        - text: forwards
+        - code: request.RepairedSource
+        - text: and only overwrites
+        - code: SourceID
+        - text: ","
+        - code: RevisionID
+        - text: ", and"
+        - code: RepairOverlayID
+        - text: lines 185-193.
+        - code: PersistSourceLifecycle
+        - text: defaults missing
+        - code: ProjectID
+        - text: to
+        - code: defaultProjectID
+        - text: ", missing"
+        - code: SourceKind
+        - text: to
+        - code: project
+        - text: ", and missing"
+        - code: Lifecycle
+        - text: to
+        - code: active
+        - text: lines 160-174; the new envelope uses those values lines 261-272 and only preserves
+        - code: CreatedAt
+        - text: from the prior envelope lines 274-276.
+        - strong: "Risk:"
+        - text: Applying a repair to an imported or Quick Listen temporary source with a minimal
+        - code: RepairedSource
+        - text: can turn it into an active project source, drop expiry/promoted state, and alter project binding. That is an under-bound source lifecycle contract and crosses the stated no-Quick-Listen-promotion boundary.
+        - strong: "Minimal fix:"
+        - text: In
+        - code: ApplyRepairOverlay
+        - text: ", load the existing source envelope and either copy immutable envelope identity fields into the repaired-source request or reject mismatches/missing values fail-closed. Preserve"
+        - code: ProjectID
+        - text: ","
+        - code: SourceKind
+        - text: ","
+        - code: Lifecycle
+        - text: ","
+        - code: ExpiresAt
+        - text: ","
+        - code: PromotedToSourceID
+        - text: ", and source envelope metadata unless an explicit allowed transition exists."
+        - strong: "Focused verification:"
+        - text: Add a repair test seeded with a non-default source envelope, especially
+        - code: quick_listen_temporary
+        - text: +
+        - code: temporary
+        - text: +
+        - code: ExpiresAt
+        - text: + non-default
+        - code: ProjectID
+        - text: ; apply a minimal repair and assert these envelope fields are preserved or the repair is rejected.
+  - group "Response actions":
+    - button "Copy response" [e76]
+    - button "Pro feedback" [e77]
+    - button "Add to project sources" [e78]
+    - button "Switch model" [e79]
+    - button "More actions" [e80]
+  - button "Add files and more" [e81]
+  - textbox "Chat with ChatGPT" [e82]:
+    - paragraph: Ask anything
+  - button "Pro Extended" [e83]
+  - button "Start dictation" [e84]:
+    - img
+  - button "Start Voice" [e85]
+  - text: ChatGPT can make mistakes. Check important info.
+- alert
+- status
+```

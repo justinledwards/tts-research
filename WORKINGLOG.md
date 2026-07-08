@@ -2924,3 +2924,91 @@ duplicating every implementation detail from commits, PR text, or generated revi
   - QUALITY APPROVED (`deleg_5c04fdf1`).
   - ChatGPT peer request saved and peer blocker re-review approved (`deleg_78422c70`).
 - [ ] commit/push/Linear Done pending.
+
+## 2026-07-08 — QQP-436 kickoff
+
+- [x] QQP-435 closeout verified: commit `ec3659c2847f7dcb817c257c081f891f5cae6e4d`, remote-equal, Linear Done.
+- [x] selected next unblocked issue: QQP-436 — Minimal repair overlay and manifest supersession.
+- [x] dependencies checked from agreed manifest: readalong contracts, manifest snapshot storage/API, durable progress resolver, retry/interrupted artifact semantics are complete.
+- [x] repo preflight before kickoff: clean and remote-equal.
+- [x] plan written: `docs/plans/linear/QQP-436-minimal-repair-overlay-manifest-supersession.md`.
+- [x] Linear moved In Progress and kickoff comment posted.
+- [x] implementation worker dispatched for QQP-436.
+
+## 2026-07-08 — QQP-436 timeout recovery
+
+- [x] implementation worker `deleg_095bf448` timed out after 600s with no summary; parent treated output as untrusted and inspected the worktree.
+- [x] recovered coherent product diff:
+  - `backend/internal/pipeline/models.go`
+  - `backend/internal/pipeline/progress.go`
+  - `backend/internal/pipeline/service.go`
+  - `backend/internal/pipeline/source_lifecycle.go`
+  - `backend/internal/pipeline/repair_overlay.go`
+  - `backend/internal/pipeline/repair_overlay_test.go`
+- [x] parent verification after timeout recovery:
+  - focused QQP-436 Go gate -> pass.
+  - `mise exec -- pnpm validate:ir` -> pass.
+  - `mise exec -- pnpm check` -> pass.
+  - gofmt + `git diff --check` -> pass.
+- [ ] independent SPEC/QUALITY reviews pending.
+
+## 2026-07-08 — QQP-436 review blocker repair
+
+- [x] SPEC review `deleg_8f17bb5b`: SPEC FAIL.
+- [x] QUALITY review `deleg_8f17bb5b`: QUALITY REQUEST_CHANGES.
+- [x] repaired cited blockers:
+  - added highlight-map stale evidence to repair overlay application result.
+  - repair revision maps now reject mismatched overlay IDs and require exact repair overlay/manifest evidence.
+  - stored repair-overlay remaps require explicit high-confidence `ProgressMappings`; generic non-repair revision maps keep existing remap behavior.
+  - affected progress supersession now requires readalong `ProgressIDs` membership and explicit revision-map progress mapping evidence.
+  - reordered repair application so old manifests are not superseded until overlay/map/progress evidence is durable.
+  - added failure-injection regressions for early source persistence failure and durable-progress supersession failure.
+- [x] verification after repair:
+  - targeted repair tests -> pass.
+  - focused QQP-436 Go gate -> pass.
+  - `mise exec -- pnpm validate:ir` -> pass.
+  - `mise exec -- pnpm check` -> pass.
+  - gofmt + `git diff --check` -> pass.
+- [ ] targeted SPEC/QUALITY re-review pending.
+
+## 2026-07-08 — QQP-436 quality ordering repair
+
+- [x] targeted SPEC re-review `deleg_1e9821e0`: SPEC PASS.
+- [x] targeted QUALITY re-review `deleg_1e9821e0`: REQUEST_CHANGES; remaining blocker was partial-failure ordering around repaired source/current revision and target manifest persistence before durable overlay/revision-map/progress evidence.
+- [x] repaired ordering:
+  - `ApplyRepairOverlay` now persists immutable overlay evidence and repair revision-map evidence before repaired source lifecycle/current revision and target reading/readalong manifests.
+  - added `persistRepairRevisionMapEvidence` for repair maps whose target source revision does not exist yet; it still requires repair-overlay cause, overlay ID, existing from revision, and manifest metadata already validated by `validateRepairRevisionMapManifestBindings`.
+  - old manifests remain current on overlay write failure, revision-map write failure, source persistence failure, and durable-progress supersession failure.
+  - explicit regressions cover overlay write failure and revision-map write failure before source/target mutation.
+- [x] verification after ordering repair:
+  - targeted ordering tests: pass.
+  - focused QQP-436 Go gate: pass.
+  - `mise exec -- pnpm validate:ir`: pass.
+  - `mise exec -- pnpm check`: pass.
+  - gofmt + `git diff --check`: pass.
+- [ ] narrow QUALITY re-review of ordering repair pending.
+
+## 2026-07-08 — QQP-436 stale quality hygiene repair
+
+- [x] narrow QUALITY re-review `deleg_b9506246` confirmed partial-failure ordering repair but returned REQUEST_CHANGES only because its read-only `git diff --check` saw stale `WORKINGLOG.md:2990: new blank line at EOF`.
+- [x] parent trimmed trailing blank EOF after that review snapshot.
+- [x] fresh current verification after trim:
+  - `git diff --check` -> pass.
+  - targeted repair-overlay tests -> pass.
+  - focused QQP-436 Go gate -> pass.
+- [ ] hygiene-only quality re-check pending.
+
+## 2026-07-08 — QQP-436 peer blocker approval and closeout
+
+- [x] ChatGPT Project peer checkpoint returned `PEER REQUEST_CHANGES`; response saved at `docs/reviews/chatgpt/qqp436-peer-checkpoint.response.md`.
+- [x] peer blockers repaired:
+  - mapped affected durable progress supersedes independent of caller audio evidence;
+  - superseded/stale manifest resume blocks unless revision-map remap applies;
+  - late repair failures roll back target source/current manifests/progress and leave old state current;
+  - repaired source lifecycle preserves existing envelope identity/lifecycle fields.
+- [x] targeted peer-blocker re-review `deleg_ae634d0d`: `PEER-BLOCKER APPROVED`.
+- [x] final closeout gates passed after peer-blocker approval:
+  - focused QQP-436 Go gate (`go test ./internal/pipeline ./internal/httpapi -run 'Repair|Overlay|Supersed|RevisionMap|Progress|Manifest|Source|Artifact|Resume' -count=1`);
+  - `mise exec -- pnpm validate:ir`;
+  - `git diff --check`;
+  - `mise exec -- pnpm check`.

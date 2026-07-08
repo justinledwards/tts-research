@@ -63,6 +63,10 @@ var (
 	ErrResearchModuleUnavailable      = errors.New("research module is not installed")
 	ErrManifestSnapshotNotFound       = errors.New("manifest snapshot not found")
 	ErrManifestSnapshotInvalid        = errors.New("manifest snapshot is invalid")
+	ErrRepairOverlayNotFound          = errors.New("repair overlay not found")
+	ErrRepairOverlayInvalid           = errors.New("repair overlay is invalid")
+	ErrRevisionMapNotFound            = errors.New("revision map not found")
+	ErrRevisionMapInvalid             = errors.New("revision map is invalid")
 	ErrSourceLifecycleNotFound        = errors.New("source lifecycle not found")
 	ErrSourceManifestEventInvalid     = errors.New("source manifest event request is invalid")
 )
@@ -264,6 +268,8 @@ type Service struct {
 	readalongs                      map[string]ReadalongManifest
 	currentManifests                map[manifestCurrentKey]string
 	readalongsByReadingUnitManifest map[string]map[string]struct{}
+	repairOverlays                  map[string]RepairOverlay
+	revisionMaps                    map[string]RevisionMap
 	sourceManifestEvents            *sourceManifestEventLog
 	temporary                       map[string]TemporarySourceSession
 	books                           map[string]storedBookSource
@@ -582,6 +588,8 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 		readalongs:                      map[string]ReadalongManifest{},
 		currentManifests:                map[manifestCurrentKey]string{},
 		readalongsByReadingUnitManifest: map[string]map[string]struct{}{},
+		repairOverlays:                  map[string]RepairOverlay{},
+		revisionMaps:                    map[string]RevisionMap{},
 		sourceManifestEvents:            newSourceManifestEventLog(sourceManifestEventReplayLimit),
 		temporary:                       map[string]TemporarySourceSession{},
 		books:                           map[string]storedBookSource{},
@@ -601,6 +609,8 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	service.reloadProjects()
 	service.reloadSourceLifecycle()
 	service.reloadManifestSnapshots()
+	service.reloadRepairOverlays()
+	service.reloadRevisionMaps()
 	service.reloadTemporarySources()
 	service.reloadBookSources()
 	service.reloadSourcePreps()

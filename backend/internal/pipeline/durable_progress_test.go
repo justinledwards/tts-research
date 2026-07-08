@@ -679,7 +679,7 @@ func revisionMapFixture(id string, sourceID string, fromRevisionID string, toRev
 		FromSourceRevisionID: fromRevisionID,
 		ToSourceRevisionID:   toRevisionID,
 		GeneratedAt:          time.Date(2026, 5, 17, 1, 16, 0, 0, time.UTC),
-		Cause:                RevisionMapCauseRepairOverlay,
+		Cause:                RevisionMapCauseExtractionCorrection,
 		Confidence:           confidence,
 		UnitMappings: []RevisionMapUnitMapping{
 			{FromUnitID: "unit-md-0001", ToUnitID: "unit-md-0001", Confidence: unitConfidence, Status: "matched"},

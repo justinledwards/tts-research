@@ -365,7 +365,11 @@ func (service *Service) ResolveResumeProgress(request ResumeResolutionRequest) (
 
 	requiresRevisionMap := progress.State == DurableProgressStateStale || progress.State == DurableProgressStateSuperseded || progress.ReadalongManifestID != currentManifest.ManifestID || progress.SourceRevisionID != currentManifest.SourceRevisionID
 	if requiresRevisionMap {
-		mapped, ok, ambiguous := mapStaleProgress(progress, currentManifest, request.RevisionMaps)
+		revisionMaps := request.RevisionMaps
+		if len(revisionMaps) == 0 {
+			revisionMaps = service.revisionMapsForResume(progress, currentManifest)
+		}
+		mapped, ok, ambiguous := mapStaleProgress(progress, currentManifest, revisionMaps)
 		if ok && !ambiguous {
 			resolution.Decision = ResumeDecisionAutoResumeRemapped
 			resolution.Reason = "stale progress remapped through revision map with high confidence"
@@ -699,6 +703,9 @@ func resolveCurrentManifestResume(resolution ResumeResolution, progress DurableP
 			return blockedResumeResolution(resolution, "audio artifact evidence is failed or incompatible")
 		}
 	}
+	if manifest.State == ManifestSnapshotStateSuperseded || manifest.State == ManifestSnapshotStateStale {
+		return blockedResumeResolution(resolution, "readalong manifest is superseded or stale; revision-map remap is required")
+	}
 	if progress.State == DurableProgressStateDegraded || manifest.State == ManifestSnapshotStateDegraded {
 		resolution.Decision = ResumeDecisionAutoResumeDegraded
 		resolution.Reason = "progress or manifest is degraded; resume with degraded fidelity"
@@ -774,6 +781,9 @@ func mapStaleProgress(progress DurableProgress, current ReadalongManifest, maps 
 	matchCount := 0
 	for _, candidate := range maps {
 		if strings.TrimSpace(candidate.SourceID) != progress.SourceID || strings.TrimSpace(candidate.FromSourceRevisionID) != progress.SourceRevisionID || strings.TrimSpace(candidate.ToSourceRevisionID) != current.SourceRevisionID || candidate.Confidence < durableProgressRemapConfidence {
+			continue
+		}
+		if !revisionMapManifestEvidenceMatches(candidate, progress, current) {
 			continue
 		}
 		if !progressMappingAllows(candidate, progress.ProgressID) {
@@ -904,9 +914,24 @@ func cloneLocator(locator contentir.Locator) contentir.Locator {
 	return cloned
 }
 
+func revisionMapManifestEvidenceMatches(revisionMap RevisionMap, progress DurableProgress, current ReadalongManifest) bool {
+	if revisionMap.Cause != RevisionMapCauseRepairOverlay && strings.TrimSpace(revisionMap.OverlayID) == "" {
+		return true
+	}
+	if strings.TrimSpace(revisionMap.OverlayID) == "" {
+		return false
+	}
+	fromReadalongManifestID := metadataString(revisionMap.Metadata, "fromReadalongManifestId")
+	toReadalongManifestID := metadataString(revisionMap.Metadata, "toReadalongManifestId")
+	if fromReadalongManifestID == "" || toReadalongManifestID == "" {
+		return false
+	}
+	return fromReadalongManifestID == progress.ReadalongManifestID && toReadalongManifestID == current.ManifestID
+}
+
 func progressMappingAllows(revisionMap RevisionMap, progressID string) bool {
 	if len(revisionMap.ProgressMappings) == 0 {
-		return true
+		return revisionMap.Cause != RevisionMapCauseRepairOverlay && strings.TrimSpace(revisionMap.OverlayID) == ""
 	}
 	for _, mapping := range revisionMap.ProgressMappings {
 		if strings.TrimSpace(mapping.FromProgressID) == progressID && mapping.Confidence >= durableProgressRemapConfidence && strings.TrimSpace(mapping.ToProgressID) != "" {

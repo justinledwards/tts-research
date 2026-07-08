@@ -1199,6 +1199,78 @@ type ResumeAudioArtifactEvidence struct {
 	Retry               *AudioArtifactRetryMetadata `json:"retry,omitempty"`
 }
 
+type RepairOverlayOperation string
+
+const (
+	RepairOverlayOperationReplaceText   RepairOverlayOperation = "replace_text"
+	RepairOverlayOperationInsertText    RepairOverlayOperation = "insert_text"
+	RepairOverlayOperationDeleteText    RepairOverlayOperation = "delete_text"
+	RepairOverlayOperationMarkBlocked   RepairOverlayOperation = "mark_blocked"
+	RepairOverlayOperationMetadataPatch RepairOverlayOperation = "metadata_patch"
+)
+
+type RepairOverlayChange struct {
+	ChangeID   string                 `json:"changeId"`
+	Operation  RepairOverlayOperation `json:"op"`
+	UnitID     string                 `json:"unitId"`
+	Locator    *contentir.Locator     `json:"locator,omitempty"`
+	BeforeText string                 `json:"beforeText,omitempty"`
+	AfterText  string                 `json:"afterText,omitempty"`
+	Reason     string                 `json:"reason"`
+}
+
+type RepairOverlay struct {
+	SchemaVersion    string                `json:"schemaVersion"`
+	OverlayID        string                `json:"overlayId"`
+	SourceID         string                `json:"sourceId"`
+	SourceRevisionID string                `json:"sourceRevisionId"`
+	TargetRevisionID string                `json:"targetRevisionId"`
+	CreatedAt        time.Time             `json:"createdAt"`
+	CreatedBy        string                `json:"createdBy,omitempty"`
+	Immutable        bool                  `json:"immutable"`
+	Changes          []RepairOverlayChange `json:"changes"`
+	Summary          string                `json:"summary"`
+	Metadata         map[string]any        `json:"metadata,omitempty"`
+}
+
+type RepairOverlayAffectedArtifact struct {
+	ArtifactID          string             `json:"artifactId"`
+	ArtifactKind        string             `json:"artifactKind"`
+	SourceID            string             `json:"sourceId"`
+	SourceRevisionID    string             `json:"sourceRevisionId"`
+	ReadalongManifestID string             `json:"readalongManifestId"`
+	UnitID              string             `json:"unitId"`
+	SegmentID           string             `json:"segmentId,omitempty"`
+	PreviousState       AudioArtifactState `json:"previousState"`
+	NewState            AudioArtifactState `json:"newState"`
+	Reason              string             `json:"reason"`
+}
+
+type RepairOverlayApplicationRequest struct {
+	Overlay                   RepairOverlay
+	RepairedSource            SourceLifecyclePersistRequest
+	ReadingUnitManifest       ReadingUnitManifest
+	ReadalongManifest         ReadalongManifest
+	RevisionMap               RevisionMap
+	FromReadingUnitManifestID string
+	FromReadalongManifestID   string
+	AudioArtifacts            []ResumeAudioArtifactEvidence
+	HighlightMapIDs           []string
+}
+
+type RepairOverlayApplication struct {
+	Overlay                 RepairOverlay                   `json:"overlay"`
+	SourceRevision          SourceRevision                  `json:"sourceRevision"`
+	ReadingUnitManifest     ReadingUnitManifest             `json:"readingUnitManifest"`
+	ReadalongManifest       ReadalongManifest               `json:"readalongManifest"`
+	RevisionMap             RevisionMap                     `json:"revisionMap"`
+	StaleAudioArtifacts     []RepairOverlayAffectedArtifact `json:"staleAudioArtifacts,omitempty"`
+	PreservedAudioArtifacts []ResumeAudioArtifactEvidence   `json:"preservedAudioArtifacts,omitempty"`
+	StaleHighlightArtifacts []RepairOverlayAffectedArtifact `json:"staleHighlightArtifacts,omitempty"`
+	PreservedHighlightIDs   []string                        `json:"preservedHighlightIds,omitempty"`
+	SupersededProgress      []DurableProgress               `json:"supersededProgress,omitempty"`
+}
+
 type RevisionMapCause string
 
 const (

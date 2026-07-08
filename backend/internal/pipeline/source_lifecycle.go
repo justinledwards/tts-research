@@ -125,6 +125,7 @@ type SourceLifecyclePersistRequest struct {
 	SourceID               string
 	RevisionID             string
 	ProjectID              string
+	RepairOverlayID        string
 	SourceKind             SourceEnvelopeKind
 	Lifecycle              SourceEnvelopeLifecycle
 	Origin                 SourceOrigin
@@ -244,6 +245,8 @@ func (service *Service) PersistSourceLifecycle(request SourceLifecyclePersistReq
 	}
 	envelopeMetadata[sourceLifecycleWorkStatusMetadataKey] = string(envelopeStatus)
 
+	repairOverlayID := strings.TrimSpace(request.RepairOverlayID)
+
 	revisionMetadata := cloneSourceLifecycleMetadata(request.RevisionMetadata)
 	revisionStatus := request.RevisionWorkStatus
 	if revisionStatus == "" {
@@ -251,6 +254,9 @@ func (service *Service) PersistSourceLifecycle(request SourceLifecyclePersistReq
 	}
 	revisionMetadata[sourceLifecycleWorkStatusMetadataKey] = string(revisionStatus)
 	revisionMetadata["path"] = rawPath
+	if repairOverlayID != "" {
+		revisionMetadata["repairOverlayId"] = repairOverlayID
+	}
 
 	envelope := SourceEnvelope{
 		SchemaVersion:      sourceEnvelopeSchemaVersion,
@@ -285,6 +291,7 @@ func (service *Service) PersistSourceLifecycle(request SourceLifecyclePersistReq
 			ByteLength:  int64(len(rawBytes)),
 		},
 		SupersedesRevisionID: supersedesRevisionID,
+		RepairOverlayID:      repairOverlayID,
 		Metadata:             revisionMetadata,
 	}
 
