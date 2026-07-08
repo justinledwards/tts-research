@@ -693,7 +693,13 @@ describe("teleprompt theatre model", () => {
       block({ id: "body", kind: "body", spokenText: "A cache follows audio." }),
     ];
     const text = "Cache and Cache Coherency Executive summary A cache follows audio.";
-    const markup = renderCueWithBlocks({ activeBlock, currentWordIndex: 5, previewBlocks, text });
+    const markup = renderCueWithBlocks({
+      activeBlock,
+      currentWordIndex: 5,
+      previewBlocks,
+      text,
+      transportCanClaimExactReadAlong: true,
+    });
 
     expect(markup).toContain('aria-current="true"');
     expect(markup).toContain("teleprompter-word--spoken");
@@ -723,6 +729,7 @@ describe("teleprompt theatre model", () => {
       currentWordIndex: 6,
       previewBlocks,
       text,
+      transportCanClaimExactReadAlong: true,
       wordTimings: [
         {
           audioEndMs: 900,
@@ -739,6 +746,30 @@ describe("teleprompt theatre model", () => {
 
     expect(markup).toContain('aria-current="true"');
     expect(markup).toContain('data-source-word-id="book-1:book:word:106"');
+  });
+
+  it("falls trusted theatre timing with omitted transport evidence back to phrase emphasis", () => {
+    const activeBlock = block({
+      id: "title",
+      kind: "heading",
+      spokenText: "Cache and Cache Coherency",
+    });
+    const previewBlocks = [
+      block({ id: "summary", kind: "subheading", spokenText: "Executive summary" }),
+      block({ id: "body", kind: "body", spokenText: "A cache follows audio." }),
+    ];
+    const text = "Cache and Cache Coherency Executive summary A cache follows audio.";
+    const markup = renderCueWithBlocks({
+      activeBlock,
+      currentWordIndex: 6,
+      previewBlocks,
+      text,
+      timingState: "trusted",
+    });
+
+    expect(markup).toContain('data-reading-followalong-visual-mode="phrase"');
+    expect(markup).not.toContain('aria-current="true"');
+    expect(markup).toContain('data-readalong-word-role="activePhrase"');
   });
 
   it("falls low-confidence theatre timing back to phrase emphasis", () => {
@@ -1235,6 +1266,7 @@ function renderCueWithBlocks({
   previewBlocks,
   text,
   timingState,
+  transportCanClaimExactReadAlong,
   wordTimings,
 }: Readonly<{
   activeBlock: RevisionBlock;
@@ -1243,6 +1275,7 @@ function renderCueWithBlocks({
   previewBlocks: RevisionBlock[];
   text: string;
   timingState?: ReadAlongTimingState;
+  transportCanClaimExactReadAlong?: boolean;
   wordTimings?: readonly TelepromptCueWordTiming[];
 }>): string {
   return renderToStaticMarkup(
@@ -1258,6 +1291,7 @@ function renderCueWithBlocks({
       text,
       textClassName: "text-xl",
       timingState,
+      transportCanClaimExactReadAlong,
       widthClassName: "max-w-3xl",
       wordTimings,
       wordSpacing: "0",

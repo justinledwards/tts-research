@@ -32,6 +32,7 @@ export function TelepromptCurrentCueStage({
   settings,
   textClassName,
   timingState = "trusted",
+  transportCanClaimExactReadAlong = false,
   wordTimings = [],
   wordSpacing,
   workModeDetail,
@@ -53,6 +54,7 @@ export function TelepromptCurrentCueStage({
   settings: TeleprompterHighlightSettings;
   textClassName: string;
   timingState?: ReadAlongTimingState;
+  transportCanClaimExactReadAlong?: boolean;
   wordTimings?: readonly TelepromptCueWordTiming[];
   wordSpacing: string;
   workModeDataAttributes: Record<string, string | undefined>;
@@ -74,6 +76,7 @@ export function TelepromptCurrentCueStage({
         currentWordIndex={currentWordIndex}
         settings={settings}
         timingState={timingState}
+        transportCanClaimExactReadAlong={transportCanClaimExactReadAlong}
         text={spokenText}
         wordTimings={wordTimings}
       />
@@ -178,6 +181,7 @@ export function TelepromptScriptBlock({
   presetClassName,
   settings,
   timingState = "trusted",
+  transportCanClaimExactReadAlong = false,
   wordTimings = [],
   onSelect,
 }: Readonly<{
@@ -192,6 +196,7 @@ export function TelepromptScriptBlock({
   presetClassName: string;
   settings: TeleprompterHighlightSettings;
   timingState?: ReadAlongTimingState;
+  transportCanClaimExactReadAlong?: boolean;
   wordTimings?: readonly TelepromptCueWordTiming[];
   onSelect: () => void;
 }>) {
@@ -232,6 +237,7 @@ export function TelepromptScriptBlock({
             currentWordIndex={currentWordIndex}
             settings={settings}
             timingState={timingState}
+            transportCanClaimExactReadAlong={transportCanClaimExactReadAlong}
             text={spokenText}
             wordTimings={wordTimings}
           />
@@ -265,6 +271,7 @@ export function TelepromptCueWords({
   currentWordIndex,
   settings,
   timingState = "trusted",
+  transportCanClaimExactReadAlong = false,
   text,
   wordTimings = [],
 }: Readonly<{
@@ -273,6 +280,7 @@ export function TelepromptCueWords({
   currentWordIndex?: number | null;
   settings: TeleprompterHighlightSettings;
   timingState?: ReadAlongTimingState;
+  transportCanClaimExactReadAlong?: boolean;
   text: string;
   wordTimings?: readonly TelepromptCueWordTiming[];
 }>) {
@@ -310,6 +318,7 @@ export function TelepromptCueWords({
       surface="teleprompt"
       surfaceKind="cue"
       timingState={timingState}
+      transportCanClaimExactReadAlong={transportCanClaimExactReadAlong}
       wordStyle={({ role, token }) => {
         const cue = cueByIndex.get(token.wordIndex);
         return {

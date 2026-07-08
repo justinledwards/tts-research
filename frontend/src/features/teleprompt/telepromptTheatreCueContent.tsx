@@ -34,6 +34,7 @@ export function TelepromptTheatreCueText({
   mirrorMode,
   previewBlocks = [],
   timingState = "trusted",
+  transportCanClaimExactReadAlong = false,
   text,
   textClassName,
   widthClassName,
@@ -49,6 +50,7 @@ export function TelepromptTheatreCueText({
   mirrorMode: boolean;
   previewBlocks?: readonly RevisionBlock[];
   timingState?: ReadAlongTimingState;
+  transportCanClaimExactReadAlong?: boolean;
   text: string;
   textClassName: string;
   widthClassName: string;
@@ -231,6 +233,7 @@ export function TelepromptTheatreCueText({
                 surface="teleprompt"
                 surfaceKind="theatre"
                 timingState={timingState}
+                transportCanClaimExactReadAlong={transportCanClaimExactReadAlong}
                 wordStyle={({ role, token }) => {
                   const cue = cueByIndex.get(token.wordIndex);
                   return {

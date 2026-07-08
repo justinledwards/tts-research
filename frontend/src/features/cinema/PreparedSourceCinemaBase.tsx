@@ -96,6 +96,7 @@ import {
 } from "../reader-navigation";
 import {
   applyReaderTypographyPreset,
+  deriveReaderTransportStateDescriptor,
   readingSurfaceClassName,
   readingSurfaceDataAttributes,
 } from "../reading-surface";
@@ -587,8 +588,46 @@ export function PreparedSourceCinemaOverlay({
     state: readAlongRuntime.state,
     surface: isWebsiteCinema ? "Website Cinema" : "Document Cinema",
   });
-  const readAlongVisualMode = readAlongVisualModeFromRuntime(readAlongRuntime, effectiveReadAlong);
+  const requestedReadAlongVisualMode = readAlongVisualModeFromRuntime(
+    readAlongRuntime,
+    effectiveReadAlong,
+  );
   const readAlongTimingState = readAlongTimingStateFromRuntime({ runtime: readAlongRuntime });
+  const readAlongLowResourceMode = preparedSourceReadAlongLowResourceMode(effectiveReadAlong);
+  const readerTransportDescriptor = useMemo(() => {
+    let audioArtifactState: string | null = null;
+    if (job && activeJobMatchesSource) {
+      audioArtifactState = job.voiceCheck.complete ? "checked" : "unchecked";
+    }
+
+    return deriveReaderTransportStateDescriptor({
+      audioArtifactState,
+      generatedAudioLifecycle: activeJobMatchesSource ? generatedAudioState : "stale",
+      readAlongExactSync:
+        !readAlongLowResourceMode &&
+        readAlongTimingState === "trusted" &&
+        requestedReadAlongVisualMode === "word",
+      readAlongRuntimeState: readAlongRuntime.state,
+      readAlongTimingState,
+    });
+  }, [
+    activeJobMatchesSource,
+    generatedAudioState,
+    job,
+    readAlongLowResourceMode,
+    readAlongRuntime.state,
+    readAlongTimingState,
+    requestedReadAlongVisualMode,
+  ]);
+  let readAlongVisualMode = requestedReadAlongVisualMode;
+  if (readAlongLowResourceMode) {
+    readAlongVisualMode = "block";
+  } else if (
+    requestedReadAlongVisualMode === "word" &&
+    !readerTransportDescriptor.canClaimExactReadAlong
+  ) {
+    readAlongVisualMode = "phrase";
+  }
   const schedulerTimeline = useMemo(() => {
     if (
       !job ||
@@ -618,7 +657,8 @@ export function PreparedSourceCinemaOverlay({
   const wordSchedulerAvailable =
     Boolean(job && schedulerTimeline) &&
     playbackControls.isPlaying &&
-    readAlongVisualMode === "word";
+    readAlongVisualMode === "word" &&
+    readerTransportDescriptor.canClaimExactReadAlong;
   const readAlongReport = useMemo(
     () =>
       evaluatePreparedSourceReadAlongInvariant({
@@ -1243,6 +1283,7 @@ export function PreparedSourceCinemaOverlay({
           highlightStyle={effectiveReadAlong.highlightStyle}
           jobId={job?.id ?? null}
           isFullscreen={isFullscreen || cinemaTheatre.fullscreenActive}
+          canClaimExactReadAlong={readerTransportDescriptor.canClaimExactReadAlong}
           readAlongVisualMode={readAlongVisualMode}
           readAlongTimingState={readAlongTimingState}
           rendererLifecycle={rendererLifecycle}
@@ -1787,6 +1828,7 @@ function PreparedSourceCinemaReader({
   accessibilitySettings,
   autoFollow,
   calibratedPlaybackCursorSec,
+  canClaimExactReadAlong,
   canvasFirst,
   highlightMotion,
   highlightStyle,
@@ -1813,6 +1855,7 @@ function PreparedSourceCinemaReader({
   accessibilitySettings: ReaderAccessibilitySettings;
   autoFollow: boolean;
   calibratedPlaybackCursorSec: number;
+  canClaimExactReadAlong: boolean;
   canvasFirst: boolean;
   highlightMotion: ReadAlongHighlightMotion;
   highlightStyle: ReadAlongHighlightStyle;
@@ -1992,6 +2035,7 @@ function PreparedSourceCinemaReader({
     const surface = preparedSourceCinemaKind(source) === "website" ? "website" : "document";
     const scheduler = new ReadAlongWordScheduler({
       audioElement: () => readAlongAudioElementForJob(jobId),
+      canClaimExactReadAlong,
       highlight: {
         accessibilitySettings,
         autoFollow,
@@ -2018,6 +2062,7 @@ function PreparedSourceCinemaReader({
     highlightStyle,
     jobId,
     readAlongVisualMode,
+    canClaimExactReadAlong,
     rendererLifecycle,
     schedulerTimeline,
     scrollFollow,
@@ -3049,6 +3094,12 @@ function saveAlignmentRepairMap(
     return;
   }
   storage.setItem(key, serializeAlignmentRepairMap(repairMap));
+}
+
+function preparedSourceReadAlongLowResourceMode(preferences: ReadAlongPreferences): boolean {
+  return (
+    preferences.highlightGranularity === "block" || preferences.syncStrictness === "blockFallback"
+  );
 }
 
 function CinemaFilmIcon() {

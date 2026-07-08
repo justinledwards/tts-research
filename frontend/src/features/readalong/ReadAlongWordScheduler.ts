@@ -23,6 +23,7 @@ export interface ReadAlongWordSchedulerRuntime {
 
 export interface ReadAlongWordSchedulerOptions {
   audioElement: () => HTMLAudioElement | null;
+  canClaimExactReadAlong?: boolean | null;
   highlight?: ReadAlongDomHighlighterOptions;
   initialCursorSec?: number;
   onWordChange?: (entry: WordTimelineEntry, cursorSec: number) => void;
@@ -88,6 +89,12 @@ export class ReadAlongWordScheduler {
     startReadAlongLongTaskObserver();
     this.stop(false);
     const audio = this.options.audioElement();
+    if (!this.canClaimExactReadAlong()) {
+      if (this.options.highlight) {
+        this.highlighter.clear(this.options.highlight);
+      }
+      return;
+    }
     if (!audio || !this.options.timeline?.entries.length) {
       return;
     }
@@ -109,6 +116,9 @@ export class ReadAlongWordScheduler {
 
   syncNow(): void {
     this.clearTimer();
+    if (!this.canClaimExactReadAlong()) {
+      return;
+    }
     const entries = this.options.timeline?.entries ?? [];
     if (entries.length === 0) {
       return;
@@ -165,6 +175,10 @@ export class ReadAlongWordScheduler {
     }
     this.runtime.clearTimeout(this.timeoutId);
     this.timeoutId = null;
+  }
+
+  private canClaimExactReadAlong(): boolean {
+    return this.options.canClaimExactReadAlong === true;
   }
 }
 
@@ -468,11 +482,14 @@ function deactivateReadAlongWordElement(element: HTMLElement): void {
     "readalong-highlight--active",
     "readalong-highlight--word",
     "book-cinema-word-active",
-    "readalong-word-role--active",
     "website-cinema-word-active",
   );
+  for (const className of WORD_ROLE_CLASSES) {
+    element.classList.remove(className);
+  }
   element.removeAttribute("aria-current");
   delete element.dataset.readalongDomActive;
+  delete element.dataset.readalongWordRole;
 }
 
 function maybeScrollReadAlongDomHighlight(

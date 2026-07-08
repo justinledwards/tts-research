@@ -3093,3 +3093,98 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] targeted peer-blocker recheck returned one remaining `sourceReadinessState: "stale"` blocker; response saved at `docs/reviews/chatgpt/qqp439-peer-blocker-recheck.response.md`.
 - [x] repaired source-readiness stale raw evidence; final source-stale peer recheck returned `PEER-BLOCKER APPROVED`; response saved at `docs/reviews/chatgpt/qqp439-source-stale-peer-recheck.response.md`.
 - [x] final parent gates before commit: focused model test 18 passed, frontend typecheck passed, `validate:ir` passed, `git diff --check` passed, full `pnpm check` passed (frontend 111 files / 761 tests).
+
+## 2026-07-08 — QQP-440 kickoff
+
+- [x] selected QQP-440 as next unblocked TTS issue after QQP-439; QQP-437 remains blocked because QQP-4 is still Todo.
+- [x] fetched Linear issue details: https://linear.app/niklas-olsson/issue/QQP-440/reader-windowing-and-highlight-scheduling.
+- [x] wrote local plan: `docs/plans/linear/QQP-440-reader-windowing-highlight-scheduling.md`.
+- [x] moved Linear In Progress and dispatched implementation worker `deleg_2a6a6cb7`.
+
+## 2026-07-08 — QQP-440 fan-in
+
+- [x] implementation worker `deleg_2a6a6cb7` completed with product-code diff.
+- [x] parent focused verification passed: follow-along renderer, word scheduler, prepared-source cinema, and book-cinema model tests (59 tests).
+- [x] parent frontend typecheck, `validate:ir`, and `git diff --check` passed.
+- [x] full `mise exec -- pnpm check` passed after formatter repair and nested-ternary lint repair recovery.
+
+## 2026-07-08 — QQP-440 post-repair gates
+
+- [x] formatter repair worker `deleg_a3ee4231` formatted only the requested QQP-440 product files; focused tests/typecheck/diff-check passed.
+- [x] lint repair worker `deleg_24f9a796` timed out, but parent recovered the actual diff: nested ternaries became local `audioArtifactState` assignments in the two transport wiring files.
+- [x] parent focused recovery gates passed: 4 touched frontend test files / 59 tests, frontend typecheck, and `git diff --check`.
+- [x] parent full `mise exec -- pnpm check` passed: format, lint, typecheck, package/script/adapter/backend/frontend tests; frontend 111 files / 766 tests.
+- [ ] spec review dispatched.
+
+## 2026-07-08 — QQP-440 SPEC repair
+
+- [x] SPEC review `deleg_1ee2003e` returned `SPEC FAIL`.
+- [ ] Repair dispatched for affirmative transport exact gate, source/index exact identity agreement, and low-resource/block-fallback Reader wiring.
+
+## 2026-07-08 — QQP-440 SPEC repair recovery
+
+- [x] SPEC repair worker `deleg_e064887f` timed out; parent recovered visible code changes for affirmative transport gating, exact active identity agreement, and low-resource Book/Prepared wiring.
+- [x] parent focused recovery gates passed: 4 touched frontend test files / 61 tests, frontend typecheck, `validate:ir`, and `git diff --check` after parent-owned WORKINGLOG EOF normalization.
+- [x] full `mise exec -- pnpm check` exposed one regression in combined teleprompt theatre cues; narrow repair worker `deleg_0f386fcc` timed out but parent recovered the fix and final full check passed.
+
+## 2026-07-08 — QQP-440 re-review gate
+
+- [x] teleprompt regression repair worker `deleg_0f386fcc` timed out; parent recovered visible wrapper fix preserving global role context without reintroducing exact active overclaim.
+- [x] focused regression gate passed: teleprompt, follow-along renderer, word scheduler, prepared-source model, and book-cinema model tests (5 files / 105 tests).
+- [x] frontend typecheck passed.
+- [x] `git diff --check` passed after parent-owned WORKINGLOG EOF normalization.
+- [x] full `mise exec -- pnpm check` passed: format, lint, typecheck, package/script/adapter/backend/frontend tests; frontend 111 files / 769 tests.
+- [x] targeted SPEC re-review `deleg_af12cafc` passed for the prior blockers and teleprompt regression.
+
+## 2026-07-08 — QQP-440 SPEC approved
+
+- [x] targeted SPEC re-review `deleg_af12cafc`: `SPEC PASS`.
+- [x] confirmed no remaining blockers for affirmative transport evidence, source/index mismatch fail-closed exact identity, low-resource Book/Prepared wiring, and combined theatre recent/upcoming role context.
+- [x] quality review `deleg_46ca5f7a`: `QUALITY APPROVED`.
+
+## 2026-07-08 — QQP-440 QUALITY approved
+
+- [x] quality review `deleg_46ca5f7a`: `QUALITY APPROVED`; audit copy saved to `docs/reviews/subagents/qqp440-quality-review.md`.
+- [x] final parent gates passed before peer; ChatGPT peer checkpoint returned `PEER REQUEST_CHANGES`, response saved to `docs/reviews/chatgpt/qqp440-peer-checkpoint.response.md`.
+
+## 2026-07-08 — QQP-440 ChatGPT peer blockers
+
+- [x] archive-backed ChatGPT peer checkpoint submitted in TTS-Research Project.
+- [x] verdict: `PEER REQUEST_CHANGES`; response saved to `docs/reviews/chatgpt/qqp440-peer-checkpoint.response.md`.
+- [ ] focused peer-blocker repair dispatched for fail-open scheduler/helper defaults, teleprompt manufactured transport evidence, Book scheduler isolation, and stale DOM highlighter role metadata.
+
+## 2026-07-08 — QQP-440 peer-blocker partial repair recovery
+
+- [x] peer-blocker repair worker `deleg_d8c897d5` stopped at tool-call limit with incomplete/unverified work.
+- [x] parent recovery probe: `git diff --check` passed; focused vitest passed for teleprompt/followAlong/scheduler/prepared/book tests (5 files / 107 tests).
+- [ ] frontend typecheck currently fails in `telepromptStudioComponents.tsx` because `TelepromptCueWords` call sites pass `transportCanClaimExactReadAlong` before the prop type/destructure was completed.
+- [ ] remaining peer blockers: complete Teleprompt/Theatre explicit transport prop threading and Book Cinema scheduler-active React highlight/scroll isolation. Continuation worker dispatched.
+
+## 2026-07-08 — QQP-440 peer-blocker continuation fan-in
+
+- [x] continuation worker `deleg_df4ddec1` finished Teleprompt/Theatre explicit transport threading and Book scheduler-active isolation wiring, but did not run gates.
+- [x] parent `git diff --check` passed.
+- [ ] focused vitest now fails only because existing theatre positive tests omit the new explicit transport evidence; narrow test/format cleanup dispatched.
+- [ ] full check currently fails at Biome formatting in `TelepromptStudio.tsx`; same cleanup owns this.
+
+## 2026-07-08 — QQP-440 peer-blocker cleanup verified
+
+- [x] final cleanup worker `deleg_a1174d2b` updated theatre exact-positive tests to pass explicit transport evidence and added/preserved omitted-transport fallback coverage.
+- [x] parent re-read changed `teleprompt.test.ts` / `TelepromptStudio.tsx` and verified Biome formatting.
+- [x] parent gates passed after cleanup: `git diff --check`; focused peer cleanup vitest (5 files / 108 tests); frontend typecheck; `validate:ir`; full `mise exec -- pnpm check` with frontend 111 files / 772 tests.
+- [ ] targeted peer-blocker re-review pending.
+
+## 2026-07-08 — QQP-440 peer-blocker test gap repaired
+
+- [x] targeted peer-blocker re-review `deleg_8482bc02` approved fail-closed exact gates, Teleprompt explicit transport evidence, and DOM stale metadata cleanup, but requested one missing Book scheduler-active render regression.
+- [x] added direct Book follow/page block regression in `frontend/src/features/book-cinema/model.test.ts`: when `wordSchedulerActive` is true, anchors/source word IDs remain renderable while React-owned `aria-current`, active role metadata, and `book-cinema-word-active` are suppressed; scheduler inactive still produces React active metadata.
+- [x] exported `BookFollowReaderBlock` and `BookReaderPageBlock` for direct render regression coverage.
+- [x] parent gates passed after repair: focused QQP-440 tests (5 files / 109 tests), frontend typecheck, `validate:ir`, `git diff --check`, full `mise exec -- pnpm check` with frontend 111 files / 773 tests.
+- [ ] narrow peer-blocker test-gap re-review pending.
+
+## 2026-07-08 — QQP-440 peer-blocker approved
+
+- [x] narrow peer-blocker test-gap re-review `deleg_01a3dc7f` returned `PEER-BLOCKER APPROVED`.
+- [x] reviewer verified the new Book scheduler-active regression covers both follow/page blocks, keeps anchors resolvable, suppresses React-owned active metadata while scheduler active, and preserves React active metadata when scheduler inactive.
+- [x] reviewer ran focused repaired test (1 passed / 27 skipped) and full Book Cinema model test (28 passed).
+- [ ] final closeout commit/push/Linear update pending.

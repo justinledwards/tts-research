@@ -1,5 +1,8 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { READ_ALONG_DISPLAY_LOOKUP } from "../readalong";
+import { BookFollowReaderBlock, BookReaderPageBlock } from "./BookCinemaPanel";
 import {
   BOOK_SOURCE_ACCEPT,
   bookCinemaKeyboardCommandForKey,
@@ -33,6 +36,7 @@ import {
   makeVoiceJob,
   v2Entry,
 } from "./modelTestHelpers";
+import { bookPageStructuredBlocks } from "./pageStructure";
 
 describe("Book Cinema helpers", () => {
   it("maps playback progress onto book word spans without changing text color state", () => {
@@ -202,6 +206,55 @@ describe("Book Cinema helpers", () => {
         timingLookup: READ_ALONG_DISPLAY_LOOKUP,
       })?.activeWordIndex,
     ).toBe(82);
+  });
+
+  it("keeps Book scheduler-active render anchors without React-owned exact active words", () => {
+    const text = "Alpha beta gamma delta";
+    const scopedSpans = indexedSpans(text, 20);
+    const [block] = bookPageStructuredBlocks({
+      page: {
+        endWordIndex: 23,
+        index: 0,
+        spans: scopedSpans,
+        startWordIndex: 20,
+      },
+      scopeKey: "book",
+      scopedText: text,
+      sourceId: "book-1",
+    });
+
+    for (const Component of [BookFollowReaderBlock, BookReaderPageBlock]) {
+      const schedulerActiveMarkup = renderToStaticMarkup(
+        createElement(Component, {
+          activeWordIndex: 21,
+          block,
+          highlightStyle: "background",
+          readAlongVisualMode: "word",
+          sourceId: "book-1",
+          wordSchedulerActive: true,
+        }),
+      );
+
+      expect(schedulerActiveMarkup).toContain('data-readalong-word-index="21"');
+      expect(schedulerActiveMarkup).toContain('data-source-word-id="book-1:book:word:21"');
+      expect(schedulerActiveMarkup).not.toContain('aria-current="true"');
+      expect(schedulerActiveMarkup).not.toContain('data-readalong-word-role="active"');
+      expect(schedulerActiveMarkup).not.toContain("book-cinema-word-active");
+
+      const reactActiveMarkup = renderToStaticMarkup(
+        createElement(Component, {
+          activeWordIndex: 21,
+          block,
+          highlightStyle: "background",
+          readAlongVisualMode: "word",
+          sourceId: "book-1",
+          wordSchedulerActive: false,
+        }),
+      );
+
+      expect(reactActiveMarkup).toContain('aria-current="true"');
+      expect(reactActiveMarkup).toContain('data-readalong-word-role="active"');
+    }
   });
 
   it("trusts v2 source identity across blocks even when spoken text is transformed", () => {

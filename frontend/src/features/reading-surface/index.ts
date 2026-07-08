@@ -52,6 +52,7 @@ export {
   readingFollowAlongDisplayPreset,
   readingFollowAlongPhraseRange,
   readingFollowAlongVisualMode,
+  readingFollowAlongWindow,
   readingFollowAlongWordRole,
   type BuildReadingFollowAlongTokensOptions,
   type ReadingFollowAlongCue,
@@ -63,5 +64,8 @@ export {
   type ReadingFollowAlongPhraseRangeInput,
   type ReadingFollowAlongToken,
   type ReadingFollowAlongVisualModeInput,
+  type ReadingFollowAlongWindow,
+  type ReadingFollowAlongWindowInput,
+  type ReadingFollowAlongWindowToken,
   type ReadingFollowAlongWordRoleInput,
 } from "./followAlongModel";

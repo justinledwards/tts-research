@@ -41,6 +41,7 @@ export interface ReadingFollowAlongRendererProps {
   readonly dataEffect?: string;
   readonly exactWordTiming?: boolean;
   readonly highlightStyle?: ReadAlongHighlightStyle;
+  readonly lowResourceMode?: boolean | null;
   readonly mode?: ReadingFollowAlongMode;
   readonly phraseWordEnd?: number | null;
   readonly phraseWordStart?: number | null;
@@ -50,6 +51,7 @@ export interface ReadingFollowAlongRendererProps {
   readonly surface: ReadAlongHighlightSurface;
   readonly surfaceKind?: ReadingSurfaceKind;
   readonly timingState?: ReadAlongTimingState;
+  readonly transportCanClaimExactReadAlong?: boolean | null;
   readonly upcomingWindow?: number;
   readonly wordStyle?: (state: ReadingFollowAlongWordRenderState) => CSSProperties | undefined;
 }
@@ -64,6 +66,7 @@ export function ReadingFollowAlongRenderer({
   dataEffect,
   exactWordTiming,
   highlightStyle,
+  lowResourceMode,
   mode = "reading-only",
   phraseWordEnd,
   phraseWordStart,
@@ -73,22 +76,42 @@ export function ReadingFollowAlongRenderer({
   surface,
   surfaceKind,
   timingState = "trusted",
+  transportCanClaimExactReadAlong,
   upcomingWindow,
   wordStyle,
 }: Readonly<ReadingFollowAlongRendererProps>) {
   const cue = normalizeReadingFollowAlongCue(cueInput);
-  const canClaimExactWord = readingFollowAlongCanClaimExactWord({
-    exactWordTiming,
-    timingState,
-  });
   const visualMode = readingFollowAlongVisualMode({
     activeWordIndex,
     exactWordTiming,
+    lowResourceMode,
     mode,
     phraseWordEnd,
     phraseWordStart,
     requestedVisualMode,
     timingState,
+    transportCanClaimExactReadAlong,
+  });
+  const canClaimExactWord =
+    visualMode === "word" &&
+    readingFollowAlongCanClaimExactWord({
+      exactWordTiming,
+      lowResourceMode,
+      timingState,
+      transportCanClaimExactReadAlong,
+    });
+  const exactActiveIdentity = resolveReadingFollowAlongExactActiveIdentity({
+    activeSourceWordId,
+    activeWordIndex,
+    canClaimExactWord,
+    tokens: cue.tokens,
+  });
+  const roleContext = resolveReadingFollowAlongRoleContext({
+    activeSourceWordId,
+    activeWordIndex,
+    canClaimExactWord,
+    exactActiveIdentity,
+    tokens: cue.tokens,
   });
   const phraseRange = readingFollowAlongPhraseRange({
     activeWordIndex,
@@ -102,7 +125,7 @@ export function ReadingFollowAlongRenderer({
     <span
       className={className}
       {...readingFollowAlongDataAttributes({
-        canClaimExactWord,
+        canClaimExactWord: exactActiveIdentity.canClaimExactWord,
         displayTextSource: cue.displayTextSource,
         mode,
         presetId,
@@ -112,8 +135,8 @@ export function ReadingFollowAlongRenderer({
       data-reading-followalong-surface-kind={surfaceKind}
     >
       <HighlightRenderer
-        activeSourceWordId={canClaimExactWord ? activeSourceWordId : null}
-        activeWordIndex={canClaimExactWord ? activeWordIndex : null}
+        activeSourceWordId={exactActiveIdentity.activeSourceWordId}
+        activeWordIndex={exactActiveIdentity.activeWordIndex}
         classNameForWord={(state) =>
           classNameForWord?.(
             readingFollowAlongRenderState({
@@ -136,7 +159,8 @@ export function ReadingFollowAlongRenderer({
         wordRoleForWord={({ active, phrase, token }) =>
           readingFollowAlongWordRole({
             active,
-            activeWordIndex,
+            activeWordIndex: roleContext.activeWordIndex,
+            canClaimExactWord: roleContext.canClaimExactWord,
             cueRole,
             phrase,
             recentWindow,
@@ -157,6 +181,104 @@ export function ReadingFollowAlongRenderer({
       />
     </span>
   );
+}
+
+interface ReadingFollowAlongExactActiveIdentity {
+  readonly activeSourceWordId: string | null;
+  readonly activeWordIndex: number | null;
+  readonly canClaimExactWord: boolean;
+}
+
+function resolveReadingFollowAlongExactActiveIdentity({
+  activeSourceWordId,
+  activeWordIndex,
+  canClaimExactWord,
+  tokens,
+}: Readonly<{
+  activeSourceWordId?: string | null;
+  activeWordIndex?: number | null;
+  canClaimExactWord: boolean;
+  tokens: readonly ReadingFollowAlongToken[];
+}>): ReadingFollowAlongExactActiveIdentity {
+  if (!canClaimExactWord) {
+    return NO_EXACT_ACTIVE_IDENTITY;
+  }
+
+  const hasActiveSourceWordId =
+    activeSourceWordId !== null &&
+    activeSourceWordId !== undefined &&
+    activeSourceWordId.length > 0;
+  const hasActiveWordIndex =
+    typeof activeWordIndex === "number" && Number.isFinite(activeWordIndex);
+  if (!hasActiveSourceWordId && !hasActiveWordIndex) {
+    return NO_EXACT_ACTIVE_IDENTITY;
+  }
+
+  const activeToken = tokens.find((token) => {
+    const sourceMatches = !hasActiveSourceWordId || token.sourceWordId === activeSourceWordId;
+    const indexMatches = !hasActiveWordIndex || token.wordIndex === activeWordIndex;
+    return sourceMatches && indexMatches;
+  });
+  if (!activeToken) {
+    return NO_EXACT_ACTIVE_IDENTITY;
+  }
+
+  return {
+    activeSourceWordId: hasActiveSourceWordId ? activeSourceWordId : null,
+    activeWordIndex: hasActiveWordIndex ? activeWordIndex : null,
+    canClaimExactWord: true,
+  };
+}
+
+const NO_EXACT_ACTIVE_IDENTITY = {
+  activeSourceWordId: null,
+  activeWordIndex: null,
+  canClaimExactWord: false,
+} as const;
+
+function resolveReadingFollowAlongRoleContext({
+  activeSourceWordId,
+  activeWordIndex,
+  canClaimExactWord,
+  exactActiveIdentity,
+  tokens,
+}: Readonly<{
+  activeSourceWordId?: string | null;
+  activeWordIndex?: number | null;
+  canClaimExactWord: boolean;
+  exactActiveIdentity: ReadingFollowAlongExactActiveIdentity;
+  tokens: readonly ReadingFollowAlongToken[];
+}>): Pick<ReadingFollowAlongExactActiveIdentity, "activeWordIndex" | "canClaimExactWord"> {
+  if (exactActiveIdentity.canClaimExactWord) {
+    return {
+      activeWordIndex: exactActiveIdentity.activeWordIndex,
+      canClaimExactWord: true,
+    };
+  }
+  if (
+    !canClaimExactWord ||
+    typeof activeWordIndex !== "number" ||
+    !Number.isFinite(activeWordIndex)
+  ) {
+    return NO_EXACT_ACTIVE_IDENTITY;
+  }
+
+  const hasActiveSourceWordId =
+    activeSourceWordId !== null &&
+    activeSourceWordId !== undefined &&
+    activeSourceWordId.length > 0;
+  const hasSourceMatch =
+    hasActiveSourceWordId && tokens.some((token) => token.sourceWordId === activeSourceWordId);
+  const hasIndexMatch = tokens.some((token) => token.wordIndex === activeWordIndex);
+  const sectionContainsPartialActiveIdentity = hasSourceMatch || hasIndexMatch;
+  if (sectionContainsPartialActiveIdentity) {
+    return NO_EXACT_ACTIVE_IDENTITY;
+  }
+
+  return {
+    activeWordIndex,
+    canClaimExactWord: true,
+  };
 }
 
 function readingFollowAlongRenderState({

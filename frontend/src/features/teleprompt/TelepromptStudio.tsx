@@ -510,6 +510,12 @@ export function TelepromptStudio({
     ((cueSync.activeCue?.wordTimings.length ?? 0) > 0 || highlightMapV2TimingTrusted)
       ? "trusted"
       : activeCueTimingStateBase;
+  const activeCueTransportCanClaimExactReadAlong =
+    audioFollowAvailable &&
+    cueSyncMode !== "manual" &&
+    activeCueTimingState === "trusted" &&
+    Boolean(cueSync.activeCue) &&
+    ((cueSync.activeCue?.wordTimings.length ?? 0) > 0 || highlightMapV2TimingTrusted);
   const telepromptTheatreSyncDebug = useMemo(
     () => ({
       activeCueId: cueSync.activeCue?.cueId ?? "",
@@ -1404,6 +1410,7 @@ export function TelepromptStudio({
             settings={effectiveSettings}
             textClassName={telepromptStageTextClassName(presetId)}
             timingState={activeCueTimingState}
+            transportCanClaimExactReadAlong={activeCueTransportCanClaimExactReadAlong}
             wordTimings={cueSync.activeCue?.wordTimings ?? []}
             wordSpacing={preset.wordSpacing}
             workModeDataAttributes={workModeModel.dataAttributes}
@@ -1750,6 +1757,11 @@ export function TelepromptStudio({
                     presetClassName={preset.scriptClassName}
                     settings={effectiveSettings}
                     timingState={block.id === activeBlock?.id ? activeCueTimingState : "trusted"}
+                    transportCanClaimExactReadAlong={
+                      block.id === activeBlock?.id
+                        ? activeCueTransportCanClaimExactReadAlong
+                        : false
+                    }
                     wordTimings={
                       block.id === activeBlock?.id ? (cueSync.activeCue?.wordTimings ?? []) : []
                     }
@@ -1792,6 +1804,7 @@ export function TelepromptStudio({
           cueSyncStatusLabel={cueSync.statusLabel}
           currentCueText={cueSync.activeCue?.spokenText ?? cue?.currentText ?? null}
           currentSourceWordId={activeCueCurrentSourceWordId}
+          currentTransportCanClaimExactReadAlong={activeCueTransportCanClaimExactReadAlong}
           currentTimingState={activeCueTimingState}
           currentWordIndex={cueSync.activeCue?.currentWordIndex ?? null}
           fullscreenActive={nativeFullscreenActive}

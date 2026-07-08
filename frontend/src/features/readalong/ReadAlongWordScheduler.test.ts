@@ -31,6 +31,7 @@ describe("ReadAlongWordScheduler", () => {
     const activeWords: number[] = [];
     const scheduler = new ReadAlongWordScheduler({
       audioElement: () => audio,
+      canClaimExactReadAlong: true,
       onWordChange: (active) => {
         activeWords.push(active.sourceWordIndex);
       },
@@ -64,6 +65,7 @@ describe("ReadAlongWordScheduler", () => {
     const audio = fakeAudio({ currentTime: 0.05, playbackRate: 2 });
     const scheduler = new ReadAlongWordScheduler({
       audioElement: () => audio,
+      canClaimExactReadAlong: true,
       runtime: {
         clearTimeout: noop,
         now: () => 0,
@@ -81,10 +83,78 @@ describe("ReadAlongWordScheduler", () => {
     scheduler.stop(false);
   });
 
+  it("does not schedule exact word work when exact read-along cannot be claimed", () => {
+    const scheduled: number[] = [];
+    const activeWords: number[] = [];
+    const previous = fakeElement();
+    previous.classList.add("book-cinema-word-active", "readalong-word-role--active");
+    previous.setAttribute("aria-current", "true");
+    previous.dataset.readalongDomActive = "true";
+    previous.dataset.readalongWordRole = "active";
+    const root = fakeRoot({ current: fakeElement(), previous });
+    const scheduler = new ReadAlongWordScheduler({
+      audioElement: () => fakeAudio({ currentTime: 0.05 }),
+      canClaimExactReadAlong: false,
+      highlight: {
+        mode: "word",
+        root: () => root,
+        sourceId: "book",
+        surface: "book",
+      },
+      onWordChange: (active) => {
+        activeWords.push(active.sourceWordIndex);
+      },
+      runtime: {
+        clearTimeout: noop,
+        now: () => 0,
+        setTimeout: (_callback, delayMs) => {
+          scheduled.push(delayMs);
+          return scheduled.length;
+        },
+      },
+      timeline: timeline(),
+    });
+
+    scheduler.start();
+    scheduler.syncNow();
+
+    expect(scheduled).toEqual([]);
+    expect(activeWords).toEqual([]);
+    expect(previous.getAttribute("aria-current")).toBeNull();
+    expect(previous.dataset.readalongWordRole).toBeUndefined();
+  });
+
+  it("does not schedule exact word work when exact read-along evidence is omitted", () => {
+    const scheduled: number[] = [];
+    const activeWords: number[] = [];
+    const scheduler = new ReadAlongWordScheduler({
+      audioElement: () => fakeAudio({ currentTime: 0.05 }),
+      onWordChange: (active) => {
+        activeWords.push(active.sourceWordIndex);
+      },
+      runtime: {
+        clearTimeout: noop,
+        now: () => 0,
+        setTimeout: (_callback, delayMs) => {
+          scheduled.push(delayMs);
+          return scheduled.length;
+        },
+      },
+      timeline: timeline(),
+    });
+
+    scheduler.start();
+    scheduler.syncNow();
+
+    expect(scheduled).toEqual([]);
+    expect(activeWords).toEqual([]);
+  });
+
   it("does not schedule boundary work while audio is paused", () => {
     const scheduled: number[] = [];
     const scheduler = new ReadAlongWordScheduler({
       audioElement: () => fakeAudio({ currentTime: 0.05, paused: true }),
+      canClaimExactReadAlong: true,
       runtime: {
         clearTimeout: noop,
         now: () => 0,
@@ -108,6 +178,7 @@ describe("read-along DOM highlight adapter", () => {
     previous.classList.add("book-cinema-word-active", "readalong-word-role--active");
     previous.setAttribute("aria-current", "true");
     previous.dataset.readalongDomActive = "true";
+    previous.dataset.readalongWordRole = "active";
     const current = fakeElement();
     const root = fakeRoot({ current, previous });
 
@@ -123,7 +194,9 @@ describe("read-along DOM highlight adapter", () => {
 
     expect(result.activeElement).toBe(current);
     expect(previous.classList.contains("book-cinema-word-active")).toBe(false);
+    expect(previous.classList.contains("readalong-word-role--active")).toBe(false);
     expect(previous.getAttribute("aria-current")).toBeNull();
+    expect(previous.dataset.readalongWordRole).toBeUndefined();
     expect(current.classList.contains("book-cinema-word-active")).toBe(true);
     expect(current.classList.contains("readalong-word-role--active")).toBe(true);
     expect(current.getAttribute("aria-current")).toBe("true");
@@ -295,6 +368,7 @@ describe("ReadAlongDomHighlighterSession", () => {
 
     expect(result.activeElement).toBeNull();
     expect(previous.getAttribute("aria-current")).toBeNull();
+    expect(previous.dataset.readalongWordRole).toBeUndefined();
   });
 
   it("cleans up active state without rescanning on every word boundary", () => {
@@ -321,7 +395,9 @@ describe("ReadAlongDomHighlighterSession", () => {
 
     expect(root.querySelectorAllCalls).toBe(scansAfterSetup + 1);
     expect(first.getAttribute("aria-current")).toBeNull();
+    expect(first.dataset.readalongWordRole).toBeUndefined();
     expect(second.getAttribute("aria-current")).toBeNull();
+    expect(second.dataset.readalongWordRole).toBeUndefined();
   });
 });
 

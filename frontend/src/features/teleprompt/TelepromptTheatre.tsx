@@ -60,6 +60,7 @@ export interface TelepromptTheatreProps {
   readonly cueSyncStatusLabel: string;
   readonly currentCueText: string | null;
   readonly currentSourceWordId?: string | null;
+  readonly currentTransportCanClaimExactReadAlong?: boolean;
   readonly currentWordIndex: number | null;
   readonly currentTimingState?: ReadAlongTimingState;
   readonly fullscreenAvailability: TelepromptFullscreenAvailability;
@@ -134,6 +135,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
       cueSyncStatusLabel,
       currentCueText,
       currentSourceWordId,
+      currentTransportCanClaimExactReadAlong = false,
       currentTimingState = "trusted",
       currentWordIndex,
       countdownRemaining,
@@ -619,6 +621,7 @@ export const TelepromptTheatre = forwardRef<HTMLDivElement, TelepromptTheatrePro
                 mirrorMode={settings.mirrorMode}
                 previewBlocks={previewBlocks}
                 timingState={currentTimingState}
+                transportCanClaimExactReadAlong={currentTransportCanClaimExactReadAlong}
                 text={currentCue}
                 textClassName={theatreTextSizeClassName(settings.cueFontSize, presetId)}
                 widthClassName={theatreCueWidthClassName(settings.cueWidth)}

@@ -98,6 +98,7 @@ import {
   readAlongInvariantStatusLabel,
   readAlongPreferenceDataAttributes,
   readAlongRuntimeStateLabel,
+  readAlongTimingStateFromRuntime,
   readAlongVisualModeFromRuntime,
   type SyncDebugSourceLocator,
   scrollReadAlongAnchor,
@@ -132,6 +133,7 @@ import {
 } from "../reader-navigation";
 import {
   applyReaderTypographyPreset,
+  deriveReaderTransportStateDescriptor,
   readingSurfaceClassName,
   readingSurfaceDataAttributes,
 } from "../reading-surface";
@@ -1058,7 +1060,48 @@ export function BookCinemaOverlay({
     surface: "Book Cinema",
   });
   const runtimeHighlightCue = readAlongRuntime.activeCue ?? highlightCue;
-  const readAlongVisualMode = readAlongVisualModeFromRuntime(readAlongRuntime, effectiveReadAlong);
+  const requestedReadAlongVisualMode = readAlongVisualModeFromRuntime(
+    readAlongRuntime,
+    effectiveReadAlong,
+  );
+  const readAlongTimingState = readAlongTimingStateFromRuntime({ runtime: readAlongRuntime });
+  const readAlongLowResourceMode = bookCinemaReadAlongLowResourceMode(effectiveReadAlong);
+  const readerTransportDescriptor = useMemo(() => {
+    let audioArtifactState: string | null = null;
+    if (activeBookJob) {
+      audioArtifactState = activeBookJob.voiceCheck.complete ? "checked" : "unchecked";
+    }
+
+    return deriveReaderTransportStateDescriptor({
+      audioArtifactState,
+      generatedAudioLifecycle:
+        activeBookJob && highlightMap && highlightMap.jobId !== activeBookJob.id
+          ? "stale"
+          : generatedAudioLifecycleFromJob({ job: activeBookJob }),
+      readAlongExactSync:
+        !readAlongLowResourceMode &&
+        readAlongTimingState === "trusted" &&
+        requestedReadAlongVisualMode === "word",
+      readAlongRuntimeState: readAlongRuntime.state,
+      readAlongTimingState,
+    });
+  }, [
+    activeBookJob,
+    highlightMap,
+    readAlongLowResourceMode,
+    readAlongRuntime.state,
+    readAlongTimingState,
+    requestedReadAlongVisualMode,
+  ]);
+  let readAlongVisualMode = requestedReadAlongVisualMode;
+  if (readAlongLowResourceMode) {
+    readAlongVisualMode = "block";
+  } else if (
+    requestedReadAlongVisualMode === "word" &&
+    !readerTransportDescriptor.canClaimExactReadAlong
+  ) {
+    readAlongVisualMode = "phrase";
+  }
   const resolvedTimingCue = useMemo(() => {
     const directV2Timing = resolveBookTimingMapV2WordIndexes({
       map: activeReadAlongTimingMapV2,
@@ -1131,13 +1174,15 @@ export function BookCinemaOverlay({
     Boolean(activeBookJob && schedulerTimeline) &&
     book.kind !== "markdown" &&
     pointerWordIndex < 0 &&
-    readAlongVisualMode === "word";
+    readAlongVisualMode === "word" &&
+    readerTransportDescriptor.canClaimExactReadAlong;
   useEffect(() => {
     if (!wordSchedulerAvailable || !activeBookJob || !playbackControls.isPlaying) {
       return;
     }
     const scheduler = new ReadAlongWordScheduler({
       audioElement: () => readAlongAudioElementForJob(activeBookJob.id),
+      canClaimExactReadAlong: readerTransportDescriptor.canClaimExactReadAlong,
       highlight: {
         accessibilitySettings: normalizedAccessibility,
         autoFollow: true,
@@ -1165,6 +1210,7 @@ export function BookCinemaOverlay({
     effectiveReadAlong.scrollFollow,
     normalizedAccessibility,
     playbackControls.isPlaying,
+    readerTransportDescriptor.canClaimExactReadAlong,
     readAlongVisualMode,
     schedulerTimeline,
     wordSchedulerAvailable,
@@ -2066,6 +2112,7 @@ export function BookCinemaOverlay({
           syncDataAttributes={readerSyncDataAttributes}
           readAlongVisualMode={readAlongVisualMode}
           theatreActive={cinemaTheatre.active}
+          wordSchedulerActive={wordSchedulerAvailable}
           onAccessibilitySettingsChange={onAccessibilitySettingsChange}
         />
       }
@@ -3541,6 +3588,7 @@ function BookCinemaReaderStage({
   scrollFollow,
   syncDataAttributes,
   theatreActive,
+  wordSchedulerActive,
   onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
@@ -3559,6 +3607,7 @@ function BookCinemaReaderStage({
   scrollFollow: ReadAlongScrollFollow;
   syncDataAttributes: Record<string, string | number>;
   theatreActive: boolean;
+  wordSchedulerActive: boolean;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
   const presentation = bookCinemaReaderPresentation();
@@ -3605,6 +3654,7 @@ function BookCinemaReaderStage({
         scrollFollow={scrollFollow}
         syncDataAttributes={syncDataAttributes}
         theatreActive={theatreActive}
+        wordSchedulerActive={wordSchedulerActive}
         onAccessibilitySettingsChange={onAccessibilitySettingsChange}
       />
     );
@@ -3626,6 +3676,7 @@ function BookCinemaReaderStage({
       scrollFollow={scrollFollow}
       syncDataAttributes={syncDataAttributes}
       theatreActive={theatreActive}
+      wordSchedulerActive={wordSchedulerActive}
       onAccessibilitySettingsChange={onAccessibilitySettingsChange}
     />
   );
@@ -3654,6 +3705,7 @@ function BookFollowReaderStage({
   scrollFollow,
   syncDataAttributes,
   theatreActive,
+  wordSchedulerActive,
   onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
@@ -3672,6 +3724,7 @@ function BookFollowReaderStage({
   scrollFollow: ReadAlongScrollFollow;
   syncDataAttributes: Record<string, string | number>;
   theatreActive: boolean;
+  wordSchedulerActive: boolean;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
   const readerRef = useRef<HTMLDivElement | null>(null);
@@ -3711,6 +3764,9 @@ function BookFollowReaderStage({
   const scrollBehavior = readerScrollBehavior(accessibilitySettings);
 
   useEffect(() => {
+    if (wordSchedulerActive) {
+      return;
+    }
     if (activeWordIndex < 0) {
       return;
     }
@@ -3745,6 +3801,7 @@ function BookFollowReaderStage({
     book.id,
     readAlongVisualMode,
     scrollFollow,
+    wordSchedulerActive,
   ]);
 
   useEffect(() => {
@@ -3823,6 +3880,7 @@ function BookFollowReaderStage({
               phraseWordStart={phraseWordStart}
               readAlongVisualMode={readAlongVisualMode}
               sourceId={book.id}
+              wordSchedulerActive={wordSchedulerActive}
             />
           ))
         ) : (
@@ -3852,7 +3910,7 @@ function BookReaderTextButton({
   );
 }
 
-function BookFollowReaderBlock({
+export function BookFollowReaderBlock({
   activeWordIndex,
   block,
   highlightStyle,
@@ -3860,16 +3918,19 @@ function BookFollowReaderBlock({
   phraseWordStart,
   readAlongVisualMode,
   sourceId,
+  wordSchedulerActive,
 }: Readonly<{
-  activeWordIndex: number;
+  activeWordIndex: number | null;
   block: BookPageStructuredBlock;
   highlightStyle: ReadAlongHighlightStyle;
   phraseWordEnd?: number;
   phraseWordStart?: number;
   readAlongVisualMode: ReadAlongHighlightVisualMode;
   sourceId: string;
+  wordSchedulerActive: boolean;
 }>) {
   const BlockElement = bookReaderPageBlockElement(block.kind);
+  const rendererActiveWordIndex = wordSchedulerActive ? null : activeWordIndex;
   return (
     <BlockElement
       className={bookFollowReaderBlockClassName(block.kind)}
@@ -3878,7 +3939,7 @@ function BookFollowReaderBlock({
       id={block.sourceBlockId ? `cinema-block-${block.sourceBlockId}` : undefined}
     >
       <HighlightRenderer
-        activeWordIndex={activeWordIndex}
+        activeWordIndex={rendererActiveWordIndex}
         highlightStyle={highlightStyle}
         mode={readAlongVisualMode}
         nodeId={block.sourceBlockId}
@@ -3913,6 +3974,7 @@ function BookPagedReaderStage({
   scrollFollow,
   syncDataAttributes,
   theatreActive,
+  wordSchedulerActive,
   onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
@@ -3930,6 +3992,7 @@ function BookPagedReaderStage({
   scrollFollow: ReadAlongScrollFollow;
   syncDataAttributes: Record<string, string | number>;
   theatreActive: boolean;
+  wordSchedulerActive: boolean;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
   const pageMetrics = useBookPageMetrics(accessibilitySettings);
@@ -4067,6 +4130,7 @@ function BookPagedReaderStage({
           scopedText={index === 0 || page ? scopedText : ""}
           scopeContent={scopeContent}
           totalPages={pagination.totalPages}
+          wordSchedulerActive={wordSchedulerActive}
         />
       ))}
       {displayedPages.length === 1 && pagesPerSpread === 2 && pagination.totalPages > 1 ? (
@@ -4088,6 +4152,7 @@ function BookPagedReaderStage({
           scopedText=""
           scopeContent={null}
           totalPages={pagination.totalPages}
+          wordSchedulerActive={wordSchedulerActive}
         />
       ) : null}
     </ReaderCanvasFrame>
@@ -4185,6 +4250,7 @@ function BookReaderPage({
   scopedText,
   scopeContent,
   totalPages,
+  wordSchedulerActive,
 }: Readonly<{
   allowPageScroll?: boolean;
   activeWordIndex: number;
@@ -4203,6 +4269,7 @@ function BookReaderPage({
   scopedText: string;
   scopeContent: BookSourceScopeContent | null;
   totalPages: number;
+  wordSchedulerActive: boolean;
 }>) {
   const pageNumber = page ? page.index + 1 : totalPages + 1;
   const pageLabel = page ? `Reader page ${String(pageNumber)} of ${String(totalPages)}` : "End";
@@ -4254,6 +4321,7 @@ function BookReaderPage({
               phraseWordStart={phraseWordStart}
               readAlongVisualMode={readAlongVisualMode}
               sourceId={book.id}
+              wordSchedulerActive={wordSchedulerActive}
             />
           ))
         ) : (
@@ -4268,7 +4336,7 @@ function BookReaderPage({
   );
 }
 
-function BookReaderPageBlock({
+export function BookReaderPageBlock({
   activeWordIndex,
   block,
   highlightStyle,
@@ -4276,16 +4344,19 @@ function BookReaderPageBlock({
   phraseWordStart,
   readAlongVisualMode,
   sourceId,
+  wordSchedulerActive,
 }: Readonly<{
-  activeWordIndex: number;
+  activeWordIndex: number | null;
   block: BookPageStructuredBlock;
   highlightStyle: ReadAlongHighlightStyle;
   phraseWordEnd?: number;
   phraseWordStart?: number;
   readAlongVisualMode: ReadAlongHighlightVisualMode;
   sourceId: string;
+  wordSchedulerActive: boolean;
 }>) {
   const BlockElement = bookReaderPageBlockElement(block.kind);
+  const rendererActiveWordIndex = wordSchedulerActive ? null : activeWordIndex;
   return (
     <BlockElement
       className={bookReaderPageBlockClassName(block.kind)}
@@ -4294,7 +4365,7 @@ function BookReaderPageBlock({
       id={block.sourceBlockId ? `cinema-block-${block.sourceBlockId}` : undefined}
     >
       <HighlightRenderer
-        activeWordIndex={activeWordIndex}
+        activeWordIndex={rendererActiveWordIndex}
         highlightStyle={highlightStyle}
         mode={readAlongVisualMode}
         nodeId={block.sourceBlockId}
@@ -4518,6 +4589,12 @@ function groupBookScopeOptions(options: BookScopeOption[]): {
 
 function findScopeByOptionKey(options: BookScopeOption[], key: string): BookScope | undefined {
   return options.find((option) => option.key === key)?.scope;
+}
+
+function bookCinemaReadAlongLowResourceMode(preferences: ReadAlongPreferences): boolean {
+  return (
+    preferences.highlightGranularity === "block" || preferences.syncStrictness === "blockFallback"
+  );
 }
 
 function bookCreateLabel(scope: BookScope, book?: BookSource): string {

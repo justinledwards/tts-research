@@ -84,11 +84,13 @@ export interface BuildReadingFollowAlongTokensOptions {
 export interface ReadingFollowAlongVisualModeInput {
   readonly activeWordIndex?: number | null;
   readonly exactWordTiming?: boolean;
+  readonly lowResourceMode?: boolean | null;
   readonly mode: ReadingFollowAlongMode;
   readonly phraseWordEnd?: number | null;
   readonly phraseWordStart?: number | null;
   readonly requestedVisualMode?: ReadAlongHighlightVisualMode | null;
   readonly timingState: ReadAlongTimingState;
+  readonly transportCanClaimExactReadAlong?: boolean | null;
 }
 
 export interface ReadingFollowAlongPhraseRangeInput {
@@ -102,11 +104,40 @@ export interface ReadingFollowAlongPhraseRangeInput {
 export interface ReadingFollowAlongWordRoleInput {
   readonly active: boolean;
   readonly activeWordIndex?: number | null;
+  readonly canClaimExactWord?: boolean;
   readonly cueRole: ReadAlongCueRole;
   readonly phrase: boolean;
   readonly recentWindow?: number;
   readonly token: ReadingFollowAlongToken;
   readonly upcomingWindow?: number;
+}
+
+export interface ReadingFollowAlongWindowInput {
+  readonly activeWordIndex?: number | null;
+  readonly canClaimExactWord?: boolean;
+  readonly phraseWordEnd?: number | null;
+  readonly phraseWordStart?: number | null;
+  readonly recentWindow?: number;
+  readonly tokens: readonly ReadingFollowAlongToken[];
+  readonly upcomingWindow?: number;
+  readonly visualMode: ReadAlongHighlightVisualMode;
+}
+
+export interface ReadingFollowAlongWindowToken {
+  readonly distanceFromActive: number | null;
+  readonly inWindow: boolean;
+  readonly phrase: boolean;
+  readonly role: ReadAlongWordRole;
+  readonly token: ReadingFollowAlongToken;
+}
+
+export interface ReadingFollowAlongWindow {
+  readonly activeWordIndex: number | null;
+  readonly firstWindowWordIndex: number | null;
+  readonly lastWindowWordIndex: number | null;
+  readonly recentWindow: number;
+  readonly tokens: readonly ReadingFollowAlongWindowToken[];
+  readonly upcomingWindow: number;
 }
 
 export const READING_FOLLOW_ALONG_TYPOGRAPHY_SCALE: Record<
@@ -249,22 +280,33 @@ export function normalizeReadingFollowAlongCue(
 
 export function readingFollowAlongCanClaimExactWord({
   exactWordTiming,
+  lowResourceMode,
   timingState,
+  transportCanClaimExactReadAlong,
 }: Readonly<{
   exactWordTiming?: boolean;
+  lowResourceMode?: boolean | null;
   timingState: ReadAlongTimingState;
+  transportCanClaimExactReadAlong?: boolean | null;
 }>): boolean {
-  return timingState === "trusted" && exactWordTiming !== false;
+  return (
+    timingState === "trusted" &&
+    exactWordTiming !== false &&
+    lowResourceMode !== true &&
+    transportCanClaimExactReadAlong === true
+  );
 }
 
 export function readingFollowAlongVisualMode({
   activeWordIndex,
   exactWordTiming,
+  lowResourceMode,
   mode,
   phraseWordEnd,
   phraseWordStart,
   requestedVisualMode,
   timingState,
+  transportCanClaimExactReadAlong,
 }: ReadingFollowAlongVisualModeInput): ReadAlongHighlightVisualMode {
   if (timingState === "stale") {
     return "none";
@@ -274,8 +316,13 @@ export function readingFollowAlongVisualMode({
   }
   const canClaimExactWord = readingFollowAlongCanClaimExactWord({
     exactWordTiming,
+    lowResourceMode,
     timingState,
+    transportCanClaimExactReadAlong,
   });
+  if (lowResourceMode === true) {
+    return requestedVisualMode && requestedVisualMode !== "word" ? requestedVisualMode : "block";
+  }
   if (requestedVisualMode && requestedVisualMode !== "word") {
     return requestedVisualMode;
   }
@@ -325,9 +372,74 @@ export function readingFollowAlongPhraseRange({
   };
 }
 
+export function readingFollowAlongWindow({
+  activeWordIndex,
+  canClaimExactWord = false,
+  phraseWordEnd,
+  phraseWordStart,
+  recentWindow = 2,
+  tokens,
+  upcomingWindow = 2,
+  visualMode,
+}: ReadingFollowAlongWindowInput): ReadingFollowAlongWindow {
+  const boundedRecentWindow = normalizeWindowSize(recentWindow);
+  const boundedUpcomingWindow = normalizeWindowSize(upcomingWindow);
+  const resolvedActiveWordIndex =
+    typeof activeWordIndex === "number" && activeWordIndex >= 0 ? activeWordIndex : null;
+  const canUseExactWindow =
+    canClaimExactWord && visualMode === "word" && resolvedActiveWordIndex !== null;
+  const firstWindowWordIndex = canUseExactWindow
+    ? resolvedActiveWordIndex - boundedRecentWindow
+    : null;
+  const lastWindowWordIndex = canUseExactWindow
+    ? resolvedActiveWordIndex + boundedUpcomingWindow
+    : null;
+
+  return {
+    activeWordIndex: resolvedActiveWordIndex,
+    firstWindowWordIndex,
+    lastWindowWordIndex,
+    recentWindow: boundedRecentWindow,
+    tokens: tokens.map((token) => {
+      const phrase = tokenIsInPhraseRange(
+        token.wordIndex,
+        phraseWordStart,
+        phraseWordEnd,
+        visualMode,
+      );
+      const distanceFromActive =
+        resolvedActiveWordIndex === null ? null : token.wordIndex - resolvedActiveWordIndex;
+      const inWindow =
+        canUseExactWindow &&
+        firstWindowWordIndex !== null &&
+        lastWindowWordIndex !== null &&
+        token.wordIndex >= firstWindowWordIndex &&
+        token.wordIndex <= lastWindowWordIndex;
+      return {
+        distanceFromActive,
+        inWindow,
+        phrase,
+        role: readingFollowAlongWordRole({
+          active: canUseExactWindow && token.wordIndex === resolvedActiveWordIndex,
+          activeWordIndex: resolvedActiveWordIndex,
+          canClaimExactWord: canUseExactWindow,
+          cueRole: "current",
+          phrase,
+          recentWindow: boundedRecentWindow,
+          token,
+          upcomingWindow: boundedUpcomingWindow,
+        }),
+        token,
+      };
+    }),
+    upcomingWindow: boundedUpcomingWindow,
+  };
+}
+
 export function readingFollowAlongWordRole({
   active,
   activeWordIndex,
+  canClaimExactWord = false,
   cueRole,
   phrase,
   recentWindow = 2,
@@ -337,7 +449,7 @@ export function readingFollowAlongWordRole({
   if (cueRole === "skipped" || token.transformation === "skipped") {
     return "skipped";
   }
-  if (active) {
+  if (canClaimExactWord && active) {
     return "active";
   }
   if (phrase) {
@@ -347,12 +459,12 @@ export function readingFollowAlongWordRole({
     return "transformed";
   }
   return readAlongWordRoleForIndex({
-    active,
-    activeWordIndex,
+    active: canClaimExactWord && active,
+    activeWordIndex: canClaimExactWord ? activeWordIndex : null,
     cueRole,
     phrase,
-    recentWindow,
-    upcomingWindow,
+    recentWindow: normalizeWindowSize(recentWindow),
+    upcomingWindow: normalizeWindowSize(upcomingWindow),
     wordIndex: token.wordIndex,
   });
 }
@@ -429,4 +541,23 @@ function readingFollowAlongDisplayText({
       return "";
     }
   }
+}
+
+function normalizeWindowSize(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+function tokenIsInPhraseRange(
+  wordIndex: number,
+  phraseWordStart: number | null | undefined,
+  phraseWordEnd: number | null | undefined,
+  visualMode: ReadAlongHighlightVisualMode,
+): boolean {
+  return (
+    (visualMode === "phrase" || visualMode === "sentence") &&
+    typeof phraseWordStart === "number" &&
+    typeof phraseWordEnd === "number" &&
+    wordIndex >= phraseWordStart &&
+    wordIndex <= phraseWordEnd
+  );
 }
