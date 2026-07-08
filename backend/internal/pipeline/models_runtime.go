@@ -57,29 +57,102 @@ type JobQualityReport struct {
 	Reason                 string  `json:"reason"`
 }
 
+type AudioArtifactState string
+
+const (
+	AudioArtifactStateGenerating           AudioArtifactState = "generating"
+	AudioArtifactStateUnchecked            AudioArtifactState = "unchecked"
+	AudioArtifactStateChecked              AudioArtifactState = "checked"
+	AudioArtifactStateStale                AudioArtifactState = "stale"
+	AudioArtifactStateReplaced             AudioArtifactState = "replaced"
+	AudioArtifactStateFailed               AudioArtifactState = "failed"
+	AudioArtifactStateRetryable            AudioArtifactState = "retryable"
+	AudioArtifactStateInterruptedRetriable AudioArtifactState = "interrupted_retriable"
+)
+
+type AudioArtifactRetryScope string
+
+const (
+	AudioArtifactRetryScopeNone     AudioArtifactRetryScope = "none"
+	AudioArtifactRetryScopeArtifact AudioArtifactRetryScope = "artifact"
+	AudioArtifactRetryScopeSegment  AudioArtifactRetryScope = "segment"
+)
+
+type AudioArtifactRetryMetadata struct {
+	Retryable bool                    `json:"retryable"`
+	Scope     AudioArtifactRetryScope `json:"scope"`
+	Reason    string                  `json:"reason,omitempty"`
+	Attempt   int                     `json:"attempt,omitempty"`
+}
+
+type AudioArtifactReplacementMetadata struct {
+	ReplacementOfJobID        string             `json:"replacementOfJobId,omitempty"`
+	ReplacementOfSegmentIndex int                `json:"replacementOfSegmentIndex,omitempty"`
+	ReplacementOfArtifactID   string             `json:"replacementOfArtifactId,omitempty"`
+	ReplacedByJobID           string             `json:"replacedByJobId,omitempty"`
+	ReplacedBySegmentIndex    int                `json:"replacedBySegmentIndex,omitempty"`
+	ReplacedByArtifactID      string             `json:"replacedByArtifactId,omitempty"`
+	PreviousState             AudioArtifactState `json:"previousState,omitempty"`
+	NewState                  AudioArtifactState `json:"newState,omitempty"`
+	Reason                    string             `json:"reason,omitempty"`
+}
+
+type AudioArtifactReuseMetadata struct {
+	Reused                bool               `json:"reused"`
+	FromJobID             string             `json:"fromJobId,omitempty"`
+	FromSegmentIndex      int                `json:"fromSegmentIndex,omitempty"`
+	FromArtifactID        string             `json:"fromArtifactId,omitempty"`
+	FromCompatibilityKey  string             `json:"fromCompatibilityKey,omitempty"`
+	CompatibilityKey      string             `json:"compatibilityKey,omitempty"`
+	CompatibilityDecision string             `json:"compatibilityDecision,omitempty"`
+	ReuseAllowed          bool               `json:"reuseAllowed"`
+	StateOnReuse          AudioArtifactState `json:"stateOnReuse,omitempty"`
+	Reason                string             `json:"reason,omitempty"`
+}
+
 type JobSegment struct {
-	Index            int      `json:"index"`
-	Text             string   `json:"text"`
-	Status           string   `json:"status,omitempty"`
-	AudioURL         string   `json:"audioUrl,omitempty"`
-	TimingStatus     string   `json:"timingStatus,omitempty"`
-	TimingConfidence string   `json:"timingConfidence,omitempty"`
-	Attempts         int      `json:"attempts,omitempty"`
-	DurationMS       int      `json:"durationMs,omitempty"`
-	LatencyMS        int      `json:"latencyMs,omitempty"`
-	Similarity       float64  `json:"similarity,omitempty"`
-	Reason           string   `json:"reason,omitempty"`
-	Warnings         []string `json:"warnings,omitempty"`
-	ReusedFromJobID  string   `json:"reusedFromJobId,omitempty"`
+	Index                    int                               `json:"index"`
+	Text                     string                            `json:"text"`
+	Status                   string                            `json:"status,omitempty"`
+	AudioURL                 string                            `json:"audioUrl,omitempty"`
+	TimingStatus             string                            `json:"timingStatus,omitempty"`
+	TimingConfidence         string                            `json:"timingConfidence,omitempty"`
+	Attempts                 int                               `json:"attempts,omitempty"`
+	DurationMS               int                               `json:"durationMs,omitempty"`
+	LatencyMS                int                               `json:"latencyMs,omitempty"`
+	Similarity               float64                           `json:"similarity,omitempty"`
+	Reason                   string                            `json:"reason,omitempty"`
+	Warnings                 []string                          `json:"warnings,omitempty"`
+	ReusedFromJobID          string                            `json:"reusedFromJobId,omitempty"`
+	ArtifactID               string                            `json:"artifactId,omitempty"`
+	ArtifactState            AudioArtifactState                `json:"artifactState,omitempty"`
+	ArtifactCompatibilityKey string                            `json:"artifactCompatibilityKey,omitempty"`
+	Replaceable              bool                              `json:"replaceable,omitempty"`
+	CheckedAt                *time.Time                        `json:"checkedAt,omitempty"`
+	FailureCode              string                            `json:"failureCode,omitempty"`
+	FailureMessage           string                            `json:"failureMessage,omitempty"`
+	Retry                    *AudioArtifactRetryMetadata       `json:"retry,omitempty"`
+	Replacement              *AudioArtifactReplacementMetadata `json:"replacement,omitempty"`
+	Reuse                    *AudioArtifactReuseMetadata       `json:"reuse,omitempty"`
 }
 
 type PartialAudioSegmentManifest struct {
-	Index            int    `json:"index"`
-	Status           string `json:"status"`
-	AudioURL         string `json:"audioUrl,omitempty"`
-	DurationMS       int    `json:"durationMs,omitempty"`
-	TimingAvailable  bool   `json:"timingAvailable"`
-	TimingConfidence string `json:"timingConfidence"`
+	Index                    int                               `json:"index"`
+	Status                   string                            `json:"status"`
+	AudioURL                 string                            `json:"audioUrl,omitempty"`
+	DurationMS               int                               `json:"durationMs,omitempty"`
+	TimingAvailable          bool                              `json:"timingAvailable"`
+	TimingConfidence         string                            `json:"timingConfidence"`
+	ArtifactID               string                            `json:"artifactId,omitempty"`
+	ArtifactState            AudioArtifactState                `json:"artifactState,omitempty"`
+	ArtifactCompatibilityKey string                            `json:"artifactCompatibilityKey,omitempty"`
+	Replaceable              bool                              `json:"replaceable,omitempty"`
+	CheckedAt                *time.Time                        `json:"checkedAt,omitempty"`
+	FailureCode              string                            `json:"failureCode,omitempty"`
+	FailureMessage           string                            `json:"failureMessage,omitempty"`
+	Retry                    *AudioArtifactRetryMetadata       `json:"retry,omitempty"`
+	Replacement              *AudioArtifactReplacementMetadata `json:"replacement,omitempty"`
+	Reuse                    *AudioArtifactReuseMetadata       `json:"reuse,omitempty"`
 }
 
 type PartialAudioManifest struct {
@@ -89,6 +162,10 @@ type PartialAudioManifest struct {
 	TotalSegments   int                           `json:"totalSegments"`
 	FirstPlayableAt *time.Time                    `json:"firstPlayableAt,omitempty"`
 	CompleteEnough  bool                          `json:"completeEnough"`
+	ArtifactState   AudioArtifactState            `json:"artifactState,omitempty"`
+	Replaceable     bool                          `json:"replaceable,omitempty"`
+	CheckedAt       *time.Time                    `json:"checkedAt,omitempty"`
+	Retry           *AudioArtifactRetryMetadata   `json:"retry,omitempty"`
 	Segments        []PartialAudioSegmentManifest `json:"segments,omitempty"`
 }
 

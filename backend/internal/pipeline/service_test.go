@@ -1882,6 +1882,15 @@ func TestCreateJobCanSkipASRCheckAndRetry(t *testing.T) {
 	if completed.QualityReport.ReferenceProfile {
 		t.Fatal("quality report should not mark a default voice job as reference-profile")
 	}
+	if len(completed.Segments) == 0 {
+		t.Fatal("completed job should include segments")
+	}
+	if completed.Segments[0].ArtifactState != pipeline.AudioArtifactStateUnchecked {
+		t.Fatalf("ASR-disabled completed segment artifact state = %q, want unchecked without checker evidence", completed.Segments[0].ArtifactState)
+	}
+	if !completed.Segments[0].Replaceable {
+		t.Fatal("ASR-disabled completed audio should remain replaceable until checker evidence exists")
+	}
 }
 
 func TestProjectBundleSummaryExportAndPreview(t *testing.T) {
@@ -3154,8 +3163,21 @@ func TestCreateJobPublishesPartialAudioWhileSynthesizing(t *testing.T) {
 	if len(processingJob.PartialAudioManifest.Segments) == 0 || processingJob.PartialAudioManifest.Segments[0].AudioURL == "" {
 		t.Fatalf("partial manifest segments = %#v, want segment audio URL", processingJob.PartialAudioManifest.Segments)
 	}
+	firstPartialSegment := processingJob.PartialAudioManifest.Segments[0]
+	if firstPartialSegment.ArtifactState != pipeline.AudioArtifactStateUnchecked {
+		t.Fatalf("partial segment artifact state = %q, want unchecked", firstPartialSegment.ArtifactState)
+	}
+	if !firstPartialSegment.Replaceable {
+		t.Fatal("partial segment should be replaceable while unchecked")
+	}
+	if firstPartialSegment.CheckedAt != nil {
+		t.Fatalf("partial segment checkedAt = %v, want nil before final checker completion", firstPartialSegment.CheckedAt)
+	}
 	if len(processingJob.Segments) == 0 || processingJob.Segments[0].AudioURL == "" {
 		t.Fatalf("job segments = %#v, want ready segment audio URL", processingJob.Segments)
+	}
+	if processingJob.Segments[0].ArtifactState != pipeline.AudioArtifactStateUnchecked {
+		t.Fatalf("job segment artifact state = %q, want unchecked before completion", processingJob.Segments[0].ArtifactState)
 	}
 
 	partialAudio, partialType, err := service.GetPartialAudio(job.ID)
@@ -3173,6 +3195,21 @@ func TestCreateJobPublishesPartialAudioWhileSynthesizing(t *testing.T) {
 	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
 	if completed.AudioPath == "" {
 		t.Fatal("completed job should include final audio path")
+	}
+	if completed.PartialAudioManifest == nil {
+		t.Fatal("completed job should retain partial audio manifest metadata")
+	}
+	if completed.PartialAudioManifest.ArtifactState != pipeline.AudioArtifactStateChecked {
+		t.Fatalf("completed manifest artifact state = %q, want checked", completed.PartialAudioManifest.ArtifactState)
+	}
+	if len(completed.PartialAudioManifest.Segments) == 0 || completed.PartialAudioManifest.Segments[0].ArtifactState != pipeline.AudioArtifactStateChecked {
+		t.Fatalf("completed partial segment state = %#v, want checked", completed.PartialAudioManifest.Segments)
+	}
+	if len(completed.Segments) == 0 || completed.Segments[0].ArtifactState != pipeline.AudioArtifactStateChecked {
+		t.Fatalf("completed job segment state = %#v, want checked", completed.Segments)
+	}
+	if completed.Segments[0].CheckedAt == nil {
+		t.Fatal("completed checked segment should include checkedAt evidence")
 	}
 }
 
@@ -3268,6 +3305,30 @@ func TestRetryJobReusesPersistedReadySegments(t *testing.T) {
 	if failed.FailureKind == "" {
 		t.Fatal("failed job should identify a failure kind")
 	}
+	if len(failed.Segments) < 2 {
+		t.Fatalf("failed job segments = %#v, want ready and failed segment", failed.Segments)
+	}
+	if failed.Segments[0].ArtifactState != pipeline.AudioArtifactStateUnchecked || !failed.Segments[0].Replaceable {
+		t.Fatalf("ready segment state = %q replaceable=%v, want unchecked replaceable", failed.Segments[0].ArtifactState, failed.Segments[0].Replaceable)
+	}
+	if failed.Segments[1].ArtifactState != pipeline.AudioArtifactStateRetryable {
+		t.Fatalf("failed segment artifact state = %q, want retryable", failed.Segments[1].ArtifactState)
+	}
+	if failed.Segments[1].Retry == nil || !failed.Segments[1].Retry.Retryable || failed.Segments[1].Retry.Scope != pipeline.AudioArtifactRetryScopeSegment {
+		t.Fatalf("failed segment retry metadata = %#v, want segment-scoped retryable", failed.Segments[1].Retry)
+	}
+	if failed.Segments[1].FailureMessage == "" {
+		t.Fatal("failed segment should preserve failure message")
+	}
+	if failed.PartialAudioManifest == nil || len(failed.PartialAudioManifest.Segments) < 2 {
+		t.Fatalf("failed partial manifest = %#v, want segment artifact states", failed.PartialAudioManifest)
+	}
+	if failed.PartialAudioManifest.Segments[0].ArtifactState != pipeline.AudioArtifactStateUnchecked {
+		t.Fatalf("failed manifest ready segment state = %q, want unchecked", failed.PartialAudioManifest.Segments[0].ArtifactState)
+	}
+	if failed.PartialAudioManifest.Segments[1].ArtifactState != pipeline.AudioArtifactStateRetryable {
+		t.Fatalf("failed manifest retry segment state = %q, want retryable", failed.PartialAudioManifest.Segments[1].ArtifactState)
+	}
 	if _, _, err := service.GetPartialAudio(failed.ID); err != nil {
 		t.Fatalf("GetPartialAudio after failure returned error: %v", err)
 	}
@@ -3287,6 +3348,9 @@ func TestRetryJobReusesPersistedReadySegments(t *testing.T) {
 	}
 	if reloadedJob.AudioReadySegments != 1 {
 		t.Fatalf("reloaded ready segments = %d, want 1", reloadedJob.AudioReadySegments)
+	}
+	if len(reloadedJob.Segments) < 2 || reloadedJob.Segments[1].ArtifactState != pipeline.AudioArtifactStateRetryable {
+		t.Fatalf("reloaded failed segment state = %#v, want retryable", reloadedJob.Segments)
 	}
 	if _, _, err := reloaded.GetPartialAudio(failed.ID); err != nil {
 		t.Fatalf("reloaded GetPartialAudio returned error: %v", err)
@@ -3317,6 +3381,27 @@ func TestRetryJobReusesPersistedReadySegments(t *testing.T) {
 	}
 	if len(completed.Segments) == 0 || completed.Segments[0].ReusedFromJobID != failed.ID {
 		t.Fatalf("first segment reuse marker = %+v, want source job %s", completed.Segments, failed.ID)
+	}
+	if completed.Segments[0].Reuse == nil || !completed.Segments[0].Reuse.Reused || !completed.Segments[0].Reuse.ReuseAllowed {
+		t.Fatalf("first segment reuse metadata = %#v, want allowed compatible reuse", completed.Segments[0].Reuse)
+	}
+	if completed.Segments[0].Reuse.FromJobID != failed.ID || completed.Segments[0].Reuse.FromArtifactID == "" || completed.Segments[0].Reuse.CompatibilityKey == "" {
+		t.Fatalf("first segment reuse metadata = %#v, want source job/artifact/key", completed.Segments[0].Reuse)
+	}
+	if completed.Segments[0].ArtifactState != pipeline.AudioArtifactStateChecked {
+		t.Fatalf("reused completed segment state = %q, want checked only after retry completion", completed.Segments[0].ArtifactState)
+	}
+	if len(completed.Segments) < 2 || completed.Segments[1].Replacement == nil {
+		t.Fatalf("regenerated segment replacement metadata = %#v, want replacement link", completed.Segments)
+	}
+	if completed.Segments[1].Replacement.ReplacementOfJobID != failed.ID || completed.Segments[1].Replacement.ReplacementOfArtifactID == "" {
+		t.Fatalf("regenerated segment replacement metadata = %#v, want source artifact link", completed.Segments[1].Replacement)
+	}
+	if completed.Segments[1].ArtifactState != pipeline.AudioArtifactStateChecked {
+		t.Fatalf("regenerated segment state = %q, want checked after retry checker completion", completed.Segments[1].ArtifactState)
+	}
+	if completed.Segments[1].Replacement.NewState != completed.Segments[1].ArtifactState {
+		t.Fatalf("regenerated segment replacement new state = %q, want current artifact state %q", completed.Segments[1].Replacement.NewState, completed.Segments[1].ArtifactState)
 	}
 	if completed.AudioReadySegments != completed.Retries.TotalSegments {
 		t.Fatalf("completed ready segments = %d, want %d", completed.AudioReadySegments, completed.Retries.TotalSegments)
@@ -6070,6 +6155,31 @@ func TestCreateJobCompletesWithAudioReviewWarningWhenCheckerRetryLimitExhausts(t
 	if completed.QualityReport == nil || completed.QualityReport.WarningCount != 1 || completed.QualityReport.UnverifiedSegmentCount != 1 {
 		t.Fatalf("quality report = %#v, want one warning and one unverified segment", completed.QualityReport)
 	}
+	if completed.Segments[0].ArtifactState != pipeline.AudioArtifactStateUnchecked {
+		t.Fatalf("warning segment artifact state = %q, want unchecked", completed.Segments[0].ArtifactState)
+	}
+	if !completed.Segments[0].Replaceable {
+		t.Fatal("warning segment should remain replaceable")
+	}
+	if completed.Segments[0].CheckedAt != nil {
+		t.Fatalf("warning segment checkedAt = %v, want nil", completed.Segments[0].CheckedAt)
+	}
+	if completed.PartialAudioManifest == nil || len(completed.PartialAudioManifest.Segments) == 0 {
+		t.Fatalf("partial audio manifest = %#v, want warning segment metadata", completed.PartialAudioManifest)
+	}
+	manifestSegment := completed.PartialAudioManifest.Segments[0]
+	if manifestSegment.ArtifactState != pipeline.AudioArtifactStateUnchecked {
+		t.Fatalf("warning manifest segment artifact state = %q, want unchecked", manifestSegment.ArtifactState)
+	}
+	if !manifestSegment.Replaceable {
+		t.Fatal("warning manifest segment should remain replaceable")
+	}
+	if manifestSegment.CheckedAt != nil {
+		t.Fatalf("warning manifest segment checkedAt = %v, want nil", manifestSegment.CheckedAt)
+	}
+	if completed.PartialAudioManifest.ArtifactState == pipeline.AudioArtifactStateChecked || completed.PartialAudioManifest.CheckedAt != nil {
+		t.Fatalf("warning manifest artifact state/checkedAt = %q/%v, want non-checked nil", completed.PartialAudioManifest.ArtifactState, completed.PartialAudioManifest.CheckedAt)
+	}
 }
 
 func TestCreateJobContinuesWhenSegmentThirteenASRDoesNotMatch(t *testing.T) {
@@ -6131,6 +6241,34 @@ func TestCreateJobContinuesWhenSegmentThirteenASRDoesNotMatch(t *testing.T) {
 	}
 	if completed.QualityReport == nil || completed.QualityReport.WarningCount != 1 || completed.QualityReport.UnverifiedSegmentCount != 1 {
 		t.Fatalf("quality report = %#v, want one ASR warning", completed.QualityReport)
+	}
+	for index, segment := range completed.Segments {
+		if segment.ArtifactState != pipeline.AudioArtifactStateUnchecked {
+			t.Fatalf("segment %d artifact state = %q, want unchecked when any segment is unverified", index+1, segment.ArtifactState)
+		}
+		if !segment.Replaceable {
+			t.Fatalf("segment %d should remain replaceable when any segment is unverified", index+1)
+		}
+		if segment.CheckedAt != nil {
+			t.Fatalf("segment %d checkedAt = %v, want nil when any segment is unverified", index+1, segment.CheckedAt)
+		}
+	}
+	if completed.PartialAudioManifest == nil || completed.PartialAudioManifest.ArtifactState == pipeline.AudioArtifactStateChecked || completed.PartialAudioManifest.CheckedAt != nil {
+		t.Fatalf("partial audio manifest = %#v, want non-checked aggregate for unverified job", completed.PartialAudioManifest)
+	}
+	if len(completed.PartialAudioManifest.Segments) != len(completed.Segments) {
+		t.Fatalf("partial manifest segments = %d, want %d", len(completed.PartialAudioManifest.Segments), len(completed.Segments))
+	}
+	for index, segment := range completed.PartialAudioManifest.Segments {
+		if segment.ArtifactState != pipeline.AudioArtifactStateUnchecked {
+			t.Fatalf("partial manifest segment %d artifact state = %q, want unchecked when any segment is unverified", index+1, segment.ArtifactState)
+		}
+		if !segment.Replaceable {
+			t.Fatalf("partial manifest segment %d should remain replaceable when any segment is unverified", index+1)
+		}
+		if segment.CheckedAt != nil {
+			t.Fatalf("partial manifest segment %d checkedAt = %v, want nil when any segment is unverified", index+1, segment.CheckedAt)
+		}
 	}
 }
 
@@ -6222,6 +6360,15 @@ func TestCreateJobRetriesTransientProviderCancellationBeforeFailingRun(t *testin
 	if completed.Retries.Attempts != 2 {
 		t.Fatalf("attempts = %d, want 2", completed.Retries.Attempts)
 	}
+	for index, segment := range completed.Segments {
+		assertJobSegmentHasNoDerivedFailureMetadata(t, segment, fmt.Sprintf("completed provider retry segment %d", index+1))
+	}
+	if completed.PartialAudioManifest == nil || len(completed.PartialAudioManifest.Segments) == 0 {
+		t.Fatalf("partial audio manifest = %#v, want final segment metadata", completed.PartialAudioManifest)
+	}
+	for index, segment := range completed.PartialAudioManifest.Segments {
+		assertPartialSegmentHasNoDerivedFailureMetadata(t, segment, fmt.Sprintf("completed provider retry manifest segment %d", index+1))
+	}
 }
 
 func TestCreateJobRetriesTransientCheckerTimeoutBeforeFailingRun(t *testing.T) {
@@ -6250,6 +6397,15 @@ func TestCreateJobRetriesTransientCheckerTimeoutBeforeFailingRun(t *testing.T) {
 	}
 	if completed.Retries.Attempts != 2 {
 		t.Fatalf("attempts = %d, want 2", completed.Retries.Attempts)
+	}
+	for index, segment := range completed.Segments {
+		assertJobSegmentHasNoDerivedFailureMetadata(t, segment, fmt.Sprintf("completed checker retry segment %d", index+1))
+	}
+	if completed.PartialAudioManifest == nil || len(completed.PartialAudioManifest.Segments) == 0 {
+		t.Fatalf("partial audio manifest = %#v, want final segment metadata", completed.PartialAudioManifest)
+	}
+	for index, segment := range completed.PartialAudioManifest.Segments {
+		assertPartialSegmentHasNoDerivedFailureMetadata(t, segment, fmt.Sprintf("completed checker retry manifest segment %d", index+1))
 	}
 }
 
@@ -7178,6 +7334,20 @@ func assertNoReferenceCueLeak(t *testing.T, text string, forbidden []string, lab
 	}
 	if regexp.MustCompile(`\b6\b`).MatchString(text) {
 		t.Fatalf("%s leaked numeric citation: %q", label, text)
+	}
+}
+
+func assertJobSegmentHasNoDerivedFailureMetadata(t *testing.T, segment pipeline.JobSegment, label string) {
+	t.Helper()
+	if segment.FailureCode != "" || segment.FailureMessage != "" || segment.Retry != nil {
+		t.Fatalf("%s derived failure metadata = code %q message %q retry %#v, want empty/nil", label, segment.FailureCode, segment.FailureMessage, segment.Retry)
+	}
+}
+
+func assertPartialSegmentHasNoDerivedFailureMetadata(t *testing.T, segment pipeline.PartialAudioSegmentManifest, label string) {
+	t.Helper()
+	if segment.FailureCode != "" || segment.FailureMessage != "" || segment.Retry != nil {
+		t.Fatalf("%s derived failure metadata = code %q message %q retry %#v, want empty/nil", label, segment.FailureCode, segment.FailureMessage, segment.Retry)
 	}
 }
 

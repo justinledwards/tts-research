@@ -1679,21 +1679,24 @@ func (service *Service) optimizeText(ctx context.Context, id string, inputText s
 }
 
 type reusableAudioSegment struct {
-	index       int
-	audio       []byte
-	audioPCM    []byte
-	audioSpec   audio.WAVSpec
-	durationMS  int
-	attempts    int
-	check       agents.VoiceCheckResult
-	latencyMS   int
-	contentType string
-	provider    string
-	voice       string
-	transcript  string
-	similarity  float64
-	reason      string
-	warnings    []string
+	index                  int
+	audio                  []byte
+	audioPCM               []byte
+	audioSpec              audio.WAVSpec
+	durationMS             int
+	attempts               int
+	check                  agents.VoiceCheckResult
+	latencyMS              int
+	contentType            string
+	provider               string
+	voice                  string
+	transcript             string
+	similarity             float64
+	reason                 string
+	warnings               []string
+	sourceJobID            string
+	sourceArtifactID       string
+	sourceCompatibilityKey string
 }
 
 func (service *Service) reusableAudioPrefix(sourceJobID string, targetSegments []string) []reusableAudioSegment {
@@ -1756,22 +1759,29 @@ func (service *Service) reusableAudioPrefix(sourceJobID string, targetSegments [
 		if check.Provider == "" {
 			check.Provider = "reused"
 		}
+		sourceCompatibilityKey := sourceSegment.ArtifactCompatibilityKey
+		if strings.TrimSpace(sourceCompatibilityKey) == "" {
+			sourceCompatibilityKey = segmentAudioArtifactCompatibilityKey(sourceJob.VoiceJob, index, sourceSegment.Text)
+		}
 		reused = append(reused, reusableAudioSegment{
-			index:       index,
-			audio:       segmentAudio,
-			audioPCM:    segmentPCM,
-			audioSpec:   segmentSpec,
-			durationMS:  durationMS,
-			attempts:    sourceSegment.Attempts,
-			check:       check,
-			latencyMS:   latencyMS,
-			contentType: contentType,
-			provider:    sourceJob.Provider,
-			voice:       sourceJob.Voice,
-			transcript:  sourceSegment.Text,
-			similarity:  sourceSegment.Similarity,
-			reason:      check.Reason,
-			warnings:    append([]string(nil), sourceSegment.Warnings...),
+			index:                  index,
+			audio:                  segmentAudio,
+			audioPCM:               segmentPCM,
+			audioSpec:              segmentSpec,
+			durationMS:             durationMS,
+			attempts:               sourceSegment.Attempts,
+			check:                  check,
+			latencyMS:              latencyMS,
+			contentType:            contentType,
+			provider:               sourceJob.Provider,
+			voice:                  sourceJob.Voice,
+			transcript:             sourceSegment.Text,
+			similarity:             sourceSegment.Similarity,
+			reason:                 check.Reason,
+			warnings:               append([]string(nil), sourceSegment.Warnings...),
+			sourceJobID:            sourceJob.ID,
+			sourceArtifactID:       firstNonEmpty(sourceSegment.ArtifactID, segmentAudioArtifactID(sourceJob.ID, index)),
+			sourceCompatibilityKey: sourceCompatibilityKey,
 		})
 	}
 	return reused
@@ -2251,6 +2261,12 @@ func (service *Service) synthesizeUntilComplete(
 					segment.Reason = reusable.reason
 					segment.Warnings = append([]string(nil), reusable.warnings...)
 					segment.ReusedFromJobID = currentJob.RetryOfJobID
+					segment.ArtifactID = segmentAudioArtifactID(job.ID, reusable.index)
+					segment.ArtifactCompatibilityKey = segmentAudioArtifactCompatibilityKey(job.VoiceJob, reusable.index, segment.Text)
+					segment.Reuse = compatibleAudioReuseMetadata(reusable.sourceJobID, reusable.index, segment.ArtifactCompatibilityKey, AudioArtifactStateUnchecked)
+					segment.Reuse.FromArtifactID = reusable.sourceArtifactID
+					segment.Reuse.FromCompatibilityKey = reusable.sourceCompatibilityKey
+					segment.Replacement = nil
 				})
 				setProgress(
 					job,
@@ -2425,6 +2441,12 @@ func (service *Service) synthesizeUntilComplete(
 					segment.Similarity = nextResult.similarity
 					segment.Reason = nextResult.check.Reason
 					segment.Warnings = append([]string(nil), nextResult.warnings...)
+					segment.ArtifactID = segmentAudioArtifactID(job.ID, nextSegment)
+					segment.ArtifactCompatibilityKey = segmentAudioArtifactCompatibilityKey(job.VoiceJob, nextSegment, segment.Text)
+					segment.Reuse = nil
+					if strings.TrimSpace(job.RetryOfJobID) != "" {
+						segment.Replacement = retryReplacementMetadata(job.RetryOfJobID, nextSegment)
+					}
 				})
 				job.AudioPartialURL = fmt.Sprintf("/api/voice-jobs/%s/audio/partial", job.ID)
 				job.ContentType = nextResult.contentType
@@ -2588,6 +2610,7 @@ func ensureFirstPlayableAt(job *storedJob) {
 }
 
 func normalizePartialAudioManifest(job VoiceJob) VoiceJob {
+	job = normalizeJobSegmentAudioArtifacts(job)
 	totalSegments := len(job.Segments)
 	readySegments := max(0, min(job.AudioReadySegments, totalSegments))
 	if readySegments <= 0 && strings.TrimSpace(job.AudioPartialURL) == "" {
@@ -2618,12 +2641,22 @@ func normalizePartialAudioManifest(job VoiceJob) VoiceJob {
 		}
 		timingConfidence := firstNonEmpty(segment.TimingConfidence, partialSegmentTimingConfidence(job, index))
 		segments = append(segments, PartialAudioSegmentManifest{
-			Index:            index,
-			Status:           status,
-			AudioURL:         audioURL,
-			DurationMS:       segment.DurationMS,
-			TimingAvailable:  partialSegmentTimingStatus(job, index) == "ready",
-			TimingConfidence: timingConfidence,
+			Index:                    index,
+			Status:                   status,
+			AudioURL:                 audioURL,
+			DurationMS:               segment.DurationMS,
+			TimingAvailable:          partialSegmentTimingStatus(job, index) == "ready",
+			TimingConfidence:         timingConfidence,
+			ArtifactID:               segment.ArtifactID,
+			ArtifactState:            segment.ArtifactState,
+			ArtifactCompatibilityKey: segment.ArtifactCompatibilityKey,
+			Replaceable:              segment.Replaceable,
+			CheckedAt:                segment.CheckedAt,
+			FailureCode:              segment.FailureCode,
+			FailureMessage:           segment.FailureMessage,
+			Retry:                    segment.Retry,
+			Replacement:              segment.Replacement,
+			Reuse:                    segment.Reuse,
 		})
 	}
 
@@ -2633,6 +2666,23 @@ func normalizePartialAudioManifest(job VoiceJob) VoiceJob {
 	} else if readySegments <= 0 {
 		manifestStatus = "pending"
 	}
+	manifestState := AudioArtifactStateGenerating
+	var manifestCheckedAt *time.Time
+	var manifestRetry *AudioArtifactRetryMetadata
+	if readySegments > 0 {
+		manifestState = AudioArtifactStateUnchecked
+	}
+	if readySegments >= totalSegments && totalSegments > 0 && jobHasCheckedAudioArtifactEvidence(job) {
+		manifestState = AudioArtifactStateChecked
+		manifestCheckedAt = audioArtifactCheckedAt(job)
+	}
+	for _, segment := range job.Segments {
+		if segment.ArtifactState == AudioArtifactStateRetryable || segment.ArtifactState == AudioArtifactStateInterruptedRetriable || segment.ArtifactState == AudioArtifactStateFailed {
+			manifestState = segment.ArtifactState
+			manifestRetry = segment.Retry
+			break
+		}
+	}
 	job.PartialAudioManifest = &PartialAudioManifest{
 		Status:          manifestStatus,
 		AudioURL:        job.AudioPartialURL,
@@ -2640,6 +2690,10 @@ func normalizePartialAudioManifest(job VoiceJob) VoiceJob {
 		TotalSegments:   totalSegments,
 		FirstPlayableAt: job.FirstPlayableAt,
 		CompleteEnough:  readySegments >= totalSegments && totalSegments > 0,
+		ArtifactState:   manifestState,
+		Replaceable:     audioArtifactStateIsReplaceable(manifestState),
+		CheckedAt:       manifestCheckedAt,
+		Retry:           manifestRetry,
 		Segments:        segments,
 	}
 	return job

@@ -2611,3 +2611,56 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] targeted peer-blocker re-review APPROVED (`deleg_1e499154` / `subagent-summary-0-20260708_030134_049461.txt`): no remaining blockers; source/unit identity, readalong membership, missing-node fail-closed behavior, and synthesis-input reuse key binding verified
 - [x] final closeout gates passed after peer-blocker approval: `gofmt -l`, speechplan Go package test, `mise exec -- pnpm validate:ir`, `mise exec -- pnpm check`, and `git diff --check`
 - [ ] commit/push/remote verify and Linear Done pending
+
+## 2026-07-08 — QQP-432 partial audio artifact states kickoff
+
+- [x] closed QQP-431: commit `3926ff1cf8084e6ed25120e7a2ad0d76aef6034c` pushed/remote-verified; Linear Done.
+- [x] selected QQP-432 as next dependency-order issue: QQP-431 dependency is Done; QQP-433+ depend on QQP-432.
+- [x] scoped QQP-432 to backend/runtime segment-level audio artifact state/replacement/reuse semantics, aligned to `audio-artifact.v1` and `artifact-compatibility.v1`; no sync fidelity UI or Reader work.
+- [x] moved QQP-432 to In Progress and posted Linear kickoff comment.
+- [x] dispatched focused implementation worker (delegation pending completion).
+
+## 2026-07-08 — QQP-432 parent implementation verification
+
+- [x] implementation worker `deleg_4244f101` returned with scoped backend/runtime changes only.
+- [x] parent inspected actual diff/files: `models_runtime.go`, new `audio_artifact_states.go`, `service.go`, `service_test.go`; parent docs remain `WORKINGLOG.md` and QQP-432 plan.
+- [x] parent gates passed after implementation:
+  - `gofmt -l backend/internal/pipeline/models_runtime.go backend/internal/pipeline/audio_artifact_states.go backend/internal/pipeline/service.go backend/internal/pipeline/service_test.go` — clean output.
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline -run 'Partial|Artifact|Retry|CreateJob|VoiceJob' -count=1` — pass (`ok`, 7.747s).
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline -count=1` — pass (`ok`, 19.892s).
+  - `mise exec -- pnpm validate:ir` — pass; 4 Content IR fixtures, 55 public contract fixtures, 3 adapter files.
+  - `git diff --check` — pass.
+- [x] read-only spec review passed: `deleg_991301bb` returned `SPEC PASS`; no spec blockers.
+- [x] read-only quality review `deleg_7c2347e2` returned `QUALITY REQUEST_CHANGES`.
+- [x] blocker repair `deleg_74ba159b` completed: checked evidence now rejects `QualityReport.UnverifiedSegmentCount > 0` and any segment warnings; warning/unverified segments remain unchecked/replaceable with nil `CheckedAt`.
+- [x] parent repair gates passed:
+  - `gofmt -l backend/internal/pipeline/audio_artifact_states.go backend/internal/pipeline/service_test.go` — clean output.
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline -run 'AudioReviewWarning|Partial|Artifact|Retry|CreateJob|VoiceJob' -count=1` — pass (`ok`, 6.843s).
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline -count=1` — pass (`ok`, 17.498s).
+  - `mise exec -- pnpm validate:ir` — pass; 4 Content IR fixtures, 55 public contract fixtures, 3 adapter files.
+  - `git diff --check` — pass.
+- [x] targeted quality re-review `deleg_ecf5e728` returned `QUALITY APPROVED`; no remaining blocker in targeted repair scope.
+- [x] final gates passed after review/review-log updates:
+  - `gofmt -l backend/internal/pipeline/models_runtime.go backend/internal/pipeline/audio_artifact_states.go backend/internal/pipeline/service.go backend/internal/pipeline/service_test.go && cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline -count=1` — pass (`ok`, 20.090s).
+  - `mise exec -- pnpm validate:ir` — pass; 4 Content IR fixtures, 55 public contract fixtures, 3 adapter files.
+  - `mise exec -- pnpm check` — pass; backend Go packages, 111 frontend test files / 748 tests passed.
+  - `git diff --check` — pass.
+- [x] ChatGPT Project peer checkpoint returned `PEER REQUEST_CHANGES`; response saved to `docs/reviews/chatgpt/qqp432-peer-checkpoint.response.md`.
+- [x] peer repair worker `deleg_82481fb5` timed out but left coherent scoped product diff; parent recovered and verified it.
+- [x] recovered peer repair evidence:
+  - normalization clears `FailureCode` / `FailureMessage` / `Retry` for non-failure states and refreshes them for failure-like states.
+  - `Replacement.NewState` now tracks current derived `ArtifactState` on every normalization.
+  - tests cover transient provider/checker retry paths with final non-failure segments having empty derived failure metadata, plus replacement `NewState == ArtifactState` after retry completion.
+- [x] parent gates after recovered peer repair passed:
+  - `gofmt -l backend/internal/pipeline/audio_artifact_states.go backend/internal/pipeline/service_test.go backend/internal/pipeline/service.go backend/internal/pipeline/models_runtime.go` — clean output.
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline -run 'AudioReviewWarning|Partial|Artifact|Retry|CreateJob|VoiceJob' -count=1` — pass (`ok`, 6.808s).
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline -count=1` — pass (`ok`, 16.907s).
+  - `mise exec -- pnpm validate:ir` — pass; 4 Content IR fixtures, 55 public contract fixtures, 3 adapter files.
+  - `git diff --check` — pass.
+- [x] targeted peer-blocker re-review `deleg_1f8acd16` returned `PEER-BLOCKER APPROVED`; no remaining peer blockers in targeted scope.
+- [x] final closeout gates passed after peer-blocker approval:
+  - `gofmt -l backend/internal/pipeline/models_runtime.go backend/internal/pipeline/audio_artifact_states.go backend/internal/pipeline/service.go backend/internal/pipeline/service_test.go && cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline -count=1` — pass (`ok`, 16.477s).
+  - `mise exec -- pnpm validate:ir` — pass; 4 Content IR fixtures, 55 public contract fixtures, 3 adapter files.
+  - `mise exec -- pnpm check` — pass; backend Go packages, 111 frontend test files / 748 tests passed.
+  - `git diff --check` — pass.
+- [ ] commit/push/remote verify and Linear Done pending.
