@@ -270,6 +270,7 @@ type Service struct {
 	readalongsByReadingUnitManifest map[string]map[string]struct{}
 	repairOverlays                  map[string]RepairOverlay
 	revisionMaps                    map[string]RevisionMap
+	promotionCrosswalks             map[string]PromotionCrosswalk
 	sourceManifestEvents            *sourceManifestEventLog
 	temporary                       map[string]TemporarySourceSession
 	books                           map[string]storedBookSource
@@ -590,6 +591,7 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 		readalongsByReadingUnitManifest: map[string]map[string]struct{}{},
 		repairOverlays:                  map[string]RepairOverlay{},
 		revisionMaps:                    map[string]RevisionMap{},
+		promotionCrosswalks:             map[string]PromotionCrosswalk{},
 		sourceManifestEvents:            newSourceManifestEventLog(sourceManifestEventReplayLimit),
 		temporary:                       map[string]TemporarySourceSession{},
 		books:                           map[string]storedBookSource{},
@@ -611,6 +613,7 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	service.reloadManifestSnapshots()
 	service.reloadRepairOverlays()
 	service.reloadRevisionMaps()
+	service.reloadPromotionCrosswalks()
 	service.reloadTemporarySources()
 	service.reloadBookSources()
 	service.reloadSourcePreps()

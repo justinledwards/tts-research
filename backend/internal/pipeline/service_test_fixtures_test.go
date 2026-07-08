@@ -383,7 +383,14 @@ func waitForJob(t *testing.T, service *pipeline.Service, id string, status pipel
 			t.Fatalf("GetJob returned error: %v", err)
 		}
 		if job.Status == status {
-			return job
+			if status == pipeline.JobStatusCompleted && job.TemporarySourceID != "" {
+				source, sourceErr := service.GetTemporarySource(job.TemporarySourceID)
+				if sourceErr == nil && source.Status != pipeline.TemporarySourceStateGenerating {
+					return job
+				}
+			} else {
+				return job
+			}
 		}
 		if job.Status == pipeline.JobStatusFailed {
 			t.Fatalf("job failed: %s", job.Error)

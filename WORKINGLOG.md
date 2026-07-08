@@ -1,3 +1,10 @@
+## 2026-07-09 00:30 CEST - QQP-437 Quick Listen promotion crosswalk
+
+- [ ] inspect promotion behavior and persistence seams
+- [ ] implement promotion crosswalk and durable identity remaps
+- [ ] add focused deterministic promotion/failure tests
+- [ ] run focused verification and diff check
+
 ## 2026-07-09 00:05 CEST - QQP-4 Quick Narrate Pasted URL
 
 - [ ] inspect current Quick Listen URL and temporary-source seams
@@ -3227,3 +3234,42 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] reviewer verified scoped lifecycle defaulting, deterministic local URL regression, coherent temporary-source/progress semantics, acceptable response-body absence assertions, and no hidden QQP-437 promotion behavior.
 - [x] final gates passed after quality approval: focused httpapi route tests, `mise exec -- pnpm validate:ir`, `mise exec -- pnpm check`, and `git diff --check`.
 - [ ] commit/push/Linear closeout pending.
+
+## 2026-07-09 — QQP-4 closeout / QQP-437 kickoff
+
+- [x] QQP-4 committed: `a5d7e62e4516164a8de1269e31dbdf1f5a8cbb2b` (`Anchor Quick Listen URL narration to temporary sources`).
+- [x] QQP-4 commit hook ran full `mise exec -- pnpm check` successfully.
+- [x] QQP-4 pushed and remote equality verified against `fork/niklas/voice-studio-follow-up`.
+- [x] QQP-4 Linear closeout comment posted: `https://linear.app/niklas-olsson/issue/QQP-4/quick-narrate-pasted-url#comment-dde3e5ae`; issue moved Done.
+- [x] selected next dependency-unblocked issue: QQP-437 — Quick Listen to project promotion crosswalk. Prerequisites now Done: QQP-4, source lifecycle/storage, manifest snapshots, partial artifact states, durable progress/resume.
+- [x] repo preflight after QQP-4: clean, branch `niklas/voice-studio-follow-up`, local equals `fork/niklas/voice-studio-follow-up` at `a5d7e62e4516164a8de1269e31dbdf1f5a8cbb2b`.
+- [x] plan written: `docs/plans/linear/QQP-437-quick-listen-promotion-crosswalk.md`.
+- [x] Linear moved In Progress and kickoff comment posted: `https://linear.app/niklas-olsson/issue/QQP-437/quick-listen-to-project-promotion-crosswalk#comment-2802f9ae`.
+- [x] implementation worker `deleg_b7677741` timed out after writing substantial promotion-crosswalk code but no summary; parent treated worktree as untrusted and verified from diffs/tests.
+- [x] parent added focused crosswalk regression `TestTemporarySourcePromotionPersistsCrosswalkAndRemapsProgress`.
+- [x] RCA for repeated temp-source test race: `GetTemporarySource(..., touch=true)` could re-persist a stale `generating` snapshot while the async completion hook was marking `audio_ready`.
+- [x] repair: generating temp-source reads no longer persist/touch stale snapshots; shared test `waitForJob` waits for temporary-source terminal state before returning completed temporary jobs.
+- [x] focused QQP-437 gates passed: promotion crosswalk/progress tests repeated, existing temporary promotion/cleanup/conflict/failure/webpage tests repeated, focused httpapi temporary source routes.
+- [x] broad gates passed: backend `go test ./...`, `mise exec -- pnpm validate:ir`, full `mise exec -- pnpm check` including backend and frontend.
+- [ ] independent SPEC review pending.
+- [x] SPEC review `deleg_a7d15712`: REQUEST_CHANGES. Blockers: runtime crosswalk JSON did not match `promotion-crosswalk.v1`; durable progress remap left temp scope/locator fields incomplete; segment mapping/test coverage incomplete.
+- [x] parent repair: `PromotionCrosswalk` now serializes canonical `promotion-crosswalk.v1` JSON (`promotedAt`, `fromSourceId`, `toSourceId`, `fromManifestId`, `toManifestId`, nested `identityMappings`) while retaining internal mapping accessors.
+- [x] parent repair: durable progress promotion remaps locator scope/node, unit/segment strings via temporary->durable ID map and records segment mappings as stable/no-op metadata/crosswalk evidence.
+- [x] parent repair: focused regression now asserts canonical persisted crosswalk JSON (no legacy top-level fields), readalong manifest IDs, segment mappings, and durable progress anchors.
+- [x] focused contract/remap repair test passed: `go test ./internal/pipeline -run '^TestTemporarySourcePromotionPersistsCrosswalkAndRemapsProgress$' -count=1`.
+- [x] post-SPEC-repair gates passed: focused pipeline/httpapi suites, backend `go test ./...`, `mise exec -- pnpm validate:ir`, and full `mise exec -- pnpm check`.
+- [ ] re-dispatched SPEC review pending.
+- [x] re-SPEC `deleg_9efe9cd4`: REQUEST_CHANGES, one remaining blocker: scope keys could remap `temporary-source:<tmp>` to `temporary-source:<promoted>` instead of durable `prepared:<promoted>`.
+- [x] parent repair: added temp-target -> prepared-target mapping for durable progress and playback/bookmark/highlight reading-position scope keys; regression now asserts no `temporary-source:` scope remains and scope equals durable prepared target.
+- [x] focused scope-key repair test passed: `go test ./internal/pipeline -run '^TestTemporarySourcePromotionPersistsCrosswalkAndRemapsProgress$' -count=1`.
+- [ ] rerun focused/broad gates and narrow re-SPEC pending.
+- [x] QUALITY review `deleg_ca8b5d9a`: REQUEST_CHANGES. Blockers: promotion rollback left durable progress/playback/session artifacts; promoted playback session persistence error was ignored.
+- [x] parent repair: rollback now removes promoted durable progress, playback progress, and playback session artifacts from memory and disk; promoted playback session persistence now returns errors and aborts promotion.
+- [x] parent regression: `TestTemporarySourcePromotionRollbackRemovesProgressArtifactsOnSessionWriteFailure` forces promoted playback session write failure after progress side effects and verifies no promoted progress/session residue survives memory reload.
+- [x] focused rollback/crosswalk tests passed: `go test ./internal/pipeline -run 'TemporarySourcePromotion(PersistsCrosswalkAndRemapsProgress|RollbackRemovesProgressArtifactsOnSessionWriteFailure)' -count=1`.
+- [x] post-QUALITY-repair gates passed: focused pipeline/httpapi, backend `go test ./...`, `mise exec -- pnpm validate:ir`, `git diff --check`, and full `mise exec -- pnpm check`.
+- [ ] narrow QUALITY re-review pending.
+- [x] narrow SPEC re-review `deleg_74de2b01`: SPEC PASS. Scope-key blocker resolved; durable progress/playback/bookmark/session scope keys now promote to `prepared:<promoted>` and reject `temporary-source:` residue in regression.
+- [ ] narrow QUALITY re-review `deleg_302cbfdd` pending.
+- [x] narrow QUALITY re-review `deleg_302cbfdd`: QUALITY PASS. Rollback/session-persistence blockers resolved; focused reviewer reran rollback/crosswalk test successfully.
+- [ ] final parent gates/commit/push/Linear closeout pending.

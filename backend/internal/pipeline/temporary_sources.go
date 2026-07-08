@@ -1003,7 +1003,29 @@ func (service *Service) PromoteTemporarySource(ctx context.Context, id string, r
 	if !keep.LexiconOverrides {
 		source.SourceSpeechPolicyOverrides = policy.Overrides{}
 	}
-	source.Metadata = sanitizeTemporaryPromotionMetadata(source.Metadata, TemporarySourcePromotionManifest{
+	temporaryRevisionID := service.currentSourceRevisionID(session.ID, session.ID+"-rev")
+	projectRevisionID := source.ID + "-rev"
+	crosswalk := PromotionCrosswalk{
+		CrosswalkID:               deterministicManifestID("pcw", session.ID, source.ID, now.Format(time.RFC3339Nano)),
+		TemporarySourceID:         session.ID,
+		TemporarySourceRevisionID: temporaryRevisionID,
+		ProjectID:                 project.ID,
+		ProjectSourceID:           source.ID,
+		ProjectSourceRevisionID:   projectRevisionID,
+		CreatedAt:                 now,
+		SourceIDMappings: []PromotionCrosswalkIDMapping{{
+			FromID: session.ID,
+			ToID:   source.ID,
+		}},
+		RevisionIDMappings: []PromotionCrosswalkIDMapping{{
+			FromID: temporaryRevisionID,
+			ToID:   projectRevisionID,
+		}},
+		Metadata: map[string]any{
+			"keep": keep,
+		},
+	}
+	promotionManifest := TemporarySourcePromotionManifest{
 		TemporarySourceID: session.ID,
 		ProjectID:         project.ID,
 		SourceID:          source.ID,
@@ -1015,53 +1037,104 @@ func (service *Service) PromoteTemporarySource(ctx context.Context, id string, r
 		StorageImpact:     storageImpact,
 		Warnings:          artifactWarnings,
 		CreatedAt:         now,
-	})
+	}
+	source.Metadata = sanitizeTemporaryPromotionMetadata(source.Metadata, promotionManifest)
+	source.Metadata["promotionCrosswalkId"] = crosswalk.CrosswalkID
 	source = service.sanitizePreparedSourceWarnings(applySpeechPolicyToPreparedSourceWithEvaluator(
 		source,
 		speechPolicyEvaluatorForSource(project, source.SourceSpeechPolicyProfile, source.SourceSpeechPolicyOverrides, "", policy.Overrides{}),
 		service.options.SourcePrepSentenceMaxRunes,
 	))
 	source = service.applySpeechRenderToPreparedSource(source, SpeechRenderOptions{ProjectID: project.ID})
-	if err := service.writePreparedSourceMetadata(source); err != nil {
-		_ = service.removePromotedPreparedSource(source.ID)
-		return PreparedSource{}, err
-	}
-	if err := service.writePreparedSourceContentIR(source); err != nil {
-		_ = service.removePromotedPreparedSource(source.ID)
-		return PreparedSource{}, err
-	}
-	service.updatePreparedSource(source)
+
 	var promotedJobID string
 	if keep.GeneratedAudio {
+		temporaryJobID := ""
+		if sourceJob, ok := service.latestPromotableTemporaryJob(session.ID); ok {
+			temporaryJobID = sourceJob.ID
+		}
 		promotedJob, err := service.promoteTemporarySourceJobArtifacts(session.ID, source, keep)
 		if err != nil {
-			_ = service.removePromotedPreparedSource(source.ID)
-			if promotedJobID != "" {
-				_ = service.removeJobsByID([]string{promotedJobID})
-			}
-			session.PromotionStatus = TemporarySourcePromotionFailed
-			session.Error = err.Error()
-			session.FailureCode = TemporarySourceFailurePromotionFailed
-			_ = service.persistTemporarySource(session)
-			service.mu.Lock()
-			service.temporary[session.ID] = cloneTemporarySourceSession(session)
-			service.mu.Unlock()
+			service.markTemporaryPromotionFailed(session, err)
 			return PreparedSource{}, err
 		}
 		promotedJobID = promotedJob.ID
+		if temporaryJobID != "" {
+			crosswalk.AudioArtifactIDMappings = append(crosswalk.AudioArtifactIDMappings, PromotionCrosswalkIDMapping{FromID: temporaryJobID, ToID: promotedJob.ID})
+			if keep.TimingMaps {
+				crosswalk.HighlightMapIDMappings = append(crosswalk.HighlightMapIDMappings,
+					PromotionCrosswalkIDMapping{FromID: temporaryJobID + ":highlight-map", ToID: promotedJob.ID + ":highlight-map"},
+					PromotionCrosswalkIDMapping{FromID: temporaryJobID + ":highlight-map-v2", ToID: promotedJob.ID + ":highlight-map-v2"},
+				)
+			}
+		}
+	}
+	rollback := true
+	defer func() {
+		if rollback {
+			_ = service.removePromotedPreparedSource(source.ID)
+			_ = service.removeSourceLifecycle(source.ID)
+			_ = service.removePromotedProgressArtifacts(source.ID)
+			if promotedJobID != "" {
+				_ = service.removeJobsByID([]string{promotedJobID})
+			}
+		}
+	}()
+	if _, _, err := service.PersistSourceLifecycle(sourceLifecycleRequestFromPreparedSource(source, source.Text, []byte(source.Text), SourceLifecycleWorkStatusComplete)); err != nil {
+		service.markTemporaryPromotionFailed(session, err)
+		return PreparedSource{}, err
+	}
+	manifestCrosswalk, err := service.promoteTemporarySourceManifests(session, source, temporaryRevisionID, projectRevisionID, promotedJobID, keep, now)
+	if err != nil {
+		service.markTemporaryPromotionFailed(session, err)
+		return PreparedSource{}, err
+	}
+	mergePromotionCrosswalk(&crosswalk, manifestCrosswalk)
+	if playbackCrosswalk, err := service.promoteTemporaryPlaybackProgress(session.ID, source, promotedJobID, keep); err != nil {
+		service.markTemporaryPromotionFailed(session, err)
+		return PreparedSource{}, err
+	} else {
+		mergePromotionCrosswalk(&crosswalk, playbackCrosswalk)
+	}
+	persistedCrosswalk, err := service.PersistPromotionCrosswalk(crosswalk)
+	if err != nil {
+		service.markTemporaryPromotionFailed(session, err)
+		return PreparedSource{}, err
+	}
+	crosswalk = persistedCrosswalk
+	source.Metadata["promotionCrosswalk"] = crosswalk
+	if err := service.writePreparedSourceMetadata(source); err != nil {
+		service.markTemporaryPromotionFailed(session, err)
+		return PreparedSource{}, err
+	}
+	if err := service.writePreparedSourceContentIR(source); err != nil {
+		service.markTemporaryPromotionFailed(session, err)
+		return PreparedSource{}, err
+	}
+	service.updatePreparedSource(source)
+	if err := service.markTemporarySourceLifecyclePromoted(session, temporaryRevisionID, source.ID, crosswalk.CrosswalkID); err != nil {
+		service.markTemporaryPromotionFailed(session, err)
+		return PreparedSource{}, err
 	}
 	session.Status = TemporarySourceStatePromoted
 	session.PromotionStatus = TemporarySourcePromoted
 	session.PromotedProjectID = source.ProjectID
 	session.PromotedSourceID = source.ID
+	session.Metadata = cloneMetadataMap(session.Metadata)
+	if session.Metadata == nil {
+		session.Metadata = map[string]any{}
+	}
+	session.Metadata["promotionCrosswalkId"] = crosswalk.CrosswalkID
 	session.UpdatedAt = time.Now().UTC()
 	session.LastAccessedAt = session.UpdatedAt
 	if err := service.persistTemporarySource(session); err != nil {
+		service.markTemporaryPromotionFailed(session, err)
 		return PreparedSource{}, err
 	}
 	service.mu.Lock()
 	service.temporary[session.ID] = cloneTemporarySourceSession(session)
 	service.mu.Unlock()
+	rollback = false
 	return source, nil
 }
 
@@ -1074,6 +1147,351 @@ func (service *Service) removePromotedPreparedSource(id string) error {
 	delete(service.sourcePreps, cleanID)
 	service.mu.Unlock()
 	return os.RemoveAll(filepath.Join(service.options.SourcePrepDir, cleanID))
+}
+
+func (service *Service) removePromotedProgressArtifacts(sourceID string) error {
+	cleanID := strings.TrimSpace(sourceID)
+	if cleanID == "" {
+		return nil
+	}
+	progressIDs := make([]string, 0)
+	targetIDs := make([]string, 0)
+	sessionIDs := make([]string, 0)
+	service.mu.Lock()
+	for progressID, progress := range service.durableProgress {
+		if progress.SourceID == cleanID {
+			delete(service.durableProgress, progressID)
+			progressIDs = append(progressIDs, progressID)
+		}
+	}
+	for targetID, progress := range service.progress {
+		if progress.PreparedSourceID == cleanID {
+			delete(service.progress, targetID)
+			targetIDs = append(targetIDs, targetID)
+		}
+	}
+	for sessionID, session := range service.sessions {
+		if session.PreparedSourceID == cleanID {
+			delete(service.sessions, sessionID)
+			sessionIDs = append(sessionIDs, sessionID)
+		}
+	}
+	service.mu.Unlock()
+	for _, progressID := range progressIDs {
+		_ = os.RemoveAll(filepath.Join(service.durableProgressBaseDir(), safeDataPathID(progressID)))
+	}
+	for _, targetID := range targetIDs {
+		_ = os.RemoveAll(filepath.Join(service.options.ProgressDataDir, safeDataPathID(targetID)))
+	}
+	for _, sessionID := range sessionIDs {
+		_ = os.RemoveAll(filepath.Join(service.options.PlaybackSessionDir, safeDataPathID(sessionID)))
+	}
+	return nil
+}
+
+func (service *Service) currentSourceRevisionID(sourceID string, fallback string) string {
+	service.mu.RLock()
+	envelope, ok := service.sourceEnvelopes[strings.TrimSpace(sourceID)]
+	service.mu.RUnlock()
+	if ok && strings.TrimSpace(envelope.CurrentRevisionID) != "" {
+		return strings.TrimSpace(envelope.CurrentRevisionID)
+	}
+	return strings.TrimSpace(fallback)
+}
+
+func (service *Service) markTemporaryPromotionFailed(session TemporarySourceSession, err error) {
+	session.PromotionStatus = TemporarySourcePromotionFailed
+	if err != nil {
+		session.Error = err.Error()
+	}
+	session.FailureCode = TemporarySourceFailurePromotionFailed
+	session.UpdatedAt = time.Now().UTC()
+	_ = service.persistTemporarySource(session)
+	service.mu.Lock()
+	service.temporary[session.ID] = cloneTemporarySourceSession(session)
+	service.mu.Unlock()
+}
+
+func (service *Service) markTemporarySourceLifecyclePromoted(session TemporarySourceSession, revisionID string, promotedSourceID string, crosswalkID string) error {
+	request := sourceLifecycleRequestFromTemporarySource(session, session.Text, []byte(session.Text), SourceLifecycleWorkStatusComplete)
+	request.RevisionID = firstNonEmpty(revisionID, request.RevisionID)
+	request.Lifecycle = SourceEnvelopeLifecyclePromoted
+	request.PromotedToSourceID = strings.TrimSpace(promotedSourceID)
+	request.Metadata = map[string]any{
+		"promotionCrosswalkId": crosswalkID,
+		"promotedToSourceId":   promotedSourceID,
+	}
+	request.RevisionMetadata = map[string]any{
+		"promotionCrosswalkId": crosswalkID,
+		"promotedToSourceId":   promotedSourceID,
+	}
+	_, _, err := service.PersistSourceLifecycle(request)
+	return err
+}
+
+func (service *Service) promoteTemporarySourceManifests(session TemporarySourceSession, source PreparedSource, temporaryRevisionID string, projectRevisionID string, promotedJobID string, keep TemporarySourcePromotionKeep, now time.Time) (PromotionCrosswalk, error) {
+	crosswalk := PromotionCrosswalk{}
+	readingUnit, err := service.GetCurrentReadingUnitManifest(session.ID, temporaryRevisionID)
+	if err != nil {
+		if errors.Is(err, ErrManifestSnapshotNotFound) {
+			return crosswalk, nil
+		}
+		return crosswalk, err
+	}
+	idMap := map[string]string{
+		session.ID:          source.ID,
+		temporaryRevisionID: projectRevisionID,
+	}
+	if promotedJobID != "" {
+		if job, ok := service.latestPromotableTemporaryJob(session.ID); ok {
+			idMap[job.ID] = promotedJobID
+		}
+	}
+	promotedExtractionRevisionID := deterministicManifestID("er", source.ID, projectRevisionID, readingUnit.ExtractionRevisionID)
+	idMap[readingUnit.ExtractionRevisionID] = promotedExtractionRevisionID
+	promotedReadingUnit := cloneReadingUnitManifest(readingUnit)
+	promotedReadingUnit.ManifestID = ""
+	promotedReadingUnit.SourceID = source.ID
+	promotedReadingUnit.SourceRevisionID = projectRevisionID
+	promotedReadingUnit.ExtractionRevisionID = promotedExtractionRevisionID
+	promotedReadingUnit.GeneratedAt = now
+	promotedReadingUnit.SupersededByManifestID = ""
+	promotedReadingUnit.State = ManifestSnapshotStateCurrent
+	promotedReadingUnit.Metadata = remapManifestMetadata(promotedReadingUnit.Metadata, idMap)
+	promotedReadingUnit.Metadata["promotionCrosswalkTemporarySourceId"] = session.ID
+	promotedReadingUnit.Metadata["promotionSourceId"] = source.ID
+	for index := range promotedReadingUnit.Units {
+		unit := &promotedReadingUnit.Units[index]
+		unit.Locator = remapAnyStringMap(unit.Locator, idMap)
+		unit.Provenance = remapAnyStringMap(unit.Provenance, idMap)
+		crosswalk.UnitIDMappings = append(crosswalk.UnitIDMappings, PromotionCrosswalkIDMapping{FromID: unit.UnitID, ToID: unit.UnitID})
+	}
+	persistedReadingUnit, err := service.PersistReadingUnitManifest(promotedReadingUnit)
+	if err != nil {
+		return crosswalk, err
+	}
+	idMap[readingUnit.ManifestID] = persistedReadingUnit.ManifestID
+	crosswalk.ExtractionRevisionIDMappings = append(crosswalk.ExtractionRevisionIDMappings, PromotionCrosswalkIDMapping{FromID: readingUnit.ExtractionRevisionID, ToID: promotedExtractionRevisionID})
+	crosswalk.ReadingUnitManifestIDMappings = append(crosswalk.ReadingUnitManifestIDMappings, PromotionCrosswalkIDMapping{FromID: readingUnit.ManifestID, ToID: persistedReadingUnit.ManifestID})
+
+	readalong, readalongErr := service.GetCurrentReadalongManifest(session.ID, temporaryRevisionID)
+	if readalongErr != nil {
+		if errors.Is(readalongErr, ErrManifestSnapshotNotFound) {
+			return crosswalk, nil
+		}
+		return crosswalk, readalongErr
+	}
+	promotedProgressIDs := service.promotedDurableProgressIDs(readalong, source, projectRevisionID, promotedJobID, keep)
+	promotedReadalong := cloneReadalongManifest(readalong)
+	promotedReadalong.ManifestID = ""
+	promotedReadalong.SourceID = source.ID
+	promotedReadalong.SourceRevisionID = projectRevisionID
+	promotedReadalong.ExtractionRevisionID = promotedExtractionRevisionID
+	promotedReadalong.ReadingUnitManifestID = persistedReadingUnit.ManifestID
+	promotedReadalong.GeneratedAt = now
+	promotedReadalong.SupersededByManifestID = ""
+	promotedReadalong.State = ManifestSnapshotStateCurrent
+	promotedReadalong.AudioArtifactIDs = remapStringSlice(promotedReadalong.AudioArtifactIDs, idMap)
+	promotedReadalong.HighlightMapIDs = remapStringSlice(promotedReadalong.HighlightMapIDs, idMap)
+	promotedReadalong.SpeechPlanIDs = remapStringSlice(promotedReadalong.SpeechPlanIDs, idMap)
+	promotedReadalong.ArtifactCompatibilityIDs = remapStringSlice(promotedReadalong.ArtifactCompatibilityIDs, idMap)
+	promotedReadalong.SyncFidelityDecisionIDs = remapStringSlice(promotedReadalong.SyncFidelityDecisionIDs, idMap)
+	promotedReadalong.ProgressIDs = promotedProgressIDs
+	promotedReadalong.Metadata = remapManifestMetadata(promotedReadalong.Metadata, idMap)
+	promotedReadalong.Metadata["promotionCrosswalkTemporarySourceId"] = session.ID
+	promotedReadalong.Metadata["promotionSourceId"] = source.ID
+	persistedReadalong, err := service.PersistReadalongManifest(promotedReadalong)
+	if err != nil {
+		service.removeReadingUnitManifest(persistedReadingUnit)
+		return crosswalk, err
+	}
+	idMap[readalong.ManifestID] = persistedReadalong.ManifestID
+	crosswalk.FromManifestID = readalong.ManifestID
+	crosswalk.ToManifestID = persistedReadalong.ManifestID
+	crosswalk.ReadalongManifestIDMappings = append(crosswalk.ReadalongManifestIDMappings, PromotionCrosswalkIDMapping{FromID: readalong.ManifestID, ToID: persistedReadalong.ManifestID})
+	crosswalk.AudioArtifactIDMappings = append(crosswalk.AudioArtifactIDMappings, idMappingsForSlices(readalong.AudioArtifactIDs, persistedReadalong.AudioArtifactIDs)...)
+	crosswalk.HighlightMapIDMappings = append(crosswalk.HighlightMapIDMappings, idMappingsForSlices(readalong.HighlightMapIDs, persistedReadalong.HighlightMapIDs)...)
+	progressCrosswalk, err := service.promoteTemporaryDurableProgress(readalong, persistedReadalong, source, projectRevisionID, promotedJobID, keep)
+	if err != nil {
+		service.removeReadalongManifest(persistedReadalong)
+		service.removeReadingUnitManifest(persistedReadingUnit)
+		return crosswalk, err
+	}
+	mergePromotionCrosswalk(&crosswalk, progressCrosswalk)
+	return crosswalk, nil
+}
+
+func (service *Service) promotedDurableProgressIDs(readalong ReadalongManifest, source PreparedSource, projectRevisionID string, promotedJobID string, keep TemporarySourcePromotionKeep) []string {
+	if !keep.Progress && !keep.Bookmarks {
+		return nil
+	}
+	service.mu.RLock()
+	defer service.mu.RUnlock()
+	ids := make([]string, 0)
+	for _, progress := range service.durableProgress {
+		if progress.ReadalongManifestID != readalong.ManifestID || !temporaryPromotionKeepsProgressKind(progress.Kind, keep) {
+			continue
+		}
+		ids = append(ids, promotedDurableProgressID(progress, source.ID, projectRevisionID, promotedJobID))
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+func (service *Service) promoteTemporaryDurableProgress(from ReadalongManifest, to ReadalongManifest, source PreparedSource, projectRevisionID string, promotedJobID string, keep TemporarySourcePromotionKeep) (PromotionCrosswalk, error) {
+	crosswalk := PromotionCrosswalk{}
+	if !keep.Progress && !keep.Bookmarks {
+		return crosswalk, nil
+	}
+	service.mu.RLock()
+	items := make([]DurableProgress, 0)
+	for _, progress := range service.durableProgress {
+		if progress.ReadalongManifestID == from.ManifestID && temporaryPromotionKeepsProgressKind(progress.Kind, keep) {
+			items = append(items, cloneDurableProgress(progress))
+		}
+	}
+	service.mu.RUnlock()
+	sort.SliceStable(items, func(left int, right int) bool { return items[left].ProgressID < items[right].ProgressID })
+	for _, progress := range items {
+		promoted := cloneDurableProgress(progress)
+		promoted.ProgressID = promotedDurableProgressID(progress, source.ID, projectRevisionID, promotedJobID)
+		promoted.SourceID = source.ID
+		promoted.SourceRevisionID = projectRevisionID
+		promoted.ReadalongManifestID = to.ManifestID
+		idMap := map[string]string{
+			progress.SourceID:                                   source.ID,
+			progress.SourceRevisionID:                           projectRevisionID,
+			progress.ReadalongManifestID:                        to.ManifestID,
+			progressTargetForTemporarySource(progress.SourceID): progressTargetForPreparedSource(source.ID),
+		}
+		if promoted.AudioArtifactID != "" && promotedJobID != "" {
+			idMap[promoted.AudioArtifactID] = promotedJobID
+			promoted.AudioArtifactID = promotedJobID
+		}
+		promoted.State = DurableProgressStateCurrent
+		promoted.UpdatedAt = time.Now().UTC()
+		promoted.LocatorEnvelope.SourceID = source.ID
+		promoted.LocatorEnvelope.ScopeKey = remapStringID(promoted.LocatorEnvelope.ScopeKey, idMap)
+		promoted.LocatorEnvelope.NodeID = remapStringID(promoted.LocatorEnvelope.NodeID, idMap)
+		promoted.Position.UnitID = remapStringID(promoted.Position.UnitID, idMap)
+		oldSegmentID := progress.Position.SegmentID
+		promoted.Position.SegmentID = remapStringID(promoted.Position.SegmentID, idMap)
+		promoted.Metadata = cloneManifestMetadata(promoted.Metadata)
+		if promoted.Metadata == nil {
+			promoted.Metadata = map[string]any{}
+		}
+		promoted.Metadata["promotedFromProgressId"] = progress.ProgressID
+		promoted.Metadata["promotedFromSourceId"] = progress.SourceID
+		persisted, err := service.PersistDurableProgress(promoted)
+		if err != nil {
+			return crosswalk, err
+		}
+		crosswalk.ProgressIDMappings = append(crosswalk.ProgressIDMappings, PromotionCrosswalkIDMapping{FromID: progress.ProgressID, ToID: persisted.ProgressID})
+		if oldSegmentID != "" {
+			crosswalk.SegmentIDMappings = append(crosswalk.SegmentIDMappings, PromotionCrosswalkIDMapping{FromID: oldSegmentID, ToID: promoted.Position.SegmentID})
+		}
+	}
+	return crosswalk, nil
+}
+
+func promotedDurableProgressID(progress DurableProgress, sourceID string, projectRevisionID string, promotedJobID string) string {
+	return deterministicManifestID("dp", progress.ProgressID, sourceID, projectRevisionID, promotedJobID)
+}
+
+func temporaryPromotionKeepsProgressKind(kind DurableProgressKind, keep TemporarySourcePromotionKeep) bool {
+	switch kind {
+	case DurableProgressKindResume:
+		return keep.Progress
+	case DurableProgressKindBookmark, DurableProgressKindHighlight:
+		return keep.Bookmarks || keep.Progress
+	default:
+		return false
+	}
+}
+
+func (service *Service) promoteTemporaryPlaybackProgress(temporarySourceID string, source PreparedSource, promotedJobID string, keep TemporarySourcePromotionKeep) (PromotionCrosswalk, error) {
+	crosswalk := PromotionCrosswalk{}
+	if !keep.Progress && !keep.Bookmarks {
+		return crosswalk, nil
+	}
+	temporaryTargetID := progressTargetForTemporarySource(temporarySourceID)
+	projectTargetID := progressTargetForPreparedSource(source.ID)
+	service.mu.RLock()
+	progress, ok := service.progress[temporaryTargetID]
+	service.mu.RUnlock()
+	if !ok {
+		return crosswalk, nil
+	}
+	promoted := clonePlaybackProgress(progress)
+	promoted.TargetID = projectTargetID
+	promoted.ProjectID = source.ProjectID
+	promoted.JobID = promotedJobID
+	promoted.PreparedSourceID = source.ID
+	promoted.TemporarySourceID = ""
+	promoted.BookSourceID = ""
+	promoted.BookScope = nil
+	if !keep.Progress {
+		promoted.CurrentTimeSec = 0
+		promoted.Progress = 0
+		promoted.ActiveWordIndex = 0
+		promoted.ReadingPosition = nil
+		promoted.Finished = false
+		promoted.StartedAt = nil
+		promoted.FinishedAt = nil
+	} else {
+		promoted.ReadingPosition = remapPipelineReadingPosition(promoted.ReadingPosition, temporarySourceID, source.ID)
+	}
+	if !keep.Bookmarks {
+		promoted.Bookmarks = nil
+	} else {
+		for index := range promoted.Bookmarks {
+			oldID := promoted.Bookmarks[index].ID
+			promoted.Bookmarks[index].ReadingPosition = remapPipelineReadingPosition(promoted.Bookmarks[index].ReadingPosition, temporarySourceID, source.ID)
+			crosswalk.BookmarkIDMappings = append(crosswalk.BookmarkIDMappings, PromotionCrosswalkIDMapping{FromID: oldID, ToID: promoted.Bookmarks[index].ID})
+		}
+	}
+	promoted.UpdatedAt = time.Now().UTC()
+	service.mu.Lock()
+	service.progress[projectTargetID] = promoted
+	service.mu.Unlock()
+	if err := service.writePlaybackProgress(promoted); err != nil {
+		return crosswalk, err
+	}
+	crosswalk.ProgressIDMappings = append(crosswalk.ProgressIDMappings, PromotionCrosswalkIDMapping{FromID: temporaryTargetID, ToID: projectTargetID})
+	if err := service.promoteTemporaryPlaybackSessions(temporaryTargetID, projectTargetID, source, promotedJobID, temporarySourceID); err != nil {
+		return crosswalk, err
+	}
+	return crosswalk, nil
+}
+
+func (service *Service) promoteTemporaryPlaybackSessions(temporaryTargetID string, projectTargetID string, source PreparedSource, promotedJobID string, temporarySourceID string) error {
+	service.mu.RLock()
+	items := make([]PlaybackSession, 0)
+	for _, session := range service.sessions {
+		if session.TargetID == temporaryTargetID {
+			items = append(items, session)
+		}
+	}
+	service.mu.RUnlock()
+	for _, session := range items {
+		session.ID = newID()
+		session.TargetID = projectTargetID
+		session.ProjectID = source.ProjectID
+		session.JobID = promotedJobID
+		session.PreparedSourceID = source.ID
+		session.TemporarySourceID = ""
+		session.BookSourceID = ""
+		session.BookScope = nil
+		session.ReadingPosition = remapPipelineReadingPosition(session.ReadingPosition, temporarySourceID, source.ID)
+		session.UpdatedAt = time.Now().UTC()
+		service.mu.Lock()
+		service.sessions[session.ID] = session
+		service.mu.Unlock()
+		if err := service.writePlaybackSession(session); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func promotionTitle(source PreparedSource, request TemporarySourcePromotionRequest) string {
@@ -1202,10 +1620,12 @@ func (service *Service) getTemporarySource(id string, touch bool) (TemporarySour
 		session.LastAccessedAt = now
 		session.ExpiresAt = now.Add(service.options.TemporarySourceTTL)
 		session.UpdatedAt = now
-		_ = service.persistTemporarySource(session)
-		service.mu.Lock()
-		service.temporary[session.ID] = cloneTemporarySourceSession(session)
-		service.mu.Unlock()
+		if session.Status != TemporarySourceStateGenerating {
+			_ = service.persistTemporarySource(session)
+			service.mu.Lock()
+			service.temporary[session.ID] = cloneTemporarySourceSession(session)
+			service.mu.Unlock()
+		}
 	}
 	session.Scope = SourceArtifactScopeTemporary
 	return session, nil
@@ -1393,6 +1813,11 @@ func (service *Service) promoteTemporarySourceJobArtifacts(temporarySourceID str
 	}
 	if err := copyDirectory(sourceDir, targetDir); err != nil {
 		return VoiceJob{}, err
+	}
+	if keep.TimingMaps {
+		if err := rewritePromotedTimingArtifacts(targetDir, sourceJob.ID, promotedJob.ID, temporarySourceID, source.ID); err != nil {
+			return VoiceJob{}, err
+		}
 	}
 	if promotedJob.AudioPath != "" {
 		promotedJob.AudioPath = filepath.Join(targetDir, filepath.Base(promotedJob.AudioPath))

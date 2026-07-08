@@ -466,6 +466,43 @@ func (service *Service) removeSourceRevision(sourceID string, revisionID string)
 	return os.RemoveAll(filepath.Join(service.sourceLifecycleBaseDir(), sourceLifecycleDataPathID(sourceID), "revisions", sourceLifecycleDataPathID(revisionID)))
 }
 
+func (service *Service) removeSourceLifecycle(sourceID string) error {
+	cleanID := strings.TrimSpace(sourceID)
+	if cleanID == "" {
+		return nil
+	}
+	service.mu.Lock()
+	delete(service.sourceEnvelopes, cleanID)
+	for revisionID, revision := range service.sourceRevisions {
+		if revision.SourceID == cleanID {
+			delete(service.sourceRevisions, revisionID)
+		}
+	}
+	for manifestID, manifest := range service.readingUnits {
+		if manifest.SourceID == cleanID {
+			delete(service.readingUnits, manifestID)
+		}
+	}
+	for manifestID, manifest := range service.readalongs {
+		if manifest.SourceID == cleanID {
+			delete(service.readalongs, manifestID)
+		}
+	}
+	for progressID, progress := range service.durableProgress {
+		if progress.SourceID == cleanID {
+			delete(service.durableProgress, progressID)
+		}
+	}
+	for crosswalkID, crosswalk := range service.promotionCrosswalks {
+		if crosswalk.ProjectSourceID == cleanID {
+			delete(service.promotionCrosswalks, crosswalkID)
+		}
+	}
+	service.rebuildManifestIndexesLocked()
+	service.mu.Unlock()
+	return os.RemoveAll(filepath.Join(service.sourceLifecycleBaseDir(), sourceLifecycleDataPathID(cleanID)))
+}
+
 func (service *Service) sourceLifecycleBaseDir() string {
 	baseDir, err := filepath.Abs(service.options.SourceLifecycleDataDir)
 	if err != nil {
