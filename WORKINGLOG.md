@@ -2588,3 +2588,26 @@ duplicating every implementation detail from commits, PR text, or generated revi
   - [x] targeted peer-blocker re-review APPROVED (`deleg_84871c57` / `subagent-summary-0-20260708_005554_492953.txt`): no remaining blockers; authoritative snapshot sequence wins; lower non-gap replay reset covered; ordinary events remain monotonic
   - [x] final closeout gates passed after peer repair/re-review: `python3 -m json.tool integrations/chatgpt/project.json`, `mise exec -- pnpm check`, `mise exec -- pnpm validate:ir`, `git diff --check`
 - [x] commit prepared locally after final gates; push/remote verification and Linear Done closeout next
+
+## 2026-07-08 — QQP-431 incremental speech-plan segmentation kickoff
+
+- [x] closed previous issue QQP-430: Linear Done, commit `ca717ddb7526b5f707eec1679cb618f6a597206b` pushed and remote-verified, worktree clean
+- [x] live Linear project preflight: TTS-Research issue page `hasNextPage=false`; QQP-431 is Backlog; QQP-423/425/428 dependencies are Done
+- [x] selected next unblocked manifest issue: order 9 / QQP-431 `incremental-speech-plan-segmentation`
+- [x] wrote implementation plan: `docs/plans/linear/QQP-431-incremental-speech-plan-segmentation.md`
+- [x] moved QQP-431 to In Progress and posted Linear kickoff comment
+- [x] dispatched focused implementation worker `deleg_43a12561`
+- [x] implementation worker completed (`deleg_43a12561`): added manifest-bound first-narratable-prefix speech-plan builder and deterministic tests; worker reported speechplan tests, `validate:ir`, and `git diff --check` passing
+- [x] parent inspected product diff and reran focused gates: `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/speechplan -count=1`, `mise exec -- pnpm validate:ir`, `git diff --check` all passed
+- [x] independent spec review PASS (`deleg_253bd096` / `subagent-summary-0-20260708_021756_385373.txt`)
+- [x] quality review REQUEST_CHANGES (`deleg_c2b65eef` / `subagent-summary-0-20260708_021802_826412.txt`): manifest-bound builder must reject empty source/revision/manifest identity, avoid stale `unit.NodeID` binding when fallback resolved a different Content IR node, reject duplicate unit/node identities, and add JSON round-trip/unknown readiness coverage
+- [x] focused quality repair worker completed (`deleg_627eb341`): fail-closed manifest identity validation, stale node ID rejection, duplicate Content IR node/manifest unit ID rejection, JSON round-trip binding coverage, and unknown/case-varied readiness tests
+- [x] parent repair gates passed: `gofmt -l backend/internal/speechplan/speech_plan.go backend/internal/speechplan/speech_plan_test.go`, `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/speechplan -count=1`, `mise exec -- pnpm validate:ir`, `git diff --check`
+- [x] targeted quality re-review APPROVED (`deleg_435ccf5a`): no remaining blockers; manifest identity validation, stale node fail-closed behavior, duplicate identity rejection, JSON round-trip binding, and readiness coverage confirmed
+- [x] final gates passed before ChatGPT peer checkpoint: `gofmt -l`, speechplan Go package test, `mise exec -- pnpm validate:ir`, `mise exec -- pnpm check`, and `git diff --check`
+- [x] ChatGPT Project peer checkpoint returned REQUEST_CHANGES; response saved to `docs/reviews/chatgpt/qqp431-peer-checkpoint.response.md`
+- [x] focused peer repair completed (`deleg_ef931a9f`): source/unit/order/fingerprint fail-closed validation, readalong membership restricted to unit IDs, missing narratable Content IR nodes error, and `synthesisInputHash` now binds SSML/lang/pronunciation/lexicon/synthesis payload into reuse key
+- [x] parent peer-repair gates passed: `gofmt -l`, speechplan Go package test, `mise exec -- pnpm validate:ir`, and `git diff --check`
+- [x] targeted peer-blocker re-review APPROVED (`deleg_1e499154` / `subagent-summary-0-20260708_030134_049461.txt`): no remaining blockers; source/unit identity, readalong membership, missing-node fail-closed behavior, and synthesis-input reuse key binding verified
+- [x] final closeout gates passed after peer-blocker approval: `gofmt -l`, speechplan Go package test, `mise exec -- pnpm validate:ir`, `mise exec -- pnpm check`, and `git diff --check`
+- [ ] commit/push/remote verify and Linear Done pending
