@@ -16,10 +16,20 @@ export const READER_SHELL_STATES = [
   "retryable",
   "superseded",
 ] as const;
+export const READER_TRANSPORT_STATES = [
+  "pre-audio",
+  "generating",
+  "unchecked",
+  "checked",
+  "stale-replaced",
+  "failed-retryable",
+  "degraded",
+] as const;
 
 export type ReadingSurfaceKind = (typeof READING_SURFACE_KINDS)[number];
 export type ReadingTypographyPresetId = (typeof READING_TYPOGRAPHY_PRESET_IDS)[number];
 export type ReaderShellState = (typeof READER_SHELL_STATES)[number];
+export type ReaderTransportState = (typeof READER_TRANSPORT_STATES)[number];
 
 export type ReaderShellTone = "danger" | "info" | "neutral" | "success" | "warning";
 
@@ -28,6 +38,28 @@ export interface ReaderShellStateDescriptor {
   readonly modeLabel: string;
   readonly state: ReaderShellState;
   readonly tone: ReaderShellTone;
+}
+
+export interface ReaderTransportStateDescriptor {
+  readonly canClaimCheckedAudio: boolean;
+  readonly canClaimCurrentAudio: boolean;
+  readonly canClaimExactReadAlong: boolean;
+  readonly canStartPlayback: boolean;
+  readonly disabledReason: string | null;
+  readonly label: string;
+  readonly recoveryReason: string | null;
+  readonly retryAllowed: boolean | null;
+  readonly state: ReaderTransportState;
+  readonly tone: ReaderShellTone;
+}
+
+export interface ReaderTransportStateDescriptorOptions {
+  readonly retryAllowed?: boolean | null;
+}
+
+export interface ReaderTransportStateInput extends ReaderShellStateInput {
+  readonly readAlongExactSync?: boolean | null;
+  readonly readerShellState?: ReaderShellState | null;
 }
 
 export interface ReaderShellStateInput {
@@ -115,6 +147,171 @@ export const READER_SHELL_STATE_DESCRIPTORS: Record<ReaderShellState, ReaderShel
     unchecked: readerShellDescriptor("unchecked", "Unchecked audio", "Unchecked", "warning"),
   };
 
+export const READER_TRANSPORT_STATE_DESCRIPTORS: Record<
+  ReaderTransportState,
+  ReaderTransportStateDescriptor
+> = {
+  checked: readerTransportDescriptor({
+    canClaimCheckedAudio: true,
+    canClaimCurrentAudio: true,
+    canClaimExactReadAlong: false,
+    canStartPlayback: true,
+    disabledReason: null,
+    label: "Checked audio",
+    recoveryReason: null,
+    state: "checked",
+    tone: "success",
+  }),
+  degraded: readerTransportDescriptor({
+    canClaimCheckedAudio: false,
+    canClaimCurrentAudio: false,
+    canClaimExactReadAlong: false,
+    canStartPlayback: false,
+    disabledReason: "No playable current audio evidence is available for degraded playback.",
+    label: "Degraded playback",
+    recoveryReason:
+      "Provide current audio before playback; exact read-along sync remains degraded.",
+    state: "degraded",
+    tone: "warning",
+  }),
+  "failed-retryable": readerTransportDescriptor({
+    canClaimCheckedAudio: false,
+    canClaimCurrentAudio: false,
+    canClaimExactReadAlong: false,
+    canStartPlayback: false,
+    disabledReason: "Generation did not complete or was interrupted.",
+    label: "Failed or retryable",
+    recoveryReason: "Retry or resolve generation before playback.",
+    state: "failed-retryable",
+    tone: "danger",
+  }),
+  generating: readerTransportDescriptor({
+    canClaimCheckedAudio: false,
+    canClaimCurrentAudio: false,
+    canClaimExactReadAlong: false,
+    canStartPlayback: false,
+    disabledReason: "Audio generation is still in progress.",
+    label: "Generating",
+    recoveryReason: "Wait for generation to finish before starting playback.",
+    state: "generating",
+    tone: "info",
+  }),
+  "pre-audio": readerTransportDescriptor({
+    canClaimCheckedAudio: false,
+    canClaimCurrentAudio: false,
+    canClaimExactReadAlong: false,
+    canStartPlayback: false,
+    disabledReason: "No generated audio is ready yet.",
+    label: "Pre-audio",
+    recoveryReason: "Generate audio before starting playback.",
+    state: "pre-audio",
+    tone: "neutral",
+  }),
+  "stale-replaced": readerTransportDescriptor({
+    canClaimCheckedAudio: false,
+    canClaimCurrentAudio: false,
+    canClaimExactReadAlong: false,
+    canStartPlayback: false,
+    disabledReason: "Audio is stale, superseded, or replaced.",
+    label: "Stale or replaced",
+    recoveryReason: "Regenerate current audio before playback.",
+    state: "stale-replaced",
+    tone: "warning",
+  }),
+  unchecked: readerTransportDescriptor({
+    canClaimCheckedAudio: false,
+    canClaimCurrentAudio: true,
+    canClaimExactReadAlong: false,
+    canStartPlayback: true,
+    disabledReason: null,
+    label: "Unchecked audio",
+    recoveryReason: "Audio can play, but checked artifact evidence is absent.",
+    state: "unchecked",
+    tone: "warning",
+  }),
+};
+
+export function readerTransportStateDescriptor(
+  state: ReaderTransportState,
+  options: ReaderTransportStateDescriptorOptions = {},
+): ReaderTransportStateDescriptor {
+  const descriptor = READER_TRANSPORT_STATE_DESCRIPTORS[state];
+  if (state !== "failed-retryable" || options.retryAllowed === undefined) {
+    return descriptor;
+  }
+  const retryAllowed = options.retryAllowed;
+  let recoveryReason = descriptor.recoveryReason;
+  if (retryAllowed === true) {
+    recoveryReason = "Retry generation before playback.";
+  } else if (retryAllowed === false) {
+    recoveryReason = "Resolve the failed audio state before playback.";
+  }
+  return {
+    ...descriptor,
+    recoveryReason,
+    retryAllowed,
+  };
+}
+
+export function deriveReaderTransportState(
+  input: ReaderTransportStateInput = {},
+): ReaderTransportState {
+  const rawShellState = deriveReaderShellState(input);
+  const shellState = isBlockingRawReaderShellState(rawShellState)
+    ? rawShellState
+    : (input.readerShellState ?? rawShellState);
+  switch (shellState) {
+    case "generating": {
+      return "generating";
+    }
+    case "unchecked": {
+      return "unchecked";
+    }
+    case "checked": {
+      return "checked";
+    }
+    case "degraded": {
+      return "degraded";
+    }
+    case "stale":
+    case "superseded": {
+      return "stale-replaced";
+    }
+    case "failed":
+    case "retryable": {
+      return "failed-retryable";
+    }
+    case "source-only": {
+      return "pre-audio";
+    }
+  }
+}
+
+export function deriveReaderTransportStateDescriptor(
+  input: ReaderTransportStateInput = {},
+): ReaderTransportStateDescriptor {
+  const state = deriveReaderTransportState(input);
+  const descriptor = readerTransportStateDescriptor(state, {
+    retryAllowed: state === "failed-retryable" ? deriveTransportRetryAllowed(input) : null,
+  });
+  if (state === "checked" && input.readAlongExactSync === true) {
+    return {
+      ...descriptor,
+      canClaimExactReadAlong: true,
+    };
+  }
+  if (state !== "degraded" || !hasPlayableCurrentAudioEvidence(input)) {
+    return descriptor;
+  }
+  return {
+    ...descriptor,
+    canClaimCurrentAudio: true,
+    canStartPlayback: true,
+    disabledReason: null,
+    recoveryReason: "Playback may be available, but exact read-along sync is degraded.",
+  };
+}
+
 export function readerShellStateDescriptor(state: ReaderShellState): ReaderShellStateDescriptor {
   return READER_SHELL_STATE_DESCRIPTORS[state];
 }
@@ -157,6 +354,7 @@ export function deriveReaderShellState(input: ReaderShellStateInput = {}): Reade
     audioArtifactState === "failed" ||
     durableProgressState === "failed" ||
     generatedAudioLifecycle === "failed" ||
+    jobStatus === "failed" ||
     sourceReadinessState === "failed"
   ) {
     return "failed";
@@ -167,7 +365,8 @@ export function deriveReaderShellState(input: ReaderShellStateInput = {}): Reade
     durableProgressState === "stale" ||
     generatedAudioLifecycle === "stale" ||
     readAlongRuntimeState === "stale-audio" ||
-    readAlongTimingState === "stale"
+    readAlongTimingState === "stale" ||
+    sourceReadinessState === "stale"
   ) {
     return "stale";
   }
@@ -334,6 +533,73 @@ function readerShellDescriptor(
   tone: ReaderShellTone,
 ): ReaderShellStateDescriptor {
   return { label, modeLabel, state, tone };
+}
+
+function readerTransportDescriptor(
+  descriptor: Omit<ReaderTransportStateDescriptor, "retryAllowed"> &
+    Pick<Partial<ReaderTransportStateDescriptor>, "retryAllowed">,
+): ReaderTransportStateDescriptor {
+  return { retryAllowed: null, ...descriptor };
+}
+
+function deriveTransportRetryAllowed(input: ReaderTransportStateInput): boolean | null {
+  const manifestStates = new Set(
+    [input.readalongManifestState, input.readingUnitManifestState].map((state) =>
+      normalizeStateToken(state),
+    ),
+  );
+  const audioArtifactState = normalizeStateToken(input.audioArtifactState);
+  const durableProgressState = normalizeStateToken(input.durableProgressState);
+  const jobStatus = normalizeStateToken(input.jobStatus);
+  const jobTerminalReason = normalizeStateToken(input.jobTerminalReason);
+
+  if (
+    jobStatus === "failed" &&
+    (input.jobRetriable === false || jobTerminalReason === "configuration-failed")
+  ) {
+    return false;
+  }
+
+  if (input.readerShellState === "retryable") {
+    return true;
+  }
+
+  if (
+    manifestStates.has("interrupted-retriable") ||
+    audioArtifactState === "interrupted-retriable" ||
+    audioArtifactState === "retryable" ||
+    durableProgressState === "interrupted-retriable" ||
+    (jobStatus === "failed" &&
+      input.jobRetriable !== false &&
+      jobTerminalReason !== "configuration-failed")
+  ) {
+    return true;
+  }
+  if (input.jobRetriable === false || jobTerminalReason === "configuration-failed") {
+    return false;
+  }
+  return null;
+}
+
+function isBlockingRawReaderShellState(state: ReaderShellState): boolean {
+  return (
+    state === "degraded" ||
+    state === "failed" ||
+    state === "retryable" ||
+    state === "stale" ||
+    state === "superseded"
+  );
+}
+
+function hasPlayableCurrentAudioEvidence(input: ReaderTransportStateInput): boolean {
+  const audioArtifactState = normalizeStateToken(input.audioArtifactState);
+  const generatedAudioLifecycle = normalizeStateToken(input.generatedAudioLifecycle);
+
+  return (
+    audioArtifactState === "checked" ||
+    audioArtifactState === "unchecked" ||
+    generatedAudioLifecycle === "ready"
+  );
 }
 
 function normalizeReaderShellState(

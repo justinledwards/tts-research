@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_READER_ACCESSIBILITY_SETTINGS } from "../reader-accessibility";
 import {
   READER_SHELL_STATES,
+  READER_TRANSPORT_STATES,
   applyReaderTypographyPreset,
   deriveReaderShellState,
+  deriveReaderTransportStateDescriptor,
   readerShellStateDescriptor,
+  readerTransportStateDescriptor,
   normalizeReadingTypographyPresetId,
   readerTypographyPresetForSettings,
   readingSurfaceDataAttributes,
@@ -73,6 +76,7 @@ describe("reading surface model", () => {
     expect(deriveReaderShellState({ generatedAudioLifecycle: "ready" })).toBe("unchecked");
     expect(deriveReaderShellState({ readalongManifestState: "degraded" })).toBe("degraded");
     expect(deriveReaderShellState({ generatedAudioLifecycle: "stale" })).toBe("stale");
+    expect(deriveReaderShellState({ sourceReadinessState: "stale" })).toBe("stale");
     expect(deriveReaderShellState({ readalongManifestState: "failed" })).toBe("failed");
     expect(deriveReaderShellState({ audioArtifactState: "retryable" })).toBe("retryable");
     expect(deriveReaderShellState({ readalongManifestState: "superseded" })).toBe("superseded");
@@ -146,6 +150,328 @@ describe("reading surface model", () => {
         readalongManifestState: "unknown",
       }),
     ).toBe("source-only");
+  });
+
+  it("derives Reader transport categories from shell and artifact evidence", () => {
+    expect(
+      deriveReaderTransportStateDescriptor({ generatedAudioLifecycle: "missing" }),
+    ).toMatchObject({
+      canStartPlayback: false,
+      state: "pre-audio",
+    });
+    expect(
+      deriveReaderTransportStateDescriptor({ sourceReadinessState: "prepared" }),
+    ).toMatchObject({
+      canStartPlayback: false,
+      state: "pre-audio",
+    });
+
+    for (const jobStatus of ["queued", "checking", "retrying"] as const) {
+      expect(deriveReaderTransportStateDescriptor({ jobStatus })).toMatchObject({
+        canStartPlayback: false,
+        state: "generating",
+      });
+    }
+    expect(
+      deriveReaderTransportStateDescriptor({ generatedAudioLifecycle: "generating" }).state,
+    ).toBe("generating");
+
+    expect(
+      deriveReaderTransportStateDescriptor({ generatedAudioLifecycle: "ready" }),
+    ).toMatchObject({
+      canClaimCheckedAudio: false,
+      canClaimExactReadAlong: false,
+      canStartPlayback: true,
+      state: "unchecked",
+    });
+    expect(deriveReaderTransportStateDescriptor({ audioArtifactState: "checked" })).toMatchObject({
+      canClaimCheckedAudio: true,
+      canClaimExactReadAlong: false,
+      canStartPlayback: true,
+      state: "checked",
+    });
+  });
+
+  it("claims exact read-along only with checked current audio and explicit exact sync evidence", () => {
+    expect(deriveReaderTransportStateDescriptor({ audioArtifactState: "checked" })).toMatchObject({
+      canClaimCheckedAudio: true,
+      canClaimCurrentAudio: true,
+      canClaimExactReadAlong: false,
+      canStartPlayback: true,
+      state: "checked",
+    });
+    expect(
+      deriveReaderTransportStateDescriptor({
+        audioArtifactState: "checked",
+        readAlongExactSync: false,
+      }),
+    ).toMatchObject({
+      canClaimCheckedAudio: true,
+      canClaimCurrentAudio: true,
+      canClaimExactReadAlong: false,
+      canStartPlayback: true,
+      state: "checked",
+    });
+    expect(
+      deriveReaderTransportStateDescriptor({
+        audioArtifactState: "checked",
+        readAlongExactSync: true,
+      }),
+    ).toMatchObject({
+      canClaimCheckedAudio: true,
+      canClaimCurrentAudio: true,
+      canClaimExactReadAlong: true,
+      canStartPlayback: true,
+      state: "checked",
+    });
+    expect(
+      deriveReaderTransportStateDescriptor({
+        audioArtifactState: "checked",
+        readAlongExactSync: true,
+        readAlongTimingState: "degraded",
+      }),
+    ).toMatchObject({
+      canClaimExactReadAlong: false,
+      state: "degraded",
+    });
+  });
+
+  it("does not let degraded evidence alone claim playable current audio", () => {
+    for (const input of [
+      { generatedAudioLifecycle: "degraded" },
+      { readAlongRuntimeState: "degraded" },
+      { readAlongTimingState: "degraded" },
+      { readalongManifestState: "degraded" },
+      { readingUnitManifestState: "degraded" },
+    ] as const) {
+      expect(deriveReaderTransportStateDescriptor(input)).toMatchObject({
+        canClaimCurrentAudio: false,
+        canStartPlayback: false,
+        state: "degraded",
+      });
+    }
+    expect(readerTransportStateDescriptor("degraded")).toMatchObject({
+      canClaimCurrentAudio: false,
+      canStartPlayback: false,
+    });
+  });
+
+  it("allows degraded playback only with explicit playable current audio evidence", () => {
+    expect(
+      deriveReaderTransportStateDescriptor({
+        audioArtifactState: "unchecked",
+        readAlongRuntimeState: "degraded",
+        readAlongTimingState: "degraded",
+      }),
+    ).toMatchObject({
+      canClaimCheckedAudio: false,
+      canClaimCurrentAudio: true,
+      canClaimExactReadAlong: false,
+      canStartPlayback: true,
+      state: "degraded",
+    });
+    expect(
+      deriveReaderTransportStateDescriptor({
+        generatedAudioLifecycle: "ready",
+        readAlongTimingState: "degraded",
+      }),
+    ).toMatchObject({
+      canClaimCurrentAudio: true,
+      canClaimExactReadAlong: false,
+      canStartPlayback: true,
+      state: "degraded",
+    });
+  });
+
+  it("pins Reader transport precedence without overclaiming readiness", () => {
+    expect(
+      deriveReaderTransportStateDescriptor({
+        audioArtifactState: "checked",
+        readalongManifestState: "superseded",
+      }),
+    ).toMatchObject({
+      canClaimCurrentAudio: false,
+      canStartPlayback: false,
+      state: "stale-replaced",
+    });
+    expect(
+      deriveReaderTransportStateDescriptor({
+        audioArtifactState: "checked",
+        generatedAudioLifecycle: "stale",
+      }).state,
+    ).toBe("stale-replaced");
+    expect(
+      deriveReaderTransportStateDescriptor({
+        audioArtifactState: "checked",
+        readAlongRuntimeState: "degraded",
+      }),
+    ).toMatchObject({
+      canClaimCheckedAudio: false,
+      canClaimExactReadAlong: false,
+      canStartPlayback: true,
+      state: "degraded",
+    });
+    expect(
+      deriveReaderTransportStateDescriptor({
+        audioArtifactState: "retryable",
+        generatedAudioLifecycle: "failed",
+        readAlongRuntimeState: "stale-audio",
+      }),
+    ).toMatchObject({
+      retryAllowed: true,
+      state: "failed-retryable",
+    });
+    expect(
+      deriveReaderTransportStateDescriptor({
+        generatedAudioLifecycle: "failed",
+        jobRetriable: false,
+        jobStatus: "failed",
+      }),
+    ).toMatchObject({
+      canStartPlayback: false,
+      retryAllowed: false,
+      state: "failed-retryable",
+    });
+    expect(
+      deriveReaderTransportStateDescriptor({
+        audioArtifactState: "checked",
+        generatedAudioLifecycle: "unknown-ready-ish",
+      }).state,
+    ).toBe("checked");
+    expect(
+      deriveReaderTransportStateDescriptor({
+        audioArtifactState: "unknown-checked-ish",
+        generatedAudioLifecycle: "unknown-ready-ish",
+      }),
+    ).toMatchObject({
+      canStartPlayback: false,
+      state: "pre-audio",
+    });
+  });
+
+  it("maps non-retryable failed jobs to failed transport without hiding them behind checked audio", () => {
+    expect(
+      deriveReaderTransportStateDescriptor({ jobRetriable: false, jobStatus: "failed" }),
+    ).toMatchObject({
+      canStartPlayback: false,
+      retryAllowed: false,
+      state: "failed-retryable",
+    });
+    expect(
+      deriveReaderTransportStateDescriptor({
+        jobStatus: "failed",
+        jobTerminalReason: "configuration-failed",
+      }),
+    ).toMatchObject({
+      canStartPlayback: false,
+      retryAllowed: false,
+      state: "failed-retryable",
+    });
+    expect(
+      deriveReaderTransportStateDescriptor({
+        audioArtifactState: "checked",
+        jobRetriable: false,
+        jobStatus: "failed",
+        readAlongExactSync: true,
+      }),
+    ).toMatchObject({
+      canClaimCheckedAudio: false,
+      canClaimCurrentAudio: false,
+      canClaimExactReadAlong: false,
+      canStartPlayback: false,
+      retryAllowed: false,
+      state: "failed-retryable",
+    });
+  });
+
+  it("does not let readerShellState weaken stronger raw transport evidence", () => {
+    expect(
+      deriveReaderTransportStateDescriptor({
+        audioArtifactState: "replaced",
+        readerShellState: "checked",
+        readAlongExactSync: true,
+      }),
+    ).toMatchObject({
+      canClaimCurrentAudio: false,
+      canClaimExactReadAlong: false,
+      canStartPlayback: false,
+      state: "stale-replaced",
+    });
+    expect(
+      deriveReaderTransportStateDescriptor({
+        readerShellState: "checked",
+        readAlongExactSync: true,
+        sourceReadinessState: "stale",
+      }),
+    ).toMatchObject({
+      canClaimCurrentAudio: false,
+      canClaimExactReadAlong: false,
+      canStartPlayback: false,
+      state: "stale-replaced",
+    });
+    expect(
+      deriveReaderTransportStateDescriptor({
+        audioArtifactState: "checked",
+        readAlongExactSync: true,
+        sourceReadinessState: "stale",
+      }),
+    ).toMatchObject({
+      canClaimCurrentAudio: false,
+      canClaimExactReadAlong: false,
+      canStartPlayback: false,
+      state: "stale-replaced",
+    });
+    expect(
+      deriveReaderTransportStateDescriptor({
+        generatedAudioLifecycle: "failed",
+        readerShellState: "checked",
+      }),
+    ).toMatchObject({
+      canStartPlayback: false,
+      state: "failed-retryable",
+    });
+    expect(
+      deriveReaderTransportStateDescriptor({
+        audioArtifactState: "replaced",
+        generatedAudioLifecycle: "ready",
+        readerShellState: "degraded",
+      }),
+    ).toMatchObject({
+      canClaimCurrentAudio: false,
+      canClaimExactReadAlong: false,
+      canStartPlayback: false,
+      state: "stale-replaced",
+    });
+  });
+
+  it("keeps Reader transport labels, reasons, and descriptors explicit", () => {
+    expect(
+      READER_TRANSPORT_STATES.map((state) => readerTransportStateDescriptor(state).label),
+    ).toEqual([
+      "Pre-audio",
+      "Generating",
+      "Unchecked audio",
+      "Checked audio",
+      "Stale or replaced",
+      "Failed or retryable",
+      "Degraded playback",
+    ]);
+    expect(readerTransportStateDescriptor("generating")).toMatchObject({
+      disabledReason: "Audio generation is still in progress.",
+      recoveryReason: "Wait for generation to finish before starting playback.",
+    });
+    expect(
+      readerTransportStateDescriptor("failed-retryable", { retryAllowed: true }),
+    ).toMatchObject({
+      recoveryReason: "Retry generation before playback.",
+      retryAllowed: true,
+    });
+    expect(
+      readerTransportStateDescriptor("failed-retryable", { retryAllowed: false }),
+    ).toMatchObject({
+      recoveryReason: "Resolve the failed audio state before playback.",
+      retryAllowed: false,
+    });
   });
 
   it("keeps Reader shell labels and mode labels explicit and deterministic", () => {

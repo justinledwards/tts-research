@@ -1,3 +1,10 @@
+## 2026-07-08 18:50 CEST - QQP-439 Reader transport state machine
+
+- [x] inspect Reader transport plan and existing model seam
+- [x] add deterministic transport state tests
+- [x] implement minimal Reader transport helper and exports
+- [x] run focused frontend gates
+
 ## 2026-07-08 17:59 CEST - QQP-438 Reader shell state vocabulary and mode labels
 
 - [ ] inspect Reader/readalong state surfaces
@@ -3055,3 +3062,34 @@ duplicating every implementation detail from commits, PR text, or generated revi
   - `mise exec -- pnpm validate:ir`;
   - `mise exec -- pnpm check`.
 - [x] `WORKINGLOG.md` EOF normalized before final `git diff --check`.
+
+## 2026-07-08 — QQP-439 kickoff
+
+- [x] QQP-438 completed, pushed, remote-verified, and moved Done in Linear at `7424727dbf94df4e79d4b0b9e8e8e2b9a4dbef39`.
+- [x] QQP-437 checked but remains blocked/deferred because dependency `QQP-4` is still `Todo`.
+- [x] selected next unblocked Reader issue: QQP-439 — Reader transport state machine.
+- [x] issue URL: https://linear.app/niklas-olsson/issue/QQP-439/reader-transport-state-machine.
+- [x] plan written: `docs/plans/linear/QQP-439-reader-transport-state-machine.md`.
+- [x] moved Linear In Progress and dispatched implementation worker `deleg_80ca7eb1`.
+
+## 2026-07-08 — QQP-439 review and degraded-readiness repair
+
+- [x] implementation worker `deleg_80ca7eb1` completed QQP-439 Reader transport model/test/export changes.
+- [x] parent verification passed after fan-in:
+  - `mise exec -- pnpm --filter @tts-research/frontend exec vitest run src/features/reading-surface/model.test.ts`;
+  - `mise exec -- pnpm --filter @tts-research/frontend typecheck`;
+  - `mise exec -- pnpm validate:ir`;
+  - `git diff --check`.
+- [x] SPEC review `deleg_a205b4af`: `SPEC PASS`.
+- [x] QUALITY review `deleg_f7c862e8`: `QUALITY REQUEST_CHANGES` for degraded transport readiness overclaim.
+- [x] focused repair worker `deleg_55ec3908` made degraded evidence alone non-playable/non-current while allowing degraded + explicit playable current audio evidence without exact-readalong claims.
+- [x] targeted quality re-review `deleg_e9a39e8e`: `QUALITY APPROVED`.
+- [ ] downstream Reader state-machine ChatGPT peer checkpoint pending before closeout.
+
+## 2026-07-08 — QQP-439 peer-blocker closeout
+
+- [x] ChatGPT downstream-contract peer returned `PEER REQUEST_CHANGES`; response saved at `docs/reviews/chatgpt/qqp439-peer-checkpoint.response.md`.
+- [x] repaired exact-readalong overclaim, non-retryable failed-job precedence, and raw-evidence precedence; parent gates passed.
+- [x] targeted peer-blocker recheck returned one remaining `sourceReadinessState: "stale"` blocker; response saved at `docs/reviews/chatgpt/qqp439-peer-blocker-recheck.response.md`.
+- [x] repaired source-readiness stale raw evidence; final source-stale peer recheck returned `PEER-BLOCKER APPROVED`; response saved at `docs/reviews/chatgpt/qqp439-source-stale-peer-recheck.response.md`.
+- [x] final parent gates before commit: focused model test 18 passed, frontend typecheck passed, `validate:ir` passed, `git diff --check` passed, full `pnpm check` passed (frontend 111 files / 761 tests).

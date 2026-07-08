@@ -1,0 +1,169 @@
+# QQP-439 ChatGPT peer checkpoint response
+
+Conversation: https://chatgpt.com/g/g-p-6a4c3396e3948191a15f9959895179d7-tts-research/c/6a4e8b04-f034-83eb-bca0-82af2019805e
+
+Archive: `/tmp/tts-research-qqp439-dirty-20260708-173552.zip`
+
+Archive SHA-256: `68acdb08eeff029b6fd3fa90c68547bd644465afbb6eea60b3aa2453b0eef5df`
+
+```text
+ChatGPT said:" [level=4]
+  - paragraph: I’ll inspect the uploaded archive as the source of truth, focusing on the Reader transport model, tests, exports, docs/logs, and QQP-440 scheduling safety.
+  - paragraph: I’ve confirmed the archive is readable and the implementation is concentrated in the reading-surface model/export seam. I’m now probing mixed-evidence cases where shell state might mask stale, failed, degraded, or superseded signals.
+  - button "Thought for 7m 44s"
+  - paragraph: PEER REQUEST_CHANGES
+  - list:
+    - listitem:
+      - paragraph:
+        - code: frontend/src/features/reading-surface/model.ts
+        - text: —
+        - code: READER_TRANSPORT_STATE_DESCRIPTORS.checked
+        - text: /
+        - code: deriveReaderTransportStateDescriptor
+      - list:
+        - listitem:
+          - paragraph:
+            - text: "Blocking issue:"
+            - code: checked
+            - text: audio currently sets
+            - code: "canClaimExactReadAlong: true"
+            - text: from checked artifact state alone.
+        - listitem:
+          - paragraph: "Risk to QQP-440: downstream window/highlight scheduling could treat checked playable audio as exact read-along evidence even though exact sync requires a separate fidelity/timing/mapping decision. Checked audio proves checked audio; it does not by itself prove exact word/read-along scheduling safety."
+        - listitem:
+          - paragraph: "Acceptance criteria/tests:"
+          - list:
+            - listitem:
+              - paragraph:
+                - code: "deriveReaderTransportStateDescriptor({ audioArtifactState: \"checked\" })"
+                - text: must not claim exact read-along unless explicit exact sync evidence is also present.
+            - listitem:
+              - paragraph:
+                - text: Add a minimal explicit exact-sync input, for example mirroring
+                - code: SyncFidelityDecision.exactAllowed
+                - text: /
+                - code: fidelity === "exact_word"
+                - text: ", or keep"
+                - code: canClaimExactReadAlong
+                - text: false at this seam until QQP-440 consumes the existing exact-word gate separately.
+            - listitem:
+              - paragraph: Pin tests for checked audio with no sync evidence, checked audio with phrase/block/audio-only/degraded evidence, and checked audio with explicit exact evidence.
+    - listitem:
+      - paragraph:
+        - code: frontend/src/features/reading-surface/model.ts
+        - text: —
+        - code: deriveReaderShellState
+        - text: /
+        - code: deriveTransportRetryAllowed
+      - list:
+        - listitem:
+          - paragraph:
+            - text: "Blocking issue:"
+            - code: "jobStatus: \"failed\""
+            - text: with
+            - code: "jobRetriable: false"
+            - text: or
+            - code: "jobTerminalReason: \"configuration-failed\""
+            - text: is not mapped to
+            - code: failed
+            - text: ; it can fall through to
+            - code: source-only
+            - text: ", or to"
+            - code: checked
+            - text: if stale checked artifact evidence is also present.
+        - listitem:
+          - paragraph:
+            - text: "Risk to QQP-440: a non-retryable failed generation can be hidden by checked artifact state and emit playable/current/exact claims, instead of the safe"
+            - code: failed-retryable
+            - text: transport bucket with
+            - code: "retryAllowed: false"
+            - text: .
+        - listitem:
+          - paragraph: "Acceptance criteria/tests:"
+          - list:
+            - listitem:
+              - paragraph:
+                - code: "deriveReaderTransportStateDescriptor({ jobStatus: \"failed\", jobRetriable: false })"
+                - text: must return
+                - code: "state: \"failed-retryable\""
+                - text: ","
+                - code: "canStartPlayback: false"
+                - text: ","
+                - code: "retryAllowed: false"
+                - text: .
+            - listitem:
+              - paragraph:
+                - code: "deriveReaderTransportStateDescriptor({ jobStatus: \"failed\", jobTerminalReason: \"configuration-failed\" })"
+                - text: must return
+                - code: "state: \"failed-retryable\""
+                - text: with retry not allowed or otherwise explicitly non-retryable.
+            - listitem:
+              - paragraph:
+                - code: "deriveReaderTransportStateDescriptor({ jobStatus: \"failed\", jobRetriable: false, audioArtifactState: \"checked\" })"
+                - text: must not return
+                - code: checked
+                - text: ", must not claim current audio, and must not claim exact read-along unless a separate currentness contract proves that checked artifact belongs to a still-current generation."
+    - listitem:
+      - paragraph:
+        - code: frontend/src/features/reading-surface/model.ts
+        - text: —
+        - code: deriveReaderTransportState
+      - list:
+        - listitem:
+          - paragraph:
+            - text: "Blocking issue: a supplied"
+            - code: readerShellState
+            - text: is treated as authoritative over stronger raw evidence. For example,
+            - code: "readerShellState: \"checked\""
+            - text: plus
+            - code: "audioArtifactState: \"replaced\""
+            - text: or stale/failed/retryable raw fields can still derive
+            - code: checked
+            - text: .
+        - listitem:
+          - paragraph: "Risk to QQP-440: callers that pass both cached shell state and raw artifact/progress evidence can accidentally schedule playback/highlights against stale, replaced, failed, or superseded audio."
+        - listitem:
+          - paragraph: "Acceptance criteria/tests:"
+          - list:
+            - listitem:
+              - paragraph:
+                - text: Raw stale/replaced/superseded/failed/retryable/degraded evidence must not be weakened by
+                - code: readerShellState
+                - text: .
+            - listitem:
+              - paragraph:
+                - text: Add tests such as
+                - code: "readerShellState: \"checked\" + audioArtifactState: \"replaced\""
+                - text: →
+                - code: stale-replaced
+                - text: ", non-playable, non-current, non-exact;"
+                - code: "readerShellState: \"checked\" + generatedAudioLifecycle: \"failed\""
+                - text: →
+                - code: failed-retryable
+                - text: ; and
+                - code: "readerShellState: \"degraded\" + audioArtifactState: \"replaced\" + generatedAudioLifecycle: \"ready\""
+                - text: →
+                - code: stale-replaced
+                - text: .
+            - listitem:
+              - paragraph:
+                - text: If
+                - code: readerShellState
+                - text: is intended to be exclusive input, split the type/API so raw evidence and pre-derived shell state cannot be mixed ambiguously.
+  - group "Response actions":
+    - button "Copy response"
+    - button "Pro feedback"
+    - button "Add to project sources"
+    - button "Switch model"
+    - button "More actions"
+  - button "Add files and more" [e163]
+  - textbox "Chat with ChatGPT" [e164]:
+    - paragraph: Ask anything
+  - button "Pro Extended" [e165]
+  - button "Start dictation" [e166]:
+    - img
+  - button "Start Voice"
+  - text: ChatGPT can make mistakes. Check important info.
+- alert
+- status: Response complete
+```
