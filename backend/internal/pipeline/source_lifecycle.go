@@ -157,13 +157,13 @@ func (service *Service) PersistSourceLifecycle(request SourceLifecyclePersistReq
 	if revisionID == "" {
 		revisionID = "rev_" + newID()
 	}
-	projectID := strings.TrimSpace(request.ProjectID)
-	if projectID == "" {
-		projectID = defaultProjectID
-	}
 	sourceKind := request.SourceKind
 	if sourceKind == "" {
 		sourceKind = SourceEnvelopeKindProject
+	}
+	projectID := strings.TrimSpace(request.ProjectID)
+	if projectID == "" && sourceKind != SourceEnvelopeKindQuickListenTemporary {
+		projectID = defaultProjectID
 	}
 	lifecycle := request.Lifecycle
 	if lifecycle == "" {
@@ -689,7 +689,6 @@ func sourceLifecycleRequestFromTemporarySource(session TemporarySourceSession, r
 	return SourceLifecyclePersistRequest{
 		SourceID:   session.ID,
 		RevisionID: session.ID + "-rev",
-		ProjectID:  defaultProjectID,
 		SourceKind: SourceEnvelopeKindQuickListenTemporary,
 		Lifecycle:  SourceEnvelopeLifecycleTemporary,
 		ExpiresAt:  &session.ExpiresAt,

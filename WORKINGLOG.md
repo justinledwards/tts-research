@@ -1,3 +1,10 @@
+## 2026-07-09 00:05 CEST - QQP-4 Quick Narrate Pasted URL
+
+- [ ] inspect current Quick Listen URL and temporary-source seams
+- [ ] implement capture anchor without project mutation or promotion
+- [ ] add focused deterministic tests
+- [ ] run focused verification and diff check
+
 ## 2026-07-08 18:50 CEST - QQP-439 Reader transport state machine
 
 - [x] inspect Reader transport plan and existing model seam
@@ -2754,7 +2761,10 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] format/diff hygiene passed after parent trimmed WORKINGLOG EOF whitespace: `gofmt -l ...`, `git diff --check`.
 - [x] SPEC review `deleg_014697d2`: SPEC PASS.
 - [x] parent re-trimmed WORKINGLOG EOF hygiene after SPEC read-only diff-check finding.
-- [ ] QUALITY review pending.
+- [x] QUALITY review `deleg_5295bb46`: QUALITY APPROVED.
+- [x] reviewer verified scoped lifecycle defaulting, deterministic local URL regression, coherent temporary-source/progress semantics, acceptable response-body absence assertions, and no hidden QQP-437 promotion behavior.
+- [x] final gates passed after quality approval: focused httpapi route tests, `mise exec -- pnpm validate:ir`, `mise exec -- pnpm check`, and `git diff --check`.
+- [ ] commit/push/Linear closeout pending.
 
 ## 2026-07-08 — QQP-434 quality blocker
 
@@ -3188,3 +3198,32 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [x] reviewer verified the new Book scheduler-active regression covers both follow/page blocks, keeps anchors resolvable, suppresses React-owned active metadata while scheduler active, and preserves React active metadata when scheduler inactive.
 - [x] reviewer ran focused repaired test (1 passed / 27 skipped) and full Book Cinema model test (28 passed).
 - [ ] final closeout commit/push/Linear update pending.
+
+## 2026-07-08 — QQP-4 kickoff
+
+- [x] user corrected loop stall; resumed active TTS-Research issue cadence immediately after QQP-440.
+- [x] live Linear TTS-Research remaining issues confirmed: QQP-4, QQP-437, QQP-441.
+- [x] selected dependency-unblocked next issue: QQP-4 — Quick Narrate Pasted URL. QQP-437 depends on QQP-4; QQP-441 depends on QQP-437 and already-Done first-batch issues.
+- [x] repo preflight: branch `niklas/voice-studio-follow-up`, local HEAD equals `fork/niklas/voice-studio-follow-up` at `3180081987d2203622c371164477f386f275ab3d`, clean worktree before kickoff.
+- [x] scope read: Linear issue/comment, source-reader Quick Listen invariants, temporary-source copy guide, Quick Listen/frontend/backend seams.
+- [x] plan written: `docs/plans/linear/QQP-4-quick-narrate-pasted-url.md`.
+- [x] Linear In Progress/comment posted: `https://linear.app/niklas-olsson/issue/QQP-4/quick-narrate-pasted-url#comment-bfa8661b`.
+- [x] implementation worker dispatched and fan-in received: `deleg_0efc3e7d`.
+
+## 2026-07-09 — QQP-4 implementation fan-in
+
+- [x] implementation worker `deleg_0efc3e7d` implemented backend Quick Listen URL capture anchor for projectless temporary sources.
+- [x] parent RCA for reported grouped test flake: new URL route test started an async temporary voice job without waiting, so TempDir cleanup could race temporary-audio writes.
+- [x] parent repair: wait for created temporary URL job completion before project-mutation assertions and TempDir cleanup.
+- [x] focused gates passed after repair:
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/httpapi -run 'TestTemporarySourceRouteQuickListenURLCapturesAndNarratesWithoutProject|TestTemporarySourceRoutesCreateGenerateArtifactsAndPromote|TestTemporarySourceRouteAcceptsMultipartFile' -count=1`.
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline -run 'TestPersistSourceLifecycleStoresEnvelopeRevisionAndRawArtifact|TestTemporaryWebpageMetadataAndPromotion|TestTemporarySourceLifecycleCreatesGeneratesDeletesAndPromotesByCopy' -count=1`.
+  - `mise exec -- pnpm --filter @tts-research/frontend exec vitest run src/features/quick-listen/QuickListenPanel.test.ts`.
+  - `mise exec -- pnpm --filter @tts-research/frontend typecheck`.
+  - `git diff --check`.
+- [x] broad gates passed after parent repair: `mise exec -- pnpm validate:ir`; full `mise exec -- pnpm check` with backend `go test ./...` and frontend 111 files / 773 tests.
+- [x] SPEC review `deleg_1ef78e70`: SPEC PASS.
+- [x] QUALITY review `deleg_5295bb46`: QUALITY APPROVED.
+- [x] reviewer verified scoped lifecycle defaulting, deterministic local URL regression, coherent temporary-source/progress semantics, acceptable response-body absence assertions, and no hidden QQP-437 promotion behavior.
+- [x] final gates passed after quality approval: focused httpapi route tests, `mise exec -- pnpm validate:ir`, `mise exec -- pnpm check`, and `git diff --check`.
+- [ ] commit/push/Linear closeout pending.
