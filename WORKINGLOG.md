@@ -2719,3 +2719,93 @@ duplicating every implementation detail from commits, PR text, or generated revi
   - `git diff --check` — pass.
 - [ ] commit/push/remote verify and Linear Done pending.
 - [ ] targeted peer-blocker re-review `deleg_68990223` still pending/async; ChatGPT Project repair re-check is approved and saved.
+
+## 2026-07-08 — QQP-434 kickoff
+
+- [x] user corrected loop stall; resumed active Linear issue cadence from referenced MADI/Seedling-style sessions.
+- [x] repo preflight: branch `niklas/voice-studio-follow-up`, clean and remote-equal at `2f06051974f627369c8a2c2eeccc8f11b3f72570`.
+- [x] live Linear TTS-Research project preflight: `hasNextPage=false`; active unarchived remaining issues = 9.
+- [x] selected QQP-434 as next dependency-unblocked issue; prerequisites QQP-424, QQP-425, and QQP-433 are Done in Linear.
+- [x] scope read: durable progress/resume resolver contracts, source-reader invariants, readalong sidecars, current/remapped progress fixtures, existing progress/source-manifest seams.
+- [x] plan written: `docs/plans/linear/QQP-434-durable-progress-resume-resolver.md`.
+- [x] Linear In Progress/comment posted for QQP-434.
+- [x] implementation worker dispatched for QQP-434.
+
+## 2026-07-08 — QQP-434 implementation fan-in
+
+- [x] implementation worker `deleg_d582bd1d` returned implemented backend/runtime durable progress + resume resolver; no commit/push/Linear side effects.
+- [x] parent reconciled workspace including untracked `backend/internal/pipeline/durable_progress_test.go`.
+- [x] parent focused gate passed: `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline ./internal/httpapi -run 'Progress|Resume|Manifest|Source|Artifact|SyncFidelity' -count=1`.
+- [x] parent contract gate passed: `mise exec -- pnpm validate:ir`.
+- [x] format/diff hygiene passed after parent trimmed WORKINGLOG EOF whitespace: `gofmt -l ...`, `git diff --check`.
+- [x] SPEC review `deleg_014697d2`: SPEC PASS.
+- [x] parent re-trimmed WORKINGLOG EOF hygiene after SPEC read-only diff-check finding.
+- [ ] QUALITY review pending.
+
+## 2026-07-08 — QQP-434 quality blocker
+
+- [x] QUALITY review `deleg_d7972144`: QUALITY REQUEST_CHANGES.
+- [ ] blocker: `PersistDurableProgress` canonical replacement is not atomic/serialized; concurrent writes or partial failure can leave multiple canonical durable records.
+- [ ] blocker: `reloadDurableProgress` loads progress by ID only and does not validate/reconcile duplicate canonical records after crash/corruption.
+- [x] narrow repair worker `deleg_2cc40b3b` returned repaired.
+- [x] parent repair focused gate passed: `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline -run 'DurableProgress|ResumeResolver' -count=1`.
+- [x] parent repair adjacent gate passed: `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline ./internal/httpapi -run 'Progress|Resume|Manifest|Source|Artifact|SyncFidelity' -count=1`.
+- [x] parent contract gate passed: `mise exec -- pnpm validate:ir`.
+- [ ] targeted quality re-review pending for canonical durability blocker.
+
+## 2026-07-08 — QQP-434 second quality blocker
+
+- [x] targeted quality re-review `deleg_668dca3a`: QUALITY REQUEST_CHANGES.
+- [ ] remaining blocker: canonical replacement can durably demote old canonical records, then fail/crash before writing the new canonical, leaving zero canonical records on disk after restart.
+- [ ] required repair: make replacement/reload deterministic for old-demoted/new-missing state; add injected new-canonical-write failure/reload regression.
+- [x] second narrow repair worker `deleg_ad7464bf` returned repaired.
+- [x] parent second-repair focused gate passed: `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline -run 'DurableProgress|ResumeResolver' -count=1`.
+- [x] parent second-repair adjacent gate passed: `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline ./internal/httpapi -run 'Progress|Resume|Manifest|Source|Artifact|SyncFidelity' -count=1`.
+- [x] parent contract/hygiene gates passed: `mise exec -- pnpm validate:ir`, `gofmt -l ...`, `git diff --check`.
+- [ ] targeted quality re-review pending for zero-canonical crash-state repair.
+
+## 2026-07-08 — QQP-434 quality approved
+
+- [x] second targeted quality re-review `deleg_1b7217ca`: QUALITY APPROVED.
+- [x] canonical durability blockers fixed together: concurrent canonical writes, demotion-write failure, new-write failure/zero-canonical reload, duplicate canonical reload, invalid reload skip.
+- [x] final gates passed after quality approval.
+  - focused Go rerun: `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline ./internal/httpapi -run 'Progress|Resume|Manifest|Source|Artifact|SyncFidelity' -count=1` -> pass after initial transient TempDir cleanup failure.
+  - broad repo gate: `mise exec -- pnpm check` -> pass.
+  - contract gate: `mise exec -- pnpm validate:ir` -> pass.
+  - hygiene: `gofmt -l ...`, `git diff --check` -> pass after parent WORKINGLOG EOF trim.
+- [ ] ChatGPT Project peer checkpoint pending with fresh dirty-worktree archive.
+
+## 2026-07-08 — QQP-434 ChatGPT peer checkpoint
+
+- [x] ChatGPT Project peer checkpoint submitted with archive `/tmp/tts-research-qqp434-peer-20260708T115354Z.zip` (`0e74de9659732ba80c854bc046972740a36ce8d43358e2e64479e111e88bfb97`).
+- [x] response saved: `docs/reviews/chatgpt/qqp434-peer-checkpoint.response.md`.
+- [ ] verdict: PEER REQUEST_CHANGES.
+- [ ] blocker to inspect/repair: remapped resume returns `auto_resume_remapped` but leaves `ResolvedLocatorEnvelope` on stale unit; mapped unit is only metadata, so reopen could resume old source position instead of resolved manifest locator.
+
+## 2026-07-08 — QQP-434 peer blocker repair fan-in
+
+- [x] peer blocker repair worker `deleg_71e63d38` completed.
+- [x] parent inspected changed runtime paths:
+  - `RevisionMapLocatorMapping` runtime model now supports locator mappings.
+  - `ResolveResumeProgress` gates stale/superseded/different manifest or revision before current-path handling.
+  - remap resolution now uses mapped `ResolvedLocatorEnvelope` from `locatorMappings` instead of stale progress locator.
+- [x] parent verification after repair:
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline -run 'DurableProgress|ResumeResolver' -count=1` -> pass.
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline ./internal/httpapi -run 'Progress|Resume|Manifest|Source|Artifact|SyncFidelity' -count=1` -> pass.
+  - `mise exec -- pnpm validate:ir` -> pass.
+  - `gofmt -l ...` and `git diff --check` -> pass after parent WORKINGLOG EOF trim.
+- [ ] targeted read-only re-review pending for ChatGPT blockers.
+
+## 2026-07-08 — QQP-434 peer blocker re-review approved
+
+- [x] targeted peer-blocker re-review `deleg_6aecd08f`: PEER_BLOCKER APPROVED.
+- [x] confirmed fixes:
+  - runtime `RevisionMap` supports `locatorMappings`.
+  - remapped resume resolves to mapped current locator envelope, not stale locator.
+  - stale/superseded same-manifest records cannot bypass revision-map path into current resume decisions.
+- [x] final closeout gates passed on current repaired worktree.
+  - focused Go first run hit transient `TestTemporarySourceRouteAcceptsMultipartFile` `i/o timeout`; rerun passed: `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline ./internal/httpapi -run 'Progress|Resume|Manifest|Source|Artifact|SyncFidelity' -count=1`.
+  - broad repo gate passed: `mise exec -- pnpm check`.
+  - contract gate passed: `mise exec -- pnpm validate:ir`.
+  - hygiene passed: `gofmt -l ...`, `git diff --check`.
+- [ ] commit/push/remote verify and Linear Done pending.

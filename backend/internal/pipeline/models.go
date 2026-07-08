@@ -1101,6 +1101,148 @@ type PlaybackProgressUpdate struct {
 	AddBookmark       *ProgressBookmark `json:"addBookmark,omitempty"`
 }
 
+type DurableProgressKind string
+
+const (
+	DurableProgressKindResume    DurableProgressKind = "resume"
+	DurableProgressKindBookmark  DurableProgressKind = "bookmark"
+	DurableProgressKindHighlight DurableProgressKind = "highlight"
+)
+
+type DurableProgressState string
+
+const (
+	DurableProgressStateCurrent              DurableProgressState = "current"
+	DurableProgressStateDegraded             DurableProgressState = "degraded"
+	DurableProgressStateStale                DurableProgressState = "stale"
+	DurableProgressStateSuperseded           DurableProgressState = "superseded"
+	DurableProgressStateFailed               DurableProgressState = "failed"
+	DurableProgressStateInterruptedRetriable DurableProgressState = "interrupted_retriable"
+	DurableProgressStateRemapped             DurableProgressState = "remapped"
+)
+
+type DurableProgressPosition struct {
+	UnitID          string `json:"unitId"`
+	SegmentID       string `json:"segmentId,omitempty"`
+	ActiveWordIndex int    `json:"activeWordIndex,omitempty"`
+	AudioOffsetMS   int    `json:"audioOffsetMs,omitempty"`
+	TextQuote       string `json:"textQuote,omitempty"`
+}
+
+type DurableProgress struct {
+	SchemaVersion       string                    `json:"schemaVersion"`
+	ProgressID          string                    `json:"progressId"`
+	SourceID            string                    `json:"sourceId"`
+	ReadalongManifestID string                    `json:"readalongManifestId"`
+	SourceRevisionID    string                    `json:"sourceRevisionId"`
+	AudioArtifactID     string                    `json:"audioArtifactId,omitempty"`
+	Kind                DurableProgressKind       `json:"kind"`
+	State               DurableProgressState      `json:"state"`
+	UpdatedAt           time.Time                 `json:"updatedAt"`
+	Canonical           bool                      `json:"canonical"`
+	LocatorEnvelope     contentir.LocatorEnvelope `json:"locatorEnvelope"`
+	Position            DurableProgressPosition   `json:"position"`
+	Metadata            map[string]any            `json:"metadata,omitempty"`
+}
+
+type ResumeDecision string
+
+const (
+	ResumeDecisionAutoResumeCurrent  ResumeDecision = "auto_resume_current"
+	ResumeDecisionAutoResumeDegraded ResumeDecision = "auto_resume_degraded"
+	ResumeDecisionResumeAudioOnly    ResumeDecision = "resume_audio_only"
+	ResumeDecisionResumeSourceOnly   ResumeDecision = "resume_source_only"
+	ResumeDecisionOfferRetry         ResumeDecision = "offer_retry"
+	ResumeDecisionOfferOldVsRepaired ResumeDecision = "offer_old_vs_repaired"
+	ResumeDecisionAutoResumeRemapped ResumeDecision = "auto_resume_remapped"
+	ResumeDecisionBlockedFailed      ResumeDecision = "blocked_failed"
+)
+
+type ResumeResolution struct {
+	SchemaVersion               string                    `json:"schemaVersion"`
+	ResolutionID                string                    `json:"resolutionId"`
+	ProgressID                  string                    `json:"progressId"`
+	SourceID                    string                    `json:"sourceId"`
+	RequestedAt                 time.Time                 `json:"requestedAt"`
+	Decision                    ResumeDecision            `json:"decision"`
+	Reason                      string                    `json:"reason"`
+	ResolvedReadalongManifestID string                    `json:"resolvedReadalongManifestId"`
+	ResolvedLocatorEnvelope     contentir.LocatorEnvelope `json:"resolvedLocatorEnvelope"`
+	RevisionMapID               string                    `json:"revisionMapId,omitempty"`
+	StaleProgressID             string                    `json:"staleProgressId,omitempty"`
+	RetryArtifactID             string                    `json:"retryArtifactId,omitempty"`
+	Offers                      []string                  `json:"offers,omitempty"`
+	Metadata                    map[string]any            `json:"metadata,omitempty"`
+}
+
+type ResumeResolutionRequest struct {
+	ProgressID            string
+	SourceID              string
+	SourceRevisionID      string
+	ReadalongManifestID   string
+	Kind                  DurableProgressKind
+	RequestedAt           time.Time
+	AudioArtifacts        []ResumeAudioArtifactEvidence
+	SyncFidelityDecisions []SyncFidelityDecision
+	RevisionMaps          []RevisionMap
+}
+
+type ResumeAudioArtifactEvidence struct {
+	ArtifactID          string                      `json:"artifactId"`
+	SourceID            string                      `json:"sourceId"`
+	SourceRevisionID    string                      `json:"sourceRevisionId"`
+	ReadalongManifestID string                      `json:"readalongManifestId"`
+	State               AudioArtifactState          `json:"state"`
+	Retry               *AudioArtifactRetryMetadata `json:"retry,omitempty"`
+}
+
+type RevisionMapCause string
+
+const (
+	RevisionMapCauseRepairOverlay        RevisionMapCause = "repair_overlay"
+	RevisionMapCauseExtractionCorrection RevisionMapCause = "extraction_correction"
+	RevisionMapCausePromotion            RevisionMapCause = "promotion"
+)
+
+type RevisionMapUnitMapping struct {
+	FromUnitID string  `json:"fromUnitId"`
+	ToUnitID   string  `json:"toUnitId"`
+	Confidence float64 `json:"confidence"`
+	Status     string  `json:"status,omitempty"`
+}
+
+type RevisionMapProgressMapping struct {
+	FromProgressID string  `json:"fromProgressId"`
+	ToProgressID   string  `json:"toProgressId"`
+	Confidence     float64 `json:"confidence"`
+}
+
+type RevisionMapLocatorMapping struct {
+	FromLocator         *contentir.Locator         `json:"fromLocator,omitempty"`
+	ToLocator           *contentir.Locator         `json:"toLocator,omitempty"`
+	FromLocatorEnvelope *contentir.LocatorEnvelope `json:"fromLocatorEnvelope,omitempty"`
+	ToLocatorEnvelope   *contentir.LocatorEnvelope `json:"toLocatorEnvelope,omitempty"`
+	Confidence          float64                    `json:"confidence"`
+	Status              string                     `json:"status,omitempty"`
+	TextQuote           string                     `json:"textQuote,omitempty"`
+}
+
+type RevisionMap struct {
+	SchemaVersion        string                       `json:"schemaVersion"`
+	RevisionMapID        string                       `json:"revisionMapId"`
+	SourceID             string                       `json:"sourceId"`
+	FromSourceRevisionID string                       `json:"fromSourceRevisionId"`
+	ToSourceRevisionID   string                       `json:"toSourceRevisionId"`
+	GeneratedAt          time.Time                    `json:"generatedAt"`
+	Cause                RevisionMapCause             `json:"cause"`
+	OverlayID            string                       `json:"overlayId,omitempty"`
+	Confidence           float64                      `json:"confidence"`
+	UnitMappings         []RevisionMapUnitMapping     `json:"unitMappings"`
+	LocatorMappings      []RevisionMapLocatorMapping  `json:"locatorMappings,omitempty"`
+	ProgressMappings     []RevisionMapProgressMapping `json:"progressMappings,omitempty"`
+	Metadata             map[string]any               `json:"metadata,omitempty"`
+}
+
 type PlaybackSessionStatus string
 
 const (

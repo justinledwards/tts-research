@@ -56,6 +56,7 @@ var (
 	ErrContentIRNotFound              = errors.New("content IR not found")
 	ErrSpeechPolicyProfileNotFound    = errors.New("speech policy profile not found")
 	ErrProgressNotFound               = errors.New("playback progress not found")
+	ErrDurableProgressInvalid         = errors.New("durable progress is invalid")
 	ErrPlaybackSessionNotFound        = errors.New("playback session not found")
 	ErrProjectBundleInvalid           = errors.New("project bundle is invalid")
 	ErrResearchModuleNotFound         = errors.New("research module not found")
@@ -267,6 +268,7 @@ type Service struct {
 	books                           map[string]storedBookSource
 	sourcePreps                     map[string]PreparedSource
 	progress                        map[string]PlaybackProgress
+	durableProgress                 map[string]DurableProgress
 	sessions                        map[string]PlaybackSession
 	profiles                        map[string]storedVoiceProfile
 	sources                         map[string]storedVoiceProfileSource
@@ -584,6 +586,7 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 		books:                           map[string]storedBookSource{},
 		sourcePreps:                     map[string]PreparedSource{},
 		progress:                        map[string]PlaybackProgress{},
+		durableProgress:                 map[string]DurableProgress{},
 		sessions:                        map[string]PlaybackSession{},
 		profiles:                        map[string]storedVoiceProfile{},
 		sources:                         map[string]storedVoiceProfileSource{},
@@ -602,6 +605,7 @@ func NewService(optimizer VoiceOptimizer, tts TTSAgent, checker VoiceChecker, op
 	service.reloadSourcePreps()
 	service.reloadVoiceProfileSources()
 	service.reloadProgress()
+	service.reloadDurableProgress()
 	service.reloadPlaybackSessions()
 	service.reloadProfiles()
 	service.reloadJobs()
