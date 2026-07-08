@@ -472,6 +472,43 @@ type AlignmentOptions struct {
 	RequiredForWordHighlight bool                     `json:"requiredForWordHighlight,omitempty"`
 }
 
+type SyncFidelity string
+
+const (
+	SyncFidelityExactWord  SyncFidelity = "exact_word"
+	SyncFidelityPhrase     SyncFidelity = "phrase"
+	SyncFidelityBlock      SyncFidelity = "block"
+	SyncFidelityAudioOnly  SyncFidelity = "audio_only"
+	SyncFidelitySourceOnly SyncFidelity = "source_only"
+	SyncFidelityNone       SyncFidelity = "none"
+)
+
+type SyncFidelityEvidence struct {
+	SourceRevisionCurrent bool    `json:"sourceRevisionCurrent"`
+	MappingValid          bool    `json:"mappingValid"`
+	TimingConfidence      bool    `json:"timingConfidence"`
+	LowResourceMode       bool    `json:"lowResourceMode"`
+	ArtifactCompatible    bool    `json:"artifactCompatible"`
+	Confidence            float64 `json:"confidence"`
+	DriftBudgetMS         int     `json:"driftBudgetMs,omitempty"`
+}
+
+type SyncFidelityDecision struct {
+	SchemaVersion       string               `json:"schemaVersion"`
+	DecisionID          string               `json:"decisionId,omitempty"`
+	SourceID            string               `json:"sourceId,omitempty"`
+	SourceRevisionID    string               `json:"sourceRevisionId,omitempty"`
+	ReadalongManifestID string               `json:"readalongManifestId,omitempty"`
+	AudioArtifactID     string               `json:"audioArtifactId,omitempty"`
+	HighlightMapID      string               `json:"highlightMapId,omitempty"`
+	GeneratedAt         time.Time            `json:"generatedAt"`
+	Fidelity            SyncFidelity         `json:"fidelity"`
+	ExactAllowed        bool                 `json:"exactAllowed"`
+	FallbackReason      string               `json:"fallbackReason,omitempty"`
+	Evidence            SyncFidelityEvidence `json:"evidence"`
+	Metadata            map[string]any       `json:"metadata,omitempty"`
+}
+
 type TimingArtifacts struct {
 	Status              string                            `json:"status"`
 	Summary             highlightmap.Summary              `json:"summary"`
@@ -480,6 +517,7 @@ type TimingArtifacts struct {
 	FragmentTimingURL   string                            `json:"fragmentTimingUrl,omitempty"`
 	TokenTimingURL      string                            `json:"tokenTimingUrl,omitempty"`
 	AlignmentQualityURL string                            `json:"alignmentQualityUrl,omitempty"`
+	SyncFidelity        *SyncFidelityDecision             `json:"syncFidelity,omitempty"`
 	FragmentTiming      *alignment.FragmentTimingArtifact `json:"fragmentTiming,omitempty"`
 	TokenTiming         *alignment.TokenTimingArtifact    `json:"tokenTiming,omitempty"`
 	AlignmentQuality    *alignment.AlignmentQualityReport `json:"alignmentQuality,omitempty"`

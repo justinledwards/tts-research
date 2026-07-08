@@ -2664,3 +2664,58 @@ duplicating every implementation detail from commits, PR text, or generated revi
   - `mise exec -- pnpm check` — pass; backend Go packages, 111 frontend test files / 748 tests passed.
   - `git diff --check` — pass.
 - [ ] commit/push/remote verify and Linear Done pending.
+
+## 2026-07-08 — QQP-433 kickoff
+
+- [x] selected QQP-433 as next dependency-order TTS-Research issue after QQP-432.
+- [x] preflight clean/remote-equal before kickoff:
+  - branch `niklas/voice-studio-follow-up` at `5faeec3ff7ee13f7f3777b293a03886105fadd46`.
+  - local HEAD equals `fork/niklas/voice-studio-follow-up`.
+- [x] Linear issue state before kickoff: `Backlog`.
+- [x] source docs inspected:
+  - `docs/architecture/source-reader-flow-invariants.md` exact word forbidden without source revision, mapping, timing confidence, and low-resource gates.
+  - `docs/contracts/readalong-sidecars.md` `SyncFidelityDecision` contract.
+  - `packages/schema/schemas/sync-fidelity-decision.v1.schema.json` and exact/low-resource public fixtures.
+  - runtime timing path in `backend/internal/pipeline/timing_artifacts.go` and alignment/highlight quality helpers.
+- [x] plan written: `docs/plans/linear/QQP-433-sync-fidelity-gates.md`.
+- [x] Linear moved to `In Progress`; kickoff comment posted.
+- [x] implementation worker `deleg_a19fa694` timed out with no summary, but left coherent scoped product diff; parent recovered and verified it.
+- [x] recovered implementation summary:
+  - added runtime `SyncFidelityDecision` / evidence types and additive `TimingArtifacts.syncFidelity`.
+  - added pipeline decision helper gating exact word sync on source context, word mapping, timing confidence, low-resource=false, and checked-compatible audio evidence.
+  - integrated decision derivation into timing artifact refresh.
+  - added focused decision tests for exact pass, low-resource block downgrade, unchecked ASR-disabled denial, retryable denial, missing mapping phrase fallback, heuristic block fallback, and audio-only fallback.
+- [x] parent verification after recovered diff passed:
+  - `gofmt -l backend/internal/pipeline/models_runtime.go backend/internal/pipeline/service.go backend/internal/pipeline/service_test.go backend/internal/pipeline/timing_artifacts.go backend/internal/pipeline/sync_fidelity_decisions.go backend/internal/pipeline/sync_fidelity_decisions_test.go` — clean output.
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline ./internal/highlightmap ./internal/alignment -run 'SyncFidelity|Highlight|Timing|Partial|Artifact|PreparedSource' -count=1` — pass (`pipeline` 8.091s, `highlightmap` 0.022s, `alignment` 0.011s).
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline -count=1` — pass (`ok`, 16.691s).
+  - `mise exec -- pnpm validate:ir` — pass; 4 Content IR fixtures, 55 public contract fixtures, 3 adapter files.
+  - `git diff --check` — pass.
+- [x] read-only spec review `deleg_329be4c1` returned `SPEC PASS`; no spec blockers.
+- [x] read-only quality review `deleg_7a3c4a59` returned `QUALITY APPROVED`; no blocking quality issues.
+- [x] final gates passed before ChatGPT peer checkpoint.
+- [x] ChatGPT Project peer checkpoint returned `PEER REQUEST_CHANGES`; response saved at `docs/reviews/chatgpt/qqp433-peer-checkpoint.response.md`.
+- [x] peer blocker scoped: exact source-word mapping accepted presence-only IDs and could over-claim exact after source/spoken text divergence.
+- [x] focused repair applied: highlight-map v2 now preserves source text separately from spoken token text; exact sync gate requires normalized source/spoken word equivalence; regressions added for divergent source/spoken text.
+- [x] focused repair verification passed:
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline ./internal/highlightmap ./internal/alignment -run 'SyncFidelity|Highlight|Timing|Partial|Artifact|PreparedSource|BuildV2' -count=1` — pass (`pipeline` 10.006s, `highlightmap` 0.050s, `alignment` 0.035s).
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline ./internal/highlightmap -count=1` initially hit `TestRetryJobReusesPersistedReadySegments` transient async state failure; rerun of that specific test passed (0.178s), and full `./internal/pipeline -count=1` rerun passed (17.241s).
+  - `mise exec -- pnpm validate:ir` — pass; 4 Content IR fixtures, 55 public contract fixtures, 3 adapter files.
+  - `git diff --check` — pass.
+- [x] fresh post-sentinel verification passed at 2026-07-08T05:32/05:33+02:00:
+  - `gofmt -w backend/internal/highlightmap/build_test.go backend/internal/highlightmap/build_v2.go backend/internal/pipeline/sync_fidelity_decisions.go backend/internal/pipeline/sync_fidelity_decisions_test.go` — exit 0.
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline ./internal/highlightmap ./internal/alignment -run 'SyncFidelity|Highlight|Timing|Partial|Artifact|PreparedSource|BuildV2' -count=1` — pass (`pipeline` 8.828s, `highlightmap` 0.025s, `alignment` 0.014s).
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline -count=1` — pass (18.075s).
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/highlightmap -count=1` — pass (0.025s).
+  - `mise exec -- pnpm validate:ir` — pass; 4 Content IR fixtures, 55 public contract fixtures, 3 adapter files.
+  - `git diff --check` — pass.
+- [x] ChatGPT Project repair re-check returned `PEER APPROVED`; response saved at `docs/reviews/chatgpt/qqp433-peer-repair-recheck.response.md`.
+- [x] final closeout gates passed after ChatGPT repair approval:
+  - `gofmt -l backend/internal/highlightmap/build_test.go backend/internal/highlightmap/build_v2.go backend/internal/pipeline/models_runtime.go backend/internal/pipeline/service.go backend/internal/pipeline/service_test.go backend/internal/pipeline/timing_artifacts.go backend/internal/pipeline/sync_fidelity_decisions.go backend/internal/pipeline/sync_fidelity_decisions_test.go` — clean.
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline ./internal/highlightmap ./internal/alignment -run 'SyncFidelity|Highlight|Timing|Partial|Artifact|PreparedSource|BuildV2' -count=1` — pass (`pipeline` 8.300s, `highlightmap` 0.025s, `alignment` 0.013s).
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline ./internal/highlightmap -count=1` — pass (`pipeline` 17.359s, `highlightmap` 0.037s).
+  - `mise exec -- pnpm validate:ir` — pass; 4 Content IR fixtures, 55 public contract fixtures, 3 adapter files.
+  - `mise exec -- pnpm check` — pass; 111 frontend test files / 748 tests, backend `go test ./...`, scripts/adapters/package gates all green.
+  - `git diff --check` — pass.
+- [ ] commit/push/remote verify and Linear Done pending.
+- [ ] targeted peer-blocker re-review `deleg_68990223` still pending/async; ChatGPT Project repair re-check is approved and saved.

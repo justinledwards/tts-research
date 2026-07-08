@@ -133,6 +133,7 @@ func BuildV2(request BuildV2Request) HighlightMapV2 {
 			readingPosition:  position,
 			scopeKey:         scopeKey,
 			sourceID:         sourceID,
+			sourceText:       position.TextQuote,
 			sourceWordIndex:  sourceWordIndexForTiming(request.WordSpans, fragment.TokenStart),
 			sourceLocator:    locatorForV2Entry(request.WordSpans, fragment.TokenStart, fragment.Text, position),
 			speechPlanID:     speechPlanID,
@@ -164,6 +165,7 @@ func BuildV2(request BuildV2Request) HighlightMapV2 {
 				readingPosition:  position,
 				scopeKey:         scopeKey,
 				sourceID:         sourceID,
+				sourceText:       sourceWordTextForTiming(request.WordSpans, token.Index, token.Text),
 				sourceWordIndex:  sourceWordIndexForTiming(request.WordSpans, token.Index),
 				sourceLocator:    locatorForV2Entry(request.WordSpans, token.Index, token.Text, position),
 				speechPlanID:     speechPlanID,
@@ -208,6 +210,7 @@ type v2EntryInput struct {
 	readingPosition  ReadingPosition
 	scopeKey         string
 	sourceID         string
+	sourceText       string
 	sourceWordIndex  *int
 	sourceLocator    contentir.Locator
 	speechPlanID     string
@@ -228,6 +231,8 @@ func v2Entry(input v2EntryInput) HighlightMapV2Entry {
 	if sourceWordIndex != nil {
 		sourceWordID = sourceWordIDForV2(input.sourceID, input.scopeKey, *sourceWordIndex)
 	}
+	sourceText := firstNonEmpty(input.sourceText, input.readingPosition.TextQuote, input.text)
+	spokenText := strings.TrimSpace(input.text)
 	return HighlightMapV2Entry{
 		EntryID:               fmt.Sprintf("%s:%04d", input.level, input.entryIndex),
 		Level:                 input.level,
@@ -242,10 +247,10 @@ func v2Entry(input v2EntryInput) HighlightMapV2Entry {
 		SegmentID:             fmt.Sprintf("segment-%04d", max(1, input.entryIndex+1)),
 		SourceWordID:          sourceWordID,
 		SourceWordIndex:       sourceWordIndex,
-		TextQuote:             strings.TrimSpace(input.text),
-		RawText:               strings.TrimSpace(input.text),
-		NormalizedText:        strings.TrimSpace(input.text),
-		SpokenText:            strings.TrimSpace(input.text),
+		TextQuote:             strings.TrimSpace(sourceText),
+		RawText:               strings.TrimSpace(sourceText),
+		NormalizedText:        strings.TrimSpace(sourceText),
+		SpokenText:            spokenText,
 		ReadingPosition:       input.readingPosition,
 		TokenIndex:            input.tokenIndex,
 		FragmentIndex:         input.fragmentIndex,
@@ -262,11 +267,18 @@ func v2Entry(input v2EntryInput) HighlightMapV2Entry {
 		AlignmentWarnings:     uniqueStrings(input.warnings),
 		FallbackMode:          input.fallbackMode,
 		Traceability: &HighlightMapV2Traceability{
-			SourceTextMatch:     strings.TrimSpace(input.text),
-			NormalizedTextMatch: strings.TrimSpace(input.text),
-			SpokenTextMatch:     strings.TrimSpace(input.text),
+			SourceTextMatch:     strings.TrimSpace(sourceText),
+			NormalizedTextMatch: strings.TrimSpace(sourceText),
+			SpokenTextMatch:     spokenText,
 		},
 	}
+}
+
+func sourceWordTextForTiming(wordSpans []WordSpan, tokenIndex int, fallback string) string {
+	if tokenIndex >= 0 && tokenIndex < len(wordSpans) {
+		return firstNonEmpty(wordSpans[tokenIndex].Text, fallback)
+	}
+	return fallback
 }
 
 func v2Summary(

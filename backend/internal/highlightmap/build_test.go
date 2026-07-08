@@ -142,6 +142,48 @@ func TestBuildV2CarriesSourceWordReadingPositions(t *testing.T) {
 	}
 }
 
+func TestBuildV2PreservesSourceAndSpokenWordTextSeparately(t *testing.T) {
+	request := fixtureRequest(alignment.TimingConfidence{
+		Overall: 0.95,
+		Segment: 0.95,
+		Token:   0.95,
+	}, alignment.DriftStats{})
+	request.WordSpans[0].Text = "source-word"
+	request.Tokens.Tokens[0].Text = "spoken-word"
+	request.Fragments.Source = alignment.TimingSourceNative
+	request.Tokens.Source = alignment.TimingSourceNative
+	report := alignment.AlignmentReportForTiming(
+		alignment.NormalizedTiming{Fragments: request.Fragments, Tokens: request.Tokens},
+		alignment.AlignmentModeProviderOnly,
+		nil,
+		nil,
+	)
+	highlight := BuildV2(BuildV2Request{
+		JobID:        request.JobID,
+		BookSourceID: request.BookSourceID,
+		ScopeKey:     request.ScopeKey,
+		SpeechPlanID: request.JobID,
+		WordSpans:    request.WordSpans,
+		Fragments:    request.Fragments,
+		Tokens:       request.Tokens,
+		GeneratedAt:  request.GeneratedAt,
+		Quality:      report,
+	})
+	var entry HighlightMapV2Entry
+	for _, candidate := range highlight.Entries {
+		if candidate.Level == "word" && candidate.SourceWordIndex != nil && *candidate.SourceWordIndex == 10 {
+			entry = candidate
+			break
+		}
+	}
+	if entry.TextQuote != "source-word" || entry.SpokenText != "spoken-word" {
+		t.Fatalf("entry text quote/spoken = %q/%q, want source-word/spoken-word", entry.TextQuote, entry.SpokenText)
+	}
+	if entry.Traceability == nil || entry.Traceability.SourceTextMatch != "source-word" || entry.Traceability.SpokenTextMatch != "spoken-word" {
+		t.Fatalf("traceability = %#v, want source/spoken text split", entry.Traceability)
+	}
+}
+
 func fixtureRequest(confidence alignment.TimingConfidence, drift alignment.DriftStats) BuildRequest {
 	generatedAt := time.Unix(0, 0).UTC()
 	fragments := []alignment.FragmentTiming{{

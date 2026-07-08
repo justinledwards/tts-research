@@ -318,6 +318,15 @@ func TestPreparedSourceJobTimingUsesPreparedSourceScope(t *testing.T) {
 		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
 	}
 	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.Timing == nil || completed.Timing.SyncFidelity == nil {
+		t.Fatalf("completed timing sync fidelity = %#v, want additive fidelity decision metadata", completed.Timing)
+	}
+	if completed.Timing.SyncFidelity.SourceID != source.ID || completed.Timing.SyncFidelity.ExactAllowed {
+		t.Fatalf("sync fidelity = %#v, want prepared source-bound non-exact decision for mock heuristic timing", completed.Timing.SyncFidelity)
+	}
+	if completed.Timing.SyncFidelity.Fidelity != pipeline.SyncFidelityBlock {
+		t.Fatalf("sync fidelity = %q, want block fallback for mock heuristic timing", completed.Timing.SyncFidelity.Fidelity)
+	}
 	timing, err := service.GetHighlightMapV2(completed.ID)
 	if err != nil {
 		t.Fatalf("GetHighlightMapV2 returned error: %v", err)

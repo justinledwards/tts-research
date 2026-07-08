@@ -185,6 +185,7 @@ type Options struct {
 	ResearchModulePromptDisabled         bool
 	ResearchModuleCloneTimeoutSeconds    int
 	Alignment                            AlignmentOptions
+	SyncLowResourceMode                  bool
 	DefaultTTSEngine                     string
 	TTSEngines                           []TTSEngineRegistration
 	incrementalExtractionObserver        func(context.Context, IncrementalExtractionSnapshot)

@@ -75,6 +75,14 @@ func (service *Service) refreshTimingArtifacts(ctx context.Context, id string, f
 	if err := highlightmap.PersistAlignmentQuality(jobDir, alignmentResult.Quality); err != nil {
 		return nil, err
 	}
+	syncFidelity := deriveSyncFidelityDecision(syncFidelityDecisionInput{
+		Job:         job.VoiceJob,
+		Highlight:   highlightV2,
+		Quality:     alignmentResult.Quality,
+		GeneratedAt: highlightV2.GeneratedAt,
+		Final:       final,
+		LowResource: service.options.SyncLowResourceMode,
+	})
 
 	artifacts := TimingArtifacts{
 		Status:              highlight.Status,
@@ -84,6 +92,7 @@ func (service *Service) refreshTimingArtifacts(ctx context.Context, id string, f
 		FragmentTimingURL:   fmt.Sprintf("/api/voice-jobs/%s/timing/fragments", id),
 		TokenTimingURL:      fmt.Sprintf("/api/voice-jobs/%s/timing/tokens", id),
 		AlignmentQualityURL: fmt.Sprintf("/api/voice-jobs/%s/timing/alignment", id),
+		SyncFidelity:        &syncFidelity,
 		AlignmentQuality:    &alignmentResult.Quality,
 	}
 	var updatedJob VoiceJob
