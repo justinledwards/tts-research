@@ -1,0 +1,140 @@
+# QQP-438 ChatGPT peer checkpoint response
+
+Conversation: https://chatgpt.com/g/g-p-6a4c3396e3948191a15f9959895179d7-tts-research/c/6a4e79c5-832c-83eb-b9f5-cc5b36e523e0
+
+```text
+heading "ChatGPT said:" [level=4]
+  - paragraph: I’ll inspect the archive as source of truth, focusing on the Reader shell vocabulary, derivation precedence, exports, tests, and any scope creep beyond QQP-438.
+  - paragraph:
+    - text: I’m reviewing the extracted snapshot without git metadata, and the new surface appears concentrated in
+    - code: reading-surface
+    - text: model/export/tests/docs. Next I’m checking the derivation against existing manifest, artifact, lifecycle, and runtime tokens.
+  - button "Thought for 9m 11s" [e162]
+  - paragraph: PEER REQUEST_CHANGES
+  - list:
+    - listitem:
+      - paragraph:
+        - strong:
+          - text: "Blocking:"
+          - code: "generatedAudioLifecycle: \"ready\""
+          - text: overclaims
+          - code: checked
+          - text: .
+      - paragraph:
+        - strong: "Path:"
+        - code: frontend/src/features/reading-surface/model.ts
+      - paragraph:
+        - strong: "Evidence:"
+        - code: deriveReaderShellState
+        - text: returns
+        - code: "\"checked\""
+        - text: when
+        - code: generatedAudioLifecycle === "ready"
+        - text: even when no
+        - code: "audioArtifactState: \"checked\""
+        - text: evidence is present (
+        - code: model.ts:188-189
+        - text: ). The contracts keep
+        - code: AudioArtifactState
+        - text: as a separate
+        - code: unchecked
+        - text: /
+        - code: checked
+        - text: state surface, and backend partial-audio manifest construction can mark a completed job/status as ready while leaving the artifact state
+        - code: unchecked
+        - text: unless checked evidence exists (
+        - code: backend/internal/pipeline/service.go:2684-2698
+        - text: ; contract state split at
+        - code: packages/schema/src/generated/contracts.ts:551-559
+        - text: ).
+      - paragraph:
+        - strong: "Risk to QQP-439/440:"
+        - text: Reader transport and windowing/highlight scheduling could treat playable-but-unchecked audio as checked, hiding the exact seam that downstream state machine work needs for safe playback/highlight claims.
+      - paragraph:
+        - strong: "Acceptance criterion:"
+        - code: "generatedAudioLifecycle: \"ready\""
+        - text: must not derive
+        - code: "\"checked\""
+        - text: "without explicit checked artifact evidence. Add deterministic tests such as:"
+      - text: TypeScript
+      - button "Copy" [e163]
+      - code: "expect(deriveReaderShellState({ generatedAudioLifecycle: \"ready\" })).toBe(\"unchecked\"); expect( deriveReaderShellState({ generatedAudioLifecycle: \"ready\", audioArtifactState: \"unchecked\" }), ).toBe(\"unchecked\"); expect( deriveReaderShellState({ generatedAudioLifecycle: \"ready\", audioArtifactState: \"checked\" }), ).toBe(\"checked\");"
+    - listitem:
+      - paragraph:
+        - strong: "Blocking: durable progress state is not part of the shell-state input seam."
+      - paragraph:
+        - strong: "Path:"
+        - code: frontend/src/features/reading-surface/model.ts
+      - paragraph:
+        - strong: "Evidence:"
+        - code: ReaderShellStateInput
+        - text: includes artifact, lifecycle, job, readalong runtime/timing, manifest, and source readiness fields, but no durable progress/progress-state field (
+        - code: model.ts:33-44
+        - text: ). QQP-438’s plan scopes derivation from existing manifest/artifact/progress state, and the schema exposes durable progress states including
+        - code: degraded
+        - text: ","
+        - code: stale
+        - text: ","
+        - code: superseded
+        - text: ","
+        - code: failed
+        - text: ", and"
+        - code: interrupted_retriable
+        - text: (
+        - code: docs/plans/linear/QQP-438-reader-shell-state-vocabulary-and-mode-labels.md:15-17
+        - text: ","
+        - code: packages/schema/src/generated/contracts.ts:763-778
+        - text: ).
+      - paragraph:
+        - strong: "Risk to QQP-439/440:"
+        - text: QQP-440 depends on durable progress/resume/highlight state. Without an official progress input, downstream code must duplicate precedence logic or smuggle progress state through unrelated manifest/readalong fields, making stale/superseded/failed progress handling non-contractual.
+      - paragraph:
+        - strong: "Acceptance criterion:"
+        - text: Add a progress-state input, for example
+        - code: "durableProgressState?: string | null"
+        - text: ", and pin mappings for the overlapping contract states:"
+      - text: TypeScript
+      - button "Copy" [e164]
+      - code: "expect(deriveReaderShellState({ durableProgressState: \"interrupted_retriable\" })).toBe(\"retryable\"); expect(deriveReaderShellState({ durableProgressState: \"failed\" })).toBe(\"failed\"); expect(deriveReaderShellState({ durableProgressState: \"stale\" })).toBe(\"stale\"); expect(deriveReaderShellState({ durableProgressState: \"superseded\" })).toBe(\"superseded\");"
+      - paragraph:
+        - code: current
+        - text: /
+        - code: remapped
+        - text: should be explicitly documented/tested as non-readiness-claiming unless another surface proves audio readiness.
+    - listitem:
+      - paragraph:
+        - strong: "Blocking: tests do not pin mixed-state precedence or bad-input safety."
+      - paragraph:
+        - strong: "Path:"
+        - code: frontend/src/features/reading-surface/model.test.ts
+      - paragraph:
+        - strong: "Evidence:"
+        - text: The current derivation test covers one surface at a time (
+        - code: model.test.ts:68-77
+        - text: ). It does not cover mixed superseded/retryable/failed/stale/degraded/generating/checked inputs, nor unknown tokens. Those are explicit approval criteria for QQP-438 because this is a downstream contract seam.
+      - paragraph:
+        - strong: "Risk to QQP-439/440:"
+        - text: Real Reader inputs will be mixed during repair, retry, stale manifest, and progress transitions. Without precedence tests, later transport/windowing work cannot safely depend on the vocabulary semantics.
+      - paragraph:
+        - strong: "Acceptance criterion:"
+        - text: "Add table-driven tests that lock the precedence and safe fallback, at minimum:"
+      - text: TypeScript
+      - button "Copy" [e165]
+      - code: "expect( deriveReaderShellState({ readalongManifestState: \"superseded\", audioArtifactState: \"retryable\", generatedAudioLifecycle: \"failed\", }), ).toBe(\"superseded\"); expect( deriveReaderShellState({ audioArtifactState: \"retryable\", generatedAudioLifecycle: \"failed\", readAlongRuntimeState: \"stale-audio\", }), ).toBe(\"retryable\"); expect( deriveReaderShellState({ generatedAudioLifecycle: \"failed\", readAlongRuntimeState: \"stale-audio\", }), ).toBe(\"failed\"); expect( deriveReaderShellState({ readAlongRuntimeState: \"stale-audio\", readAlongTimingState: \"degraded\", }), ).toBe(\"stale\"); expect( deriveReaderShellState({ audioArtifactState: \"not-a-real-state\", generatedAudioLifecycle: \"also-unknown\", readalongManifestState: \"unknown\", }), ).toBe(\"source-only\");"
+  - group "Response actions":
+    - button "Copy response" [e166]
+    - button "Pro feedback" [e167]
+    - button "Add to project sources" [e168]
+    - button "Switch model" [e169]
+    - button "More actions" [e170]
+  - button "Add files and more" [e171]
+  - textbox "Chat with ChatGPT" [e172]:
+    - paragraph: Ask anything
+  - button "Pro Extended" [e173]
+  - button "Start dictation" [e174]:
+    - img
+  - button "Start Voice" [e175]
+  - text: ChatGPT can make mistakes. Check important info.
+- alert
+- status
+```

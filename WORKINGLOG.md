@@ -1,3 +1,10 @@
+## 2026-07-08 17:59 CEST - QQP-438 Reader shell state vocabulary and mode labels
+
+- [ ] inspect Reader/readalong state surfaces
+- [ ] add deterministic vocabulary tests
+- [ ] implement minimal Reader shell vocabulary helper and wiring
+- [ ] run focused frontend tests and diff checks
+
 ## 2026-06-14 12:43 CEST - Source Processing Phase Orchestration and Resumable Failure Model
 
 - [ ] add phase-oriented backend model and phase-aware job state
@@ -3012,3 +3019,39 @@ duplicating every implementation detail from commits, PR text, or generated revi
   - `mise exec -- pnpm validate:ir`;
   - `git diff --check`;
   - `mise exec -- pnpm check`.
+
+## 2026-07-08 — QQP-438 kickoff
+
+- [x] QQP-436 completed, pushed, remote-verified, and moved Done in Linear at `84e80a417823a19c1e744462a18a738698783661`.
+- [x] QQP-437 checked but blocked/deferred because dependency `QQP-4` is still `Todo`.
+- [x] selected next unblocked issue: QQP-438 — Reader shell state vocabulary and mode labels.
+- [x] issue URL: https://linear.app/niklas-olsson/issue/QQP-438/reader-shell-state-vocabulary-and-mode-labels.
+- [x] plan written: `docs/plans/linear/QQP-438-reader-shell-state-vocabulary-and-mode-labels.md`.
+- [x] moved Linear In Progress and dispatched implementation worker `deleg_f6d6b8bb`.
+
+## 2026-07-08 — QQP-438 timeout recovery and review
+
+- [x] implementation worker `deleg_f6d6b8bb` timed out after 600s with no summary; parent recovered the dirty diff from the worktree.
+- [x] recovered diff is scoped to Reader shell vocabulary/model tests/exports plus QQP-438 plan/log.
+- [x] parent recovery gates passed:
+  - `mise exec -- pnpm --filter @tts-research/frontend test -- src/features/reading-surface/model.test.ts`;
+  - `git diff --check`;
+  - `mise exec -- pnpm --filter @tts-research/frontend typecheck`;
+  - `mise exec -- pnpm validate:ir`.
+- [x] read-only review fan-in `deleg_3313e043`: `SPEC PASS` and `QUALITY APPROVED`.
+- [ ] downstream Reader seam ChatGPT peer checkpoint pending before closeout.
+
+## 2026-07-08 — QQP-438 peer-blocker approval and closeout
+
+- [x] ChatGPT downstream peer checkpoint returned `PEER REQUEST_CHANGES`; response saved at `docs/reviews/chatgpt/qqp438-peer-checkpoint.response.md`.
+- [x] peer blockers repaired by `deleg_9eceed35`:
+  - `generatedAudioLifecycle: "ready"` no longer overclaims `checked` without checked artifact evidence;
+  - `durableProgressState` is part of the shell-state input seam and maps interrupted/failed/stale/superseded progress states;
+  - mixed-state precedence and unknown-token fallback are pinned in tests.
+- [x] targeted peer-blocker re-review `deleg_83ecd136`: `PEER-BLOCKER APPROVED`.
+- [x] final closeout gates passed after peer-blocker approval:
+  - `mise exec -- pnpm --filter @tts-research/frontend test -- src/features/reading-surface/model.test.ts`;
+  - `mise exec -- pnpm --filter @tts-research/frontend typecheck`;
+  - `mise exec -- pnpm validate:ir`;
+  - `mise exec -- pnpm check`.
+- [x] `WORKINGLOG.md` EOF normalized before final `git diff --check`.
