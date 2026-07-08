@@ -1192,6 +1192,9 @@ type ResumeAudioArtifactEvidence struct {
 	SourceID            string                      `json:"sourceId"`
 	SourceRevisionID    string                      `json:"sourceRevisionId"`
 	ReadalongManifestID string                      `json:"readalongManifestId"`
+	UnitID              string                      `json:"unitId,omitempty"`
+	SegmentID           string                      `json:"segmentId,omitempty"`
+	CompatibilityKey    string                      `json:"compatibilityKey,omitempty"`
 	State               AudioArtifactState          `json:"state"`
 	Retry               *AudioArtifactRetryMetadata `json:"retry,omitempty"`
 }

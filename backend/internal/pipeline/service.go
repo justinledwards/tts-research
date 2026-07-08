@@ -190,6 +190,7 @@ type Options struct {
 	DefaultTTSEngine                     string
 	TTSEngines                           []TTSEngineRegistration
 	incrementalExtractionObserver        func(context.Context, IncrementalExtractionSnapshot)
+	interruptedJobMetadataWriter         func(*Service, VoiceJob) error
 }
 
 const (
@@ -1709,6 +1710,7 @@ func (service *Service) reusableAudioPrefix(sourceJobID string, targetSegments [
 	if err != nil || sourceJob.AudioReadySegments <= 0 {
 		return nil
 	}
+	sourceJob.VoiceJob = normalizePartialAudioManifest(sourceJob.VoiceJob)
 
 	readyCount := min(sourceJob.AudioReadySegments, len(sourceJob.Segments), len(targetSegments))
 	if readyCount <= 0 {
@@ -1721,6 +1723,14 @@ func (service *Service) reusableAudioPrefix(sourceJobID string, targetSegments [
 	for index := 1; index <= readyCount; index += 1 {
 		sourceSegment := sourceJob.Segments[index-1]
 		if strings.TrimSpace(sourceSegment.Text) != strings.TrimSpace(targetSegments[index-1]) {
+			break
+		}
+		targetCompatibilityKey := segmentAudioArtifactCompatibilityKey(sourceJob.VoiceJob, index, targetSegments[index-1])
+		sourceCompatibilityKey := sourceSegment.ArtifactCompatibilityKey
+		if strings.TrimSpace(sourceCompatibilityKey) == "" {
+			sourceCompatibilityKey = segmentAudioArtifactCompatibilityKey(sourceJob.VoiceJob, index, sourceSegment.Text)
+		}
+		if !audioArtifactStateAllowsCompatibleReuse(sourceSegment.ArtifactState) || sourceCompatibilityKey != targetCompatibilityKey {
 			break
 		}
 		segmentAudio, err := service.readySegmentAudio(sourceJob, index)
@@ -1763,10 +1773,6 @@ func (service *Service) reusableAudioPrefix(sourceJobID string, targetSegments [
 		}
 		if check.Provider == "" {
 			check.Provider = "reused"
-		}
-		sourceCompatibilityKey := sourceSegment.ArtifactCompatibilityKey
-		if strings.TrimSpace(sourceCompatibilityKey) == "" {
-			sourceCompatibilityKey = segmentAudioArtifactCompatibilityKey(sourceJob.VoiceJob, index, sourceSegment.Text)
 		}
 		reused = append(reused, reusableAudioSegment{
 			index:                  index,
@@ -3488,6 +3494,82 @@ func (service *Service) failJobByID(id string, err error) {
 	}
 }
 
+func markInterruptedRuntimeJob(job VoiceJob, interruptedAt time.Time) (VoiceJob, bool) {
+	if !jobStatusIsActive(job.Status) {
+		return job, false
+	}
+	job.Status = JobStatusCancelled
+	job.Error = "interrupted by backend restart"
+	job.TerminalReason = JobTerminalReasonSystemCancelled
+	job.FailureKind = JobFailureKindCancellation
+	job.Retriable = true
+	if job.FailedPhase == "" && isKnownJobPipelinePhase(job.Phase) {
+		job.FailedPhase = job.Phase
+	}
+	job.Retries.CurrentSegment = retryAffectedSegmentIndex(job)
+	if job.Retries.TotalSegments <= 0 {
+		job.Retries.TotalSegments = len(job.Segments)
+	}
+	for index := range job.Segments {
+		segmentIndex := index + 1
+		status := strings.TrimSpace(job.Segments[index].Status)
+		if segmentIndex == job.Retries.CurrentSegment || status == "running" || status == "checking" || status == "retrying" {
+			job.Segments[index].Status = "interrupted"
+			job.Segments[index].Reason = "backend restart interrupted active segment work"
+		}
+	}
+	if job.Stages.Optimization == StageStatusRunning {
+		job.Stages.Optimization = StageStatusFailed
+	}
+	if job.Stages.Synthesis == StageStatusRunning {
+		job.Stages.Synthesis = StageStatusFailed
+	}
+	if job.Stages.Checker == StageStatusRunning {
+		job.Stages.Checker = StageStatusFailed
+	}
+	completedAt := interruptedAt.UTC()
+	job.CompletedAt = &completedAt
+	job.UpdatedAt = completedAt
+	job.Progress = JobProgress{
+		Message:        "Job interrupted",
+		Detail:         "Backend restart detected orphaned active work; affected segment can be retried.",
+		ActiveStage:    string(JobStatusCancelled),
+		CurrentSegment: job.Retries.CurrentSegment,
+		TotalSegments:  job.Retries.TotalSegments,
+		StartedAt:      &completedAt,
+	}
+	return normalizePartialAudioManifest(job), true
+}
+
+func jobStatusIsActive(status JobStatus) bool {
+	switch status {
+	case JobStatusQueued, JobStatusOptimizing, JobStatusSynthesizing, JobStatusChecking, JobStatusRetrying:
+		return true
+	default:
+		return false
+	}
+}
+
+func retryAffectedSegmentIndex(job VoiceJob) int {
+	if job.Retries.CurrentSegment > 0 && job.Retries.CurrentSegment <= len(job.Segments) && job.Retries.CurrentSegment > job.AudioReadySegments {
+		return job.Retries.CurrentSegment
+	}
+	return firstActiveJobSegmentIndex(job)
+}
+
+func firstActiveJobSegmentIndex(job VoiceJob) int {
+	for index, segment := range job.Segments {
+		switch strings.TrimSpace(segment.Status) {
+		case "running", "checking", "retrying", "failed", "interrupted":
+			return index + 1
+		}
+	}
+	if job.AudioReadySegments < len(job.Segments) {
+		return job.AudioReadySegments + 1
+	}
+	return max(1, min(job.Retries.CurrentSegment, len(job.Segments)))
+}
+
 func (service *Service) cancelJobByID(id string) {
 	service.updateJob(id, func(job *storedJob) {
 		job.Status = JobStatusCancelled
@@ -3508,6 +3590,10 @@ func (service *Service) cancelJobByID(id string) {
 		job.Retriable = true
 		if job.FailedPhase == "" && isKnownJobPipelinePhase(job.Phase) {
 			job.FailedPhase = job.Phase
+		}
+		job.Retries.CurrentSegment = retryAffectedSegmentIndex(job.VoiceJob)
+		if job.Retries.TotalSegments <= 0 {
+			job.Retries.TotalSegments = len(job.Segments)
 		}
 		setProgress(job, string(JobStatusCancelled), "Job cancelled", "Processing was cancelled by user request.", job.Retries.CurrentSegment, job.Retries.TotalSegments)
 	})

@@ -2809,3 +2809,118 @@ duplicating every implementation detail from commits, PR text, or generated revi
   - contract gate passed: `mise exec -- pnpm validate:ir`.
   - hygiene passed: `gofmt -l ...`, `git diff --check`.
 - [ ] commit/push/remote verify and Linear Done pending.
+
+## 2026-07-08 — QQP-435 kickoff
+
+- [x] selected next issue after QQP-434 closeout: QQP-435 — Retry and interrupted artifact semantics.
+- [x] repo preflight:
+  - clean worktree after QQP-434 commit.
+  - branch `niklas/voice-studio-follow-up` at `c92b43361ec5a7931b9187cc2fac352ccd43b2e4`.
+  - local HEAD equals `fork/niklas/voice-studio-follow-up`.
+- [x] live Linear dependency check:
+  - QQP-424 Done.
+  - QQP-432 Done.
+  - QQP-434 Done.
+- [x] plan written: `docs/plans/linear/QQP-435-retry-interrupted-artifact-semantics.md`.
+- [x] Linear moved In Progress and kickoff comment posted.
+- [x] implementation worker dispatched for QQP-435.
+
+## 2026-07-08 — QQP-435 timeout recovery / parent verification
+
+- [x] implementation worker `deleg_c93b1239` timed out after 600s with no summary.
+- [x] parent treated worktree as untrusted and inspected actual dirty scope:
+  - `backend/internal/pipeline/audio_artifact_states.go`
+  - `backend/internal/pipeline/durable_progress_test.go`
+  - `backend/internal/pipeline/models.go`
+  - `backend/internal/pipeline/progress.go`
+  - `backend/internal/pipeline/projects.go`
+  - `backend/internal/pipeline/service.go`
+  - `backend/internal/pipeline/retry_interrupted_artifact_test.go`
+- [x] recovered implementation appears scoped to QQP-435:
+  - segment-scoped retry metadata and interrupted/retryable artifact states;
+  - startup reload converts active jobs to interrupted/retriable instead of running;
+  - reusable audio prefix now stops at non-reusable/stale/retryable segments;
+  - resume resolver requires matching unit/segment artifact evidence and avoids exact current resume for stale/replaced/failed/non-checked artifacts.
+- [x] parent verification:
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline ./internal/httpapi -run 'Retry|Interrupted|Artifact|Progress|Resume|Manifest|Source|SyncFidelity' -count=1` -> pass.
+  - `mise exec -- pnpm validate:ir` -> pass.
+  - `gofmt -l backend/internal/pipeline/...` -> clean.
+  - `git diff --check` -> pass.
+  - `mise exec -- pnpm check` -> pass.
+- [ ] SPEC and QUALITY read-only reviews pending on recovered current diff.
+
+## 2026-07-08 — QQP-435 quality repair
+
+- [x] SPEC review `deleg_186ef3d1` returned SPEC PASS.
+- [x] QUALITY review `deleg_186ef3d1` returned REQUEST_CHANGES:
+  - high: resume artifact identity accepted missing unit/segment evidence and could over-promote retry/current decisions.
+  - medium: startup interrupted-job metadata write errors were silently swallowed.
+- [x] parent repair:
+  - `resumeAudioArtifactUnitMatches` now requires non-empty matching `UnitID`; when progress has `SegmentID`, artifact `SegmentID` must match; segment-scoped retry evidence must include segment ID.
+  - added missing-unit, missing-segment, wrong-unit, and wrong-segment negative resume tests.
+  - reload interrupted-job write errors now surface in in-memory job error/progress detail through a deterministic package-private writer hook; added failure-injection regression.
+- [x] verification after repair:
+  - targeted quality repair Go tests -> pass.
+  - `cd backend && GOCACHE=${GOCACHE:-/tmp/tts-research-go-build} go test ./internal/pipeline ./internal/httpapi -run 'Retry|Interrupted|Artifact|Progress|Resume|Manifest|Source|SyncFidelity' -count=1` -> pass.
+  - `mise exec -- pnpm validate:ir` -> pass.
+  - `gofmt -l ...` -> clean.
+  - `git diff --check` -> pass.
+- [ ] targeted quality re-review pending on the two findings.
+
+## 2026-07-08 — QQP-435 quality re-review approved
+
+- [x] targeted quality re-review `deleg_5c04fdf1`: QUALITY APPROVED.
+- [x] confirmed repairs:
+  - resume artifact evidence missing/wrong unit or segment cannot promote retry/current decisions.
+  - exact current resume requires matched checked artifact evidence.
+  - interrupted reload metadata write failures are visible in memory while preserving interrupted/retriable state.
+- [ ] final closeout gates pending.
+
+## 2026-07-08 — QQP-435 ChatGPT peer checkpoint
+
+- [x] final local gates passed before peer:
+  - focused Go gate -> pass.
+  - `mise exec -- pnpm validate:ir` -> pass.
+  - `mise exec -- pnpm check` -> pass.
+  - gofmt and `git diff --check` -> pass.
+- [x] ChatGPT Project dirty-worktree archive submitted: `/tmp/tts-research-qqp435-peer-20260708T133733Z.zip` (`317078cdb98dc40f1209e1a4ceb4b4cb070df4b1a8c996ad982c5dc735f0da2b`).
+- [x] response saved: `docs/reviews/chatgpt/qqp435-peer-checkpoint.response.md`.
+- [ ] verdict: PEER REQUEST_CHANGES.
+- [ ] blocker to inspect/repair: restart/cancel retry scoping can over-mark a compatible ready prefix as `interrupted_retriable` because `markInterruptedRuntimeJob` trusts stale `Retries.CurrentSegment` even when that segment is already ready/checked.
+
+## 2026-07-08 — QQP-435 ChatGPT peer blocker repair
+
+- [x] ChatGPT peer blocker repaired:
+  - `retryAffectedSegmentIndex` now recomputes the affected segment when persisted `Retries.CurrentSegment` points at an already-ready prefix.
+  - `segmentAudioArtifactAffectedByTerminal` no longer treats a ready prefix as affected merely because stale `CurrentSegment` points at it.
+  - user cancellation also refreshes current segment before progress/artifact normalization.
+  - added regression: restart/user-cancel after ready segment 1 with stale current segment 1 marks segment 2 interrupted/retryable and leaves segment 1 reusable/non-failure.
+- [x] verification after peer repair:
+  - targeted peer repair Go tests -> pass.
+  - focused Go gate -> pass.
+  - `mise exec -- pnpm validate:ir` -> pass.
+  - `mise exec -- pnpm check` -> pass.
+  - gofmt -> clean.
+- [ ] targeted peer-blocker re-review pending.
+
+## 2026-07-08 — QQP-435 peer blocker re-review approved
+
+- [x] targeted peer-blocker re-review `deleg_78422c70`: PEER-BLOCKER APPROVED.
+- [x] approved repair evidence:
+  - restart and cancellation recompute affected segment via `retryAffectedSegmentIndex`.
+  - stale current segment inside ready prefix no longer marks ready prefix affected.
+  - regression covers restart/cancel with `AudioReadySegments=1`, stale `CurrentSegment=1`, pending segment 2.
+- [ ] final closeout gates / commit / push / Linear Done pending.
+
+## 2026-07-08 — QQP-435 final closeout gates
+
+- [x] final closeout gates after peer-blocker approval:
+  - focused Go gate -> pass.
+  - `mise exec -- pnpm validate:ir` -> pass.
+  - `mise exec -- pnpm check` -> pass.
+  - gofmt and `git diff --check` -> pass.
+- [x] reviews:
+  - SPEC PASS (`deleg_186ef3d1`).
+  - QUALITY APPROVED (`deleg_5c04fdf1`).
+  - ChatGPT peer request saved and peer blocker re-review approved (`deleg_78422c70`).
+- [ ] commit/push/Linear Done pending.

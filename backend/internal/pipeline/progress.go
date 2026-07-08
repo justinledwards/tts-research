@@ -689,6 +689,16 @@ func (service *Service) resolveReadalongForResume(progress DurableProgress, requ
 }
 
 func resolveCurrentManifestResume(resolution ResumeResolution, progress DurableProgress, manifest ReadalongManifest, artifact *ResumeAudioArtifactEvidence, decisions []SyncFidelityDecision) ResumeResolution {
+	if artifact != nil {
+		switch artifact.State {
+		case AudioArtifactStateStale, AudioArtifactStateReplaced:
+			resolution.Decision = ResumeDecisionResumeSourceOnly
+			resolution.Reason = "audio artifact is stale or replaced; source-only resume is safest"
+			return resolution
+		case AudioArtifactStateFailed:
+			return blockedResumeResolution(resolution, "audio artifact evidence is failed or incompatible")
+		}
+	}
 	if progress.State == DurableProgressStateDegraded || manifest.State == ManifestSnapshotStateDegraded {
 		resolution.Decision = ResumeDecisionAutoResumeDegraded
 		resolution.Reason = "progress or manifest is degraded; resume with degraded fidelity"
@@ -704,7 +714,7 @@ func resolveCurrentManifestResume(resolution ResumeResolution, progress DurableP
 	if decision != nil {
 		switch decision.Fidelity {
 		case SyncFidelityExactWord:
-			if decision.ExactAllowed && decision.Evidence.ArtifactCompatible {
+			if decision.ExactAllowed && decision.Evidence.ArtifactCompatible && artifact != nil && artifact.State == AudioArtifactStateChecked {
 				resolution.Decision = ResumeDecisionAutoResumeCurrent
 				resolution.Reason = "progress manifest is current and checked audio is compatible"
 				return resolution
@@ -915,11 +925,24 @@ func matchingResumeAudioArtifact(progress DurableProgress, manifest ReadalongMan
 		if strings.TrimSpace(artifact.ArtifactID) != progress.AudioArtifactID {
 			continue
 		}
-		if artifact.SourceID == progress.SourceID && artifact.SourceRevisionID == manifest.SourceRevisionID && artifact.ReadalongManifestID == manifest.ManifestID && stringSliceContains(manifest.AudioArtifactIDs, artifact.ArtifactID) {
+		if artifact.SourceID == progress.SourceID && artifact.SourceRevisionID == manifest.SourceRevisionID && artifact.ReadalongManifestID == manifest.ManifestID && stringSliceContains(manifest.AudioArtifactIDs, artifact.ArtifactID) && resumeAudioArtifactUnitMatches(progress, *artifact) {
 			return artifact
 		}
 	}
 	return nil
+}
+
+func resumeAudioArtifactUnitMatches(progress DurableProgress, artifact ResumeAudioArtifactEvidence) bool {
+	if strings.TrimSpace(artifact.UnitID) == "" || strings.TrimSpace(artifact.UnitID) != progress.Position.UnitID {
+		return false
+	}
+	if strings.TrimSpace(progress.Position.SegmentID) != "" {
+		return strings.TrimSpace(artifact.SegmentID) == progress.Position.SegmentID
+	}
+	if artifact.Retry != nil && artifact.Retry.Scope == AudioArtifactRetryScopeSegment {
+		return strings.TrimSpace(artifact.SegmentID) != ""
+	}
+	return true
 }
 
 func matchingSyncFidelityDecision(progress DurableProgress, manifest ReadalongManifest, decisions []SyncFidelityDecision) *SyncFidelityDecision {

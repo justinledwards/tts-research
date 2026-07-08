@@ -66,6 +66,10 @@ func deriveSegmentAudioArtifactState(job VoiceJob, segment JobSegment, index int
 	if existing == AudioArtifactStateStale || existing == AudioArtifactStateReplaced {
 		return existing
 	}
+	affected := segmentAudioArtifactAffectedByTerminal(job, segment, index, readySegments)
+	if !affected && existing == AudioArtifactStateChecked && index <= readySegments {
+		return AudioArtifactStateChecked
+	}
 	status := strings.TrimSpace(segment.Status)
 	if status == "failed" {
 		if job.Retriable {
@@ -73,7 +77,7 @@ func deriveSegmentAudioArtifactState(job VoiceJob, segment JobSegment, index int
 		}
 		return AudioArtifactStateFailed
 	}
-	if job.Status == JobStatusCancelled && (index == job.Retries.CurrentSegment || status == "running" || status == "checking" || status == "retrying") && index > readySegments {
+	if job.Status == JobStatusCancelled && affected {
 		return AudioArtifactStateInterruptedRetriable
 	}
 	if status == "retrying" {
@@ -86,6 +90,30 @@ func deriveSegmentAudioArtifactState(job VoiceJob, segment JobSegment, index int
 		return AudioArtifactStateUnchecked
 	}
 	return AudioArtifactStateGenerating
+}
+
+func segmentAudioArtifactAffectedByTerminal(job VoiceJob, segment JobSegment, index int, readySegments int) bool {
+	status := strings.TrimSpace(segment.Status)
+	statusAffected := segmentStatusIndicatesAffectedAudioArtifact(status)
+	if index == job.Retries.CurrentSegment && job.Retries.CurrentSegment > 0 {
+		return index > readySegments || statusAffected
+	}
+	if statusAffected {
+		return true
+	}
+	if job.Status == JobStatusCancelled && index > readySegments && index == max(1, job.Retries.CurrentSegment) {
+		return true
+	}
+	return false
+}
+
+func segmentStatusIndicatesAffectedAudioArtifact(status string) bool {
+	switch status {
+	case "running", "checking", "retrying", "failed", "interrupted":
+		return true
+	default:
+		return false
+	}
 }
 
 func jobHasCheckedAudioArtifactEvidence(job VoiceJob) bool {
@@ -125,6 +153,15 @@ func jobHasSegmentReviewWarnings(job VoiceJob) bool {
 func audioArtifactStateIsReplaceable(state AudioArtifactState) bool {
 	switch state {
 	case AudioArtifactStateUnchecked, AudioArtifactStateStale, AudioArtifactStateFailed, AudioArtifactStateRetryable, AudioArtifactStateInterruptedRetriable:
+		return true
+	default:
+		return false
+	}
+}
+
+func audioArtifactStateAllowsCompatibleReuse(state AudioArtifactState) bool {
+	switch state {
+	case AudioArtifactStateChecked, AudioArtifactStateUnchecked:
 		return true
 	default:
 		return false

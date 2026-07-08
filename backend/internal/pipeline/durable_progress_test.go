@@ -640,6 +640,8 @@ func checkedAudioEvidence(id string, readalongManifestID string, sourceRevisionI
 		SourceID:            "contract-markdown",
 		SourceRevisionID:    sourceRevisionID,
 		ReadalongManifestID: readalongManifestID,
+		UnitID:              "unit-md-0001",
+		SegmentID:           "seg-0001",
 		State:               state,
 		Retry:               retry,
 	}

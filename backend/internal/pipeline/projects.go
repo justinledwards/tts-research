@@ -241,6 +241,20 @@ func (service *Service) reloadJobs() {
 		if job.UpdatedAt.IsZero() {
 			job.UpdatedAt = job.CreatedAt
 		}
+		interruptedAt := time.Now().UTC()
+		if interrupted, changed := markInterruptedRuntimeJob(job, interruptedAt); changed {
+			job = interrupted
+			writeInterrupted := service.writeJobMetadata
+			if service.options.interruptedJobMetadataWriter != nil {
+				writeInterrupted = func(candidate VoiceJob) error {
+					return service.options.interruptedJobMetadataWriter(service, candidate)
+				}
+			}
+			if err := writeInterrupted(job); err != nil {
+				job.Error = firstNonEmpty(job.Error, "interrupted by backend restart") + "; failed to persist interrupted job metadata: " + err.Error()
+				job.Progress.Detail = firstNonEmpty(job.Progress.Detail, "Backend restart detected orphaned active work; affected segment can be retried.") + " Persisting interrupted job metadata failed: " + err.Error()
+			}
+		}
 		stored := storedJob{VoiceJob: job}
 		service.hydratePersistedSegmentAudio(&stored)
 		jobs[job.ID] = stored
