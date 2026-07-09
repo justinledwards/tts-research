@@ -2624,6 +2624,19 @@ async function assertWorkspacePreviewAsrWarningLayout(page) {
   if (retryVisible) {
     throw new Error("Retry generation is visible for completed audio with ASR review warnings.");
   }
+  await page.evaluate(() => {
+    const generated = document.querySelector("[data-testid='preview-generated-audio-panel']");
+    const footer = document.querySelector("[data-testid='narration-status-strip']");
+    if (!(generated instanceof HTMLElement) || !(footer instanceof HTMLElement)) {
+      return;
+    }
+    const generatedRect = generated.getBoundingClientRect();
+    const footerRect = footer.getBoundingClientRect();
+    const overlap = generatedRect.bottom - footerRect.top;
+    if (overlap > 0) {
+      window.scrollBy(0, overlap + 16);
+    }
+  });
   const report = await page.evaluate(() => {
     const failures = [];
     const visible = (element) =>
@@ -2657,7 +2670,9 @@ async function assertWorkspacePreviewAsrWarningLayout(page) {
     const footer = visible(footerElement) ? footerElement.getBoundingClientRect() : null;
     const pageText = document.body.textContent ?? "";
     const inspectorText =
-      document.querySelector("[data-context-panel-surface='Workspace']")?.textContent ?? "";
+      document.querySelector("[data-overlay-owner='right-rail']")?.textContent ??
+      document.querySelector("[data-context-panel-surface='Workspace']")?.textContent ??
+      "";
     if (!/Audio generated with 1 segment needing audio review/i.test(pageText)) {
       failures.push("Preview does not surface completed-audio ASR review warning");
     }
