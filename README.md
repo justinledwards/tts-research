@@ -27,6 +27,15 @@ LOCAL_FALLBACK_ON_BOOTSTRAP_FAILURE=0 TTS_PROVIDER=kokoro VOICE_CHECKER_PROVIDER
 
 The backend listens on `http://localhost:8080`.
 The frontend listens on `http://localhost:5173`.
+If a development port is busy, use one of the startup port overrides:
+
+```sh
+PORT=5174 mise start -- pnpm start:local          # frontend only
+API_PORT=8081 mise start -- pnpm start:local      # backend only
+PORT_BASE=5300 mise start -- pnpm start:local     # frontend 5300, backend 5301
+```
+
+Explicit `FRONTEND_PORT` and `BACKEND_PORT` still win when set.
 
 The default startup path is self-contained: rules-based optimization, mock TTS, and mock checking.
 That gives you a usable full stack without external providers or model downloads.

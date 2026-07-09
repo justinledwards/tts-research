@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT_DIR/scripts/start-port-env.sh"
 
 load_env_file() {
   local file_path="$1"
@@ -703,12 +704,14 @@ cleanup() {
 
 trap cleanup EXIT INT TERM HUP QUIT
 
+[[ -n "${BACKEND_PORT:-}" ]] && START_EXPLICIT_BACKEND_PORT=1
+[[ -n "${FRONTEND_PORT:-}" ]] && START_EXPLICIT_FRONTEND_PORT=1
+[[ -n "${VITE_API_BASE_URL:-}" ]] && START_EXPLICIT_VITE_API_BASE_URL=1
+
 load_env_file "$ROOT_DIR/.env"
 load_env_file "$ROOT_DIR/backend/.env"
 
-export BACKEND_PORT="${BACKEND_PORT:-8080}"
-export FRONTEND_PORT="${FRONTEND_PORT:-5173}"
-export VITE_API_BASE_URL="${VITE_API_BASE_URL:-http://localhost:${BACKEND_PORT}}"
+resolve_start_ports
 export VOICE_OPTIMIZER_PROVIDER="${VOICE_OPTIMIZER_PROVIDER:-rules}"
 export BONSAI_MODEL="${BONSAI_MODEL:-prism-ml/Bonsai-8B-mlx-1bit}"
 export BONSAI_PYTHON_PATH="${BONSAI_PYTHON_PATH:-./.venv-bonsai/bin/python}"

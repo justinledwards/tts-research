@@ -15,6 +15,14 @@ mise start -- pnpm start:local
 
 `mise setup` installs Node dependencies when missing, syncs the backend Python environment needed for Book Cinema/source extraction, and creates ignored local runtime folders.
 
+If another development app is using the default ports, override them at startup:
+
+```sh
+PORT=5174 mise start -- pnpm start:local          # frontend only
+API_PORT=8081 mise start -- pnpm start:local      # backend only
+PORT_BASE=5300 mise start -- pnpm start:local     # frontend 5300, backend 5301
+```
+
 Use `pnpm start:mock` for the first run. It starts the same app with deterministic mock providers so
 contributors can open **Try the Studio** and walk through Intake, Review, Preview, Teleprompt, and
 Cinema without external services. See `docs/first-run-demo.md` and `docs/contributor-quickstart.md`.

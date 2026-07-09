@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT_DIR/scripts/start-port-env.sh"
 
 load_env_file() {
   local file_path="$1"
@@ -152,12 +153,29 @@ if [[ "${#start_command[@]}" -eq 0 ]]; then
   start_command=(pnpm start)
 fi
 
+[[ -n "${BACKEND_PORT:-}" ]] && START_EXPLICIT_BACKEND_PORT=1
+[[ -n "${FRONTEND_PORT:-}" ]] && START_EXPLICIT_FRONTEND_PORT=1
+[[ -n "${VITE_API_BASE_URL:-}" ]] && START_EXPLICIT_VITE_API_BASE_URL=1
+
 load_env_file "$ROOT_DIR/.env"
 load_env_file "$ROOT_DIR/backend/.env"
 
 while [[ "${#start_command[@]}" -gt 0 ]]; do
   if [[ "${start_command[0]}" == [A-Za-z_][A-Za-z0-9_]*=* ]]; then
-    export "${start_command[0]}"
+    assignment="${start_command[0]}"
+    key="${assignment%%=*}"
+    export "$assignment"
+    case "$key" in
+      BACKEND_PORT)
+        START_EXPLICIT_BACKEND_PORT=1
+        ;;
+      FRONTEND_PORT)
+        START_EXPLICIT_FRONTEND_PORT=1
+        ;;
+      VITE_API_BASE_URL)
+        START_EXPLICIT_VITE_API_BASE_URL=1
+        ;;
+    esac
     start_command=( "${start_command[@]:1}" )
     continue
   fi
@@ -214,13 +232,12 @@ if [[ "${start_command[0]}" == "pnpm" ]]; then
   esac
 fi
 
-BACKEND_PORT="${BACKEND_PORT:-8080}"
-FRONTEND_PORT="${FRONTEND_PORT:-5173}"
+resolve_start_ports
 VOICE_OPTIMIZER_PROVIDER="${VOICE_OPTIMIZER_PROVIDER:-rules}"
 TTS_PROVIDER="${TTS_PROVIDER:-mock}"
 VOICE_CHECKER_PROVIDER="${VOICE_CHECKER_PROVIDER:-mock}"
 
-export BACKEND_PORT FRONTEND_PORT VOICE_OPTIMIZER_PROVIDER TTS_PROVIDER VOICE_CHECKER_PROVIDER
+export VOICE_OPTIMIZER_PROVIDER TTS_PROVIDER VOICE_CHECKER_PROVIDER
 
 require_command bash
 require_command go
