@@ -1,3 +1,15 @@
+## 2026-07-09 04:02 CEST - QQP-543 Final UX UI action audit debt
+
+- [ ] root-cause failed Preview scenario inventory states
+- [ ] classify final duplicate action audit groups with owners/review dates
+- [ ] run focused UI action audit verification and project checks as feasible
+
+## 2026-07-09 02:36 CEST - QQP-542 Cinema Theatre phone controls
+
+- [x] inspect compact phone Theatre transport and toolbar layout
+- [x] implement compact controls without budget relaxation
+- [x] run focused and responsive gates
+
 ## 2026-07-09 00:30 CEST - QQP-437 Quick Listen promotion crosswalk
 
 - [ ] inspect promotion behavior and persistence seams
@@ -3273,3 +3285,95 @@ duplicating every implementation detail from commits, PR text, or generated revi
 - [ ] narrow QUALITY re-review `deleg_302cbfdd` pending.
 - [x] narrow QUALITY re-review `deleg_302cbfdd`: QUALITY PASS. Rollback/session-persistence blockers resolved; focused reviewer reran rollback/crosswalk test successfully.
 - [ ] final parent gates/commit/push/Linear closeout pending.
+
+## 2026-07-09 — QQP-437 closeout / QQP-441 kickoff
+
+- [x] QQP-437 committed/pushed/remote-verified: `02dd04dff8b7e75d391a7022cbfe0dcd03afc14f`.
+- [x] QQP-437 Linear Done comment: `https://linear.app/niklas-olsson/issue/QQP-437/quick-listen-to-project-promotion-crosswalk#comment-28ef817b`.
+- [x] QQP-441 dependency preflight passed: QQP-427, QQP-435, QQP-436, QQP-437, QQP-438, QQP-439, and QQP-440 are Done in live Linear.
+- [x] repo clean and local/remote equal at `02dd04dff8b7e75d391a7022cbfe0dcd03afc14f` before kickoff plan/log.
+- [x] QQP-441 kickoff plan written: `docs/plans/linear/QQP-441-active-processing-evidence-gates.md`.
+- [x] Linear moved In Progress and kickoff comment posted.
+- [x] evidence-worker dispatch started.
+
+## 2026-07-09 01:40 CEST - QQP-441 Evidence Gate Worker
+
+- [ ] discover existing evidence and fixture commands
+- [ ] produce deterministic evidence package
+- [ ] run focused evidence gates
+- [ ] run project check and review package if applicable
+
+## 2026-07-09 — QQP-441 timeout fan-in / evidence blocker
+
+- [x] worker `deleg_6d86035f` timed out after 600s with partial evidence-harness changes. Parent fan-in inspected actual diff/untracked files before continuing.
+- [x] parent repaired deterministic harness issue: `openBookCinemaOverlay` now uses stable `workspace-stage-intake` test id instead of exact accessible name `Intake`, matching the app's composite stage button labels.
+- [x] parent preserved failure evidence: responsive theatre screenshot is captured before canvas budget assertion.
+- [x] readalong evidence gates passed: `generate:contracts`, `validate:ir`, `test:adapters`, `e2e:readalong-sync`, `e2e:readalong-performance`.
+- [x] `e2e:responsive-snapshots` passed.
+- [x] `review:chatgpt` passed; archive regenerated after formatting.
+- [x] full `mise exec -- pnpm check` passed.
+- [!] `e2e:book-cinema:responsive` fails consistently after selector repair: `book:phone-390:theatre` violates Cinema canvas budget; footer is 343px / 40.64% viewport vs max 188px / 25%, canvas height 31.85% vs min 43%. Blocker screenshot: `output/e2e-book-cinema/screenshots/responsive-book-phone-390-theatre.png`.
+- [!] `validate:ux-final` did not complete in a 600s foreground run; it progressed through UI action replay before timeout. Treat as blocked/stale until rerun with longer tracking after the responsive budget issue is resolved.
+- [ ] QQP-441 remains In Progress; do not close Linear while responsive evidence gate fails.
+
+## 2026-07-09 — QQP-542 created for QQP-441 UI blocker
+
+- [x] RCA lane `deleg_cc56fa4c`: `RCA REAL_UI`. Phone Book Cinema Theatre controls genuinely exceed compact canvas budget; not stale budget/harness.
+- [x] Created Linear issue QQP-542: Book Cinema Theatre compact phone controls exceed canvas budget.
+- [x] Linked QQP-542 from QQP-441; QQP-441 remains evidence-only/In Progress until repair lands and evidence reruns.
+- [ ] QQP-542 frontend repair worker dispatched; parent verification/review pending.
+
+## 2026-07-09 — QQP-542 parent verification / QQP-441 final UX status
+
+- [x] QQP-542 parent fix completed after worker fan-in: Book Cinema Theatre uses action-only compact theatre toolbar; duplicate mini progress/status hidden while visible controls are shown.
+- [x] Repaired remaining Book Cinema E2E harness stale selectors/invocation paths: prepared-source opener uses stable `workspace-stage-intake`; command-palette helper falls back to stable palette trigger when hidden-theatre Ctrl+K is unavailable. Budgets are unchanged.
+- [x] Focused test passed: `mise exec -- pnpm --filter @tts-research/frontend exec vitest run src/features/playback/localizedPlaybackToolbar.test.tsx`.
+- [x] QQP-542 responsive gate passed: `mise exec -- pnpm e2e:book-cinema:responsive`.
+- [x] Full frontend tests passed: `mise exec -- pnpm --filter @tts-research/frontend test` (111 files / 774 tests).
+- [x] Full repo check passed: `mise exec -- pnpm check`.
+- [x] ChatGPT package passed: `mise exec -- pnpm review:chatgpt`, SHA256 `0ee98ee113051587f1ddd704fac16b993784aeb9a51f9da833e85faf21f99148`.
+- [x] QQP-441 evidence stack after repair passed: `generate:contracts`, `validate:ir`, `test:adapters`, `e2e:readalong-sync`, `e2e:readalong-performance`, `e2e:responsive-snapshots`.
+- [!] `validate:ux-final` failed after a tracked long run: 12/13 clean gates passed; only UI action audit failed on broader action inventory debt (2 scenario inventory failures, 73 unclassified duplicate groups). Responsive snapshots/mobile reader controls passed; Book Cinema budget blocker is resolved. Report: `output/final-ux-gates/latest/final-ux-summary.md`.
+- [ ] focused SPEC/QUALITY reviews pending before commit/Linear closeout.
+
+## 2026-07-09 — QQP-543 kickoff for final UX blocker
+
+- [x] Created Linear issue QQP-543 for the remaining `validate:ux-final` UI action audit debt blocking QQP-441: https://linear.app/niklas-olsson/issue/QQP-543/resolve-final-ux-ui-action-audit-debt-blocking-qqp-441
+- [x] Added QQP-441 blocker update comment: https://linear.app/niklas-olsson/issue/QQP-441/first-batch-active-processing-and-canonical-fixture-evidence-gate#comment-8b0c47e8
+- [x] QQP-542 remains the responsive Book Cinema repair issue; QQP-543 owns final UX action audit debt.
+- [ ] QQP-543 implementation lane pending.
+
+## 2026-07-09 — QQP-542 SPEC/QUALITY fan-in
+
+- [x] SPEC review `deleg_8b944860` returned SPEC PASS for QQP-542 and QQP-441 evidence changes: no hidden budget relaxation, `canvasBudget.ts` unchanged, responsive Cinema status passed, QQP-441 evidence-only scope preserved.
+- [x] QUALITY review `deleg_90516724` returned REQUEST_CHANGES only for stale `WORKINGLOG.md` trailing blank-line hygiene; parent normalized EOF and reran `git diff --check` successfully.
+- [x] Fresh parent verification for changed QQP-542 files passed twice: focused localized playback toolbar test, `format:check`, `lint`, `typecheck`, `e2e:book-cinema:responsive`, full `pnpm check`, and `git diff --check`.
+- [!] Commit/closeout remains held while QQP-543 worker is active on final UX action-audit blocker files.
+
+### 2026-07-09 — QQP-441/542/543 parent closeout verification
+
+- QQP-543 final UX repair verified by parent after worker fan-in.
+  - RCA repaired stale `workspace-preview-generation-failed` copy expectation.
+  - RCA repaired `workspace-preview-asr-warning` determinism by isolating project job list, source/speech-policy payloads, and project speech-policy reads so concurrent Settings replay cannot mutate the scenario currentness profile.
+  - RCA repaired Document/Website Cinema More menu React warning by moving menu-open callback outside the state updater.
+  - Duplicate action audit registry now classifies accepted duplicates with explicit owner/reason/review-date waivers and owned burn-down categories; remaining unclassified/overexposed/needs-consolidation unresolved buckets are zero.
+- Final UX gate: `mise exec -- pnpm validate:ux-final` exit 0.
+  - Summary: `output/final-ux-gates/latest/final-ux-summary.md`.
+  - Status: PASSED-WITH-FINDINGS; merge readiness READY WITH WAIVERS.
+  - UI Action Audit: PASSED, review-complete; failed activations 0; unclassified duplicate groups 0; overexposed unresolved groups 0; needs-consolidation unresolved groups 0.
+- Consolidated closeout gate stack exit 0 at 2026-07-09T09:25:10+02:00:
+  - `mise exec -- pnpm generate:contracts`
+  - `mise exec -- pnpm validate:ir`
+  - `mise exec -- pnpm test:adapters`
+  - `mise exec -- pnpm e2e:readalong-sync`
+  - `mise exec -- pnpm e2e:readalong-performance`
+  - `mise exec -- pnpm e2e:book-cinema:responsive`
+  - `mise exec -- pnpm e2e:responsive-snapshots`
+  - `mise exec -- pnpm check`
+  - `mise exec -- pnpm review:chatgpt`
+  - `git diff --check`
+- Review package: `output/chatgpt-review-packages/tts-research-chatgpt-02dd04d.zip`.
+  - Manifest: `output/chatgpt-review-packages/tts-research-chatgpt-02dd04d.manifest.json`.
+  - SHA256: `0fc43f2b9dee3c4e930ead45f309af16866ef93f4b3b7a13ab1da2c920146967`.
+- QQP-542 SPEC PASS and stale EOF-only QUALITY blocker remain resolved by parent hygiene; Book Cinema responsive budget evidence is green.
+- QQP-441 blocker is cleared: final UX action-audit gate is now green/waived, so QQP-441 evidence package can proceed to commit/Linear closeout.

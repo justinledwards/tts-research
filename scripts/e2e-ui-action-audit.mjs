@@ -1981,6 +1981,7 @@ function createScenarios(seed) {
         preparedSourceId: seed.website.source.id,
         sourceMode: "fileUrl",
         sourceType: "prepared",
+        speechPolicyProfile: "Enterprise",
         stage: "preview",
         text: seed.website.source.speechText ?? seed.website.source.text ?? "",
       }),
@@ -2591,7 +2592,9 @@ async function assertWorkspacePreviewAudioRebuildRecoveryLayout(page) {
     .first()
     .waitFor();
   await page
-    .getByText(/Audio does not match the current source, voice, policy, or scope/i)
+    .getByText(
+      /Audio does not match the current source, voice, policy, or scope|Generated audio is stale, degraded, or archived/i,
+    )
     .first()
     .waitFor();
   await page
@@ -2730,6 +2733,7 @@ async function openPreviewGenerationRunning(page, job, source) {
     }
     await route.fallback();
   });
+  await installScenarioProjectJobListRoute(page, runningJob);
   await page.route("**/api/source-preps/*/voice-jobs", async (route) => {
     if (route.request().method() !== "GET") {
       await route.fallback();
@@ -2798,11 +2802,23 @@ async function openPreviewGenerationFailedRecovery(page, job, source) {
     }
     await route.fallback();
   });
+  await installScenarioProjectJobListRoute(page, failedJob);
   await page.route("**/api/source-preps/**", async (route) => {
     const url = new URL(route.request().url());
     if (
       route.request().method() === "GET" &&
       url.pathname === `/api/source-preps/${cleanSource.id}`
+    ) {
+      await route.fulfill({
+        body: JSON.stringify(cleanSource),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    if (
+      route.request().method() === "POST" &&
+      url.pathname === `/api/source-preps/${cleanSource.id}/speech-policy/preview`
     ) {
       await route.fulfill({
         body: JSON.stringify(cleanSource),
@@ -2882,11 +2898,24 @@ async function openPreviewAsrWarning(page, job, source) {
     }
     await route.fallback();
   });
+  await installScenarioProjectJobListRoute(page, warnedJob);
+  await installScenarioProjectSpeechPolicyRoute(page, "Enterprise");
   await page.route("**/api/source-preps/**", async (route) => {
     const url = new URL(route.request().url());
     if (
       route.request().method() === "GET" &&
       url.pathname === `/api/source-preps/${cleanSource.id}`
+    ) {
+      await route.fulfill({
+        body: JSON.stringify(cleanSource),
+        contentType: "application/json",
+        status: 200,
+      });
+      return;
+    }
+    if (
+      route.request().method() === "POST" &&
+      url.pathname === `/api/source-preps/${cleanSource.id}/speech-policy/preview`
     ) {
       await route.fulfill({
         body: JSON.stringify(cleanSource),
@@ -2926,6 +2955,54 @@ async function openPreviewAsrWarning(page, job, source) {
   });
   await gotoApp(page);
   await assertWorkspacePreviewAsrWarningLayout(page);
+}
+
+async function installScenarioProjectJobListRoute(page, scenarioJob) {
+  await page.route("**/api/projects/*/jobs", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      body: JSON.stringify([scenarioJob]),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+}
+
+async function installScenarioProjectSpeechPolicyRoute(page, profile) {
+  await page.route("**/api/projects/*/speech-policy", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (!/^\/api\/projects\/[^/]+\/speech-policy$/.test(url.pathname)) {
+      await route.fallback();
+      return;
+    }
+    if (request.method() !== "GET" && request.method() !== "PATCH") {
+      await route.fallback();
+      return;
+    }
+    const response = await safeRouteFetch(route);
+    const fallbackProjectId = url.pathname.split("/")[3] ?? "";
+    let payload = {
+      customProfiles: [],
+      profile,
+      projectId: fallbackProjectId,
+      settings: {},
+    };
+    if (response) {
+      payload = {
+        ...(await response.json().catch(() => payload)),
+        profile,
+      };
+    }
+    await route.fulfill({
+      body: JSON.stringify(payload),
+      contentType: "application/json",
+      status: response?.status() ?? 200,
+    });
+  });
 }
 
 async function openPreviewAudition404Recovery(page) {
@@ -3032,8 +3109,8 @@ function failedPreviewGenerationJob(job, source) {
       status: index < readySegments ? "ready" : "failed",
       text,
     })),
-    speechPolicyOverrides: {},
     speechPolicyProfile: "Enterprise",
+    speechPolicyOverrides: {},
     status: "failed",
     terminalReason: "provider_failed",
     ttsEngine: "auto",
@@ -3217,6 +3294,9 @@ function cleanPreparedSourceForGenerationFailedFixture(source) {
       structureLabel: "Document",
       title: source.title ?? source.sourceName ?? "Website Fixture",
     },
+    sourceSpeechPolicyOverrides: {},
+    sourceSpeechPolicyProfile: "Enterprise",
+    speechPolicyProfile: "Enterprise",
     status: "ready",
     warnings: [],
   };

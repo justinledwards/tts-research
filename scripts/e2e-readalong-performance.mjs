@@ -13,6 +13,14 @@ const outputDir =
 const traceEnabled = process.env.READALONG_PERF_TRACE === "1";
 const durationMs = readNumberEnv("READALONG_PERF_DURATION_MS", 60_000);
 const wordDurationMs = readNumberEnv("READALONG_PERF_WORD_DURATION_MS", 185);
+const performanceBudgets = {
+  maxLongTaskCount: readNumberEnv("READALONG_PERF_MAX_LONG_TASKS", 0),
+  maxMotionMeasurePerWord: readNumberEnv("READALONG_PERF_MAX_MOTION_MEASURE_PER_WORD", 1),
+  maxReactCursorCommitRate: readNumberEnv("READALONG_PERF_MAX_REACT_COMMITS_PER_SEC", 0),
+  maxStaleHighlightIncidents: readNumberEnv("READALONG_PERF_MAX_STALE_HIGHLIGHT_INCIDENTS", 0),
+  maxStuckHighlightIncidents: readNumberEnv("READALONG_PERF_MAX_STUCK_HIGHLIGHT_INCIDENTS", 0),
+  minScenarioCount: readNumberEnv("READALONG_PERF_MIN_SCENARIOS", 3),
+};
 const scenarioFilter = new Set(
   (process.env.READALONG_PERF_SCENARIOS ?? "teleprompter,markdown-render,static-control")
     .split(",")
@@ -86,18 +94,24 @@ async function main() {
     await browser.close();
   }
 
+  const budgetComparisons = compareReadAlongPerformanceBudgets(snapshots, performanceBudgets);
   const summary = {
     durationMs,
     generatedAt: new Date().toISOString(),
     scenarioCount: snapshots.length,
-    status: "passed",
+    status: budgetComparisons.every((comparison) => comparison.passed) ? "passed" : "failed",
+    thresholds: budgetComparisons,
     trace: traceEnabled ? path.relative(rootDir, tracePath) : null,
     wordDurationMs,
   };
   await writeFile(path.join(outputDir, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
   await writeFile(path.join(outputDir, "counters.json"), `${JSON.stringify(snapshots, null, 2)}\n`);
-  await writeFile(path.join(outputDir, "report.md"), formatReadAlongPerformanceReport(snapshots));
-  console.log(`Read-along performance advisory artifacts written to ${outputDir}`);
+  await writeFile(
+    path.join(outputDir, "report.md"),
+    formatReadAlongPerformanceReport(snapshots, budgetComparisons),
+  );
+  console.log(`Read-along performance ${summary.status}. Artifacts written to ${outputDir}`);
+  process.exitCode = summary.status === "passed" ? 0 : 1;
 }
 
 function renderPerformanceFixtureHtml(scenario) {
@@ -367,9 +381,9 @@ async function runReadAlongPerformanceFixture({ durationMs, scenario, wordDurati
   }
 }
 
-function formatReadAlongPerformanceReport(snapshots) {
+function formatReadAlongPerformanceReport(snapshots, budgetComparisons = []) {
   const lines = [
-    "# Read-Along Performance Advisory",
+    "# Read-Along Performance Evidence",
     "",
     `Generated: ${new Date().toISOString()}`,
     "",
@@ -396,12 +410,93 @@ function formatReadAlongPerformanceReport(snapshots) {
         .replace(/$/, " |"),
     );
   }
+  if (budgetComparisons.length > 0) {
+    lines.push(
+      "",
+      "## Budgets",
+      "",
+      "| Budget | Actual | Expected | Status |",
+      "| --- | ---: | ---: | --- |",
+    );
+    for (const comparison of budgetComparisons) {
+      lines.push(
+        `| ${comparison.metric} | ${formatRate(comparison.actual)} | ${comparison.operator} ${formatRate(
+          comparison.expected,
+        )} | ${comparison.passed ? "PASS" : "FAIL"} |`,
+      );
+    }
+  }
   lines.push(
     "",
-    "Advisory only: these measurements are not part of `pnpm check` until stable baselines are established.",
+    "Evidence gate: these measurements fail the command if scheduler isolation, long-task, stale-highlight, or stuck-highlight budgets are exceeded.",
     "",
   );
   return lines.join("\n");
+}
+
+function compareReadAlongPerformanceBudgets(snapshots, budgets) {
+  const scenarioCount = snapshots.length;
+  const totalLongTaskCount = snapshots.reduce((sum, snapshot) => sum + snapshot.longTaskCount, 0);
+  const maxReactCursorCommitRate = maxMetric(
+    snapshots.map((snapshot) => snapshot.ratesPerSecond["react-cursor-commit"] ?? 0),
+  );
+  const maxMotionMeasurePerWord = maxMetric(
+    snapshots.map((snapshot) => {
+      const activeWords = Math.max(1, snapshot.counters["dom-highlight-swap"] ?? 0);
+      return (snapshot.counters["motion-cursor-measure"] ?? 0) / activeWords;
+    }),
+  );
+  const totalStaleHighlightIncidents = snapshots.reduce(
+    (sum, snapshot) => sum + (snapshot.staleHighlightIncidents ?? 0),
+    0,
+  );
+  const totalStuckHighlightIncidents = snapshots.reduce(
+    (sum, snapshot) => sum + (snapshot.stuckHighlightIncidents ?? 0),
+    0,
+  );
+  return [
+    budgetComparison("scenarioCount", scenarioCount, ">=", budgets.minScenarioCount),
+    budgetComparison("longTaskCount", totalLongTaskCount, "<=", budgets.maxLongTaskCount),
+    budgetComparison(
+      "maxReactCursorCommitRate",
+      maxReactCursorCommitRate,
+      "<=",
+      budgets.maxReactCursorCommitRate,
+    ),
+    budgetComparison(
+      "maxMotionMeasurePerWord",
+      maxMotionMeasurePerWord,
+      "<=",
+      budgets.maxMotionMeasurePerWord,
+    ),
+    budgetComparison(
+      "staleHighlightIncidents",
+      totalStaleHighlightIncidents,
+      "<=",
+      budgets.maxStaleHighlightIncidents,
+    ),
+    budgetComparison(
+      "stuckHighlightIncidents",
+      totalStuckHighlightIncidents,
+      "<=",
+      budgets.maxStuckHighlightIncidents,
+    ),
+  ];
+}
+
+function budgetComparison(metric, actual, operator, expected) {
+  const roundedActual = Math.round(actual * 100) / 100;
+  return {
+    actual: roundedActual,
+    expected,
+    metric,
+    operator,
+    passed: operator === "<=" ? roundedActual <= expected : roundedActual >= expected,
+  };
+}
+
+function maxMetric(values) {
+  return values.length > 0 ? Math.max(...values) : 0;
 }
 
 function readNumberEnv(name, fallback) {

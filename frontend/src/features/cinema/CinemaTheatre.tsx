@@ -349,9 +349,10 @@ export function CinemaTheatreTransport({
     stage: "cinema-theatre",
     statusLabel: model.stateSummary?.title,
     testId: "localized-cinema-theatre-playback-toolbar",
-    variant: "theatre",
+    variant: "theatre-compact",
   };
   const progressRatio = clampTheatreProgress(model.progress.ratio);
+  const miniProgressClassName = controlsVisible ? "grid gap-1 sm:hidden" : "grid gap-1";
   return (
     <footer
       className="relative shrink-0 border-t border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-bg)] px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] text-[var(--vs-theatre-text)] shadow-[0_-10px_30px_rgba(0,0,0,0.35)] lg:px-7"
@@ -361,7 +362,7 @@ export function CinemaTheatreTransport({
       data-testid="cinema-theatre-transport"
     >
       <div className="grid gap-2">
-        <div className="grid gap-1" data-cinema-theatre-mini-progress="">
+        <div className={miniProgressClassName} data-cinema-theatre-mini-progress="">
           <div className="h-1.5 overflow-hidden rounded-full bg-[var(--vs-surface-muted)]">
             <div
               className="h-full rounded-full bg-[var(--vs-theatre-accent)]"

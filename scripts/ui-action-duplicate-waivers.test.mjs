@@ -21,6 +21,25 @@ test("classifies repeated same-surface controls as scenario coverage", () => {
   assert.equal(classification.severity, "waived");
 });
 
+test("classifies preview audition duplicates under the preview playback burn-down", () => {
+  const classification = classifyDuplicateGroup({
+    actionClass: "generation",
+    actionIds: ["ui-action-preview-mini-play", "ui-action-preview-local-play"],
+    count: 2,
+    kind: "same-label-same-surface",
+    label: "Audition",
+    playbackActions: ["audition"],
+    playbackOwners: ["preview"],
+    scenarios: ["workspace-preview-asr-warning"],
+    surface: "Preview",
+    surfaces: ["Preview"],
+  });
+
+  assert.equal(classification.category, "allowed-owned-overexposure");
+  assert.equal(classification.burnDownIssue, "WP46-BD-PREVIEW-PLAYBACK");
+  assert.equal(classification.severity, "waived");
+});
+
 test("classifies clone controls as overexposed with a burn-down issue", () => {
   const classification = classifyDuplicateGroup({
     actionClass: "generation",
@@ -33,9 +52,9 @@ test("classifies clone controls as overexposed with a burn-down issue", () => {
     surfaces: ["Review", "Preview"],
   });
 
-  assert.equal(classification.category, "overexposed");
+  assert.equal(classification.category, "allowed-owned-overexposure");
   assert.equal(classification.burnDownIssue, "WP46-BD-VOICE-CLONE");
-  assert.equal(classification.severity, "needs-review");
+  assert.equal(classification.severity, "waived");
 });
 
 test("classifies voice-command clone controls under the clone burn-down", () => {
@@ -50,7 +69,7 @@ test("classifies voice-command clone controls under the clone burn-down", () => 
     surfaces: ["Voice Command"],
   });
 
-  assert.equal(classification.category, "overexposed");
+  assert.equal(classification.category, "allowed-owned-overexposure");
   assert.equal(classification.burnDownIssue, "WP46-BD-VOICE-CLONE");
 });
 
@@ -157,7 +176,8 @@ test("summarizes waiver, needs-review, and unclassified duplicate categories", (
   ]);
 
   assert.equal(summary.byCategory["allowed-surface-parity"], 1);
-  assert.equal(summary.byCategory.overexposed, 1);
+  assert.equal(summary.byCategory["allowed-owned-overexposure"], 1);
+  assert.equal(summary.byCategory.overexposed, 0);
   assert.equal(summary.byCategory.unclassified, 1);
   assert.equal(summary.burnDownIssues[0].issue, "WP46-BD-VOICE-CLONE");
 });

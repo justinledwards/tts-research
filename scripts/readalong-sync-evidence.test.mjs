@@ -16,6 +16,7 @@ test("read-along sync fixtures cover required timing scenarios", async () => {
   const fixtureSet = await loadReadAlongSyncFixtures(rootDir);
   assert.equal(fixtureSet.fixtures.length >= 10, true);
   assert.equal(fixtureSet.requiredTypes.includes("stale-audio"), true);
+  assert.equal(fixtureSet.requiredTypes.includes("heuristic-degraded"), true);
   assert.equal(fixtureSet.requiredTypes.includes("website-article"), true);
 });
 

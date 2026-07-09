@@ -16,7 +16,7 @@ export type LocalizedPlaybackToolbarStage =
   | "teleprompt"
   | "theatre";
 
-export type LocalizedPlaybackToolbarVariant = "compact" | "normal" | "theatre";
+export type LocalizedPlaybackToolbarVariant = "compact" | "normal" | "theatre" | "theatre-compact";
 
 export interface LocalizedPlaybackToolbarAction {
   readonly ariaKeyShortcuts?: string;
@@ -90,8 +90,10 @@ export function LocalizedPlaybackToolbar({
   shortcutPreferences = DEFAULT_SHORTCUT_PREFERENCES,
 }: Readonly<{ model: LocalizedPlaybackToolbarModel; shortcutPreferences?: ShortcutPreferences }>) {
   const variant = model.variant ?? "normal";
-  const highContrast = variant === "theatre" || model.stage === "cinema-theatre";
+  const highContrast =
+    variant === "theatre" || variant === "theatre-compact" || model.stage === "cinema-theatre";
   const compact = variant === "compact";
+  const theatreCompact = variant === "theatre-compact";
   const actions = localizedPlaybackActions(model);
   const toolbarTestId = model.testId ?? `localized-playback-toolbar-${model.stage}`;
   const disabledReasons = localizedPlaybackDisabledReasons(actions, model.speed);
@@ -103,7 +105,7 @@ export function LocalizedPlaybackToolbar({
       data-localized-playback-toolbar={model.stage}
       data-testid={toolbarTestId}
     >
-      <div className="grid min-w-0 gap-2">
+      <div className={cx("grid min-w-0 gap-2", theatreCompact && "hidden")}>
         <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p
@@ -162,7 +164,7 @@ export function LocalizedPlaybackToolbar({
           </div>
         </div>
       </div>
-      <div className={localizedPlaybackControlRowClassName(compact)}>
+      <div className={localizedPlaybackControlRowClassName(variant, compact)}>
         {actions.map((action) => (
           <ToolbarButton
             action={action}
@@ -174,6 +176,7 @@ export function LocalizedPlaybackToolbar({
         {model.speed ? (
           <ToolbarSpeedSelect
             highContrast={highContrast}
+            phoneHidden={theatreCompact}
             shortcutPreferences={shortcutPreferences}
             speed={model.speed}
           />
@@ -543,10 +546,12 @@ function ToolbarButton({
 
 function ToolbarSpeedSelect({
   highContrast,
+  phoneHidden = false,
   shortcutPreferences,
   speed,
 }: Readonly<{
   highContrast: boolean;
+  phoneHidden?: boolean;
   shortcutPreferences: ShortcutPreferences;
   speed: LocalizedPlaybackToolbarSpeedControl;
 }>) {
@@ -560,6 +565,7 @@ function ToolbarSpeedSelect({
     <label
       className={cx(
         "grid min-w-28 gap-1 text-xs font-semibold",
+        phoneHidden && "hidden",
         highContrast && "text-[var(--vs-theatre-text)]",
       )}
     >
@@ -603,6 +609,9 @@ function ToolbarSpeedSelect({
 }
 
 function localizedPlaybackToolbarClassName(variant: LocalizedPlaybackToolbarVariant): string {
+  if (variant === "theatre-compact") {
+    return "grid gap-2 rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-2 text-[var(--vs-theatre-text)] shadow-2xl";
+  }
   if (variant === "theatre") {
     return "grid gap-2 rounded-lg border border-[var(--vs-theatre-panel-border)] bg-[var(--vs-theatre-panel)] p-2 text-[var(--vs-theatre-text)] shadow-2xl sm:gap-3 sm:p-3";
   }
@@ -612,7 +621,13 @@ function localizedPlaybackToolbarClassName(variant: LocalizedPlaybackToolbarVari
   return "grid gap-3 rounded-lg border bg-[var(--vs-raised)] p-3 shadow-sm vs-border lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center";
 }
 
-function localizedPlaybackControlRowClassName(compact: boolean): string {
+function localizedPlaybackControlRowClassName(
+  variant: LocalizedPlaybackToolbarVariant,
+  compact: boolean,
+): string {
+  if (variant === "theatre-compact") {
+    return "flex min-w-0 flex-wrap items-center gap-2 xl:justify-end";
+  }
   return cx(
     "flex min-w-0 flex-wrap items-center gap-2",
     compact ? "justify-start" : "lg:justify-end",

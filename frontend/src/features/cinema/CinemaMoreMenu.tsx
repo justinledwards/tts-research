@@ -354,14 +354,12 @@ export function CinemaMoreMenu({
         data-ui-action-owner="cinema-more"
         data-ui-action-scope={activeAction ? "operator" : "menu"}
         onClick={() => {
-          setOpen((current) => {
-            const nextOpen = !current;
-            if (nextOpen) {
-              focusFirstOnOpenRef.current = true;
-              onMenuOpen?.();
-            }
-            return nextOpen;
-          });
+          const nextOpen = !open;
+          if (nextOpen) {
+            focusFirstOnOpenRef.current = true;
+            onMenuOpen?.();
+          }
+          setOpen(nextOpen);
         }}
         onKeyDown={(event) => {
           if (event.key === "Escape" && open) {

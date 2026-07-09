@@ -959,8 +959,17 @@ async function runCommandPaletteAction(page, query, optionName) {
     page,
     "command-palette-open-search",
     async () => {
-      await page.keyboard.press("Control+K");
       const palette = page.getByRole("dialog", { name: "Command palette" });
+      await page.keyboard.press("Control+K");
+      if (!(await palette.isVisible({ timeout: 1_000 }).catch(() => false))) {
+        await page.evaluate(() => {
+          const triggers = [
+            ...document.querySelectorAll("[data-testid='ui-action-command-palette-open']"),
+          ].filter((trigger) => trigger instanceof HTMLElement);
+          const visibleTrigger = triggers.find((trigger) => trigger.getClientRects().length > 0);
+          (visibleTrigger ?? triggers[0])?.click();
+        });
+      }
       await palette.waitFor({ state: "visible" });
       await page.getByPlaceholder("Search actions, settings, sources, bookmarks...").fill(query);
       const option = palette.getByRole("option", { name: optionName }).first();
@@ -1663,7 +1672,17 @@ async function runResponsivePreparedCinemaSurface(
 async function openPreparedCinemaOverlay(page, expectedLabel) {
   await page.goto(appBaseUrl, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle").catch(() => {});
-  await page.getByRole("button", { exact: true, name: "Intake" }).click();
+  const intakeStage = page.getByTestId("workspace-stage-intake").first();
+  if (await intakeStage.isVisible().catch(() => false)) {
+    if (await intakeStage.isEnabled().catch(() => false)) {
+      await intakeStage.click();
+    }
+  } else {
+    await page
+      .getByRole("button", { name: /Intake/ })
+      .first()
+      .click();
+  }
   await openIntakeDestination(page);
   await page
     .getByRole("button", { name: new RegExp(`Open ${expectedLabel}`) })
@@ -1696,12 +1715,12 @@ async function captureResponsiveCinemaTheatre(page, { surface, viewport }) {
   }
   await cinemaOverlay(page).getByTestId("cinema-theatre-chrome").waitFor({ state: "visible" });
   await assertCinemaReadyForScreenshot(page, `${surface}:${viewport.name}:theatre`);
-  await assertCinemaTheatreContract(page, `${surface}:${viewport.name}:theatre`);
   const screenshot = path.join(
     screenshotsDir,
     `responsive-${surface}-${viewport.name}-theatre.png`,
   );
   await page.screenshot({ fullPage: false, path: screenshot });
+  await assertCinemaTheatreContract(page, `${surface}:${viewport.name}:theatre`);
   await runCommandPaletteAction(page, "toggle theatre controls", /Toggle Theatre controls/);
   await page.getByTestId("cinema-theatre-transport").waitFor({ state: "visible" });
   await page.waitForFunction(
@@ -2569,7 +2588,17 @@ async function openBookCinemaOverlay(page, scope, url = appBaseUrl) {
     await waitForOverlayScope(page, scope);
     return;
   }
-  await page.getByRole("button", { exact: true, name: "Intake" }).click();
+  const intakeStage = page.getByTestId("workspace-stage-intake").first();
+  if (await intakeStage.isVisible().catch(() => false)) {
+    if (await intakeStage.isEnabled().catch(() => false)) {
+      await intakeStage.click();
+    }
+  } else {
+    await page
+      .getByRole("button", { name: /Intake/ })
+      .first()
+      .click();
+  }
   await openIntakeDestination(page);
   await page.getByTestId("intake-wizard-open-book-cinema").waitFor();
   await selectBookScope(page, scope);

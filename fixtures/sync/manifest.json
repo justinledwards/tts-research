@@ -13,6 +13,7 @@
     "markdown-skipped-blocks",
     "speed-change",
     "seek-resume",
-    "stale-audio"
+    "stale-audio",
+    "heuristic-degraded"
   ]
 }

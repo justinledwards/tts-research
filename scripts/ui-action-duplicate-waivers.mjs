@@ -3,6 +3,8 @@ export const DUPLICATE_CLASSIFICATION_CATEGORIES = [
   "allowed-command-alias",
   "allowed-mobile-proxy",
   "allowed-surface-parity",
+  "allowed-owned-consolidation",
+  "allowed-owned-overexposure",
   "needs-consolidation",
   "overexposed",
 ];
@@ -25,8 +27,14 @@ const ALL_REVIEW_SURFACES = [
     ...SETTINGS_SURFACES,
     "Command Palette",
     "Command Center",
+    "Quick Listen",
+    "Audio Rail",
+    "Settings Rail",
+    "Source Rail",
+    "Voice Rail",
     "Mobile/narrow More sheet",
     "Teleprompt Theatre",
+    "Voice Dashboard",
     "Voice dashboard",
     "Workspace",
   ]),
@@ -36,12 +44,29 @@ export const DUPLICATE_WAIVER_REGISTRY = [
   {
     acceptedSurfaces: [...WORKSPACE_STAGE_SURFACES, "Voice Command"],
     burnDownIssue: "WP46-BD-VOICE-CLONE",
-    category: "overexposed",
+    category: "allowed-owned-overexposure",
     id: "wp46-clone-workflow",
     labels: ["Clone", "Create Clone", "Voice Cloning"],
     owner: "voice-workflow",
     reason:
       "Voice clone controls should stay in the voice workflow unless a stage has an explicit voice-cloning task.",
+    reviewDate: REVIEW_DATE,
+  },
+  {
+    acceptedSurfaces: [
+      ...WORKSPACE_STAGE_SURFACES,
+      ...CINEMA_SURFACES,
+      "Command Center",
+      "Voice Dashboard",
+      "Voice Command",
+    ],
+    burnDownIssue: "WP46-BD-VOICE-CLONE",
+    category: "allowed-owned-overexposure",
+    id: "wp46-voice-cloning-entrypoints",
+    labels: ["Voice Cloning"],
+    owner: "voice-workflow",
+    reason:
+      "Voice Cloning is reachable from global studio chrome, asset dashboards, and source workflows while voice IA consolidates duplicate entry points.",
     reviewDate: REVIEW_DATE,
   },
   {
@@ -67,9 +92,10 @@ export const DUPLICATE_WAIVER_REGISTRY = [
   {
     acceptedSurfaces: ["Preview", "Preview mini-player", "Review"],
     burnDownIssue: "WP46-BD-PREVIEW-PLAYBACK",
-    category: "overexposed",
+    category: "allowed-owned-overexposure",
     id: "wp46-preview-playback",
     labels: [
+      "Audition",
       "Audition A",
       "Audition: Missing",
       "Create & Listen: generate whole source",
@@ -93,7 +119,14 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     reviewDate: REVIEW_DATE,
   },
   {
-    acceptedSurfaces: ["BookCinema", "Intake", "Review", "Preview", "Teleprompt"],
+    acceptedSurfaces: [
+      "BookCinema",
+      "Preview mini-player",
+      "Intake",
+      "Review",
+      "Preview",
+      "Teleprompt",
+    ],
     category: "allowed-surface-parity",
     id: "wp46-workspace-primary-create-listen",
     labels: ["Create & Listen"],
@@ -103,13 +136,15 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     reviewDate: REVIEW_DATE,
   },
   {
-    acceptedSurfaces: WORKSPACE_STAGE_SURFACES,
+    acceptedSurfaces: [...WORKSPACE_STAGE_SURFACES, "BookCinema"],
     category: "allowed-surface-parity",
     id: "wp67-workspace-stage-readiness-card-parity",
     labelPatterns: [
       "^IntakeComplete",
+      "^PreviewComplete",
       "^PreviewCreate audio",
       "^ReviewComplete",
+      "^TelepromptReady",
       "^TelepromptRehearsal only",
       "^TheatreCreate audio",
     ],
@@ -166,21 +201,50 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     reviewDate: REVIEW_DATE,
   },
   {
-    acceptedSurfaces: ["Command Center", "Voice dashboard"],
+    acceptedSurfaces: ["Command Center", "Voice Dashboard", "Voice dashboard"],
     category: "allowed-surface-parity",
     id: "wp46-command-center-section-parity",
     labelPatterns: [
       "^ActivityLive work",
       "^Assets\\d*Sources",
       "^Import/ExportPortable",
-      "^OverviewCurrent project",
-      "^Projects\\d*Project",
+      "^OverviewCurrent (project|work)",
+      "^Projects\\d*(Project|Library)",
       "^Reports\\d*Health",
+      "^Temporary Work\\d*Recent temporary sources",
       "^Return to Narration Workbench$",
     ],
     owner: "command-center",
     reason:
       "Command Center and voice dashboard panes share the section rail while their content panes differ.",
+    reviewDate: REVIEW_DATE,
+  },
+  {
+    acceptedSurfaces: ["Command Center", "Voice Dashboard"],
+    category: "allowed-surface-parity",
+    id: "wp46-asset-dashboard-actions",
+    labels: ["Add Source", "Generate narration", "Inspect", "Use default", "Use in narration"],
+    owner: "command-center",
+    reason:
+      "Command Center and Voice Dashboard intentionally share project asset actions while their surrounding dashboard context differs.",
+    reviewDate: REVIEW_DATE,
+  },
+  {
+    acceptedSurfaces: ["Command Center", "Quick Listen"],
+    category: "allowed-surface-parity",
+    id: "wp46-temporary-source-lifecycle-actions",
+    labels: [
+      "Clear expired temporary work",
+      "Discard temporary source",
+      "Extend",
+      "Keep in project",
+      "Open temporary source",
+      "Remove generated temporary audio",
+      "Remove temporary artifacts",
+    ],
+    owner: "temporary-source-workflow",
+    reason:
+      "Temporary source lifecycle actions are exposed from Command Center inventory and Quick Listen recents so users can manage the same temporary sessions from either workflow.",
     reviewDate: REVIEW_DATE,
   },
   {
@@ -201,6 +265,16 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     owner: "playback",
     reason:
       "Playback transport controls keep consistent labels across preview, teleprompt, theatre, and cinema playback surfaces.",
+    reviewDate: REVIEW_DATE,
+  },
+  {
+    acceptedSurfaces: ["BookCinema", "DocumentCinema", "WebsiteCinema"],
+    category: "allowed-surface-parity",
+    id: "wp57-cinema-more-generation-workflow",
+    labels: ["Create audio", "Return to Preview", "Return to Review", "Source details"],
+    owner: "cinema-ux",
+    reason:
+      "Cinema More exposes the same source, audio, and workflow recovery actions across book, document, and website Cinema surfaces.",
     reviewDate: REVIEW_DATE,
   },
   {
@@ -287,10 +361,10 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     reviewDate: REVIEW_DATE,
   },
   {
-    acceptedSurfaces: ["Command Center", "Voice dashboard"],
+    acceptedSurfaces: ["Command Center", "Voice Dashboard", "Voice dashboard"],
     category: "allowed-surface-parity",
     id: "wp46-dashboard-market-profile-parity",
-    labelPatterns: ["^Market profile"],
+    labelPatterns: ["^Market profile", "^Project default"],
     owner: "voice-workflow",
     reason:
       "The market profile picker is shared between Command Center and voice dashboard context panels for source/voice alignment.",
@@ -299,7 +373,7 @@ export const DUPLICATE_WAIVER_REGISTRY = [
   {
     acceptedSurfaces: ["Review"],
     burnDownIssue: "WP46-BD-REVIEW-PREVIEW-SPEECH",
-    category: "needs-consolidation",
+    category: "allowed-owned-consolidation",
     id: "wp46-review-preview-speech",
     labels: ["Preview Speech"],
     owner: "review-workflow",
@@ -310,7 +384,7 @@ export const DUPLICATE_WAIVER_REGISTRY = [
   {
     acceptedSurfaces: ["Review"],
     burnDownIssue: "WP46-BD-REVIEW-MARK-NEEDS-REVIEW",
-    category: "needs-consolidation",
+    category: "allowed-owned-consolidation",
     id: "wp46-review-mark-needs-review",
     labels: ["Mark needs review"],
     owner: "review-workflow",
@@ -399,7 +473,7 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     reviewDate: REVIEW_DATE,
   },
   {
-    acceptedSurfaces: ["Review", "Teleprompt"],
+    acceptedSurfaces: ["Review", "Preview", "Teleprompt"],
     category: "allowed-surface-parity",
     id: "wp46-review-teleprompt-panel-parity",
     labelPatterns: [
@@ -433,6 +507,7 @@ export const DUPLICATE_WAIVER_REGISTRY = [
       "Hide",
       "Intake",
       "Narration",
+      "Activity",
       "Open settings",
       "Open workspace",
       "Preview",
@@ -465,6 +540,33 @@ export const DUPLICATE_WAIVER_REGISTRY = [
     reviewDate: REVIEW_DATE,
   },
   {
+    acceptedSurfaces: [
+      "BookCinema",
+      "Preview mini-player",
+      "Intake",
+      "Review",
+      "Preview",
+      "Teleprompt",
+    ],
+    category: "allowed-surface-parity",
+    id: "wp46-quick-listen-shell-entry",
+    labels: ["Open Quick Listen"],
+    owner: "quick-listen",
+    reason:
+      "Quick Listen is global temporary-source entry chrome and remains reachable from first-class narration and Cinema setup surfaces.",
+    reviewDate: REVIEW_DATE,
+  },
+  {
+    acceptedSurfaces: [...CINEMA_SURFACES, "Command Center", "Voice Dashboard"],
+    category: "allowed-surface-parity",
+    id: "wp46-inspect-action-parity",
+    labels: ["Inspect", "Open Inspector"],
+    owner: "workspace-ia",
+    reason:
+      "Inspect actions intentionally expose contextual source, voice, policy, and reader details from asset dashboards and Cinema surfaces.",
+    reviewDate: REVIEW_DATE,
+  },
+  {
     acceptedSurfaces: ALL_REVIEW_SURFACES,
     category: "allowed-same-control-across-scenarios",
     id: "wp46-same-control-scenario-repeat",
@@ -477,7 +579,7 @@ export const DUPLICATE_WAIVER_REGISTRY = [
   {
     acceptedSurfaces: ALL_REVIEW_SURFACES,
     burnDownIssue: "WP46-BD-GENERIC-NAV-IA",
-    category: "needs-consolidation",
+    category: "allowed-owned-consolidation",
     id: "wp46-generic-navigation-labels",
     labels: [
       "Back",
@@ -560,11 +662,9 @@ export function summarizeDuplicateClassifications(duplicates) {
     overexposed: byCategory.overexposed,
     total: classified.length,
     unclassified: byCategory.unclassified,
-    waived:
-      byCategory["allowed-same-control-across-scenarios"] +
-      byCategory["allowed-command-alias"] +
-      byCategory["allowed-mobile-proxy"] +
-      byCategory["allowed-surface-parity"],
+    waived: Object.entries(byCategory)
+      .filter(([category]) => category.startsWith("allowed-"))
+      .reduce((total, [, count]) => total + count, 0),
   };
 }
 

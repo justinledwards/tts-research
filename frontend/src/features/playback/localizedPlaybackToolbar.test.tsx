@@ -65,6 +65,31 @@ describe("LocalizedPlaybackToolbar", () => {
     expect(localizedPlaybackStageLabel("cinema-theatre")).toBe("Cinema Theatre");
   });
 
+  it("collapses theatre compact chrome to an action rail on phone", () => {
+    const markup = renderToStaticMarkup(
+      <LocalizedPlaybackToolbar
+        model={{
+          activeDetail: "Ready for playback",
+          activeLabel: "Cinema cue",
+          next: { label: "+5s", onClick: () => null },
+          playPause: { label: "Pause", primary: true, onClick: () => null },
+          previous: { label: "-5s", onClick: () => null },
+          progress: { currentLabel: "0:03", durationLabel: "0:30", ratio: 0.1 },
+          restart: { label: "Restart", onClick: () => null },
+          speed: { value: 1, onChange: () => null },
+          stage: "cinema-theatre",
+          variant: "theatre-compact",
+        }}
+      />,
+    );
+
+    expect(markup).toContain("hidden");
+    expect(markup).toContain("flex-wrap");
+    expect(markup).not.toContain("overflow-x-auto");
+    expect(markup).toContain("Pause");
+    expect(markup).toContain('aria-label="Playback speed"');
+  });
+
   it("renders seekable waveform progress with cue markers", () => {
     const markup = renderToStaticMarkup(
       <LocalizedPlaybackToolbar
