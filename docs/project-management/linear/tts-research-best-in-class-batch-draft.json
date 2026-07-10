@@ -1,0 +1,296 @@
+{
+  "schemaVersion": "tts-research.linear-batch.v0-candidate",
+  "status": "candidate_pending_chatgpt",
+  "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+  "teamId": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+  "activeCap": 20,
+  "proposedCount": 16,
+  "requiredPeerMarker": "AGREED TTS BEST-IN-CLASS ARCHITECTURE BATCH",
+  "issues": [
+    {
+      "localId": "BIC-00",
+      "title": "Best-in-class UX/performance batch closeout",
+      "kind": "parent",
+      "dependencies": [
+        "BIC-01",
+        "BIC-02",
+        "BIC-03",
+        "BIC-04",
+        "BIC-05",
+        "BIC-06",
+        "BIC-07",
+        "BIC-08",
+        "BIC-09",
+        "BIC-10",
+        "BIC-11",
+        "BIC-12",
+        "BIC-13",
+        "BIC-14",
+        "BIC-15"
+      ],
+      "deliverable": "Close only after all children, visual evidence, budgets, flow coverage, and peer gates pass.",
+      "acceptanceCriteria": [
+        "Atomic scope only; no hidden adjacent redesign.",
+        "Preserve CPU-first local operation and zero eager model/provider work.",
+        "Include focused tests, fresh parent verification, and explicit performance-budget impact.",
+        "Update affected canonical flow entries or prove no flow impact.",
+        "Close only after all children, visual evidence, budgets, flow coverage, and peer gates pass."
+      ],
+      "status": "candidate_pending_chatgpt",
+      "linear": null
+    },
+    {
+      "localId": "BIC-01",
+      "title": "CPU-first startup availability and fail-fast diagnostics",
+      "kind": "implementation",
+      "dependencies": [],
+      "deliverable": "Default lean CPU path binds custom ports, performs zero eager model/provider work, and every startup probe is bounded.",
+      "acceptanceCriteria": [
+        "Atomic scope only; no hidden adjacent redesign.",
+        "Preserve CPU-first local operation and zero eager model/provider work.",
+        "Include focused tests, fresh parent verification, and explicit performance-budget impact.",
+        "Update affected canonical flow entries or prove no flow impact.",
+        "Default lean CPU path binds custom ports, performs zero eager model/provider work, and every startup probe is bounded."
+      ],
+      "status": "candidate_pending_chatgpt",
+      "linear": null
+    },
+    {
+      "localId": "BIC-02",
+      "title": "Flow registry schema and report-only semantic validator",
+      "kind": "architecture",
+      "dependencies": ["BIC-01"],
+      "deliverable": "Validate IDs, owners, Mermaid metadata, paths, branches, route inventory, states, and generated index without enforcing CI yet.",
+      "acceptanceCriteria": [
+        "Atomic scope only; no hidden adjacent redesign.",
+        "Preserve CPU-first local operation and zero eager model/provider work.",
+        "Include focused tests, fresh parent verification, and explicit performance-budget impact.",
+        "Update affected canonical flow entries or prove no flow impact.",
+        "Validate IDs, owners, Mermaid metadata, paths, branches, route inventory, states, and generated index without enforcing CI yet."
+      ],
+      "status": "candidate_pending_chatgpt",
+      "linear": null
+    },
+    {
+      "localId": "BIC-03",
+      "title": "Application shell, navigation, command, and project flow contracts",
+      "kind": "architecture",
+      "dependencies": ["BIC-02"],
+      "deliverable": "Canonicalize APP and PRJ flows with route/state/test mapping.",
+      "acceptanceCriteria": [
+        "Atomic scope only; no hidden adjacent redesign.",
+        "Preserve CPU-first local operation and zero eager model/provider work.",
+        "Include focused tests, fresh parent verification, and explicit performance-budget impact.",
+        "Update affected canonical flow entries or prove no flow impact.",
+        "Canonicalize APP and PRJ flows with route/state/test mapping."
+      ],
+      "status": "candidate_pending_chatgpt",
+      "linear": null
+    },
+    {
+      "localId": "BIC-04",
+      "title": "Durable, URL, temporary, promotion, and review source flow contracts",
+      "kind": "architecture",
+      "dependencies": ["BIC-02"],
+      "deliverable": "Canonicalize SRC flows including URL trust boundary and rollback.",
+      "acceptanceCriteria": [
+        "Atomic scope only; no hidden adjacent redesign.",
+        "Preserve CPU-first local operation and zero eager model/provider work.",
+        "Include focused tests, fresh parent verification, and explicit performance-budget impact.",
+        "Update affected canonical flow entries or prove no flow impact.",
+        "Canonicalize SRC flows including URL trust boundary and rollback."
+      ],
+      "status": "candidate_pending_chatgpt",
+      "linear": null
+    },
+    {
+      "localId": "BIC-05",
+      "title": "Policy, preview, Teleprompt, and settings flow contracts",
+      "kind": "architecture",
+      "dependencies": ["BIC-02"],
+      "deliverable": "Canonicalize effective settings and audition/return recovery.",
+      "acceptanceCriteria": [
+        "Atomic scope only; no hidden adjacent redesign.",
+        "Preserve CPU-first local operation and zero eager model/provider work.",
+        "Include focused tests, fresh parent verification, and explicit performance-budget impact.",
+        "Update affected canonical flow entries or prove no flow impact.",
+        "Canonicalize effective settings and audition/return recovery."
+      ],
+      "status": "candidate_pending_chatgpt",
+      "linear": null
+    },
+    {
+      "localId": "BIC-06",
+      "title": "Voice source, profile, and target lifecycle contracts",
+      "kind": "architecture",
+      "dependencies": ["BIC-02"],
+      "deliverable": "Canonicalize voice state machines, cancellation, missing-tool, and no-eager-model behavior.",
+      "acceptanceCriteria": [
+        "Atomic scope only; no hidden adjacent redesign.",
+        "Preserve CPU-first local operation and zero eager model/provider work.",
+        "Include focused tests, fresh parent verification, and explicit performance-budget impact.",
+        "Update affected canonical flow entries or prove no flow impact.",
+        "Canonicalize voice state machines, cancellation, missing-tool, and no-eager-model behavior."
+      ],
+      "status": "candidate_pending_chatgpt",
+      "linear": null
+    },
+    {
+      "localId": "BIC-07",
+      "title": "Job, event, persistence, and artifact lifecycle contracts",
+      "kind": "architecture",
+      "dependencies": ["BIC-02"],
+      "deliverable": "Canonicalize synthesis/check/retry/interruption/currentness and SSE snapshot recovery.",
+      "acceptanceCriteria": [
+        "Atomic scope only; no hidden adjacent redesign.",
+        "Preserve CPU-first local operation and zero eager model/provider work.",
+        "Include focused tests, fresh parent verification, and explicit performance-budget impact.",
+        "Update affected canonical flow entries or prove no flow impact.",
+        "Canonicalize synthesis/check/retry/interruption/currentness and SSE snapshot recovery."
+      ],
+      "status": "candidate_pending_chatgpt",
+      "linear": null
+    },
+    {
+      "localId": "BIC-08",
+      "title": "Reader, playback, Cinema, Theatre, progress, and repair contracts",
+      "kind": "architecture",
+      "dependencies": ["BIC-02"],
+      "deliverable": "Canonicalize partial audio, fidelity degradation, safe return, remap, and rebuild.",
+      "acceptanceCriteria": [
+        "Atomic scope only; no hidden adjacent redesign.",
+        "Preserve CPU-first local operation and zero eager model/provider work.",
+        "Include focused tests, fresh parent verification, and explicit performance-budget impact.",
+        "Update affected canonical flow entries or prove no flow impact.",
+        "Canonicalize partial audio, fidelity degradation, safe return, remap, and rebuild."
+      ],
+      "status": "candidate_pending_chatgpt",
+      "linear": null
+    },
+    {
+      "localId": "BIC-09",
+      "title": "Portability, UI memory, recovery, boundary, and diagnostics contracts",
+      "kind": "architecture",
+      "dependencies": ["BIC-02"],
+      "deliverable": "Canonicalize transactional import/export, context pruning, error ownership, and data boundaries.",
+      "acceptanceCriteria": [
+        "Atomic scope only; no hidden adjacent redesign.",
+        "Preserve CPU-first local operation and zero eager model/provider work.",
+        "Include focused tests, fresh parent verification, and explicit performance-budget impact.",
+        "Update affected canonical flow entries or prove no flow impact.",
+        "Canonicalize transactional import/export, context pruning, error ownership, and data boundaries."
+      ],
+      "status": "candidate_pending_chatgpt",
+      "linear": null
+    },
+    {
+      "localId": "BIC-10",
+      "title": "Behavior-preserving App.tsx shell/domain extraction",
+      "kind": "performance",
+      "dependencies": ["BIC-03", "BIC-04", "BIC-05", "BIC-06", "BIC-07", "BIC-08", "BIC-09"],
+      "deliverable": "Reduce App.tsx below 2,000 lines, keep shared handlers, preserve behavior and lazy chunks; no UI redesign in this issue.",
+      "acceptanceCriteria": [
+        "Atomic scope only; no hidden adjacent redesign.",
+        "Preserve CPU-first local operation and zero eager model/provider work.",
+        "Include focused tests, fresh parent verification, and explicit performance-budget impact.",
+        "Update affected canonical flow entries or prove no flow impact.",
+        "Reduce App.tsx below 2,000 lines, keep shared handlers, preserve behavior and lazy chunks; no UI redesign in this issue."
+      ],
+      "status": "candidate_pending_chatgpt",
+      "linear": null
+    },
+    {
+      "localId": "BIC-11",
+      "title": "Project library and intake UX visual hierarchy",
+      "kind": "ux",
+      "dependencies": ["BIC-10"],
+      "deliverable": "Implement one-primary-action project/intake journey with complete empty/loading/failure/resume states and approved screenshots.",
+      "acceptanceCriteria": [
+        "Atomic scope only; no hidden adjacent redesign.",
+        "Preserve CPU-first local operation and zero eager model/provider work.",
+        "Include focused tests, fresh parent verification, and explicit performance-budget impact.",
+        "Update affected canonical flow entries or prove no flow impact.",
+        "Implement one-primary-action project/intake journey with complete empty/loading/failure/resume states and approved screenshots."
+      ],
+      "status": "candidate_pending_chatgpt",
+      "linear": null
+    },
+    {
+      "localId": "BIC-12",
+      "title": "Workspace review, preview, and generation UX polish",
+      "kind": "ux",
+      "dependencies": ["BIC-10", "BIC-11"],
+      "deliverable": "Polish task hierarchy, progress, retry/cancel, and capability messaging without duplicate actions.",
+      "acceptanceCriteria": [
+        "Atomic scope only; no hidden adjacent redesign.",
+        "Preserve CPU-first local operation and zero eager model/provider work.",
+        "Include focused tests, fresh parent verification, and explicit performance-budget impact.",
+        "Update affected canonical flow entries or prove no flow impact.",
+        "Polish task hierarchy, progress, retry/cancel, and capability messaging without duplicate actions."
+      ],
+      "status": "candidate_pending_chatgpt",
+      "linear": null
+    },
+    {
+      "localId": "BIC-13",
+      "title": "Reader, Cinema, Teleprompt, and Theatre responsive polish",
+      "kind": "ux",
+      "dependencies": ["BIC-10", "BIC-12"],
+      "deliverable": "Content-first responsive layout with non-occluding controls and shared navigation/transport actions.",
+      "acceptanceCriteria": [
+        "Atomic scope only; no hidden adjacent redesign.",
+        "Preserve CPU-first local operation and zero eager model/provider work.",
+        "Include focused tests, fresh parent verification, and explicit performance-budget impact.",
+        "Update affected canonical flow entries or prove no flow impact.",
+        "Content-first responsive layout with non-occluding controls and shared navigation/transport actions."
+      ],
+      "status": "candidate_pending_chatgpt",
+      "linear": null
+    },
+    {
+      "localId": "BIC-14",
+      "title": "Startup, bundle, interaction, idle-resource, and low-resource gates",
+      "kind": "performance",
+      "dependencies": ["BIC-01", "BIC-10", "BIC-13"],
+      "deliverable": "Automate all hard budgets; fail closed with reproducible reports and no GPU requirement.",
+      "acceptanceCriteria": [
+        "Atomic scope only; no hidden adjacent redesign.",
+        "Preserve CPU-first local operation and zero eager model/provider work.",
+        "Include focused tests, fresh parent verification, and explicit performance-budget impact.",
+        "Update affected canonical flow entries or prove no flow impact.",
+        "Automate all hard budgets; fail closed with reproducible reports and no GPU requirement."
+      ],
+      "status": "candidate_pending_chatgpt",
+      "linear": null
+    },
+    {
+      "localId": "BIC-15",
+      "title": "Final accessibility, visual regression, flow coverage, and peer acceptance",
+      "kind": "evidence",
+      "dependencies": [
+        "BIC-02",
+        "BIC-03",
+        "BIC-04",
+        "BIC-05",
+        "BIC-06",
+        "BIC-07",
+        "BIC-08",
+        "BIC-09",
+        "BIC-11",
+        "BIC-12",
+        "BIC-13",
+        "BIC-14"
+      ],
+      "deliverable": "Produce complete evidence at four viewports and receive final advisory peer acceptance; repo gates remain authoritative.",
+      "acceptanceCriteria": [
+        "Atomic scope only; no hidden adjacent redesign.",
+        "Preserve CPU-first local operation and zero eager model/provider work.",
+        "Include focused tests, fresh parent verification, and explicit performance-budget impact.",
+        "Update affected canonical flow entries or prove no flow impact.",
+        "Produce complete evidence at four viewports and receive final advisory peer acceptance; repo gates remain authoritative."
+      ],
+      "status": "candidate_pending_chatgpt",
+      "linear": null
+    }
+  ]
+}
