@@ -1,3 +1,20 @@
+## 2026-07-09 21:34 CEST - CPU-first startup and best-in-class PO reset
+
+- [x] verify API_PORT/PORT startup with lean CPU Kokoro and no heavy model bootstrap
+- [x] capture startup/network RCA and enforce measurable performance budgets
+- [x] export and archive completed TTS-Research Linear issues safely
+- [x] inventory all app flows and draft canonical flowcharts
+- [ ] run archive-first ChatGPT flowchart, architecture, UX, and atomicity gates
+- [ ] create the agreed capped Linear issue batch and start the first unblocked issue
+
+Evidence/RCA:
+- exact custom-port startup and reversible project create/delete passed;
+- warm readiness measured 15.182 s frontend / 16.824 s API;
+- startup is CPU Kokoro + mock checker with no eager Qwen/FlashAttention/model import;
+- full backend gate hang traced to unbounded Python module diagnostics; bounded `CommandContext` repair reduced full `internal/pipeline` verification to 13.224 s;
+- 9/9 completed unarchived TTS Linear issues archived with repo-local backup;
+- candidate registry contains 34 flows for the 123-route application inventory and a 16/20-issue acyclic batch pending ChatGPT agreement.
+
 ## 2026-07-09 04:02 CEST - QQP-543 Final UX UI action audit debt
 
 - [ ] root-cause failed Preview scenario inventory states

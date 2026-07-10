@@ -198,12 +198,14 @@ func ttsAgentFromEnv() (pipeline.TTSAgent, error) {
 		if strings.TrimSpace(embedPythonPath) == "" {
 			embedPythonPath = strings.TrimSpace(referencePythonPath)
 		}
-		if err := ensurePythonCanImportModule(embedPythonPath, "kokoro"); err != nil {
-			return nil, fmt.Errorf(
-				"kokoro embed synthesis runtime misconfiguration: resolved interpreter %q cannot import kokoro (checked at startup). Configure KOKORO_EMBED_PYTHON_PATH (preferred) or KOKORO_PYTHON_PATH to a Python environment with kokoro installed: %w",
-				embedPythonPath,
-				err,
-			)
+		if envBoolWithFallback("KOKORO_IMPORT_CHECK_ON_START", false) {
+			if err := ensurePythonCanImportModule(embedPythonPath, "kokoro"); err != nil {
+				return nil, fmt.Errorf(
+					"kokoro embed synthesis runtime misconfiguration: resolved interpreter %q cannot import kokoro (checked at startup). Configure KOKORO_EMBED_PYTHON_PATH (preferred) or KOKORO_PYTHON_PATH to a Python environment with kokoro installed: %w",
+					embedPythonPath,
+					err,
+				)
+			}
 		}
 
 		return agents.NewKokoroTTSAgent(agents.KokoroConfig{

@@ -838,7 +838,7 @@ if [[ "${SKIP_BOOTSTRAP:-0}" != "1" ]]; then
     fi
 
     if tts_uses_kokoro; then
-      if ! ensure_kokoro_clone_python_env; then
+      if [[ "${KOKORO_REFERENCE_BOOTSTRAP_ON_START:-0}" == "1" ]] && ! ensure_kokoro_clone_python_env; then
         fallback_to_mock_tts || true
         if local_fallback_enabled; then
           echo "Continuing with mock providers after clone Python bootstrap failure."
@@ -848,7 +848,7 @@ if [[ "${SKIP_BOOTSTRAP:-0}" != "1" ]]; then
         fi
       fi
 
-      if ! ensure_kokoro_reference_dependencies; then
+      if [[ "${KOKORO_REFERENCE_BOOTSTRAP_ON_START:-0}" == "1" ]] && ! ensure_kokoro_reference_dependencies; then
         fallback_to_mock_tts || true
         if local_fallback_enabled; then
           echo "Continuing with mock providers after reference dependency bootstrap failure."

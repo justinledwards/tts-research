@@ -15,6 +15,8 @@ import (
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
 )
 
+const pythonModuleProbeTimeout = time.Second
+
 type adapterCLIResult struct {
 	AdapterVersion string             `json:"adapterVersion"`
 	Author         string             `json:"author,omitempty"`
@@ -472,7 +474,9 @@ func (service *Service) pythonModuleAvailable(moduleName string) bool {
 	if !commandAvailable(pythonPath) {
 		return false
 	}
-	command := exec.Command(pythonPath, "-c", "import "+moduleName)
+	ctx, cancel := context.WithTimeout(context.Background(), pythonModuleProbeTimeout)
+	defer cancel()
+	command := exec.CommandContext(ctx, pythonPath, "-c", "import "+moduleName)
 	return command.Run() == nil
 }
 

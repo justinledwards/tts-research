@@ -1,0 +1,769 @@
+{
+  "schemaVersion": 1,
+  "exportedAt": "2026-07-09T19:41:57.571640+00:00",
+  "purpose": "Backup completed unarchived TTS-Research issues before Linear archive",
+  "project": {
+    "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+    "name": "TTS-Research"
+  },
+  "counts": {
+    "completedUnarchived": 9,
+    "safeToArchive": 9,
+    "skippedUnsafe": 0
+  },
+  "skippedUnsafe": [],
+  "issues": [
+    {
+      "id": "a9bbef20-a2bd-4883-88e4-9ddb79e3c627",
+      "identifier": "QQP-543",
+      "title": "Resolve final UX UI action audit debt blocking QQP-441",
+      "description": "## Problem\n\n`mise exec -- pnpm validate:ux-final` is the remaining blocker for QQP-441 after the Book Cinema responsive budget was repaired in QQP-542.\n\nFresh report: `output/final-ux-gates/latest/final-ux-summary.md`\n\nObserved final UX status:\n\n* 12/13 gates passed.\n* Failed gate: UI action audit is review-complete or explicitly waived.\n* Blocking failed activations:\n  * `workspace-preview-generation-failed`: timeout waiting for `Audio does not match the current source, voice, policy, or scope`.\n  * `workspace-preview-asr-warning`: timeout waiting for `localized-preview-playback-toolbar`.\n* Duplicate registry debt:\n  * 73 unclassified duplicate action groups.\n  * 31 overexposed duplicate groups with burn-down owners.\n  * 8 needs-consolidation duplicate groups.\n\n## Acceptance\n\n* `mise exec -- pnpm validate:ux-final` passes, or any intentionally remaining UI-action findings have explicit repo/Linear waivers with owners and review dates.\n* Scenario inventories for `workspace-preview-generation-failed` and `workspace-preview-asr-warning` are deterministic.\n* Duplicate action groups are either removed, classified in the waiver registry, or moved to explicit burn-down owner/issues.\n* Do not relax Book Cinema canvas budgets or QQP-542 responsive evidence.\n\n## Linked blocker\n\nBlocks QQP-441 final closeout. QQP-542 resolved the responsive Book Cinema theatre budget blocker separately.",
+      "priority": 2,
+      "url": "https://linear.app/niklas-olsson/issue/QQP-543/resolve-final-ux-ui-action-audit-debt-blocking-qqp-441",
+      "createdAt": "2026-07-09T02:01:08.585Z",
+      "updatedAt": "2026-07-09T11:37:02.009Z",
+      "completedAt": "2026-07-09T07:29:26.292Z",
+      "archivedAt": null,
+      "state": {
+        "id": "eacb743d-bf55-41d0-a3d8-38e07ccf7566",
+        "name": "Done",
+        "type": "completed"
+      },
+      "project": {
+        "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+        "name": "TTS-Research"
+      },
+      "team": {
+        "id": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+        "key": "QQP",
+        "name": "QQ-PWN"
+      },
+      "labels": {
+        "nodes": []
+      },
+      "parent": null,
+      "children": {
+        "nodes": []
+      },
+      "comments": {
+        "nodes": [
+          {
+            "id": "bf117b07-aadd-4159-b3a3-ad888fb84f32",
+            "body": "Follow-up verification harness repair after closeout:\n\nCommit: f254acfd307d99510373221a05ffdeecd4d0bc9c (`Stabilize ASR warning UI action replay`)\nBranch: `niklas/voice-studio-follow-up` pushed to fork.\n\nRCA:\n- The remaining failures were harness nondeterminism, not product UI regressions.\n- ASR warning scenario replay could land with the generated-audio panel under the fixed status strip or with the stable ASR warning copy in the right-rail summary rather than the inner Workspace panel.\n\nRepair:\n- Scroll ASR generated-audio panel clear of the fixed status strip before asserting no overlap.\n- Read ASR warning text from the whole right rail, falling back to the Workspace panel.\n\nFresh verification:\n- Focused `workspace-preview-asr-warning` UI action replay: passed.\n- `mise exec -- pnpm check`: passed.\n- `mise exec -- pnpm validate:ux-final`: passed.\n  - Final UX: PASSED-WITH-FINDINGS\n  - Merge readiness: READY WITH WAIVERS\n  - UI action audit status: passed\n  - failed activations: 0\n  - unclassified duplicate groups: 0\n  - overexposed duplicate groups: 0\n  - needs-consolidation duplicate groups: 0\n",
+            "createdAt": "2026-07-09T11:37:02.051Z",
+            "updatedAt": "2026-07-09T11:37:02.009Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-543/resolve-final-ux-ui-action-audit-debt-blocking-qqp-441#comment-bf117b07",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          },
+          {
+            "id": "e403d313-8ebd-4174-93b7-f46c3d4a6f37",
+            "body": "Parent closeout complete.\n\nCommit: `29d45781be476d7f54df444ad7e9baf769de91a9` pushed to `fork/niklas/voice-studio-follow-up` and remote equality verified.\n\nRCA / repair:\n- `workspace-preview-generation-failed`: stale assertion copy; gate now accepts current stale/degraded/archived recovery copy without hiding activation failures.\n- `workspace-preview-asr-warning`: full-suite flake was caused by shared project speech-policy/currentness drift during concurrent Settings replay; scenario now isolates job list, prepared-source/speech-policy payloads, and project speech-policy reads.\n- Document/Website Cinema More menu React warning fixed by avoiding parent callback inside state updater.\n- Duplicate registry classifies accepted duplicate groups with explicit owner/reason/review-date waivers and owned burn-down categories.\n\nEvidence:\n- `mise exec -- pnpm validate:ux-final` PASS.\n- Final UX summary: `output/final-ux-gates/latest/final-ux-summary.md`.\n- UI Action Audit: PASSED; failed activations 0; unclassified duplicate groups 0; unresolved overexposed/needs-consolidation groups 0.\n- Consolidated closeout stack PASS including `check`, `review:chatgpt`, and `git diff --check`.\n\nArtifacts:\n- `output/final-ux-gates/latest/final-ux-summary.md`\n- `output/final-ux-gates/latest/artifacts/ui-actions/summary.json`\n- `docs/plans/linear/QQP-543-final-ux-ui-action-audit-debt.md`\n\nMarking Done.",
+            "createdAt": "2026-07-09T07:29:25.925Z",
+            "updatedAt": "2026-07-09T07:29:25.898Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-543/resolve-final-ux-ui-action-audit-debt-blocking-qqp-441#comment-e403d313",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": "e403d313-8ebd-4174-93b7-f46c3d4a6f37"
+        }
+      },
+      "relations": {
+        "nodes": []
+      },
+      "inverseRelations": {
+        "nodes": [
+          {
+            "id": "fe6b3e3c-72d0-4c2a-8c35-fa8debffc10a",
+            "type": "related",
+            "issue": {
+              "id": "45b1cc50-6a65-43fd-a16a-a6e0631aeb7c",
+              "identifier": "QQP-441",
+              "title": "First-batch active-processing and canonical fixture evidence gate",
+              "state": {
+                "name": "Done",
+                "type": "completed"
+              },
+              "url": "https://linear.app/niklas-olsson/issue/QQP-441/first-batch-active-processing-and-canonical-fixture-evidence-gate"
+            }
+          }
+        ]
+      },
+      "attachments": {
+        "nodes": []
+      }
+    },
+    {
+      "id": "a0c98d9a-4640-4c10-96e1-6662f9df8d4c",
+      "identifier": "QQP-542",
+      "title": "Book Cinema Theatre compact phone controls exceed canvas budget",
+      "description": "Blocks QQP-441: [QQP-441](https://linear.app/niklas-olsson/issue/QQP-441/first-batch-active-processing-and-canonical-fixture-evidence-gate)\n\nRCA: real product/UI failure, not stale budget or harness bug.\n\nEvidence:\n\n* `mise exec -- pnpm e2e:book-cinema:responsive` fails at `book:phone-390:theatre`.\n* Footer measures `343px` / `40.64%` viewport; compact budget allows max `188px` / `25%`.\n* Canvas height is `31.85%`; compact read/theatre budget requires `43%`.\n* Blocker screenshot: `output/e2e-book-cinema/screenshots/responsive-book-phone-390-theatre.png`.\n* `frontend/src/features/cinema/canvasBudget.ts` defines the product budget; `CinemaShell.tsx` publishes it as `data-cinema-*`; the E2E harness reads that live budget.\n\nLikely source:\n\n* `frontend/src/features/cinema/CinemaTheatre.tsx` / theatre transport renders duplicated mini progress/status plus full `LocalizedPlaybackToolbar`.\n* `frontend/src/features/playback/LocalizedPlaybackToolbar.tsx` may need a compact/action-only theatre variant.\n\nAcceptance:\n\n* Keep `canvasBudget.ts` thresholds unchanged unless demonstrably impossible after a real compact UI fix.\n* Phone Book Cinema Theatre visible controls fit budget: footer <= `188px` and <= `25%`, canvas >= `43%` viewport.\n* Avoid duplicate progress/status in compact theatre mode.\n* `mise exec -- pnpm e2e:book-cinema:responsive` passes.\n* `mise exec -- pnpm --filter @tts-research/frontend test` passes.\n* `mise exec -- pnpm check` passes.\n* If screenshots/UI evidence changes are committed, `mise exec -- pnpm review:chatgpt` passes.\n\nScope note:\n\n* QQP-441 remains evidence-only and should only rerun/collect final evidence after this UI repair lands.",
+      "priority": 0,
+      "url": "https://linear.app/niklas-olsson/issue/QQP-542/book-cinema-theatre-compact-phone-controls-exceed-canvas-budget",
+      "createdAt": "2026-07-09T00:35:42.844Z",
+      "updatedAt": "2026-07-09T07:29:25.229Z",
+      "completedAt": "2026-07-09T07:29:25.214Z",
+      "archivedAt": null,
+      "state": {
+        "id": "eacb743d-bf55-41d0-a3d8-38e07ccf7566",
+        "name": "Done",
+        "type": "completed"
+      },
+      "project": {
+        "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+        "name": "TTS-Research"
+      },
+      "team": {
+        "id": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+        "key": "QQP",
+        "name": "QQ-PWN"
+      },
+      "labels": {
+        "nodes": []
+      },
+      "parent": null,
+      "children": {
+        "nodes": []
+      },
+      "comments": {
+        "nodes": [
+          {
+            "id": "0e3a66ca-37c8-4dad-82b2-7df23fe56793",
+            "body": "Parent closeout complete.\n\nCommit: `29d45781be476d7f54df444ad7e9baf769de91a9` pushed to `fork/niklas/voice-studio-follow-up` and remote equality verified.\n\nEvidence:\n- `mise exec -- pnpm e2e:book-cinema:responsive` PASS.\n- Consolidated closeout stack PASS: `generate:contracts`, `validate:ir`, `test:adapters`, `e2e:readalong-sync`, `e2e:readalong-performance`, `e2e:book-cinema:responsive`, `e2e:responsive-snapshots`, `check`, `review:chatgpt`, `git diff --check`.\n- `canvasBudget.ts` unchanged; Book Cinema Theatre compact phone budget remains enforced.\n- SPEC review PASS; QUALITY only reported stale `WORKINGLOG.md` EOF whitespace and parent hygiene resolved it.\n\nArtifacts:\n- `output/e2e-book-cinema/summary.json`\n- `WORKINGLOG.md`\n- `docs/plans/linear/QQP-542-book-cinema-phone-theatre-budget.md`\n\nMarking Done.",
+            "createdAt": "2026-07-09T07:29:24.823Z",
+            "updatedAt": "2026-07-09T07:29:24.801Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-542/book-cinema-theatre-compact-phone-controls-exceed-canvas-budget#comment-0e3a66ca",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": "0e3a66ca-37c8-4dad-82b2-7df23fe56793"
+        }
+      },
+      "relations": {
+        "nodes": [
+          {
+            "id": "409f5aae-6f49-4b50-aa03-9a33e231870d",
+            "type": "related",
+            "relatedIssue": {
+              "id": "45b1cc50-6a65-43fd-a16a-a6e0631aeb7c",
+              "identifier": "QQP-441",
+              "title": "First-batch active-processing and canonical fixture evidence gate",
+              "state": {
+                "name": "Done",
+                "type": "completed"
+              },
+              "url": "https://linear.app/niklas-olsson/issue/QQP-441/first-batch-active-processing-and-canonical-fixture-evidence-gate"
+            }
+          }
+        ]
+      },
+      "inverseRelations": {
+        "nodes": []
+      },
+      "attachments": {
+        "nodes": []
+      }
+    },
+    {
+      "id": "45b1cc50-6a65-43fd-a16a-a6e0631aeb7c",
+      "identifier": "QQP-441",
+      "title": "First-batch active-processing and canonical fixture evidence gate",
+      "description": "Slug: `active-processing-evidence-gates`\n\nAtomic deliverable: Produce the final deterministic evidence package for the canonical fixture, performance budgets, degraded modes, screenshots, logs, and review handoff.\n\nScope: Evidence-only: screenshots, budgets, fixture runs, logs, and review package; no feature implementation beyond test/evidence harnesses.\n\nDependencies: quick-listen-promotion-crosswalk, reader-windowing-highlight-scheduling, retry-interrupted-artifact-semantics, minimal-repair-overlay-supersession, lower-tier-adapter-contract-fit\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "priority": 2,
+      "url": "https://linear.app/niklas-olsson/issue/QQP-441/first-batch-active-processing-and-canonical-fixture-evidence-gate",
+      "createdAt": "2026-07-07T09:48:59.421Z",
+      "updatedAt": "2026-07-09T07:29:26.967Z",
+      "completedAt": "2026-07-09T07:29:26.956Z",
+      "archivedAt": null,
+      "state": {
+        "id": "eacb743d-bf55-41d0-a3d8-38e07ccf7566",
+        "name": "Done",
+        "type": "completed"
+      },
+      "project": {
+        "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+        "name": "TTS-Research"
+      },
+      "team": {
+        "id": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+        "key": "QQP",
+        "name": "QQ-PWN"
+      },
+      "labels": {
+        "nodes": []
+      },
+      "parent": null,
+      "children": {
+        "nodes": []
+      },
+      "comments": {
+        "nodes": [
+          {
+            "id": "cf182c3d-354a-4846-adbf-94a605cf51a5",
+            "body": "Parent closeout complete.\n\nCommit: `29d45781be476d7f54df444ad7e9baf769de91a9` pushed to `fork/niklas/voice-studio-follow-up` and remote equality verified.\n\nEvidence package:\n- Active-processing/canonical fixture evidence implemented and verified.\n- `fixtures/sync/manifest.json`\n- `scripts/readalong-sync-evidence.test.mjs`\n- `scripts/e2e-readalong-performance.mjs`\n- `docs/plans/linear/QQP-441-active-processing-evidence-gates.md`\n\nFinal gates:\n- `mise exec -- pnpm generate:contracts` PASS.\n- `mise exec -- pnpm validate:ir` PASS.\n- `mise exec -- pnpm test:adapters` PASS.\n- `mise exec -- pnpm e2e:readalong-sync` PASS.\n- `mise exec -- pnpm e2e:readalong-performance` PASS.\n- `mise exec -- pnpm e2e:book-cinema:responsive` PASS.\n- `mise exec -- pnpm e2e:responsive-snapshots` PASS.\n- `mise exec -- pnpm validate:ux-final` PASS / READY WITH WAIVERS.\n- `mise exec -- pnpm check` PASS.\n- `mise exec -- pnpm review:chatgpt` PASS.\n- `git diff --check` PASS.\n\nBlockers resolved:\n- QQP-542 compact Book Cinema phone theatre budget repaired and verified.\n- QQP-543 final UX UI action audit blocker repaired and verified.\n\nMarking Done.",
+            "createdAt": "2026-07-09T07:29:26.580Z",
+            "updatedAt": "2026-07-09T07:29:26.557Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-441/first-batch-active-processing-and-canonical-fixture-evidence-gate#comment-cf182c3d",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          },
+          {
+            "id": "8b0c47e8-7ce8-4906-92dd-cf7478a065df",
+            "body": "Created follow-up blocker for the remaining final UX gate debt: https://linear.app/niklas-olsson/issue/QQP-543/resolve-final-ux-ui-action-audit-debt-blocking-qqp-441\n\nCurrent split:\n- QQP-542 fixes the Book Cinema responsive theatre budget and now passes `e2e:book-cinema:responsive`.\n- QQP-441 evidence stack now passes `generate:contracts`, `validate:ir`, `test:adapters`, `e2e:readalong-sync`, `e2e:readalong-performance`, and `e2e:responsive-snapshots`.\n- QQP-441 still cannot close because `validate:ux-final` fails on UI action audit debt (2 scenario inventory failures plus duplicate registry debt), tracked by QQP-543.\n",
+            "createdAt": "2026-07-09T02:01:08.781Z",
+            "updatedAt": "2026-07-09T02:01:08.758Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-441/first-batch-active-processing-and-canonical-fixture-evidence-gate#comment-8b0c47e8",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          },
+          {
+            "id": "5278c607-a58e-4440-af72-13e97fb3d908",
+            "body": "Opened UI blocker repair for QQP-441 evidence failure: QQP-542 https://linear.app/niklas-olsson/issue/QQP-542/book-cinema-theatre-compact-phone-controls-exceed-canvas-budget\n\nRCA classified the phone Book Cinema Theatre budget failure as real UI:\n- footer `343px` / `40.64%` viewport vs compact budget max `188px` / `25%`\n- canvas height `31.85%` vs compact budget min `43%`\n- likely source: theatre transport duplicates progress/status plus full `LocalizedPlaybackToolbar`\n\nQQP-441 remains evidence-only/In Progress until QQP-542 lands and final evidence gates rerun.",
+            "createdAt": "2026-07-09T00:35:43.211Z",
+            "updatedAt": "2026-07-09T00:35:43.177Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-441/first-batch-active-processing-and-canonical-fixture-evidence-gate#comment-5278c607",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          },
+          {
+            "id": "6a69bf14-b9ac-4ef2-8998-f4c1580ce81d",
+            "body": "Orchestrator update:\n- Scope: QQP-441 evidence gate timeout recovery. Parent inspected the timed-out worker diff, preserved useful evidence-harness changes, and kept scope evidence-only.\n- Evidence passed: `generate:contracts`, `validate:ir`, `test:adapters`, `e2e:readalong-sync`, `e2e:readalong-performance`, `e2e:responsive-snapshots`, `review:chatgpt`, and full `mise exec -- pnpm check`.\n- Harness repair: responsive Book Cinema opener now uses stable `workspace-stage-intake` test id instead of exact accessible name `Intake`; failing theatre screenshot is captured before budget assertion.\n- Blocker: `mise exec -- pnpm e2e:book-cinema:responsive` fails consistently at `book:phone-390:theatre` canvas budget. Measured footer: `343px` / `40.64%` viewport, budget max `188px` / `25%`; canvas height `31.85%`, budget min `43%`.\n- Artifact: `output/e2e-book-cinema/screenshots/responsive-book-phone-390-theatre.png`.\n- Additional note: `validate:ux-final` was run after the responsive blocker and timed out after 600s during UI-action replay; treat it as stale until the responsive budget blocker is resolved and the long gate can be rerun.\n- Next: QQP-441 remains In Progress; do not mark Done until the phone theatre budget failure is repaired in the appropriate UI scope and all evidence gates pass.",
+            "createdAt": "2026-07-09T00:24:40.136Z",
+            "updatedAt": "2026-07-09T00:24:40.119Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-441/first-batch-active-processing-and-canonical-fixture-evidence-gate#comment-6a69bf14",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          },
+          {
+            "id": "46b03203-7773-46cb-a0fe-ef462b69f2cb",
+            "body": "QQP-441 kickoff — dependencies cleared and evidence worker starting.\n\nDependency preflight (live Linear): QQP-427, QQP-435, QQP-436, QQP-437, QQP-438, QQP-439, and QQP-440 are Done.\n\nRepo preflight:\n- branch: `niklas/voice-studio-follow-up`\n- local/remote equality before kickoff: `02dd04dff8b7e75d391a7022cbfe0dcd03afc14f`\n- QQP-437 closeout commit: `02dd04dff8b7e75d391a7022cbfe0dcd03afc14f`\n- kickoff plan: `docs/plans/linear/QQP-441-active-processing-evidence-gates.md`\n\nScope guard: evidence-only. No hidden feature implementation; missing dependency behavior must be reported as blocker/non-claim, not silently built here.",
+            "createdAt": "2026-07-08T23:39:03.846Z",
+            "updatedAt": "2026-07-08T23:39:03.831Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-441/first-batch-active-processing-and-canonical-fixture-evidence-gate#comment-46b03203",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": "46b03203-7773-46cb-a0fe-ef462b69f2cb"
+        }
+      },
+      "relations": {
+        "nodes": [
+          {
+            "id": "fe6b3e3c-72d0-4c2a-8c35-fa8debffc10a",
+            "type": "related",
+            "relatedIssue": {
+              "id": "a9bbef20-a2bd-4883-88e4-9ddb79e3c627",
+              "identifier": "QQP-543",
+              "title": "Resolve final UX UI action audit debt blocking QQP-441",
+              "state": {
+                "name": "Done",
+                "type": "completed"
+              },
+              "url": "https://linear.app/niklas-olsson/issue/QQP-543/resolve-final-ux-ui-action-audit-debt-blocking-qqp-441"
+            }
+          }
+        ]
+      },
+      "inverseRelations": {
+        "nodes": [
+          {
+            "id": "409f5aae-6f49-4b50-aa03-9a33e231870d",
+            "type": "related",
+            "issue": {
+              "id": "a0c98d9a-4640-4c10-96e1-6662f9df8d4c",
+              "identifier": "QQP-542",
+              "title": "Book Cinema Theatre compact phone controls exceed canvas budget",
+              "state": {
+                "name": "Done",
+                "type": "completed"
+              },
+              "url": "https://linear.app/niklas-olsson/issue/QQP-542/book-cinema-theatre-compact-phone-controls-exceed-canvas-budget"
+            }
+          }
+        ]
+      },
+      "attachments": {
+        "nodes": []
+      }
+    },
+    {
+      "id": "906d0ddf-17cb-4484-a9ab-63d1e70a259f",
+      "identifier": "QQP-440",
+      "title": "Reader windowing and highlight scheduling",
+      "description": "Slug: `reader-windowing-highlight-scheduling`\n\nAtomic deliverable: Implement internal reader windowing, high-frequency highlight isolation, and low-resource fidelity downgrade behavior.\n\nScope: No new visual design system.\n\nDependencies: sync-fidelity-gates, reader-shell-state-vocabulary, reader-transport-state-machine\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "priority": 1,
+      "url": "https://linear.app/niklas-olsson/issue/QQP-440/reader-windowing-and-highlight-scheduling",
+      "createdAt": "2026-07-07T09:48:59.150Z",
+      "updatedAt": "2026-07-08T21:40:05.785Z",
+      "completedAt": "2026-07-08T21:40:05.762Z",
+      "archivedAt": null,
+      "state": {
+        "id": "eacb743d-bf55-41d0-a3d8-38e07ccf7566",
+        "name": "Done",
+        "type": "completed"
+      },
+      "project": {
+        "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+        "name": "TTS-Research"
+      },
+      "team": {
+        "id": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+        "key": "QQP",
+        "name": "QQ-PWN"
+      },
+      "labels": {
+        "nodes": []
+      },
+      "parent": null,
+      "children": {
+        "nodes": []
+      },
+      "comments": {
+        "nodes": [
+          {
+            "id": "6f5b62b3-8d6c-4e60-8113-56e33a4dc103",
+            "body": "Orchestrator closeout for `QQP-440`.\n\nImplemented reader windowing and highlight scheduling with fail-closed exact sync:\n- exact word claims now require explicit transport evidence, trusted timing, non-low-resource mode, and exact timing availability;\n- Teleprompt/Book/Prepared paths use explicit transport/readiness gates instead of manufacturing exact sync from trusted timing alone;\n- Book Cinema DOM scheduler owns high-frequency word highlighting while React render paths keep anchors but suppress competing exact-current state;\n- DOM highlighter deactivation clears stale active role metadata/classes.\n\nVerification:\n- SPEC re-review: `SPEC PASS`.\n- QUALITY review: `QUALITY APPROVED`.\n- ChatGPT downstream peer initially requested changes; all peer blockers repaired.\n- Peer-blocker re-review: `PEER-BLOCKER APPROVED`.\n- Focused QQP-440 gate: 5 files / 109 tests passed.\n- Frontend typecheck passed.\n- `validate:ir` passed: 4 Content IR fixtures, 55 public contract fixtures, 3 adapter files.\n- `git diff --check` passed.\n- Full `mise exec -- pnpm check` passed: format, lint, typecheck, package/script/adapter/backend/frontend tests; frontend 111 files / 773 tests.\n\nCommit: `3180081987d2203622c371164477f386f275ab3d`\nRemote branch equality verified: `fork/niklas/voice-studio-follow-up`.\n",
+            "createdAt": "2026-07-08T21:40:05.458Z",
+            "updatedAt": "2026-07-08T21:40:05.357Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-440/reader-windowing-and-highlight-scheduling#comment-6f5b62b3",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          },
+          {
+            "id": "ef60be11-817b-4cf1-b15c-c07244423960",
+            "body": "QQP-440 kickoff: selected as next unblocked TTS Wave 5 issue after QQP-439 closeout.\n\nDependency state:\n- QQP-438 Done.\n- QQP-439 Done at `c6a0e0754fa638223502e2bdc803f7040f918e65`.\n- QQP-437 remains blocked because QQP-4 is still Todo.\n\nLocal plan: `docs/plans/linear/QQP-440-reader-windowing-highlight-scheduling.md`.\n\nImplementation worker dispatched; parent will verify diff/gates/reviews before closeout.",
+            "createdAt": "2026-07-08T18:56:24.139Z",
+            "updatedAt": "2026-07-08T18:56:24.112Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-440/reader-windowing-and-highlight-scheduling#comment-ef60be11",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": "ef60be11-817b-4cf1-b15c-c07244423960"
+        }
+      },
+      "relations": {
+        "nodes": []
+      },
+      "inverseRelations": {
+        "nodes": []
+      },
+      "attachments": {
+        "nodes": []
+      }
+    },
+    {
+      "id": "1615aafd-1886-4cb1-a5fa-0baa5590f4d1",
+      "identifier": "QQP-439",
+      "title": "Reader transport state machine",
+      "description": "Slug: `reader-transport-state-machine`\n\nAtomic deliverable: Add shared Reader transport states for pre-audio, generating, unchecked, checked, stale/replaced, failed/retryable, and degraded playback.\n\nScope: Shared transport state mapping; no unrelated UI redesign.\n\nDependencies: partial-audio-artifact-states, reader-shell-state-vocabulary\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "priority": 1,
+      "url": "https://linear.app/niklas-olsson/issue/QQP-439/reader-transport-state-machine",
+      "createdAt": "2026-07-07T09:48:58.899Z",
+      "updatedAt": "2026-07-08T18:53:55.264Z",
+      "completedAt": "2026-07-08T18:53:55.250Z",
+      "archivedAt": null,
+      "state": {
+        "id": "eacb743d-bf55-41d0-a3d8-38e07ccf7566",
+        "name": "Done",
+        "type": "completed"
+      },
+      "project": {
+        "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+        "name": "TTS-Research"
+      },
+      "team": {
+        "id": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+        "key": "QQP",
+        "name": "QQ-PWN"
+      },
+      "labels": {
+        "nodes": []
+      },
+      "parent": null,
+      "children": {
+        "nodes": []
+      },
+      "comments": {
+        "nodes": [
+          {
+            "id": "84ed999c-d6a2-466d-88fc-78e9585f5211",
+            "body": "QQP-439 closeout: Reader transport state machine merged to branch.\n\nCommit: `c6a0e0754fa638223502e2bdc803f7040f918e65`\nBranch: `niklas/voice-studio-follow-up`\nRemote verification: local HEAD equals `fork/niklas/voice-studio-follow-up`.\n\nImplemented:\n- Added Reader transport states/descriptors for pre-audio, generating, unchecked, checked, stale/replaced, failed/retryable, and degraded playback.\n- Added non-overclaiming readiness/currentness/exact-sync fields for QQP-440 downstream scheduling.\n- Checked audio no longer claims exact readalong without explicit exact-sync evidence.\n- Failed/non-retryable jobs and stronger raw stale/replaced/failed/retryable/degraded evidence cannot be weakened by cached shell state.\n- `sourceReadinessState: \"stale\"` now fails closed to stale/replaced transport.\n\nReview evidence:\n- SPEC PASS: `deleg_a205b4af`.\n- QUALITY approved after degraded-readiness repair: `deleg_e9a39e8e`.\n- ChatGPT downstream peer initial blockers saved in `docs/reviews/chatgpt/qqp439-peer-checkpoint.response.md`.\n- Peer-blocker recheck saved in `docs/reviews/chatgpt/qqp439-peer-blocker-recheck.response.md`.\n- Final source-stale peer recheck: `PEER-BLOCKER APPROVED`, saved in `docs/reviews/chatgpt/qqp439-source-stale-peer-recheck.response.md`.\n\nFinal verification:\n- `mise exec -- pnpm --filter @tts-research/frontend exec vitest run src/features/reading-surface/model.test.ts` → PASS, 18 tests.\n- `mise exec -- pnpm --filter @tts-research/frontend typecheck` → PASS.\n- `mise exec -- pnpm validate:ir` → PASS.\n- `git diff --check` → PASS.\n- `mise exec -- pnpm check` → PASS, including frontend 111 files / 761 tests.\n- Commit hook reran `pnpm check` → PASS.\n",
+            "createdAt": "2026-07-08T18:53:54.780Z",
+            "updatedAt": "2026-07-08T18:53:54.748Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-439/reader-transport-state-machine#comment-84ed999c",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          },
+          {
+            "id": "da0bfada-c0ac-4bed-af7e-47b7fd426606",
+            "body": "Orchestrator kickoff — QQP-439 selected after QQP-438 closeout.\n\nSelection note:\n- QQP-437 remains deferred because dependency QQP-4 is still Todo.\n- QQP-439 is the next unblocked Reader slice per docs/orchestration/tts-research-orchestrator-handoff.md after QQP-438 completion.\n\nLocal plan:\n- docs/plans/linear/QQP-439-reader-transport-state-machine.md\n\nScope guard:\n- Frontend Reader transport state machine/model only.\n- No reader windowing/high-frequency highlight scheduling (QQP-440).\n- No Quick Listen promotion/crosswalk (QQP-437 / QQP-4).\n- No backend artifact/retry/repair semantics.\n- No broad UI redesign, new controls, popups, or transport UI overhaul.\n\nNext action: implementation worker is being dispatched; parent owns verification, reviews, commit/push, and final Linear closeout.\n",
+            "createdAt": "2026-07-08T16:49:36.738Z",
+            "updatedAt": "2026-07-08T16:49:36.718Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-439/reader-transport-state-machine#comment-da0bfada",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": "da0bfada-c0ac-4bed-af7e-47b7fd426606"
+        }
+      },
+      "relations": {
+        "nodes": []
+      },
+      "inverseRelations": {
+        "nodes": []
+      },
+      "attachments": {
+        "nodes": []
+      }
+    },
+    {
+      "id": "c58a01f3-9c9e-4b29-99dd-be9266a55667",
+      "identifier": "QQP-438",
+      "title": "Reader shell state vocabulary and mode labels",
+      "description": "Slug: `reader-shell-state-vocabulary`\n\nAtomic deliverable: Add Reader shell labels/state vocabulary for source-only, generating, unchecked, checked, degraded, stale, failed, retryable, and superseded states.\n\nScope: No visual redesign.\n\nDependencies: frontend-source-manifest-store\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "priority": 1,
+      "url": "https://linear.app/niklas-olsson/issue/QQP-438/reader-shell-state-vocabulary-and-mode-labels",
+      "createdAt": "2026-07-07T09:48:58.660Z",
+      "updatedAt": "2026-07-08T16:48:02.025Z",
+      "completedAt": "2026-07-08T16:48:02.013Z",
+      "archivedAt": null,
+      "state": {
+        "id": "eacb743d-bf55-41d0-a3d8-38e07ccf7566",
+        "name": "Done",
+        "type": "completed"
+      },
+      "project": {
+        "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+        "name": "TTS-Research"
+      },
+      "team": {
+        "id": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+        "key": "QQP",
+        "name": "QQ-PWN"
+      },
+      "labels": {
+        "nodes": []
+      },
+      "parent": null,
+      "children": {
+        "nodes": []
+      },
+      "comments": {
+        "nodes": [
+          {
+            "id": "94f5f018-4fad-4508-80f8-7fa102adca9e",
+            "body": "Completed QQP-438.\n\nCommit: 7424727dbf94df4e79d4b0b9e8e8e2b9a4dbef39 — Add reader shell state vocabulary\nRemote: fork/niklas/voice-studio-follow-up verified equal to local HEAD.\n\nDelivered:\n- explicit Reader shell state vocabulary for source-only, generating, unchecked, checked, degraded, stale, failed, retryable, and superseded;\n- deterministic Reader shell descriptors/mode labels and exported API seam;\n- shell-state derivation from existing manifest/artifact/job/readalong/source/progress state surfaces;\n- fail-safe ready/unverified audio behavior: generatedAudioLifecycle=ready derives unchecked unless checked artifact evidence exists;\n- durableProgressState input with interrupted/failed/stale/superseded mapping and current/remapped non-readiness behavior;\n- tests pin required states, mixed precedence, durable progress, ready-vs-checked, unknown-token fallback, and data attrs.\n\nReview evidence:\n- SPEC PASS and QUALITY APPROVED via deleg_3313e043.\n- ChatGPT downstream peer checkpoint returned PEER REQUEST_CHANGES; response saved at docs/reviews/chatgpt/qqp438-peer-checkpoint.response.md.\n- Peer blockers repaired by deleg_9eceed35.\n- Targeted peer-blocker re-review approved: deleg_83ecd136 — PEER-BLOCKER APPROVED.\n\nVerification passed:\n- mise exec -- pnpm --filter @tts-research/frontend test -- src/features/reading-surface/model.test.ts\n- mise exec -- pnpm --filter @tts-research/frontend typecheck\n- mise exec -- pnpm validate:ir\n- git diff --check\n- mise exec -- pnpm check\n- commit hook reran pnpm check successfully.\n",
+            "createdAt": "2026-07-08T16:48:01.182Z",
+            "updatedAt": "2026-07-08T16:48:01.149Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-438/reader-shell-state-vocabulary-and-mode-labels#comment-94f5f018",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          },
+          {
+            "id": "853504da-eea7-4aee-bb74-7a7e44a85309",
+            "body": "Orchestrator kickoff — QQP-438 selected after QQP-436 closeout.\n\nSelection note:\n- QQP-437 was checked but deferred because dependency QQP-4 is still Todo.\n- QQP-438 is the next unblocked Reader slice per `docs/orchestration/tts-research-orchestrator-handoff.md`.\n\nLocal plan:\n- `docs/plans/linear/QQP-438-reader-shell-state-vocabulary-and-mode-labels.md`\n\nScope guard:\n- Frontend Reader shell state vocabulary/mode labels only.\n- No Reader transport state machine (QQP-439).\n- No reader windowing/highlight scheduling (QQP-440).\n- No Quick Listen promotion or backend repair/promotion behavior.\n\nNext action: implementation worker is being dispatched; parent owns verification, reviews, commit/push, and final Linear closeout.\n",
+            "createdAt": "2026-07-08T15:58:28.467Z",
+            "updatedAt": "2026-07-08T15:58:28.445Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-438/reader-shell-state-vocabulary-and-mode-labels#comment-853504da",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": "853504da-eea7-4aee-bb74-7a7e44a85309"
+        }
+      },
+      "relations": {
+        "nodes": []
+      },
+      "inverseRelations": {
+        "nodes": []
+      },
+      "attachments": {
+        "nodes": []
+      }
+    },
+    {
+      "id": "fe4dea9d-cf6e-4424-a9b7-5f0977e82a4a",
+      "identifier": "QQP-437",
+      "title": "Quick Listen to project promotion crosswalk",
+      "description": "Slug: `quick-listen-promotion-crosswalk`\n\nAtomic deliverable: Promote temporary Quick Listen sources into durable project sources while preserving mapped progress, artifacts, highlights, and source identity.\n\nScope: Links/rescopes QQP-4 as capture anchor; do not duplicate Quick Listen capture.\n\nDependencies: QQP-4, source-lifecycle-storage, manifest-snapshot-storage-api, partial-audio-artifact-states, durable-progress-resume-resolver\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "priority": 1,
+      "url": "https://linear.app/niklas-olsson/issue/QQP-437/quick-listen-to-project-promotion-crosswalk",
+      "createdAt": "2026-07-07T09:48:58.437Z",
+      "updatedAt": "2026-07-08T23:37:03.547Z",
+      "completedAt": "2026-07-08T23:37:03.539Z",
+      "archivedAt": null,
+      "state": {
+        "id": "eacb743d-bf55-41d0-a3d8-38e07ccf7566",
+        "name": "Done",
+        "type": "completed"
+      },
+      "project": {
+        "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+        "name": "TTS-Research"
+      },
+      "team": {
+        "id": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+        "key": "QQP",
+        "name": "QQ-PWN"
+      },
+      "labels": {
+        "nodes": []
+      },
+      "parent": null,
+      "children": {
+        "nodes": []
+      },
+      "comments": {
+        "nodes": [
+          {
+            "id": "28ef817b-89c0-45d6-b8a8-4d48512a3440",
+            "body": "QQP-437 closeout — completed and pushed.\n\nCommit: `02dd04dff8b7e75d391a7022cbfe0dcd03afc14f`\nBranch: `niklas/voice-studio-follow-up`\nRemote equality: verified against `fork/niklas/voice-studio-follow-up`.\n\nImplemented:\n- canonical `promotion-crosswalk.v1` persisted sidecar for Quick Listen temporary-source promotion\n- source/revision/manifest/artifact/progress/bookmark/segment crosswalk mappings\n- durable project source lifecycle and temporary lifecycle `promoted` state\n- generated audio/timing/highlight artifact promotion with temporary IDs rewritten\n- playback, bookmark, durable progress, and session scope remaps to durable `prepared:<source>` targets\n- rollback cleanup for promoted durable progress/playback/session artifacts; promoted playback session write failures now abort promotion\n- tests for crosswalk persistence/reload, no temporary scope residue, artifact survival after temp deletion, rollback cleanup after late session-write failure\n\nVerification:\n- focused pipeline QQP-437 suite repeated: PASS\n- focused temporary-source HTTP API suite: PASS\n- backend `go test ./...`: PASS\n- `mise exec -- pnpm validate:ir`: PASS\n- full `mise exec -- pnpm check`: PASS (hook reran at commit)\n- `git diff --check`: PASS\n- SPEC PASS: `deleg_74de2b01`\n- QUALITY PASS: `deleg_302cbfdd`\n\nNon-claims:\n- QQP-441 remains responsible for first-batch active-processing/evidence-package gate.",
+            "createdAt": "2026-07-08T23:37:03.396Z",
+            "updatedAt": "2026-07-08T23:37:03.380Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-437/quick-listen-to-project-promotion-crosswalk#comment-28ef817b",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          },
+          {
+            "id": "2802f9ae-e3e1-4868-be72-08fb330e11ef",
+            "body": "Orchestrator kickoff for `QQP-437` after `QQP-4` closeout.\n\nScope:\n- Promote temporary Quick Listen sources into durable project sources while preserving mapped progress, artifacts, highlights, and source identity.\n- `QQP-4` remains the capture anchor and is Done; do not duplicate Quick Listen capture.\n- Preserve source/manifest/revision invariants from `docs/architecture/source-reader-flow-invariants.md`.\n\nPreflight:\n- `QQP-4` Done in Linear.\n- repo branch: `niklas/voice-studio-follow-up`\n- clean/remote-equal after QQP-4 at `a5d7e62e4516164a8de1269e31dbdf1f5a8cbb2b`\n- plan: `docs/plans/linear/QQP-437-quick-listen-promotion-crosswalk.md`\n- source docs/seams inspected: source-reader invariants, first-batch manifest/review docs, temporary-source promotion backend/frontend seams.\n\nImplementation worker is being dispatched; parent owns final verification, reviews, commit/push, and Linear closeout.\n",
+            "createdAt": "2026-07-08T22:29:36.707Z",
+            "updatedAt": "2026-07-08T22:29:36.627Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-437/quick-listen-to-project-promotion-crosswalk#comment-2802f9ae",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": "2802f9ae-e3e1-4868-be72-08fb330e11ef"
+        }
+      },
+      "relations": {
+        "nodes": []
+      },
+      "inverseRelations": {
+        "nodes": []
+      },
+      "attachments": {
+        "nodes": []
+      }
+    },
+    {
+      "id": "5f4a077e-a800-4b9f-8edc-eba53d862873",
+      "identifier": "QQP-436",
+      "title": "Minimal repair overlay and manifest supersession",
+      "description": "Slug: `minimal-repair-overlay-supersession`\n\nAtomic deliverable: Add immutable repair overlays, superseding manifests, affected-artifact stale marking, and revision-map-based progress remap.\n\nScope: No full repair UI/workbench.\n\nDependencies: readalong-contracts, manifest-snapshot-storage-api, durable-progress-resume-resolver, retry-interrupted-artifact-semantics\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "priority": 2,
+      "url": "https://linear.app/niklas-olsson/issue/QQP-436/minimal-repair-overlay-and-manifest-supersession",
+      "createdAt": "2026-07-07T09:48:58.106Z",
+      "updatedAt": "2026-07-08T15:56:12.684Z",
+      "completedAt": "2026-07-08T15:56:12.668Z",
+      "archivedAt": null,
+      "state": {
+        "id": "eacb743d-bf55-41d0-a3d8-38e07ccf7566",
+        "name": "Done",
+        "type": "completed"
+      },
+      "project": {
+        "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+        "name": "TTS-Research"
+      },
+      "team": {
+        "id": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+        "key": "QQP",
+        "name": "QQ-PWN"
+      },
+      "labels": {
+        "nodes": []
+      },
+      "parent": null,
+      "children": {
+        "nodes": []
+      },
+      "comments": {
+        "nodes": [
+          {
+            "id": "407e176d-38ac-4654-80a8-1d498dc31bbd",
+            "body": "Closeout detail correction for QQP-436 (previous comment had shell-stripped inline backtick text):\n\nCommit: 84e80a417823a19c1e744462a18a738698783661 — Implement minimal repair overlay supersession\nRemote: fork/niklas/voice-studio-follow-up verified equal to local HEAD.\n\nPeer evidence:\n- ChatGPT checkpoint response saved: docs/reviews/chatgpt/qqp436-peer-checkpoint.response.md\n- Targeted peer-blocker re-review: deleg_ae634d0d — PEER-BLOCKER APPROVED\n\nFinal verification:\n- Focused QQP-436 Go gate passed.\n- mise exec -- pnpm validate:ir passed.\n- git diff --check passed.\n- mise exec -- pnpm check passed.\n- Commit hook reran pnpm check successfully.\n",
+            "createdAt": "2026-07-08T15:56:26.394Z",
+            "updatedAt": "2026-07-08T15:56:26.346Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-436/minimal-repair-overlay-and-manifest-supersession#comment-407e176d",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          },
+          {
+            "id": "a6934bd2-c4b5-4034-9b7b-3f1d3ce1adda",
+            "body": "Completed QQP-436.\\n\\nCommit: 84e80a417823a19c1e744462a18a738698783661 ()\\nRemote: fork/niklas/voice-studio-follow-up verified equal to local HEAD.\\n\\nDelivered:\\n- immutable repair overlays and repair revision maps;\\n- repair target manifest supersession with staged/fail-closed promotion;\\n- affected audio/highlight/progress stale/superseded evidence;\\n- high-confidence revision-map progress remap;\\n- source lifecycle identity preservation during repair;\\n- resume hardening for superseded/stale manifests.\\n\\nReview evidence:\\n- SPEC PASS.\\n- QUALITY APPROVED.\\n- ChatGPT peer checkpoint: PEER REQUEST_CHANGES saved at docs/reviews/chatgpt/qqp436-peer-checkpoint.response.md.\\n- Peer blockers repaired and targeted re-review approved: deleg_ae634d0d ().\\n\\nVerification passed:\\n- go test ./internal/pipeline ./internal/httpapi -run 'Repair|Overlay|Supersed|RevisionMap|Progress|Manifest|Source|Artifact|Resume' -count=1\\n- mise exec -- pnpm validate:ir\\n- git diff --check\\n- mise exec -- pnpm check\\n- commit hook reran pnpm check successfully.",
+            "createdAt": "2026-07-08T15:56:12.087Z",
+            "updatedAt": "2026-07-08T15:56:12.064Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-436/minimal-repair-overlay-and-manifest-supersession#comment-a6934bd2",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          },
+          {
+            "id": "54f39cad-36f6-41ac-9348-b89fa23d5ae6",
+            "body": "Orchestrator kickoff — QQP-436 selected after QQP-435 closeout.\n\nPreflight:\n- Previous issue QQP-435 is Done.\n- Branch `niklas/voice-studio-follow-up` is clean and remote-equal at `ec3659c2847f7dcb817c257c081f891f5cae6e4d`.\n- Agreed manifest dependencies are complete: readalong contracts, manifest snapshot storage/API, durable progress resolver, retry/interrupted artifact semantics.\n\nLocal plan:\n- `docs/plans/linear/QQP-436-minimal-repair-overlay-manifest-supersession.md`\n\nScope guard:\n- Backend/runtime repair overlay + manifest supersession + affected artifact stale marking + revision-map remap only.\n- No full repair UI/workbench, no Quick Listen promotion runtime, no Reader shell/transport/windowing work.\n\nNext action: focused implementation worker is being dispatched; parent owns verification, reviews, commit/push, and final Linear closeout.\n",
+            "createdAt": "2026-07-08T14:10:19.512Z",
+            "updatedAt": "2026-07-08T14:10:19.492Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-436/minimal-repair-overlay-and-manifest-supersession#comment-54f39cad",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": "54f39cad-36f6-41ac-9348-b89fa23d5ae6"
+        }
+      },
+      "relations": {
+        "nodes": []
+      },
+      "inverseRelations": {
+        "nodes": []
+      },
+      "attachments": {
+        "nodes": []
+      }
+    },
+    {
+      "id": "d60a8996-f8cf-423a-b70e-1d5e0025bb3f",
+      "identifier": "QQP-4",
+      "title": "Quick Narrate Pasted URL",
+      "description": "Fast track URL narration without requiring a project",
+      "priority": 0,
+      "url": "https://linear.app/niklas-olsson/issue/QQP-4/quick-narrate-pasted-url",
+      "createdAt": "2026-06-06T15:53:07.980Z",
+      "updatedAt": "2026-07-08T22:28:11.947Z",
+      "completedAt": "2026-07-08T22:28:11.938Z",
+      "archivedAt": null,
+      "state": {
+        "id": "eacb743d-bf55-41d0-a3d8-38e07ccf7566",
+        "name": "Done",
+        "type": "completed"
+      },
+      "project": {
+        "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+        "name": "TTS-Research"
+      },
+      "team": {
+        "id": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+        "key": "QQP",
+        "name": "QQ-PWN"
+      },
+      "labels": {
+        "nodes": []
+      },
+      "parent": null,
+      "children": {
+        "nodes": []
+      },
+      "comments": {
+        "nodes": [
+          {
+            "id": "dde3e5ae-24ec-4a5f-81d3-079d8d009e03",
+            "body": "Orchestrator closeout for `QQP-4`.\n\nImplemented the Quick Listen URL capture anchor without requiring a durable project:\n- `quick_listen_temporary` source envelopes with no project now keep empty `ProjectID` instead of defaulting to `default`.\n- Temporary source lifecycle requests no longer inject the default project ID.\n- Added deterministic local URL route regression proving: URL -> temporary source, no durable/promoted response fields, temporary lifecycle/source envelope with URL origin and expiry, temporary voice job anchored to `temporary-source:<id>`, and no prepared/book project source mutation.\n\nReview:\n- SPEC PASS (`deleg_1ef78e70`).\n- QUALITY APPROVED (`deleg_5295bb46`).\n\nVerification:\n- focused httpapi route tests passed.\n- focused pipeline lifecycle/temporary source tests passed.\n- Quick Listen frontend test and frontend typecheck passed.\n- `git diff --check` passed.\n- `mise exec -- pnpm validate:ir` passed.\n- full `mise exec -- pnpm check` passed, including backend `go test ./...` and frontend 111 files / 773 tests.\n- commit hook reran full `mise exec -- pnpm check` successfully.\n\nCommit: `a5d7e62d3a67a1839abbd19a5e4f267779d97f2b`\nRemote branch equality verified: `fork/niklas/voice-studio-follow-up`.\n\nNon-claim: `QQP-437` promotion crosswalk was intentionally not implemented here.\n",
+            "createdAt": "2026-07-08T22:28:11.783Z",
+            "updatedAt": "2026-07-08T22:28:11.767Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-4/quick-narrate-pasted-url#comment-dde3e5ae",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          },
+          {
+            "id": "bfa8661b-9969-460a-8c5d-de2a5b482b13",
+            "body": "Orchestrator kickoff for `QQP-4` after QQP-440 closeout.\n\nLoop correction: remaining TTS-Research issues are `QQP-4`, `QQP-437`, and `QQP-441`; this issue is the dependency-unblocked next item.\n\nScope:\n- Implement the existing Quick Listen capture anchor for pasted URL narration without requiring a durable project.\n- Preserve temporary-source/source-reader invariants and local-first copy.\n- Do not implement the `QQP-437` promotion crosswalk here; `Keep in project` remains later scope.\n\nPreflight:\n- repo branch: `niklas/voice-studio-follow-up`\n- clean/remote-equal before kickoff at `3180081987d2203622c371164477f386f275ab3d`\n- plan: `docs/plans/linear/QQP-4-quick-narrate-pasted-url.md`\n- source docs read: `docs/architecture/source-reader-flow-invariants.md`, `docs/temporary-source-copy-guide.md`, first-batch manifest/review docs.\n\nImplementation worker is being dispatched; parent owns final verification, reviews, commit/push, and Linear closeout.\n",
+            "createdAt": "2026-07-08T22:04:30.513Z",
+            "updatedAt": "2026-07-08T22:04:30.500Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-4/quick-narrate-pasted-url#comment-bfa8661b",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          },
+          {
+            "id": "15fc2be2-e40a-4662-8baf-2bfaac136796",
+            "body": "Atomic batch agreement: `QQP-4` remains the existing Quick Listen capture anchor for the TTS-Research first batch. Do not create a duplicate Quick Listen issue.\n\nRescope/link note:\n- Quick Listen capture should align with the same source envelope / manifest / partial audio / durable progress model as the durable project Reader.\n- Promotion into project state is handled by the new `quick-listen-promotion-crosswalk` issue.\n- Architecture agreement: `docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md` (`AGREED ATOMIC FLOW AND LINEAR BATCH`).",
+            "createdAt": "2026-07-07T09:48:59.701Z",
+            "updatedAt": "2026-07-07T09:48:59.678Z",
+            "url": "https://linear.app/niklas-olsson/issue/QQP-4/quick-narrate-pasted-url#comment-15fc2be2",
+            "user": {
+              "name": "Niklas Olsson",
+              "email": "niklas.olsson@hotmail.co.uk"
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": "15fc2be2-e40a-4662-8baf-2bfaac136796"
+        }
+      },
+      "relations": {
+        "nodes": []
+      },
+      "inverseRelations": {
+        "nodes": []
+      },
+      "attachments": {
+        "nodes": []
+      }
+    }
+  ]
+}
