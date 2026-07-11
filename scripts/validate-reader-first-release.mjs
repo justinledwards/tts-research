@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
-import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -15,6 +17,9 @@ export const PROVENANCE_PATH =
   "docs/project-management/linear/tts-research-reader-first-linear-provenance.json";
 export const LIVE_MANIFEST_PATH =
   "docs/project-management/linear/tts-research-reader-first-release-batch.manifest.json";
+export const RFA_01_VERIFICATION_PATH = "docs/evidence/reader-first/RFA-01/verification.json";
+export const RFA_01_ROLLBACK_PATH = "docs/evidence/reader-first/RFA-01/rollback.json";
+const VALIDATOR_PATH = "scripts/validate-reader-first-release.mjs";
 export const ISSUE_IDS = Array.from(
   { length: 20 },
   (_, index) => `RFA-${String(index + 1).padStart(2, "0")}`,
@@ -35,6 +40,32 @@ const EXPECTED_AUTHORIZATION = {
   productImplementationAuthorized: true,
   graphUnblockedIssues: ["RFA-01"],
   authorizedIssues: ["RFA-01"],
+};
+const EVIDENCE_SCHEMA_VERSION = "tts-research.reader-first-evidence-manifest.v1";
+const EVIDENCE_SEMANTICS = "static_attestation_of_recorded_execution";
+const EVIDENCE_PRODUCER = "Hermes Agent RFA-01 evidence capture producer v1";
+const EXPECTED_ARCHIVE_NAME = "tts-research-reader-first-peer-review-v8.zip";
+const EXPECTED_ARCHIVE_SHA256 = "b91a683ac8c94bd44ca618b53b275cbe93c2d55d8a5cac1b11e6d9d1aeafc7de";
+const EXPECTED_SOURCE_COMMIT = "0f74143156a970c04b404a650f724b572e0ee2fd";
+const EXPECTED_APPROVAL_BINDING = {
+  approvalBindingPath: "docs/reviews/reader-first-release-peer-approval-v8.json",
+  approvalBindingSha256: "29710a3b5af4fc21be5091b454a57fc7c2b14d363a9fc46706e403e901e7ecef",
+};
+// Static attestations must describe one bounded capture. A five-minute skew permits slow clocks.
+const MAX_CAPTURE_INTERVAL_MS = 10 * 60 * 1000;
+const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
+const EXPECTED_FIXTURE_SHA256S = {
+  "fixtures/pdf/scanned_fixture.pdf":
+    "25eeaa49a696c8d5f0fca7b80ec9ec11ebd6450c33f7a279a26555b0e56a5500",
+  "fixtures/pdf/scanned_fixture.ocr.txt":
+    "fbed95e0ddf91100b02ffc1978147df53a2c2f7a0da6a8ed23e67ba5b7f09f78",
+  "fixtures/pdf/scanned_fixture.expected-overlay.json":
+    "783a5d48857303fc8c7f7a67fd3b5e5e5e06deb87469724ef3d76a15e1a9ca06",
+};
+const EXPECTED_ROLLBACK = {
+  strategy: "disable_rfa_01_new_behavior_keep_prior_compatible_state",
+  preserve: ["source_content", "committed_compatible_artifacts", "server_authoritative_revisions"],
+  never: ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
 };
 const REQUIRED_REQUIREMENTS = [
   "cross-browser-server-authority",
@@ -445,7 +476,8 @@ export function validateReaderFirstRelease(contract, packet) {
   invariant(
     server?.browserStorageRole === "disposable_cache_and_preferences_only" &&
       server.missingBrowserStorageMayBreakRestore === false &&
-      server.restoreAutoplay === false,
+      server.restoreAutoplay === false &&
+      server.artifactCompatibilityAuthority === "server",
     "browser storage and restore-autoplay authority drift",
   );
   invariant(
@@ -610,6 +642,8 @@ export function validateReaderFirstRelease(contract, packet) {
     health?.systemCriticalAuthority === "backend_health_evidence_only" &&
       health.frontendMayInferSystemCritical === false &&
       health.optionalCapabilityAbsenceMayBeCritical === false &&
+      health.missingLegacyIdentityMayDemandRebuild === false &&
+      health.rebuildRequiresExplicitIncompatibilityEvidence === true &&
       health.stageOrAudioBlockerMaySetSystemCritical === false &&
       health.finalAssemblyFailureInvalidatesSegments === false,
     "backend-owned truthful health contract drift",
@@ -1364,6 +1398,516 @@ export function validateExecutableOcrFixture(overlay, contract) {
   );
 }
 
+export function validateNegativeFixtures(contract, packet) {
+  const fixtures = [
+    {
+      id: "browser-authority",
+      expected: /browser storage and restore-autoplay authority drift/,
+      mutate(candidate) {
+        candidate.serverAuthority.browserStorageRole = "workflow_authority";
+      },
+    },
+    {
+      id: "final-only-alignment",
+      expected: /timing source\/fallback contract drift/,
+      mutate(candidate) {
+        candidate.timingContract.forcedAlignmentMayWaitForFinalAssembly = true;
+      },
+    },
+    {
+      id: "monolithic-normal-playback",
+      expected: /segment-first durable media contract drift/,
+      mutate(candidate) {
+        candidate.mediaContract.canonicalPlaybackArtifact = "monolithic_final_audio";
+      },
+    },
+    {
+      id: "multiple-audio-owners",
+      expected: /single append-capable playback owner drift/,
+      mutate(candidate) {
+        candidate.playbackContract.maxAudioOwnersPerRun = 2;
+      },
+    },
+    {
+      id: "narration-preview-binding",
+      expected: /single append-capable playback owner drift/,
+      mutate(candidate) {
+        candidate.playbackContract.previewMayOwnNarrationRun = true;
+      },
+    },
+    {
+      id: "inferred-rebuild-or-critical-status",
+      expected: /backend-owned truthful health contract drift/,
+      mutate(candidate) {
+        candidate.healthContract.missingLegacyIdentityMayDemandRebuild = true;
+        candidate.healthContract.frontendMayInferSystemCritical = true;
+      },
+    },
+  ];
+  for (const fixture of fixtures) {
+    const candidate = structuredClone(contract);
+    fixture.mutate(candidate);
+    let rejected = false;
+    try {
+      validateReaderFirstRelease(candidate, packet);
+    } catch (error) {
+      rejected = error instanceof Error && fixture.expected.test(error.message);
+    }
+    invariant(rejected, `${fixture.id}: required negative fixture was not rejected semantically`);
+  }
+  return fixtures.map(({ id }) => id);
+}
+
+async function readEvidenceManifest(root, relativePath) {
+  let text;
+  try {
+    text = await readFile(path.join(root, relativePath), "utf8");
+  } catch {
+    throw new Error(`${relativePath}: required evidence artifact missing or unreadable`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`${relativePath}: required evidence artifact is malformed JSON`);
+  }
+}
+
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SHA256 = /^[0-9a-f]{64}$/;
+const EXPECTED_AC01_TEST_NAMES = [
+  "canonical contract, exact evidence hashes, packet, DAG, and generated Markdown pass",
+  "Peer approval, Linear creation, and root-only product authorization reject drift",
+  "snapshot migration, browser transition, and revision concurrency are semantic invariants",
+  "nominal request envelope and manifest-only Reader fallback reject drift",
+  "completed artifacts cannot regress to missing during backfill",
+  "consumed timing identity and boundaries are immutable in both directions",
+  "real scanned OCR evidence must stop unresolved narration and create reviewed revisions",
+  "executable OCR fixture schema rejects legacy aliases independently of canonical hashes",
+  "system critical is backend-evidenced, fresh, enumerated, and not inferred by UI",
+  "archive-contained audit and Linear provenance bindings reject free-form drift",
+  "issue count, IDs, DAG, and dependency order are exact",
+  "issue execution schema requires owner, repository scope, non-goals, commands, and evidence",
+  "every acceptance assertion is bound to an issue command, evidence file, and fail-closed result",
+  "issue-local observability, rollback, and performance budgets reject generic or centralized drift",
+  "RFA-20 is adjudication-only and legacy removal stays with implementation owners",
+  "Round 2 blocker semantics reject packet regressions independently of canonical seals",
+  "RFA-15 authoritative timing renderer ownership rejects every omission",
+  "Round 2 execution ownership, dependencies, gates, and evidence reject drift",
+  "Round 3 executable ownership, enums, budgets, and harness semantics reject drift",
+  "random title/objective drift is caught by the canonical object seal",
+];
+
+function validateUuid(value, label) {
+  invariant(typeof value === "string" && UUID_V4.test(value), `${label}: UUID v4 required`);
+}
+function utcMillis(value, label, now = Date.now()) {
+  invariant(
+    typeof value === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value),
+    `${label}: canonical UTC timestamp required`,
+  );
+  const parsed = Date.parse(value);
+  invariant(Number.isFinite(parsed), `${label}: valid UTC timestamp required`);
+  invariant(parsed <= now + MAX_CLOCK_SKEW_MS, `${label}: timestamp is too far in the future`);
+  return parsed;
+}
+function validateMetadata(record, label) {
+  invariant(
+    record.evidenceSemantics === EVIDENCE_SEMANTICS,
+    `${label}: static attestation semantics required`,
+  );
+  invariant(
+    record.reviewer === EVIDENCE_PRODUCER,
+    `${label}: fixed evidence producer identity required`,
+  );
+  invariant(
+    /^v\d+\.\d+\.\d+$/.test(record.toolVersions?.node) &&
+      /^\d+\.\d+\.\d+(?:\.[0-9]+)?$/.test(record.toolVersions?.git),
+    `${label}: structured node and git tool versions required`,
+  );
+  invariant(
+    ["linux", "darwin", "win32"].includes(record.operatingSystem?.platform) &&
+      typeof record.operatingSystem?.release === "string" &&
+      record.operatingSystem.release.length >= 3 &&
+      /^(?:x64|arm64|ia32)$/.test(record.operatingSystem?.architecture),
+    `${label}: meaningful structured operating system required`,
+  );
+  invariant(
+    typeof record.hardwareProfile?.cpuModel === "string" &&
+      record.hardwareProfile.cpuModel.trim().length >= 8 &&
+      Number.isInteger(record.hardwareProfile.logicalCpuCount) &&
+      record.hardwareProfile.logicalCpuCount > 0 &&
+      Number.isInteger(record.hardwareProfile.totalMemoryBytes) &&
+      record.hardwareProfile.totalMemoryBytes >= 256 * 1024 * 1024,
+    `${label}: meaningful structured hardware profile required`,
+  );
+}
+function validateApprovalResolution(record, approval, approvalHash, label) {
+  invariant(
+    approvalHash === EXPECTED_APPROVAL_BINDING.approvalBindingSha256 &&
+      approval?.peerReview?.archive === EXPECTED_ARCHIVE_NAME &&
+      approval.peerReview.archiveSha256 === EXPECTED_ARCHIVE_SHA256,
+    `${label}: approval record does not resolve expected archive`,
+  );
+  invariant(
+    record.approvalBindingPath === EXPECTED_APPROVAL_BINDING.approvalBindingPath &&
+      record.approvalBindingSha256 === approvalHash &&
+      record.archiveName === approval.peerReview.archive &&
+      record.archiveSha256 === approval.peerReview.archiveSha256 &&
+      record.commitOrArchiveSha256 === approval.peerReview.archiveSha256,
+    `${label}: unresolved or mismatched archive approval binding`,
+  );
+}
+function validateAc01Output(output, label) {
+  invariant(
+    typeof output === "string" && !output.includes("[truncated]"),
+    `${label}: truncated output forbidden`,
+  );
+  const passNames = output
+    .split("\n")
+    .filter((line) => line.startsWith("✔ "))
+    .map((line) => line.replace(/^✔ /, "").replace(/ \([\d.]+ms\)$/, ""));
+  invariant(
+    same(passNames, EXPECTED_AC01_TEST_NAMES),
+    `${label}: complete ordered AC01 TAP test names required`,
+  );
+  for (const summary of [
+    "ℹ tests 20",
+    "ℹ suites 0",
+    "ℹ pass 20",
+    "ℹ fail 0",
+    "ℹ cancelled 0",
+    "ℹ skipped 0",
+    "ℹ todo 0",
+  ])
+    invariant(output.split("\n").includes(summary), `${label}: complete AC01 TAP summary required`);
+}
+function validateExecution(
+  record,
+  expected,
+  captureStart,
+  captureEnd,
+  approval,
+  approvalHash,
+  label,
+) {
+  invariant(record?.issueId === "RFA-01", `${label}: issue ID drift`);
+  validateUuid(record.correlationId, `${label} correlationId`);
+  invariant(record.acceptanceProbeId === expected.acceptanceProbeId, `${label}: probe ID drift`);
+  invariant(record.command === expected.command, `${label}: canonical command drift`);
+  invariant(record.executionMode === expected.executionMode, `${label}: execution mode drift`);
+  invariant(
+    same(record.fixtureSha256s, expected.fixtureSha256s),
+    `${label}: fixture bindings drift`,
+  );
+  invariant(
+    record.measurementProfile === expected.measurementProfile,
+    `${label}: measurement profile drift`,
+  );
+  validateMetadata(record, label);
+  validateApprovalResolution(record, approval, approvalHash, label);
+  const started = utcMillis(record.startedAt, `${label} startedAt`);
+  const completed = utcMillis(record.completedAt, `${label} completedAt`);
+  const observed = utcMillis(record.observedAt, `${label} observedAt`);
+  invariant(observed === completed, `${label}: observedAt must equal completedAt`);
+  invariant(
+    captureStart <= started && started <= completed && completed <= captureEnd,
+    `${label}: timestamps outside bounded capture interval`,
+  );
+  invariant(record.exitCode === 0, `${label}: exitCode must be exactly 0`);
+  invariant(record.rawOutputPath === expected.rawOutputPath, `${label}: raw output path drift`);
+  invariant(
+    typeof record.stdout === "string" &&
+      typeof record.stderr === "string" &&
+      record.rawOutput === `${record.stdout}${record.stderr}` &&
+      SHA256.test(record.outputSha256) &&
+      record.outputSha256 === sha256(record.rawOutput),
+    `${label}: complete stdout/stderr output hash mismatch`,
+  );
+  invariant(record.result === "pass", `${label}: passing result required`);
+  expected.validateOutput(record.rawOutput, label);
+}
+
+function expectedRollbackCommand() {
+  return (
+    'node --input-type=module -e \'import assert from "node:assert/strict"; import {readFile} from "node:fs/promises"; ' +
+    'const packet=JSON.parse(await readFile("docs/project-management/linear/tts-research-reader-first-release-batch-draft.json","utf8")); ' +
+    'const issue=packet.issues.find(({localId})=>localId==="RFA-01"); ' +
+    'assert.equal(issue.rollbackBoundary.strategy,"disable_rfa_01_new_behavior_keep_prior_compatible_state"); ' +
+    'assert.deepEqual(issue.rollbackBoundary.preserve,["source_content","committed_compatible_artifacts","server_authoritative_revisions"]); ' +
+    'assert.deepEqual(issue.rollbackBoundary.never,["delete_valid_artifacts","infer_rebuild","restore_browser_authority"]); ' +
+    `console.log(\`RFA-01 rollback boundary passed: preserve=\${issue.rollbackBoundary.preserve.join(",")} never=\${issue.rollbackBoundary.never.join(",")}\`);'`
+  );
+}
+
+function validateRfa01Evidence(
+  verification,
+  rollback,
+  packet,
+  validatorHash,
+  approval,
+  approvalHash,
+) {
+  const issue = packet.issues.find(({ localId }) => localId === "RFA-01");
+  invariant(issue, "RFA-01: canonical packet issue missing");
+  const captureStart = utcMillis(
+    verification.captureStartedAt,
+    `${RFA_01_VERIFICATION_PATH} captureStartedAt`,
+  );
+  const captureEnd = utcMillis(
+    verification.captureCompletedAt,
+    `${RFA_01_VERIFICATION_PATH} captureCompletedAt`,
+  );
+  const observedAt = utcMillis(verification.observedAt, `${RFA_01_VERIFICATION_PATH} observedAt`);
+  invariant(
+    observedAt === captureEnd,
+    `${RFA_01_VERIFICATION_PATH}: observedAt must equal captureCompletedAt`,
+  );
+  invariant(
+    captureStart <= captureEnd && captureEnd - captureStart <= MAX_CAPTURE_INTERVAL_MS,
+    `${RFA_01_VERIFICATION_PATH}: capture interval exceeds ten minutes`,
+  );
+  invariant(
+    verification?.schemaVersion === EVIDENCE_SCHEMA_VERSION &&
+      verification.immutable === true &&
+      verification.supersessionOnly === true &&
+      verification.evidenceSemantics === EVIDENCE_SEMANTICS,
+    `${RFA_01_VERIFICATION_PATH}: evidence lifecycle drift`,
+  );
+  invariant(
+    verification.issueId === "RFA-01" &&
+      verification.linearIssueId === issue.linear.identifier &&
+      verification.result === "pass",
+    `${RFA_01_VERIFICATION_PATH}: identity or result drift`,
+  );
+  validateUuid(verification.correlationId, `${RFA_01_VERIFICATION_PATH} correlationId`);
+  validateMetadata(verification, RFA_01_VERIFICATION_PATH);
+  validateApprovalResolution(verification, approval, approvalHash, RFA_01_VERIFICATION_PATH);
+  invariant(
+    verification.contractHash === EXPECTED_CONTRACT_SHA256 &&
+      verification.packetHash === EXPECTED_PACKET_SHA256 &&
+      verification.validatorHash === validatorHash,
+    `${RFA_01_VERIFICATION_PATH}: current contract, packet, or validator hash drift`,
+  );
+  invariant(
+    same(verification.authorizationState, { status: EXPECTED_STATUS, ...EXPECTED_AUTHORIZATION }),
+    `${RFA_01_VERIFICATION_PATH}: authorization binding drift`,
+  );
+  invariant(
+    verification.commitOrArchiveSha256 === EXPECTED_ARCHIVE_SHA256 &&
+      verification.sourceCommit === EXPECTED_SOURCE_COMMIT &&
+      same(verification.fixtureSha256s, EXPECTED_FIXTURE_SHA256S),
+    `${RFA_01_VERIFICATION_PATH}: source or fixture binding drift`,
+  );
+  const expectedCommands = issue.acceptanceProbes.map((probe, index) => ({
+    acceptanceProbeId: probe.id,
+    command: probe.verificationCommand,
+    executionMode:
+      probe.id === "RFA-01-AC01"
+        ? "subprocess_exact_command"
+        : "in_process_semantic_core_evidence_deferred",
+    fixtureSha256s: EXPECTED_FIXTURE_SHA256S,
+    measurementProfile: "contract_validation_only_no_product_performance_measurement",
+    rawOutputPath: `${RFA_01_VERIFICATION_PATH}#/commands/${index}/rawOutput`,
+    validateOutput:
+      probe.id === "RFA-01-AC01"
+        ? validateAc01Output
+        : (output, label) =>
+            invariant(
+              output ===
+                "Reader-First release semantic capture passed: 20 issues, 6 contract negative fixtures; evidence-file validation deliberately deferred\n",
+              `${label}: exact AC02 semantic capture output required`,
+            ),
+  }));
+  invariant(
+    same(
+      expectedCommands.map(({ acceptanceProbeId, command }) => ({ acceptanceProbeId, command })),
+      [
+        {
+          acceptanceProbeId: "RFA-01-AC01",
+          command: "node --test scripts/validate-reader-first-release.test.mjs",
+        },
+        {
+          acceptanceProbeId: "RFA-01-AC02",
+          command: "node scripts/validate-reader-first-release.mjs",
+        },
+      ],
+    ) && verification.commands?.length === 2,
+    `${RFA_01_VERIFICATION_PATH}: exact AC01/AC02 command set required`,
+  );
+  verification.commands.forEach((record, index) => {
+    validateExecution(
+      record,
+      expectedCommands[index],
+      captureStart,
+      captureEnd,
+      approval,
+      approvalHash,
+      `${RFA_01_VERIFICATION_PATH} command ${index}`,
+    );
+  });
+
+  invariant(
+    rollback?.schemaVersion === EVIDENCE_SCHEMA_VERSION &&
+      rollback.immutable === true &&
+      rollback.supersessionOnly === true &&
+      rollback.evidenceSemantics === EVIDENCE_SEMANTICS,
+    `${RFA_01_ROLLBACK_PATH}: evidence lifecycle drift`,
+  );
+  invariant(
+    rollback.issueId === "RFA-01" &&
+      rollback.linearIssueId === issue.linear.identifier &&
+      rollback.acceptanceProbeId === "RFA-01-ROLLBACK" &&
+      rollback.result === "pass",
+    `${RFA_01_ROLLBACK_PATH}: identity or result drift`,
+  );
+  validateUuid(rollback.correlationId, `${RFA_01_ROLLBACK_PATH} correlationId`);
+  invariant(
+    rollback.captureStartedAt === verification.captureStartedAt &&
+      rollback.captureCompletedAt === verification.captureCompletedAt,
+    `${RFA_01_ROLLBACK_PATH}: capture interval drift`,
+  );
+  invariant(
+    rollback.sourceCommit === EXPECTED_SOURCE_COMMIT &&
+      same(rollback.fixtureSha256s, {
+        [CONTRACT_PATH]: EXPECTED_CONTRACT_SHA256,
+        [PACKET_PATH]: EXPECTED_PACKET_SHA256,
+        [VALIDATOR_PATH]: validatorHash,
+      }),
+    `${RFA_01_ROLLBACK_PATH}: current fixture hash bindings drift`,
+  );
+  invariant(
+    rollback.strategy === EXPECTED_ROLLBACK.strategy &&
+      same(rollback.disableNewBehaviorBoundary, {
+        preserve: EXPECTED_ROLLBACK.preserve,
+        never: EXPECTED_ROLLBACK.never,
+      }),
+    `${RFA_01_ROLLBACK_PATH}: exact rollback strategy/preserve/never required`,
+  );
+  invariant(
+    same(rollback.authorizationState, {
+      status: EXPECTED_STATUS,
+      authorizedIssues: ["RFA-01"],
+      browserAuthority: false,
+      rebuildInference: false,
+    }),
+    `${RFA_01_ROLLBACK_PATH}: authorization state drift`,
+  );
+  validateExecution(
+    rollback,
+    {
+      acceptanceProbeId: "RFA-01-ROLLBACK",
+      command: expectedRollbackCommand(),
+      executionMode: "subprocess_exact_command",
+      fixtureSha256s: {
+        [CONTRACT_PATH]: EXPECTED_CONTRACT_SHA256,
+        [PACKET_PATH]: EXPECTED_PACKET_SHA256,
+        [VALIDATOR_PATH]: validatorHash,
+      },
+      measurementProfile: "static_rollback_contract_assertion_no_product_mutation",
+      rawOutputPath: `${RFA_01_ROLLBACK_PATH}#/rawOutput`,
+      validateOutput: (output, label) =>
+        invariant(
+          output ===
+            `RFA-01 rollback boundary passed: preserve=${EXPECTED_ROLLBACK.preserve.join(",")} never=${EXPECTED_ROLLBACK.never.join(",")}\n`,
+          `${label}: exact rollback output required`,
+        ),
+    },
+    captureStart,
+    captureEnd,
+    approval,
+    approvalHash,
+    RFA_01_ROLLBACK_PATH,
+  );
+}
+
+function validateEvidenceNegativeFixtures(
+  verification,
+  rollback,
+  packet,
+  validatorHash,
+  approval,
+  approvalHash,
+) {
+  const fixtures = [
+    [
+      "truncated-ac01-output",
+      (v) => {
+        const record = v.commands[0];
+        record.stdout = "ℹ tests 20\nℹ pass 20\nℹ fail 0\n";
+        record.rawOutput = record.stdout;
+        record.outputSha256 = sha256(record.rawOutput);
+      },
+    ],
+    [
+      "vacuous-nested-metadata",
+      (v) => {
+        v.commands[0].toolVersions = { node: "x", git: "y" };
+        v.commands[0].operatingSystem = { platform: "x", release: "y", architecture: "z" };
+        v.commands[0].hardwareProfile = { cpuModel: "x", logicalCpuCount: 0, totalMemoryBytes: 1 };
+      },
+    ],
+    [
+      "invalid-top-level-timestamp",
+      (v) => {
+        v.captureStartedAt = "not-a-time";
+      },
+    ],
+    [
+      "far-future-command-timestamp",
+      (v) => {
+        v.commands[0].completedAt = "2999-01-01T00:00:00.000Z";
+      },
+    ],
+    [
+      "non-uuid-identities",
+      (v, r) => {
+        v.correlationId = "x";
+        r.correlationId = "y";
+      },
+    ],
+    [
+      "wrong-output-hash-and-exit-code",
+      (v) => {
+        v.commands[0].outputSha256 = "0".repeat(64);
+        v.commands[0].exitCode = 1;
+      },
+    ],
+    [
+      "unresolved-archive-approval-binding",
+      (v) => {
+        v.commands[0].archiveName = "fabricated.zip";
+        v.commands[0].archiveSha256 = "0".repeat(64);
+      },
+    ],
+    [
+      "execution-mode-drift",
+      (v) => {
+        v.commands[1].executionMode = "subprocess_exact_command";
+      },
+    ],
+  ];
+  for (const [id, mutate] of fixtures) {
+    const candidateVerification = structuredClone(verification);
+    const candidateRollback = structuredClone(rollback);
+    mutate(candidateVerification, candidateRollback);
+    let rejected = false;
+    try {
+      validateRfa01Evidence(
+        candidateVerification,
+        candidateRollback,
+        packet,
+        validatorHash,
+        approval,
+        approvalHash,
+      );
+    } catch {
+      rejected = true;
+    }
+    invariant(rejected, `${id}: adversarial evidence fixture was not rejected`);
+  }
+  return fixtures.map(([id]) => id);
+}
+
 async function verifyEvidenceBindings(root, contract) {
   for (const [relativePath, expected] of EVIDENCE_BINDINGS) {
     const absolute = path.join(root, relativePath);
@@ -1378,16 +1922,48 @@ async function verifyEvidenceBindings(root, contract) {
   validateExecutableOcrFixture(overlay, contract);
 }
 
-export async function runValidation({ root = process.cwd(), write = false } = {}) {
-  const [contractText, packetText] = await Promise.all([
+async function runValidationCore({
+  root = process.cwd(),
+  write = false,
+  validateEvidence = true,
+} = {}) {
+  const [contractText, packetText, validatorBytes] = await Promise.all([
     readFile(path.join(root, CONTRACT_PATH), "utf8"),
     readFile(path.join(root, PACKET_PATH), "utf8"),
+    readFile(path.join(root, VALIDATOR_PATH)),
   ]);
   const contract = JSON.parse(contractText);
   const packet = JSON.parse(packetText);
   validateReaderFirstRelease(contract, packet);
+  const negativeFixtures = validateNegativeFixtures(contract, packet);
   invariant(sha256(contractText) === EXPECTED_CONTRACT_SHA256, "contract file-byte SHA-256 drift");
   invariant(sha256(packetText) === EXPECTED_PACKET_SHA256, "packet file-byte SHA-256 drift");
+  let evidenceNegativeFixtures = [];
+  if (validateEvidence) {
+    const [verification, rollback, approvalText] = await Promise.all([
+      readEvidenceManifest(root, RFA_01_VERIFICATION_PATH),
+      readEvidenceManifest(root, RFA_01_ROLLBACK_PATH),
+      readFile(path.join(root, EXPECTED_APPROVAL_BINDING.approvalBindingPath), "utf8"),
+    ]);
+    const approval = JSON.parse(approvalText);
+    const validatorHash = sha256(validatorBytes);
+    validateRfa01Evidence(
+      verification,
+      rollback,
+      packet,
+      validatorHash,
+      approval,
+      sha256(approvalText),
+    );
+    evidenceNegativeFixtures = validateEvidenceNegativeFixtures(
+      verification,
+      rollback,
+      packet,
+      validatorHash,
+      approval,
+      sha256(approvalText),
+    );
+  }
   await verifyEvidenceBindings(root, contract);
   const rendered = renderPacketMarkdown(packet);
   const markdownPath = path.join(root, MARKDOWN_PATH);
@@ -1397,18 +1973,295 @@ export async function runValidation({ root = process.cwd(), write = false } = {}
     invariant(markdown === rendered, "Reader-First Markdown parity drift");
     invariant(sha256(markdown) === EXPECTED_MARKDOWN_SHA256, "generated Markdown SHA-256 drift");
   }
-  return { mode: write ? "write" : "check", issueCount: packet.issueCount };
+  return {
+    mode: write ? "write" : "check",
+    issueCount: packet.issueCount,
+    negativeFixtureCount: negativeFixtures.length,
+    evidenceNegativeFixtureCount: evidenceNegativeFixtures.length,
+    evidenceValidationDeferred: !validateEvidence,
+  };
+}
+
+export async function runValidation(options = {}) {
+  return runValidationCore({ ...options, validateEvidence: true });
+}
+
+function executeForEvidence(root, executable, args, env = process.env) {
+  const startedAt = new Date().toISOString();
+  return new Promise((resolve) => {
+    execFile(
+      executable,
+      args,
+      { cwd: root, env, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        resolve({
+          startedAt,
+          completedAt: new Date().toISOString(),
+          exitCode: error?.code ?? 0,
+          stdout,
+          stderr,
+          rawOutput: `${stdout}${stderr}`,
+        });
+      },
+    );
+  });
+}
+
+function canonicalSemanticCoreOutput(result) {
+  return `Reader-First release semantic capture passed: ${result.issueCount} issues, ${result.negativeFixtureCount} contract negative fixtures; evidence-file validation deliberately deferred\n`;
+}
+
+async function executeSemanticCoreForEvidence(root) {
+  const startedAt = new Date().toISOString();
+  try {
+    const result = await runValidationCore({ root, validateEvidence: false });
+    const stdout = canonicalSemanticCoreOutput(result);
+    return {
+      startedAt,
+      completedAt: new Date().toISOString(),
+      exitCode: 0,
+      stdout,
+      stderr: "",
+      rawOutput: stdout,
+      outputSha256: sha256(stdout),
+    };
+  } catch (error) {
+    const stderr = `${error instanceof Error ? error.message : String(error)}\n`;
+    return {
+      startedAt,
+      completedAt: new Date().toISOString(),
+      exitCode: 1,
+      stdout: "",
+      stderr,
+      rawOutput: stderr,
+      outputSha256: sha256(stderr),
+    };
+  }
+}
+
+function archiveFields() {
+  return {
+    approvalBindingPath: EXPECTED_APPROVAL_BINDING.approvalBindingPath,
+    approvalBindingSha256: EXPECTED_APPROVAL_BINDING.approvalBindingSha256,
+    archiveName: EXPECTED_ARCHIVE_NAME,
+    archiveSha256: EXPECTED_ARCHIVE_SHA256,
+    commitOrArchiveSha256: EXPECTED_ARCHIVE_SHA256,
+  };
+}
+
+export async function captureRfa01Evidence({ root = process.cwd() } = {}) {
+  const captureStartedAt = new Date().toISOString();
+  const [validatorBytes, packetText, approvalText, gitResult] = await Promise.all([
+    readFile(path.join(root, VALIDATOR_PATH)),
+    readFile(path.join(root, PACKET_PATH), "utf8"),
+    readFile(path.join(root, EXPECTED_APPROVAL_BINDING.approvalBindingPath), "utf8"),
+    executeForEvidence(root, "git", ["--version"]),
+  ]);
+  invariant(gitResult.exitCode === 0, "capture: git --version failed");
+  const gitVersion = gitResult.stdout.trim().replace(/^git version /, "");
+  const toolVersions = { node: process.version, git: gitVersion };
+  const operatingSystem = {
+    platform: os.platform(),
+    release: os.release(),
+    architecture: os.arch(),
+  };
+  const hardwareProfile = {
+    cpuModel: os.cpus()[0]?.model ?? "unknown processor",
+    logicalCpuCount: os.cpus().length,
+    totalMemoryBytes: os.totalmem(),
+  };
+  const shared = {
+    evidenceSemantics: EVIDENCE_SEMANTICS,
+    reviewer: EVIDENCE_PRODUCER,
+    toolVersions,
+    operatingSystem,
+    hardwareProfile,
+    ...archiveFields(),
+  };
+  const ac01 = await executeForEvidence(root, process.execPath, [
+    "--test",
+    "scripts/validate-reader-first-release.test.mjs",
+  ]);
+  invariant(ac01.exitCode === 0, `capture: AC01 failed\n${ac01.rawOutput}`);
+  const ac02 = await executeSemanticCoreForEvidence(root);
+  invariant(ac02.exitCode === 0, `capture: AC02 semantic validation failed\n${ac02.rawOutput}`);
+  const rollbackScript = expectedRollbackCommand().match(/-e '([\s\S]*)'$/)?.[1];
+  invariant(rollbackScript, "capture: rollback command parser failed");
+  const rollbackResult = await executeForEvidence(root, process.execPath, [
+    "--input-type=module",
+    "-e",
+    rollbackScript,
+  ]);
+  invariant(
+    rollbackResult.exitCode === 0,
+    `capture: rollback assertion failed\n${rollbackResult.rawOutput}`,
+  );
+  const captureCompletedAt = new Date().toISOString();
+  const packet = JSON.parse(packetText);
+  const issue = packet.issues.find(({ localId }) => localId === "RFA-01");
+  const execution = (result, fields) => ({
+    issueId: "RFA-01",
+    correlationId: randomUUID(),
+    ...fields,
+    ...shared,
+    startedAt: result.startedAt,
+    completedAt: result.completedAt,
+    observedAt: result.completedAt,
+    exitCode: result.exitCode,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    rawOutput: result.rawOutput,
+    outputSha256: result.outputSha256 ?? sha256(result.rawOutput),
+    result: "pass",
+  });
+  const verification = {
+    schemaVersion: EVIDENCE_SCHEMA_VERSION,
+    immutable: true,
+    supersessionOnly: true,
+    issueId: "RFA-01",
+    linearIssueId: issue.linear.identifier,
+    correlationId: randomUUID(),
+    result: "pass",
+    captureStartedAt,
+    captureCompletedAt,
+    observedAt: captureCompletedAt,
+    contractHash: EXPECTED_CONTRACT_SHA256,
+    packetHash: EXPECTED_PACKET_SHA256,
+    validatorHash: sha256(validatorBytes),
+    authorizationState: { status: EXPECTED_STATUS, ...EXPECTED_AUTHORIZATION },
+    sourceCommit: EXPECTED_SOURCE_COMMIT,
+    fixtureSha256s: EXPECTED_FIXTURE_SHA256S,
+    measurementProfile: "contract_validation_only_no_product_performance_measurement",
+    ...shared,
+    commands: [
+      execution(ac01, {
+        acceptanceProbeId: "RFA-01-AC01",
+        command: "node --test scripts/validate-reader-first-release.test.mjs",
+        executionMode: "subprocess_exact_command",
+        fixtureSha256s: EXPECTED_FIXTURE_SHA256S,
+        measurementProfile: "contract_validation_only_no_product_performance_measurement",
+        rawOutputPath: `${RFA_01_VERIFICATION_PATH}#/commands/0/rawOutput`,
+      }),
+      execution(ac02, {
+        acceptanceProbeId: "RFA-01-AC02",
+        command: "node scripts/validate-reader-first-release.mjs",
+        executionMode: "in_process_semantic_core_evidence_deferred",
+        fixtureSha256s: EXPECTED_FIXTURE_SHA256S,
+        measurementProfile: "contract_validation_only_no_product_performance_measurement",
+        rawOutputPath: `${RFA_01_VERIFICATION_PATH}#/commands/1/rawOutput`,
+      }),
+    ],
+  };
+  const rollback = {
+    schemaVersion: EVIDENCE_SCHEMA_VERSION,
+    immutable: true,
+    supersessionOnly: true,
+    linearIssueId: issue.linear.identifier,
+    captureStartedAt,
+    captureCompletedAt,
+    sourceCommit: EXPECTED_SOURCE_COMMIT,
+    strategy: EXPECTED_ROLLBACK.strategy,
+    disableNewBehaviorBoundary: {
+      preserve: EXPECTED_ROLLBACK.preserve,
+      never: EXPECTED_ROLLBACK.never,
+    },
+    authorizationState: {
+      status: EXPECTED_STATUS,
+      authorizedIssues: ["RFA-01"],
+      browserAuthority: false,
+      rebuildInference: false,
+    },
+    ...execution(rollbackResult, {
+      acceptanceProbeId: "RFA-01-ROLLBACK",
+      command: expectedRollbackCommand(),
+      executionMode: "subprocess_exact_command",
+      fixtureSha256s: {
+        [CONTRACT_PATH]: EXPECTED_CONTRACT_SHA256,
+        [PACKET_PATH]: EXPECTED_PACKET_SHA256,
+        [VALIDATOR_PATH]: sha256(validatorBytes),
+      },
+      measurementProfile: "static_rollback_contract_assertion_no_product_mutation",
+      rawOutputPath: `${RFA_01_ROLLBACK_PATH}#/rawOutput`,
+    }),
+  };
+  const approval = JSON.parse(approvalText);
+  validateRfa01Evidence(
+    verification,
+    rollback,
+    packet,
+    sha256(validatorBytes),
+    approval,
+    sha256(approvalText),
+  );
+  validateEvidenceNegativeFixtures(
+    verification,
+    rollback,
+    packet,
+    sha256(validatorBytes),
+    approval,
+    sha256(approvalText),
+  );
+  await Promise.all([
+    writeFile(
+      path.join(root, RFA_01_VERIFICATION_PATH),
+      `${JSON.stringify(verification, null, 2)}\n`,
+    ),
+    writeFile(path.join(root, RFA_01_ROLLBACK_PATH), `${JSON.stringify(rollback, null, 2)}\n`),
+  ]);
+  const formatResult = await executeForEvidence(root, "pnpm", [
+    "exec",
+    "biome",
+    "format",
+    "--write",
+    RFA_01_VERIFICATION_PATH,
+    RFA_01_ROLLBACK_PATH,
+  ]);
+  invariant(
+    formatResult.exitCode === 0,
+    `capture: evidence formatting failed\n${formatResult.rawOutput}`,
+  );
+  const [formattedVerification, formattedRollback] = await Promise.all([
+    readEvidenceManifest(root, RFA_01_VERIFICATION_PATH),
+    readEvidenceManifest(root, RFA_01_ROLLBACK_PATH),
+  ]);
+  validateRfa01Evidence(
+    formattedVerification,
+    formattedRollback,
+    packet,
+    sha256(validatorBytes),
+    approval,
+    sha256(approvalText),
+  );
+  validateEvidenceNegativeFixtures(
+    formattedVerification,
+    formattedRollback,
+    packet,
+    sha256(validatorBytes),
+    approval,
+    sha256(approvalText),
+  );
+  return { commandCount: 3, evidenceNegativeFixtureCount: 8, captureStartedAt, captureCompletedAt };
 }
 
 const isMain =
   process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 if (isMain) {
-  runValidation({ write: process.argv.includes("--write") })
-    .then(({ mode, issueCount }) =>
-      console.log(
-        `Reader-First release ${mode} passed: ${issueCount} issues and all owner gates valid`,
-      ),
-    )
+  const capture = process.argv.includes("--capture-rfa01-evidence");
+  const operation = capture
+    ? captureRfa01Evidence()
+    : runValidation({ write: process.argv.includes("--write") });
+  operation
+    .then((result) => {
+      if (capture) {
+        console.log(
+          `RFA-01 evidence capture passed: ${result.commandCount} commands and ${result.evidenceNegativeFixtureCount} adversarial evidence fixtures`,
+        );
+      } else {
+        console.log(
+          `Reader-First release ${result.mode} passed: ${result.issueCount} issues, ${result.negativeFixtureCount} contract negative fixtures, ${result.evidenceNegativeFixtureCount} evidence negative fixtures, and all owner gates valid`,
+        );
+      }
+    })
     .catch((error) => {
       console.error(error instanceof Error ? error.message : String(error));
       process.exitCode = 1;

@@ -1,0 +1,142 @@
+{
+  "schemaVersion": "tts-research.reader-first-evidence-manifest.v1",
+  "immutable": true,
+  "supersessionOnly": true,
+  "issueId": "RFA-01",
+  "linearIssueId": "QQP-613",
+  "correlationId": "b52a53bf-3b25-4d9d-9dd7-a2cfbdcd567d",
+  "result": "pass",
+  "captureStartedAt": "2026-07-11T02:21:49.755Z",
+  "captureCompletedAt": "2026-07-11T02:21:50.057Z",
+  "observedAt": "2026-07-11T02:21:50.057Z",
+  "contractHash": "a3b2f75fa7393f93f0d2494bc5825c44e758dd2220d1fc3a78300d72a43ec868",
+  "packetHash": "aa5e20a24b856caea74b78d224ac80307b7290f05cc35cb4169da7d9e1bdd44b",
+  "validatorHash": "7fe7f5bcd2e4ba5e2b11d6d2b75c5c509201b86b70aa61e11651071ef028a41e",
+  "authorizationState": {
+    "status": "peer_approved_linear_created_rfa_01_product_authorized",
+    "ownerAccepted": true,
+    "peerApproved": true,
+    "linearCreationAuthorized": true,
+    "productImplementationAuthorized": true,
+    "graphUnblockedIssues": ["RFA-01"],
+    "authorizedIssues": ["RFA-01"]
+  },
+  "sourceCommit": "0f74143156a970c04b404a650f724b572e0ee2fd",
+  "fixtureSha256s": {
+    "fixtures/pdf/scanned_fixture.pdf": "25eeaa49a696c8d5f0fca7b80ec9ec11ebd6450c33f7a279a26555b0e56a5500",
+    "fixtures/pdf/scanned_fixture.ocr.txt": "fbed95e0ddf91100b02ffc1978147df53a2c2f7a0da6a8ed23e67ba5b7f09f78",
+    "fixtures/pdf/scanned_fixture.expected-overlay.json": "783a5d48857303fc8c7f7a67fd3b5e5e5e06deb87469724ef3d76a15e1a9ca06"
+  },
+  "measurementProfile": "contract_validation_only_no_product_performance_measurement",
+  "evidenceSemantics": "static_attestation_of_recorded_execution",
+  "reviewer": "Hermes Agent RFA-01 evidence capture producer v1",
+  "toolVersions": {
+    "node": "v26.1.0",
+    "git": "2.43.0"
+  },
+  "operatingSystem": {
+    "platform": "linux",
+    "release": "6.18.33.2-microsoft-standard-WSL2",
+    "architecture": "x64"
+  },
+  "hardwareProfile": {
+    "cpuModel": "AMD Ryzen 5 7535HS with Radeon Graphics",
+    "logicalCpuCount": 6,
+    "totalMemoryBytes": 58971992064
+  },
+  "approvalBindingPath": "docs/reviews/reader-first-release-peer-approval-v8.json",
+  "approvalBindingSha256": "29710a3b5af4fc21be5091b454a57fc7c2b14d363a9fc46706e403e901e7ecef",
+  "archiveName": "tts-research-reader-first-peer-review-v8.zip",
+  "archiveSha256": "b91a683ac8c94bd44ca618b53b275cbe93c2d55d8a5cac1b11e6d9d1aeafc7de",
+  "commitOrArchiveSha256": "b91a683ac8c94bd44ca618b53b275cbe93c2d55d8a5cac1b11e6d9d1aeafc7de",
+  "commands": [
+    {
+      "issueId": "RFA-01",
+      "correlationId": "8bee1f4b-7283-4580-9aee-b839d78ce387",
+      "acceptanceProbeId": "RFA-01-AC01",
+      "command": "node --test scripts/validate-reader-first-release.test.mjs",
+      "executionMode": "subprocess_exact_command",
+      "fixtureSha256s": {
+        "fixtures/pdf/scanned_fixture.pdf": "25eeaa49a696c8d5f0fca7b80ec9ec11ebd6450c33f7a279a26555b0e56a5500",
+        "fixtures/pdf/scanned_fixture.ocr.txt": "fbed95e0ddf91100b02ffc1978147df53a2c2f7a0da6a8ed23e67ba5b7f09f78",
+        "fixtures/pdf/scanned_fixture.expected-overlay.json": "783a5d48857303fc8c7f7a67fd3b5e5e5e06deb87469724ef3d76a15e1a9ca06"
+      },
+      "measurementProfile": "contract_validation_only_no_product_performance_measurement",
+      "rawOutputPath": "docs/evidence/reader-first/RFA-01/verification.json#/commands/0/rawOutput",
+      "evidenceSemantics": "static_attestation_of_recorded_execution",
+      "reviewer": "Hermes Agent RFA-01 evidence capture producer v1",
+      "toolVersions": {
+        "node": "v26.1.0",
+        "git": "2.43.0"
+      },
+      "operatingSystem": {
+        "platform": "linux",
+        "release": "6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64"
+      },
+      "hardwareProfile": {
+        "cpuModel": "AMD Ryzen 5 7535HS with Radeon Graphics",
+        "logicalCpuCount": 6,
+        "totalMemoryBytes": 58971992064
+      },
+      "approvalBindingPath": "docs/reviews/reader-first-release-peer-approval-v8.json",
+      "approvalBindingSha256": "29710a3b5af4fc21be5091b454a57fc7c2b14d363a9fc46706e403e901e7ecef",
+      "archiveName": "tts-research-reader-first-peer-review-v8.zip",
+      "archiveSha256": "b91a683ac8c94bd44ca618b53b275cbe93c2d55d8a5cac1b11e6d9d1aeafc7de",
+      "commitOrArchiveSha256": "b91a683ac8c94bd44ca618b53b275cbe93c2d55d8a5cac1b11e6d9d1aeafc7de",
+      "startedAt": "2026-07-11T02:21:49.773Z",
+      "completedAt": "2026-07-11T02:21:49.995Z",
+      "observedAt": "2026-07-11T02:21:49.995Z",
+      "exitCode": 0,
+      "stdout": "✔ canonical contract, exact evidence hashes, packet, DAG, and generated Markdown pass (38.260648ms)\n✔ Peer approval, Linear creation, and root-only product authorization reject drift (2.374695ms)\n✔ snapshot migration, browser transition, and revision concurrency are semantic invariants (0.86908ms)\n✔ nominal request envelope and manifest-only Reader fallback reject drift (1.335477ms)\n✔ completed artifacts cannot regress to missing during backfill (0.477362ms)\n✔ consumed timing identity and boundaries are immutable in both directions (1.216569ms)\n✔ real scanned OCR evidence must stop unresolved narration and create reviewed revisions (1.987515ms)\n✔ executable OCR fixture schema rejects legacy aliases independently of canonical hashes (0.243718ms)\n✔ system critical is backend-evidenced, fresh, enumerated, and not inferred by UI (0.69455ms)\n✔ archive-contained audit and Linear provenance bindings reject free-form drift (1.278066ms)\n✔ issue count, IDs, DAG, and dependency order are exact (2.382858ms)\n✔ issue execution schema requires owner, repository scope, non-goals, commands, and evidence (3.209821ms)\n✔ every acceptance assertion is bound to an issue command, evidence file, and fail-closed result (2.358163ms)\n✔ issue-local observability, rollback, and performance budgets reject generic or centralized drift (3.667647ms)\n✔ RFA-20 is adjudication-only and legacy removal stays with implementation owners (1.852694ms)\n✔ Round 2 blocker semantics reject packet regressions independently of canonical seals (4.383847ms)\n✔ RFA-15 authoritative timing renderer ownership rejects every omission (9.287658ms)\n✔ Round 2 execution ownership, dependencies, gates, and evidence reject drift (4.088505ms)\n✔ Round 3 executable ownership, enums, budgets, and harness semantics reject drift (8.283944ms)\n✔ random title/objective drift is caught by the canonical object seal (3.796742ms)\nℹ tests 20\nℹ suites 0\nℹ pass 20\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 181.549204\n",
+      "stderr": "",
+      "rawOutput": "✔ canonical contract, exact evidence hashes, packet, DAG, and generated Markdown pass (38.260648ms)\n✔ Peer approval, Linear creation, and root-only product authorization reject drift (2.374695ms)\n✔ snapshot migration, browser transition, and revision concurrency are semantic invariants (0.86908ms)\n✔ nominal request envelope and manifest-only Reader fallback reject drift (1.335477ms)\n✔ completed artifacts cannot regress to missing during backfill (0.477362ms)\n✔ consumed timing identity and boundaries are immutable in both directions (1.216569ms)\n✔ real scanned OCR evidence must stop unresolved narration and create reviewed revisions (1.987515ms)\n✔ executable OCR fixture schema rejects legacy aliases independently of canonical hashes (0.243718ms)\n✔ system critical is backend-evidenced, fresh, enumerated, and not inferred by UI (0.69455ms)\n✔ archive-contained audit and Linear provenance bindings reject free-form drift (1.278066ms)\n✔ issue count, IDs, DAG, and dependency order are exact (2.382858ms)\n✔ issue execution schema requires owner, repository scope, non-goals, commands, and evidence (3.209821ms)\n✔ every acceptance assertion is bound to an issue command, evidence file, and fail-closed result (2.358163ms)\n✔ issue-local observability, rollback, and performance budgets reject generic or centralized drift (3.667647ms)\n✔ RFA-20 is adjudication-only and legacy removal stays with implementation owners (1.852694ms)\n✔ Round 2 blocker semantics reject packet regressions independently of canonical seals (4.383847ms)\n✔ RFA-15 authoritative timing renderer ownership rejects every omission (9.287658ms)\n✔ Round 2 execution ownership, dependencies, gates, and evidence reject drift (4.088505ms)\n✔ Round 3 executable ownership, enums, budgets, and harness semantics reject drift (8.283944ms)\n✔ random title/objective drift is caught by the canonical object seal (3.796742ms)\nℹ tests 20\nℹ suites 0\nℹ pass 20\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 181.549204\n",
+      "outputSha256": "4a169702261bb66c073642c8ce679b8dc1279ac494273eb2c14e2914014e811b",
+      "result": "pass"
+    },
+    {
+      "issueId": "RFA-01",
+      "correlationId": "29db2bd0-37ac-42ee-9f91-bfa22885b693",
+      "acceptanceProbeId": "RFA-01-AC02",
+      "command": "node scripts/validate-reader-first-release.mjs",
+      "executionMode": "in_process_semantic_core_evidence_deferred",
+      "fixtureSha256s": {
+        "fixtures/pdf/scanned_fixture.pdf": "25eeaa49a696c8d5f0fca7b80ec9ec11ebd6450c33f7a279a26555b0e56a5500",
+        "fixtures/pdf/scanned_fixture.ocr.txt": "fbed95e0ddf91100b02ffc1978147df53a2c2f7a0da6a8ed23e67ba5b7f09f78",
+        "fixtures/pdf/scanned_fixture.expected-overlay.json": "783a5d48857303fc8c7f7a67fd3b5e5e5e06deb87469724ef3d76a15e1a9ca06"
+      },
+      "measurementProfile": "contract_validation_only_no_product_performance_measurement",
+      "rawOutputPath": "docs/evidence/reader-first/RFA-01/verification.json#/commands/1/rawOutput",
+      "evidenceSemantics": "static_attestation_of_recorded_execution",
+      "reviewer": "Hermes Agent RFA-01 evidence capture producer v1",
+      "toolVersions": {
+        "node": "v26.1.0",
+        "git": "2.43.0"
+      },
+      "operatingSystem": {
+        "platform": "linux",
+        "release": "6.18.33.2-microsoft-standard-WSL2",
+        "architecture": "x64"
+      },
+      "hardwareProfile": {
+        "cpuModel": "AMD Ryzen 5 7535HS with Radeon Graphics",
+        "logicalCpuCount": 6,
+        "totalMemoryBytes": 58971992064
+      },
+      "approvalBindingPath": "docs/reviews/reader-first-release-peer-approval-v8.json",
+      "approvalBindingSha256": "29710a3b5af4fc21be5091b454a57fc7c2b14d363a9fc46706e403e901e7ecef",
+      "archiveName": "tts-research-reader-first-peer-review-v8.zip",
+      "archiveSha256": "b91a683ac8c94bd44ca618b53b275cbe93c2d55d8a5cac1b11e6d9d1aeafc7de",
+      "commitOrArchiveSha256": "b91a683ac8c94bd44ca618b53b275cbe93c2d55d8a5cac1b11e6d9d1aeafc7de",
+      "startedAt": "2026-07-11T02:21:49.995Z",
+      "completedAt": "2026-07-11T02:21:50.015Z",
+      "observedAt": "2026-07-11T02:21:50.015Z",
+      "exitCode": 0,
+      "stdout": "Reader-First release semantic capture passed: 20 issues, 6 contract negative fixtures; evidence-file validation deliberately deferred\n",
+      "stderr": "",
+      "rawOutput": "Reader-First release semantic capture passed: 20 issues, 6 contract negative fixtures; evidence-file validation deliberately deferred\n",
+      "outputSha256": "ce78d08dd39bbf8ef80e58d349b8050266751612c8113b566c9d88da6c012095",
+      "result": "pass"
+    }
+  ]
+}
