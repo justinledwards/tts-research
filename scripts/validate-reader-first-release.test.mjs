@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import {
   CONTRACT_PATH,
@@ -12,27 +14,32 @@ import {
   PARENT_AUTHORIZATION_PATH,
   RFA_01_ROLLBACK_PATH,
   RFA_01_VERIFICATION_PATH,
+  RFA_02_START_AUTHORIZATION_PATH,
   renderPacketMarkdown,
   runValidation,
   validateExecutableOcrFixture,
   validateParentAuthorization,
   validateReaderFirstRelease,
   validateRfa01Evidence,
+  validateRfa02StartAuthorization,
 } from "./validate-reader-first-release.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+const execFileAsync = promisify(execFile);
 const [CONTRACT, PACKET] = await Promise.all([
   readFile(path.join(ROOT, CONTRACT_PATH), "utf8").then(JSON.parse),
   readFile(path.join(ROOT, PACKET_PATH), "utf8").then(JSON.parse),
 ]);
 const [
   PARENT_AUTHORIZATION,
+  RFA_02_START_AUTHORIZATION,
   LIVE_MANIFEST,
   RFA_01_VERIFICATION,
   RFA_01_ROLLBACK,
   PEER_APPROVAL_TEXT,
 ] = await Promise.all([
   readFile(path.join(ROOT, PARENT_AUTHORIZATION_PATH), "utf8").then(JSON.parse),
+  readFile(path.join(ROOT, RFA_02_START_AUTHORIZATION_PATH), "utf8").then(JSON.parse),
   readFile(path.join(ROOT, LIVE_MANIFEST_PATH), "utf8").then(JSON.parse),
   readFile(path.join(ROOT, RFA_01_VERIFICATION_PATH), "utf8").then(JSON.parse),
   readFile(path.join(ROOT, RFA_01_ROLLBACK_PATH), "utf8").then(JSON.parse),
@@ -89,7 +96,7 @@ test("Peer approval, Linear creation, and root-only product authorization reject
   }, /RFA-02: live issue authorization\/binding drift/);
 });
 
-test("completed RFA-01 to sole authorized RFA-02 transition fails closed", () => {
+test("completed RFA-01 to sole authorized In Progress RFA-02 transition fails closed", () => {
   rejectContract((contract) => {
     contract.authorization.graphUnblockedIssues = ["RFA-01"];
     contract.authorization.authorizedIssues = ["RFA-01"];
@@ -106,29 +113,25 @@ test("completed RFA-01 to sole authorized RFA-02 transition fails closed", () =>
     packet.issues[1].dependencyUnblocked = false;
   }, /RFA-02: graph\/status drift/);
   rejectPacket((packet) => {
-    packet.issues[1].linear.state = "In Progress";
-    packet.issues[1].linear.stateType = "started";
+    packet.issues[1].linear.state = "Backlog";
+    packet.issues[1].linear.stateType = "backlog";
+    delete packet.issues[1].linear.stateId;
   }, /RFA-02: live issue authorization\/binding drift/);
+  rejectPacket((packet) => {
+    packet.issues[2].productImplementationAuthorized = true;
+  }, /RFA-03: live issue authorization\/binding drift/);
 
-  const startedAuthorization = structuredClone(PARENT_AUTHORIZATION);
-  startedAuthorization.authorizedCandidate.linearState = "In Progress";
-  startedAuthorization.authorizedCandidate.linearStateType = "started";
-  startedAuthorization.authorizedCandidate.linearTransitionPerformed = true;
-  assert.throws(
-    () => validateParentAuthorization(startedAuthorization, LIVE_MANIFEST),
-    /RFA-02 authorization, dependency closure, or Backlog fact drift/,
-  );
-
+  assert.doesNotThrow(() => validateParentAuthorization(PARENT_AUTHORIZATION));
   const staleAuthorization = structuredClone(PARENT_AUTHORIZATION);
   staleAuthorization.recordedAt = "2026-07-11T01:05:48Z";
   assert.throws(
-    () => validateParentAuthorization(staleAuthorization, LIVE_MANIFEST),
+    () => validateParentAuthorization(staleAuthorization),
     /stale or has unexpected authority/,
   );
   const wrongCompletion = structuredClone(PARENT_AUTHORIZATION);
   wrongCompletion.completedDependency.completionCommit = "0".repeat(40);
   assert.throws(
-    () => validateParentAuthorization(wrongCompletion, LIVE_MANIFEST),
+    () => validateParentAuthorization(wrongCompletion),
     /RFA-01 completion fact or commit binding drift/,
   );
 
@@ -146,6 +149,89 @@ test("completed RFA-01 to sole authorized RFA-02 transition fails closed", () =>
       ),
     /historical capture authorization binding drift/,
   );
+});
+
+test("RFA-02 start authorization rejects stale state, scope drift, authority drift, and tampering", () => {
+  assert.doesNotThrow(() =>
+    validateRfa02StartAuthorization(RFA_02_START_AUTHORIZATION, LIVE_MANIFEST, PACKET),
+  );
+  const rejectStart = (mutator, expected) => {
+    const authorization = structuredClone(RFA_02_START_AUTHORIZATION);
+    const manifest = structuredClone(LIVE_MANIFEST);
+    const packet = structuredClone(PACKET);
+    mutator(authorization, manifest, packet);
+    assert.throws(() => validateRfa02StartAuthorization(authorization, manifest, packet), expected);
+  };
+  rejectStart((_authorization, manifest) => {
+    const issue = manifest.issues.find(({ localId }) => localId === "RFA-02");
+    issue.state = "Backlog";
+    issue.stateType = "backlog";
+  }, /current In Progress live Linear binding drift/);
+  rejectStart((authorization) => {
+    authorization.authorizedScope.paths.pop();
+  }, /exact authorized scope path/);
+  rejectStart((authorization) => {
+    authorization.authorizedScope.paths.push("frontend/src/App.tsx");
+  }, /exact authorized scope path/);
+  rejectStart((authorization) => {
+    authorization.authorizedScope.symbols.pop();
+  }, /exact authorized scope path/);
+  rejectStart((authorization) => {
+    authorization.authorizedScope.nonGoals[2] =
+      "Browser compatibility may be provided by the client";
+  }, /exact authorized scope path/);
+  rejectStart((authorization) => {
+    authorization.previousAuthorization.sha256 = "0".repeat(64);
+  }, /previous authorization commit\/hash binding drift/);
+  rejectStart((authorization) => {
+    authorization.previousAuthorization.authorizationCommit = "0".repeat(40);
+  }, /previous authorization commit\/hash binding drift/);
+  rejectStart((authorization) => {
+    authorization.productOwnerDecision.commentUrl = "https://linear.app/wrong-comment";
+  }, /PO comment\/start decision binding drift/);
+  rejectStart((authorization) => {
+    authorization.liveLinearManifest.startedIssue.linearState = "Backlog";
+  }, /current In Progress live Linear binding drift/);
+  for (let number = 3; number <= 20; number += 1) {
+    const issueId = `RFA-${String(number).padStart(2, "0")}`;
+    rejectStart((authorization) => {
+      authorization.currentAuthorization.authorizedIssues = ["RFA-02", issueId];
+      authorization.currentAuthorization.graphUnblockedIssues = ["RFA-02", issueId];
+    }, /sole current RFA-02 execution authorization drift/);
+  }
+});
+
+test("public RFA-01 capture command fails immediately without mutating immutable evidence", async () => {
+  const evidencePaths = [RFA_01_VERIFICATION_PATH, RFA_01_ROLLBACK_PATH];
+  const before = await Promise.all(
+    evidencePaths.map(async (relativePath) => {
+      const bytes = await readFile(path.join(ROOT, relativePath));
+      return { bytes, hash: createHash("sha256").update(bytes).digest("hex") };
+    }),
+  );
+  await assert.rejects(
+    execFileAsync(
+      process.execPath,
+      ["scripts/validate-reader-first-release.mjs", "--capture-rfa01-evidence"],
+      {
+        cwd: ROOT,
+      },
+    ),
+    (error) => {
+      assert.match(
+        `${error.stdout ?? ""}${error.stderr ?? ""}`,
+        /RFA-01 evidence is immutable historical evidence.*disabled and will not write/,
+      );
+      return true;
+    },
+  );
+  const after = await Promise.all(
+    evidencePaths.map((relativePath) => readFile(path.join(ROOT, relativePath))),
+  );
+  for (const [index, bytes] of after.entries()) {
+    assert.deepEqual(bytes, before[index].bytes);
+    assert.equal(createHash("sha256").update(bytes).digest("hex"), before[index].hash);
+  }
 });
 
 test("snapshot migration, browser transition, and revision concurrency are semantic invariants", () => {
@@ -439,7 +525,7 @@ test("Round 2 execution ownership, dependencies, gates, and evidence reject drif
     packet.issues[1].inScope.paths = packet.issues[1].inScope.paths.filter(
       (value) => value !== "scripts/e2e-reader-first-continuity.mjs",
     );
-  }, /creating issue scope drift/);
+  }, /RFA-02 exact authorized scope path\/symbol\/non-goal drift/);
   rejectPacket((packet) => {
     const issue = packet.issues[19];
     const probe = issue.acceptanceProbes.find(({ id }) => id === "RFA-20-AC02");

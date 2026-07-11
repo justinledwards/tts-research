@@ -2,13 +2,13 @@
 
 # TTS-Research Reader-First Architecture release batch
 
-Status: `peer_approved_rfa_01_completed_rfa_02_product_authorized`
+Status: `peer_approved_rfa_01_completed_rfa_02_in_progress_product_authorized`
 
 Linear target: team `QQP`, project `TTS-Research` (20 / 20 unarchived).
 
 RFA-01 is completed in Linear; its immutable evidence preserves the historical RFA-01 authorization capture.
 
-RFA-02 is the sole currently graph-unblocked and product-authorized issue and remains Backlog until the parent performs the Linear transition.
+RFA-02 is In Progress and remains the sole currently graph-unblocked and product-authorized issue; no product mutation has yet been performed.
 
 ## DAG
 
@@ -119,17 +119,25 @@ Paths:
 - `packages/schema`
 - `backend/data`
 - `scripts/e2e-reader-first-continuity.mjs`
+- `backend/internal/contentir/schema`
+- `backend/internal/pipeline`
+- `scripts/generate-contract-types-templates.mjs`
+- `packages/sdk-py/src/voice_studio_sdk/schema_files`
+- `fixtures/contracts/schema-snapshots`
+- `docs/contracts/schema-bundle.v1.json`
 
 Symbols/contracts:
 - `ReaderWorkspaceSnapshot`
 - `GET/PUT project reader-workspace`
 - `snapshot v0-to-v1 migrator`
+- `canonical ReaderWorkspaceSnapshot schema generation`
+- `minimum server-derived source-revision/run-compatibility read projection`
 
 ### Non-goals
 
-- No audio delivery changes
+- No audio delivery or generation behavior changes
 - No automatic playback on restore
-- No browser-authoritative fallback
+- No browser-provided compatibility or browser authority
 
 ### Acceptance and evidence
 

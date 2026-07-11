@@ -1,6 +1,6 @@
 {
   "schemaVersion": "tts-research.reader-first-linear-batch.v2",
-  "status": "peer_approved_rfa_01_completed_rfa_02_product_authorized",
+  "status": "peer_approved_rfa_01_completed_rfa_02_in_progress_product_authorized",
   "architectureContractPath": "docs/architecture/reader-first-release-contract-v2.json",
   "planPath": "docs/plans/2026-07-10-reader-first-release-reset.md",
   "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685",
@@ -21,7 +21,7 @@
     "authorizedIssues": ["RFA-02"]
   },
   "capacitySnapshot": {
-    "checkedAt": "2026-07-11T02:31:15Z",
+    "checkedAt": "2026-07-11T09:25:28Z",
     "activeUnarchived": 20,
     "cap": 20,
     "availableSlots": 0,
@@ -249,13 +249,14 @@
       "linearCreationAuthorized": true,
       "productImplementationAuthorized": true,
       "dependencyUnblocked": true,
-      "status": "graph_unblocked_authorized",
+      "status": "in_progress_product_authorized",
       "linear": {
         "id": "bcc7a896-6150-438d-9718-81c4dcf211fd",
         "identifier": "QQP-614",
         "url": "https://linear.app/niklas-olsson/issue/QQP-614/rfa-02-add-server-authoritative-project-restoration-snapshot-and",
-        "state": "Backlog",
-        "stateType": "backlog",
+        "state": "In Progress",
+        "stateType": "started",
+        "stateId": "8952b964-26ec-474c-838b-de6ecc3facb3",
         "priority": 3,
         "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
       },
@@ -265,18 +266,26 @@
           "backend/internal/httpapi",
           "packages/schema",
           "backend/data",
-          "scripts/e2e-reader-first-continuity.mjs"
+          "scripts/e2e-reader-first-continuity.mjs",
+          "backend/internal/contentir/schema",
+          "backend/internal/pipeline",
+          "scripts/generate-contract-types-templates.mjs",
+          "packages/sdk-py/src/voice_studio_sdk/schema_files",
+          "fixtures/contracts/schema-snapshots",
+          "docs/contracts/schema-bundle.v1.json"
         ],
         "symbols": [
           "ReaderWorkspaceSnapshot",
           "GET/PUT project reader-workspace",
-          "snapshot v0-to-v1 migrator"
+          "snapshot v0-to-v1 migrator",
+          "canonical ReaderWorkspaceSnapshot schema generation",
+          "minimum server-derived source-revision/run-compatibility read projection"
         ]
       },
       "nonGoals": [
-        "No audio delivery changes",
+        "No audio delivery or generation behavior changes",
         "No automatic playback on restore",
-        "No browser-authoritative fallback"
+        "No browser-provided compatibility or browser authority"
       ],
       "verificationCommands": [
         "cd backend && go test ./internal/httpapi -run 'Snapshot|Workspace|Restore|Revision'",
@@ -2393,13 +2402,17 @@
   "linearTargetEvidence": null,
   "liveLinearManifest": {
     "path": "docs/project-management/linear/tts-research-reader-first-release-batch.manifest.json",
-    "sha256": "f9aa05aa04221f34bea1e0b3a0b0f7c0c6b4ce8c7fc26d1b948435ac5c29608b",
+    "sha256": "54b00631d390e4ba504708191f6ccf4b4f2bce04974fe27fd3e5cef339c1595a",
     "issueCount": 20,
     "relationCount": 65,
-    "verifiedAt": "2026-07-11T02:31:15Z"
+    "verifiedAt": "2026-07-11T09:25:28Z"
   },
   "parentAuthorization": {
     "path": "docs/reviews/reader-first-rfa02-parent-authorization.json",
     "sha256": "41fa61517142af7c1ad5d2e9204aaaa4fa7c3020d21443df311a4532a329d265"
+  },
+  "currentExecutionAuthorization": {
+    "path": "docs/reviews/reader-first-rfa02-start-scope-authorization.json",
+    "sha256": "14463389f0b9b686e194deaec3f7bb27616e32c2f09c48615259bf86748ea07c"
   }
 }

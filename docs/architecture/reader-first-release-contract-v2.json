@@ -1,6 +1,6 @@
 {
   "schemaVersion": "tts-research.reader-first-release-contract.v2",
-  "status": "peer_approved_rfa_01_completed_rfa_02_product_authorized",
+  "status": "peer_approved_rfa_01_completed_rfa_02_in_progress_product_authorized",
   "planPath": "docs/plans/2026-07-10-reader-first-release-reset.md",
   "ownerDecision": {
     "authority": "acting_product_owner",
@@ -685,13 +685,17 @@
   },
   "liveLinearManifest": {
     "path": "docs/project-management/linear/tts-research-reader-first-release-batch.manifest.json",
-    "sha256": "f9aa05aa04221f34bea1e0b3a0b0f7c0c6b4ce8c7fc26d1b948435ac5c29608b",
+    "sha256": "54b00631d390e4ba504708191f6ccf4b4f2bce04974fe27fd3e5cef339c1595a",
     "issueCount": 20,
     "relationCount": 65,
-    "verifiedAt": "2026-07-11T02:31:15Z"
+    "verifiedAt": "2026-07-11T09:25:28Z"
   },
   "parentAuthorization": {
     "path": "docs/reviews/reader-first-rfa02-parent-authorization.json",
     "sha256": "41fa61517142af7c1ad5d2e9204aaaa4fa7c3020d21443df311a4532a329d265"
+  },
+  "currentExecutionAuthorization": {
+    "path": "docs/reviews/reader-first-rfa02-start-scope-authorization.json",
+    "sha256": "14463389f0b9b686e194deaec3f7bb27616e32c2f09c48615259bf86748ea07c"
   }
 }

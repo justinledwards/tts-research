@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "tts-research.reader-first-rfa02-start-scope-authorization.v1",
+  "recordedAt": "2026-07-11T09:25:28Z",
+  "authority": "acting_product_owner_scope_expansion_and_execution_start",
+  "previousAuthorization": {
+    "path": "docs/reviews/reader-first-rfa02-parent-authorization.json",
+    "sha256": "41fa61517142af7c1ad5d2e9204aaaa4fa7c3020d21443df311a4532a329d265",
+    "authorizationCommit": "836cf2c8f4631e237543d234fea339a659828529"
+  },
+  "liveLinearManifest": {
+    "path": "docs/project-management/linear/tts-research-reader-first-release-batch.manifest.json",
+    "sha256": "54b00631d390e4ba504708191f6ccf4b4f2bce04974fe27fd3e5cef339c1595a",
+    "verifiedAt": "2026-07-11T09:25:28Z",
+    "completedDependency": {
+      "localId": "RFA-01",
+      "linearIdentifier": "QQP-613",
+      "linearState": "Done",
+      "linearStateType": "completed"
+    },
+    "startedIssue": {
+      "localId": "RFA-02",
+      "linearIdentifier": "QQP-614",
+      "linearState": "In Progress",
+      "linearStateType": "started",
+      "linearStateId": "8952b964-26ec-474c-838b-de6ecc3facb3"
+    }
+  },
+  "productOwnerDecision": {
+    "commentUrl": "https://linear.app/niklas-olsson/issue/QQP-614/rfa-02-add-server-authoritative-project-restoration-snapshot-and#comment-87c70bed",
+    "decision": "approve_exact_rfa02_scope_expansion_and_execution_start",
+    "productMutationPerformed": false
+  },
+  "authorizedScope": {
+    "localId": "RFA-02",
+    "paths": [
+      "backend/internal/httpapi",
+      "packages/schema",
+      "backend/data",
+      "scripts/e2e-reader-first-continuity.mjs",
+      "backend/internal/contentir/schema",
+      "backend/internal/pipeline",
+      "scripts/generate-contract-types-templates.mjs",
+      "packages/sdk-py/src/voice_studio_sdk/schema_files",
+      "fixtures/contracts/schema-snapshots",
+      "docs/contracts/schema-bundle.v1.json"
+    ],
+    "symbols": [
+      "ReaderWorkspaceSnapshot",
+      "GET/PUT project reader-workspace",
+      "snapshot v0-to-v1 migrator",
+      "canonical ReaderWorkspaceSnapshot schema generation",
+      "minimum server-derived source-revision/run-compatibility read projection"
+    ],
+    "nonGoals": [
+      "No audio delivery or generation behavior changes",
+      "No automatic playback on restore",
+      "No browser-provided compatibility or browser authority"
+    ]
+  },
+  "currentAuthorization": {
+    "ownerAccepted": true,
+    "peerApproved": true,
+    "linearCreationAuthorized": true,
+    "productImplementationAuthorized": true,
+    "graphUnblockedIssues": ["RFA-02"],
+    "authorizedIssues": ["RFA-02"]
+  },
+  "blockedUnauthorizedIssues": [
+    "RFA-03",
+    "RFA-04",
+    "RFA-05",
+    "RFA-06",
+    "RFA-07",
+    "RFA-08",
+    "RFA-09",
+    "RFA-10",
+    "RFA-11",
+    "RFA-12",
+    "RFA-13",
+    "RFA-14",
+    "RFA-15",
+    "RFA-16",
+    "RFA-17",
+    "RFA-18",
+    "RFA-19",
+    "RFA-20"
+  ],
+  "productMutationPerformed": false
+}

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "tts-research.reader-first-linear-live.v1",
-  "verifiedAt": "2026-07-11T02:31:15Z",
+  "verifiedAt": "2026-07-11T09:25:28Z",
   "project": {
     "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
     "name": "TTS-Research",
@@ -69,8 +69,9 @@
       "identifier": "QQP-614",
       "title": "[RFA-02] Add server-authoritative project restoration snapshot and durable paused progress",
       "url": "https://linear.app/niklas-olsson/issue/QQP-614/rfa-02-add-server-authoritative-project-restoration-snapshot-and",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "In Progress",
+      "stateType": "started",
+      "stateId": "8952b964-26ec-474c-838b-de6ecc3facb3",
       "priority": 3
     },
     {

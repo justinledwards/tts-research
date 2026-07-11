@@ -19,6 +19,8 @@ export const LIVE_MANIFEST_PATH =
   "docs/project-management/linear/tts-research-reader-first-release-batch.manifest.json";
 export const PARENT_AUTHORIZATION_PATH =
   "docs/reviews/reader-first-rfa02-parent-authorization.json";
+export const RFA_02_START_AUTHORIZATION_PATH =
+  "docs/reviews/reader-first-rfa02-start-scope-authorization.json";
 export const RFA_01_VERIFICATION_PATH = "docs/evidence/reader-first/RFA-01/verification.json";
 export const RFA_01_ROLLBACK_PATH = "docs/evidence/reader-first/RFA-01/rollback.json";
 const VALIDATOR_PATH = "scripts/validate-reader-first-release.mjs";
@@ -27,14 +29,14 @@ export const ISSUE_IDS = Array.from(
   (_, index) => `RFA-${String(index + 1).padStart(2, "0")}`,
 );
 
-const EXPECTED_CONTRACT_SHA256 = "7f632658ef426616d19c31065cea72f30ed06a0c8bd1d85eceb8789a8b316d1f";
+const EXPECTED_CONTRACT_SHA256 = "f7fd41ae66e7b68fdc8e2af75a8061dbccbf05a974a70605ba4eebdac82e27c7";
 const EXPECTED_CONTRACT_CANONICAL_SHA256 =
-  "b813ce3656952525762e927ed9f6ba7892d4ce67aadc66569f0b5bcdf736822a";
-const EXPECTED_PACKET_SHA256 = "234ad45d0e0481bba1eed13bd5f5866a1d63f84bd21ab493b7c87760b07d8f0e";
+  "80b161f49ce2ae97bc4a8b49bd603ad1eaefe1844b16cdb59aa42ecd652ffefe";
+const EXPECTED_PACKET_SHA256 = "54155e7c1aebd54310dc484b28eaa1f1002c7764e8ed8977d6a7b822eb045c6c";
 const EXPECTED_PACKET_CANONICAL_SHA256 =
-  "72e35be7c7dc52cb4ec48bdf6148b10401b0778c430d8f7f74ffb5bff29aacfe";
-const EXPECTED_MARKDOWN_SHA256 = "32b7a2b3d567c3b67144cb67f6fd1712716ced54786b2d49a35e024f789d309a";
-const EXPECTED_STATUS = "peer_approved_rfa_01_completed_rfa_02_product_authorized";
+  "cf46cbc248ef0938e0d4fc09a532a7a3b7998887acfd7ae96e9f0ccb81508705";
+const EXPECTED_MARKDOWN_SHA256 = "e22d928bb4b88e89ca80fb7a89791196b1a02c57a2613ccd4ed361bcd1e97066";
+const EXPECTED_STATUS = "peer_approved_rfa_01_completed_rfa_02_in_progress_product_authorized";
 const EXPECTED_AUTHORIZATION = {
   ownerAccepted: true,
   peerApproved: true,
@@ -61,7 +63,37 @@ const HISTORICAL_RFA_01_AUTHORIZATION = {
 const EXPECTED_PARENT_AUTHORIZATION_SHA256 =
   "41fa61517142af7c1ad5d2e9204aaaa4fa7c3020d21443df311a4532a329d265";
 const EXPECTED_LIVE_MANIFEST_SHA256 =
-  "f9aa05aa04221f34bea1e0b3a0b0f7c0c6b4ce8c7fc26d1b948435ac5c29608b";
+  "54b00631d390e4ba504708191f6ccf4b4f2bce04974fe27fd3e5cef339c1595a";
+const EXPECTED_RFA_02_START_AUTHORIZATION_SHA256 =
+  "14463389f0b9b686e194deaec3f7bb27616e32c2f09c48615259bf86748ea07c";
+const RFA_02_AUTHORIZATION_COMMIT = "836cf2c8f4631e237543d234fea339a659828529";
+const RFA_02_PO_COMMENT_URL =
+  "https://linear.app/niklas-olsson/issue/QQP-614/rfa-02-add-server-authoritative-project-restoration-snapshot-and#comment-87c70bed";
+const RFA_02_STARTED_STATE_ID = "8952b964-26ec-474c-838b-de6ecc3facb3";
+const EXPECTED_RFA_02_SCOPE_PATHS = [
+  "backend/internal/httpapi",
+  "packages/schema",
+  "backend/data",
+  "scripts/e2e-reader-first-continuity.mjs",
+  "backend/internal/contentir/schema",
+  "backend/internal/pipeline",
+  "scripts/generate-contract-types-templates.mjs",
+  "packages/sdk-py/src/voice_studio_sdk/schema_files",
+  "fixtures/contracts/schema-snapshots",
+  "docs/contracts/schema-bundle.v1.json",
+];
+const EXPECTED_RFA_02_SCOPE_SYMBOLS = [
+  "ReaderWorkspaceSnapshot",
+  "GET/PUT project reader-workspace",
+  "snapshot v0-to-v1 migrator",
+  "canonical ReaderWorkspaceSnapshot schema generation",
+  "minimum server-derived source-revision/run-compatibility read projection",
+];
+const EXPECTED_RFA_02_NON_GOALS = [
+  "No audio delivery or generation behavior changes",
+  "No automatic playback on restore",
+  "No browser-provided compatibility or browser authority",
+];
 const RFA_01_COMPLETION_COMMIT = "44aa1ad0640aad8c9c18014346a6923189228b41";
 const EVIDENCE_SCHEMA_VERSION = "tts-research.reader-first-evidence-manifest.v1";
 const EVIDENCE_SEMANTICS = "static_attestation_of_recorded_execution";
@@ -315,6 +347,7 @@ const EVIDENCE_BINDINGS = [
   ],
   [LIVE_MANIFEST_PATH, EXPECTED_LIVE_MANIFEST_SHA256],
   [PARENT_AUTHORIZATION_PATH, EXPECTED_PARENT_AUTHORIZATION_SHA256],
+  [RFA_02_START_AUTHORIZATION_PATH, EXPECTED_RFA_02_START_AUTHORIZATION_SHA256],
 ];
 
 export function invariant(condition, message) {
@@ -368,7 +401,7 @@ function commandScripts(commands) {
   return commands.flatMap((command) => command.match(/scripts\/[a-z0-9-]+\.mjs/g) ?? []);
 }
 
-export function validateParentAuthorization(record, manifest) {
+export function validateParentAuthorization(record) {
   invariant(
     record?.schemaVersion === "tts-research.reader-first-parent-authorization.v1" &&
       record.recordedAt === "2026-07-11T02:31:15Z" &&
@@ -390,22 +423,17 @@ export function validateParentAuthorization(record, manifest) {
   );
   invariant(
     record.liveLinearManifest?.path === LIVE_MANIFEST_PATH &&
-      record.liveLinearManifest?.sha256 === EXPECTED_LIVE_MANIFEST_SHA256 &&
-      record.liveLinearManifest?.verifiedAt === manifest?.verifiedAt &&
-      manifest?.verifiedAt === "2026-07-11T02:31:15Z",
-    "RFA-02 parent authorization live Linear binding drift",
+      record.liveLinearManifest?.sha256 ===
+        "f9aa05aa04221f34bea1e0b3a0b0f7c0c6b4ce8c7fc26d1b948435ac5c29608b" &&
+      record.liveLinearManifest?.verifiedAt === "2026-07-11T02:31:15Z",
+    "RFA-02 historical parent authorization live Linear binding drift",
   );
-  const rfa01 = manifest?.issues?.find(({ localId }) => localId === "RFA-01");
-  const rfa02 = manifest?.issues?.find(({ localId }) => localId === "RFA-02");
   invariant(
     record.completedDependency?.localId === "RFA-01" &&
       record.completedDependency?.linearIdentifier === "QQP-613" &&
       record.completedDependency?.linearState === "Done" &&
       record.completedDependency?.linearStateType === "completed" &&
-      record.completedDependency?.completionCommit === RFA_01_COMPLETION_COMMIT &&
-      rfa01?.identifier === "QQP-613" &&
-      rfa01?.state === "Done" &&
-      rfa01?.stateType === "completed",
+      record.completedDependency?.completionCommit === RFA_01_COMPLETION_COMMIT,
     "RFA-01 completion fact or commit binding drift",
   );
   invariant(
@@ -439,19 +467,86 @@ export function validateParentAuthorization(record, manifest) {
       ]) &&
       record.authorizedCandidate?.dependencyClosureSatisfied === true &&
       record.authorizedCandidate?.productImplementationAuthorized === true &&
-      record.authorizedCandidate?.linearTransitionPerformed === false &&
-      rfa02?.identifier === "QQP-614" &&
-      rfa02?.state === "Backlog" &&
-      rfa02?.stateType === "backlog",
-    "RFA-02 authorization, dependency closure, or Backlog fact drift",
+      record.authorizedCandidate?.linearTransitionPerformed === false,
+    "RFA-02 historical authorization, dependency closure, or Backlog fact drift",
   );
   invariant(
     same(record.currentAuthorization, EXPECTED_AUTHORIZATION) &&
       same(record.blockedUnauthorizedIssues, ISSUE_IDS.slice(2)) &&
       record.linearMutationPerformed === false &&
+      record.productMutationPerformed === false,
+    "historical sole RFA-02 authorization drift",
+  );
+}
+
+export function validateRfa02StartAuthorization(record, manifest, packet) {
+  const rfa01 = manifest?.issues?.find(({ localId }) => localId === "RFA-01");
+  const rfa02 = manifest?.issues?.find(({ localId }) => localId === "RFA-02");
+  const packetRfa02 = packet?.issues?.find(({ localId }) => localId === "RFA-02");
+  invariant(
+    record?.schemaVersion === "tts-research.reader-first-rfa02-start-scope-authorization.v1" &&
+      record.recordedAt === "2026-07-11T09:25:28Z" &&
+      record.authority === "acting_product_owner_scope_expansion_and_execution_start",
+    "RFA-02 current execution authorization identity drift",
+  );
+  invariant(
+    same(record.previousAuthorization, {
+      path: PARENT_AUTHORIZATION_PATH,
+      sha256: EXPECTED_PARENT_AUTHORIZATION_SHA256,
+      authorizationCommit: RFA_02_AUTHORIZATION_COMMIT,
+    }),
+    "RFA-02 previous authorization commit/hash binding drift",
+  );
+  invariant(
+    record.liveLinearManifest?.path === LIVE_MANIFEST_PATH &&
+      record.liveLinearManifest?.sha256 === EXPECTED_LIVE_MANIFEST_SHA256 &&
+      record.liveLinearManifest?.verifiedAt === manifest?.verifiedAt &&
+      manifest?.verifiedAt === "2026-07-11T09:25:28Z" &&
+      rfa01?.identifier === "QQP-613" &&
+      rfa01?.state === "Done" &&
+      rfa01?.stateType === "completed" &&
+      rfa02?.identifier === "QQP-614" &&
+      rfa02?.state === "In Progress" &&
+      rfa02?.stateType === "started" &&
+      rfa02?.stateId === RFA_02_STARTED_STATE_ID &&
+      same(record.liveLinearManifest.completedDependency, {
+        localId: "RFA-01",
+        linearIdentifier: "QQP-613",
+        linearState: "Done",
+        linearStateType: "completed",
+      }) &&
+      same(record.liveLinearManifest.startedIssue, {
+        localId: "RFA-02",
+        linearIdentifier: "QQP-614",
+        linearState: "In Progress",
+        linearStateType: "started",
+        linearStateId: RFA_02_STARTED_STATE_ID,
+      }),
+    "RFA-02 current In Progress live Linear binding drift",
+  );
+  invariant(
+    record.productOwnerDecision?.commentUrl === RFA_02_PO_COMMENT_URL &&
+      record.productOwnerDecision?.decision ===
+        "approve_exact_rfa02_scope_expansion_and_execution_start" &&
+      record.productOwnerDecision?.productMutationPerformed === false,
+    "RFA-02 PO comment/start decision binding drift",
+  );
+  invariant(
+    record.authorizedScope?.localId === "RFA-02" &&
+      same(record.authorizedScope?.paths, EXPECTED_RFA_02_SCOPE_PATHS) &&
+      same(record.authorizedScope?.symbols, EXPECTED_RFA_02_SCOPE_SYMBOLS) &&
+      same(record.authorizedScope?.nonGoals, EXPECTED_RFA_02_NON_GOALS) &&
+      same(packetRfa02?.inScope?.paths, EXPECTED_RFA_02_SCOPE_PATHS) &&
+      same(packetRfa02?.inScope?.symbols, EXPECTED_RFA_02_SCOPE_SYMBOLS) &&
+      same(packetRfa02?.nonGoals, EXPECTED_RFA_02_NON_GOALS),
+    "RFA-02 exact authorized scope path/symbol/non-goal drift",
+  );
+  invariant(
+    same(record.currentAuthorization, EXPECTED_AUTHORIZATION) &&
+      same(record.blockedUnauthorizedIssues, ISSUE_IDS.slice(2)) &&
       record.productMutationPerformed === false &&
       same(manifest.authorization, EXPECTED_AUTHORIZATION),
-    "sole current RFA-02 authorization drift",
+    "sole current RFA-02 execution authorization drift",
   );
 }
 
@@ -865,7 +960,7 @@ export function validateReaderFirstRelease(contract, packet) {
       contract.liveLinearManifest?.sha256 === EVIDENCE_BINDINGS[23][1] &&
       contract.liveLinearManifest?.issueCount === 20 &&
       contract.liveLinearManifest?.relationCount === 65 &&
-      contract.liveLinearManifest?.verifiedAt === "2026-07-11T02:31:15Z",
+      contract.liveLinearManifest?.verifiedAt === "2026-07-11T09:25:28Z",
     "live Linear manifest binding drift",
   );
   invariant(
@@ -874,6 +969,13 @@ export function validateReaderFirstRelease(contract, packet) {
       sha256: EXPECTED_PARENT_AUTHORIZATION_SHA256,
     }),
     "RFA-02 parent authorization binding drift",
+  );
+  invariant(
+    same(contract.currentExecutionAuthorization, {
+      path: RFA_02_START_AUTHORIZATION_PATH,
+      sha256: EXPECTED_RFA_02_START_AUTHORIZATION_SHA256,
+    }),
+    "RFA-02 current execution authorization binding drift",
   );
 
   invariant(
@@ -898,7 +1000,8 @@ export function validateReaderFirstRelease(contract, packet) {
       same(packet.auditEvidence, contract.auditEvidence) &&
       same(packet.peerReviewHistory, contract.peerReviewHistory) &&
       same(packet.liveLinearManifest, contract.liveLinearManifest) &&
-      same(packet.parentAuthorization, contract.parentAuthorization),
+      same(packet.parentAuthorization, contract.parentAuthorization) &&
+      same(packet.currentExecutionAuthorization, contract.currentExecutionAuthorization),
     "packet contract evidence/authorization mirror drift",
   );
   invariant(
@@ -939,6 +1042,12 @@ export function validateReaderFirstRelease(contract, packet) {
   );
 
   const byId = new Map(packet.issues.map((issue) => [issue.localId, issue]));
+  invariant(
+    same(byId.get("RFA-02")?.inScope?.paths, EXPECTED_RFA_02_SCOPE_PATHS) &&
+      same(byId.get("RFA-02")?.inScope?.symbols, EXPECTED_RFA_02_SCOPE_SYMBOLS) &&
+      same(byId.get("RFA-02")?.nonGoals, EXPECTED_RFA_02_NON_GOALS),
+    "RFA-02 exact authorized scope path/symbol/non-goal drift",
+  );
   const requiredSourceScopes = {
     "RFA-09": {
       paths: ["frontend/src/api.ts"],
@@ -1130,8 +1239,9 @@ export function validateReaderFirstRelease(contract, packet) {
         issue.linearCreationAuthorized === true &&
         issue.productImplementationAuthorized === unblocked &&
         issue.linear?.identifier === `QQP-${linearNumber}` &&
-        issue.linear?.state === (completed ? "Done" : "Backlog") &&
-        issue.linear?.stateType === (completed ? "completed" : "backlog") &&
+        issue.linear?.state === (completed ? "Done" : unblocked ? "In Progress" : "Backlog") &&
+        issue.linear?.stateType === (completed ? "completed" : unblocked ? "started" : "backlog") &&
+        (unblocked ? issue.linear?.stateId === RFA_02_STARTED_STATE_ID : true) &&
         issue.linear?.priority === 3 &&
         issue.linear?.projectId === "010252d0-b34c-473d-82f2-05bc4d7bc685" &&
         typeof issue.linear?.id === "string" &&
@@ -1145,7 +1255,7 @@ export function validateReaderFirstRelease(contract, packet) {
           (completed
             ? "completed_linear_done"
             : unblocked
-              ? "graph_unblocked_authorized"
+              ? "in_progress_product_authorized"
               : "dependency_blocked_linear_created"),
       `${prefix}: graph/status drift`,
     );
@@ -1421,7 +1531,7 @@ export function renderPacketMarkdown(packet) {
     "",
     "RFA-01 is completed in Linear; its immutable evidence preserves the historical RFA-01 authorization capture.",
     "",
-    "RFA-02 is the sole currently graph-unblocked and product-authorized issue and remains Backlog until the parent performs the Linear transition.",
+    "RFA-02 is In Progress and remains the sole currently graph-unblocked and product-authorized issue; no product mutation has yet been performed.",
     "",
     "## DAG",
     "",
@@ -2062,18 +2172,27 @@ async function runValidationCore({
   write = false,
   validateEvidence = true,
 } = {}) {
-  const [contractText, packetText, validatorBytes, parentAuthorizationText, manifestText] =
-    await Promise.all([
-      readFile(path.join(root, CONTRACT_PATH), "utf8"),
-      readFile(path.join(root, PACKET_PATH), "utf8"),
-      readFile(path.join(root, VALIDATOR_PATH)),
-      readFile(path.join(root, PARENT_AUTHORIZATION_PATH), "utf8"),
-      readFile(path.join(root, LIVE_MANIFEST_PATH), "utf8"),
-    ]);
+  const [
+    contractText,
+    packetText,
+    validatorBytes,
+    parentAuthorizationText,
+    startAuthorizationText,
+    manifestText,
+  ] = await Promise.all([
+    readFile(path.join(root, CONTRACT_PATH), "utf8"),
+    readFile(path.join(root, PACKET_PATH), "utf8"),
+    readFile(path.join(root, VALIDATOR_PATH)),
+    readFile(path.join(root, PARENT_AUTHORIZATION_PATH), "utf8"),
+    readFile(path.join(root, RFA_02_START_AUTHORIZATION_PATH), "utf8"),
+    readFile(path.join(root, LIVE_MANIFEST_PATH), "utf8"),
+  ]);
   const contract = JSON.parse(contractText);
   const packet = JSON.parse(packetText);
+  const manifest = JSON.parse(manifestText);
   validateReaderFirstRelease(contract, packet);
-  validateParentAuthorization(JSON.parse(parentAuthorizationText), JSON.parse(manifestText));
+  validateParentAuthorization(JSON.parse(parentAuthorizationText));
+  validateRfa02StartAuthorization(JSON.parse(startAuthorizationText), manifest, packet);
   const negativeFixtures = validateNegativeFixtures(contract, packet);
   invariant(sha256(contractText) === EXPECTED_CONTRACT_SHA256, "contract file-byte SHA-256 drift");
   invariant(sha256(packetText) === EXPECTED_PACKET_SHA256, "packet file-byte SHA-256 drift");
@@ -2189,6 +2308,10 @@ function archiveFields() {
 }
 
 export async function captureRfa01Evidence({ root = process.cwd() } = {}) {
+  throw new Error(
+    `RFA-01 evidence is immutable historical evidence; --capture-rfa01-evidence is disabled and will not write ${RFA_01_VERIFICATION_PATH} or ${RFA_01_ROLLBACK_PATH}`,
+  );
+  // biome-ignore lint/correctness/noUnreachable: retained only as non-executable historical producer provenance.
   const captureStartedAt = new Date().toISOString();
   const [validatorBytes, packetText, approvalText, gitResult] = await Promise.all([
     readFile(path.join(root, VALIDATOR_PATH)),
