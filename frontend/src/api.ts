@@ -1,73 +1,75 @@
 import type {
-  BookSource,
-  BookSourceImportOptions,
-  BookCinemaDiagnostics,
-  BookScope,
-  BookSourceScopeContent,
+  LocatorEnvelope,
+  ReadalongManifest,
+  ReadingUnitManifest,
+  SourceEnvelope,
+  SourceRevision,
+} from "@tts-research/schema";
+import {
+  normalizePreparedSource,
+  normalizeVoiceProfileCandidate,
+  normalizeVoiceProfileSource,
+} from "./apiNormalizationHelpers";
+import type { ContentIRDocument, ContentIRSchemaVersion, SpeechPlanDocument } from "./content-ir";
+import type { HighlightMapV2 } from "./features/readalong";
+import type {
   AdapterCapability,
   AdapterDiagnostics,
+  AlignmentQualityReport,
+  BookCinemaDiagnostics,
+  BookScope,
+  BookSource,
+  BookSourceImportOptions,
+  BookSourceScopeContent,
   BundleImportMode,
   CreatePreparedSourceRequest,
   CreateTemporarySourceRequest,
-  LexiconUpsertRequest,
-  CreateVoiceProfileFromCandidateRequest,
   CreateVoiceJobRequest,
+  CreateVoiceProfileFromCandidateRequest,
   CreateVoiceProfileRequest,
   CreateVoiceProfileSourceRequest,
   FragmentTimingArtifact,
-  AlignmentQualityReport,
   HighlightMap,
+  LexiconUpsertRequest,
   MarkdownParseMode,
   MathPreviewResult,
   PlaybackProgress,
   PlaybackProgressUpdate,
   PlaybackSession,
   PreparedSource,
-  ProjectSpeechPolicy,
-  PronunciationLexicon,
   ProjectBundleImportResult,
   ProjectBundlePreview,
   ProjectBundleSummary,
+  ProjectSpeechPolicy,
   ProjectStorageSummary,
+  PronunciationLexicon,
   RenameAssetRequest,
   ResearchModuleDiagnostics,
+  SourceReadinessConfirmationRequest,
+  SourceSpeechPolicyUpdateRequest,
   SpeechPolicyDefinition,
   SpeechPolicyOverrides,
   SpeechPolicyProfile,
-  SourceReadinessConfirmationRequest,
-  SourceSpeechPolicyUpdateRequest,
-  UpsertSpeechPolicyProfileRequest,
   SystemMetrics,
-  TemporarySourcePromotionRequest,
   TemporarySourceCleanupRequest,
   TemporarySourceCleanupResult,
   TemporarySourceEnvelope,
+  TemporarySourcePromotionRequest,
   TemporarySourceSession,
   TemporaryStorageUsageSummary,
   TokenTimingArtifact,
   TTSEngineDiagnostics,
+  UpsertSpeechPolicyProfileRequest,
   Voice,
   VoiceJob,
-  VoiceProfileCredentialStatus,
   VoiceProfile,
   VoiceProfileCandidate,
+  VoiceProfileCredentialStatus,
   VoiceProfileSource,
   VoiceProfileSourceDiagnostics,
   VoiceProject,
 } from "./types";
-import type {
-  ReadalongManifest,
-  ReadingUnitManifest,
-  SourceEnvelope,
-  SourceRevision,
-} from "@tts-research/schema";
-import type { ContentIRDocument, ContentIRSchemaVersion, SpeechPlanDocument } from "./content-ir";
-import type { HighlightMapV2 } from "./features/readalong";
-import {
-  normalizePreparedSource,
-  normalizeVoiceProfileCandidate,
-  normalizeVoiceProfileSource,
-} from "./apiNormalizationHelpers";
+
 export {
   normalizePreparedSource,
   normalizeVoiceProfileCandidate,
@@ -115,6 +117,108 @@ export function isApiNotFoundError(error: unknown): boolean {
     return (error as { status?: unknown }).status === 404;
   }
   return error instanceof Error && /\b404\b/.test(error.message);
+}
+
+export type ReaderWorkspaceSyncFidelity =
+  | "exact_word"
+  | "phrase"
+  | "block"
+  | "audio_only"
+  | "source_only"
+  | "none";
+
+export interface ReaderWorkspaceSnapshot {
+  readonly schemaVersion: "reader_workspace_snapshot.v1";
+  readonly projectId: string;
+  readonly projectRevision: number;
+  readonly readMode: "paused" | "readable";
+  readonly sourceId: string;
+  readonly sourceRevisionId: string;
+  readonly sourceContentHash: string;
+  readonly runId: string | null;
+  readonly runCompatibilityKey: string | null;
+  readonly mediaManifestVersion: number | null;
+  readonly timingRevision: number | null;
+  readonly syncFidelity: ReaderWorkspaceSyncFidelity | null;
+  readonly readerLocator: LocatorEnvelope | null;
+  readonly playbackCursorMs: number | null;
+  readonly playbackRate: number | null;
+  readonly followPreference: boolean | null;
+  readonly updatedAt: string;
+}
+
+export interface ReaderWorkspaceVersionedSnapshot {
+  readonly snapshot: ReaderWorkspaceSnapshot;
+  readonly etag: string;
+}
+
+export class ReaderWorkspacePreconditionError extends ApiRequestError {
+  readonly current: ReaderWorkspaceSnapshot;
+  readonly etag: string;
+
+  constructor(message: string, current: ReaderWorkspaceSnapshot, etag: string) {
+    super(412, message);
+    this.name = "ReaderWorkspacePreconditionError";
+    this.current = current;
+    this.etag = etag;
+  }
+}
+
+export async function getReaderWorkspace(
+  projectId: string,
+): Promise<ReaderWorkspaceVersionedSnapshot> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/projects/${encodeURIComponent(projectId)}/reader-workspace`,
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return {
+    snapshot: (await response.json()) as ReaderWorkspaceSnapshot,
+    etag: requiredReaderWorkspaceETag(response),
+  };
+}
+
+export async function putReaderWorkspace(
+  projectId: string,
+  snapshot: ReaderWorkspaceSnapshot,
+  etag: string,
+): Promise<ReaderWorkspaceVersionedSnapshot> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/projects/${encodeURIComponent(projectId)}/reader-workspace`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "If-Match": etag },
+      body: JSON.stringify(snapshot),
+    },
+  );
+  if (response.status === 412) {
+    const payload = (await response.json()) as {
+      current: ReaderWorkspaceSnapshot;
+      error?: string;
+      retryToken?: string;
+    };
+    throw new ReaderWorkspacePreconditionError(
+      payload.error ?? "Reader workspace changed on the server",
+      payload.current,
+      requiredReaderWorkspaceETag(response, payload.retryToken),
+    );
+  }
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return {
+    snapshot: (await response.json()) as ReaderWorkspaceSnapshot,
+    etag: requiredReaderWorkspaceETag(response),
+  };
+}
+
+function requiredReaderWorkspaceETag(response: Response, fallback?: string): string {
+  const etag = response.headers.get("ETag")?.trim() ?? fallback?.trim();
+  if (!etag) {
+    throw new ApiRequestError(response.status, "Reader workspace response is missing ETag");
+  }
+  return etag;
 }
 
 export type SourceManifestEventType =

@@ -1,7 +1,11 @@
 import {
-  Suspense,
+  type CSSProperties,
+  type Dispatch,
   lazy,
   memo,
+  type ReactNode,
+  type SetStateAction,
+  Suspense,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -9,40 +13,33 @@ import {
   useRef,
   useState,
   useTransition,
-  type CSSProperties,
-  type Dispatch,
-  type ReactNode,
-  type SetStateAction,
 } from "react";
 import { type StudioMode, TopProductBar } from "./AppShell";
-import type {
-  BundleOperationActivity,
-  BundleOperationReport,
-  BundlePanelMode,
-} from "./BundlePanels";
+import type { ActivityFooterMode } from "./activityFooter";
 import {
-  apiBaseUrl,
   ApiRequestError,
+  apiBaseUrl,
   audioSource,
+  buildVoiceProfileArtifact,
   cancelVoiceJob,
   cancelVoiceProfileSource,
+  cancelVoiceProfileTarget,
   cleanupTemporarySource,
   clearExpiredTemporarySources,
+  clearHuggingFaceToken,
   clearTemporarySources,
-  cancelVoiceProfileTarget,
+  cloneResearchModule,
+  closePlaybackSession,
   confirmBookSourceReadiness,
   confirmPreparedSourceReadiness,
   confirmTemporarySourceReadiness,
-  clearHuggingFaceToken,
-  cloneResearchModule,
-  closePlaybackSession,
   createBookNarrationJob,
   createBookSource,
   createBookSourceFromUrl,
-  createProject,
   createCustomSpeechPolicyProfile,
   createPreparedSource,
   createPreparedSourceJob,
+  createProject,
   createTemporarySource,
   createTemporarySourceJob,
   createVoiceJob,
@@ -50,13 +47,13 @@ import {
   createVoiceProfileFromCandidate,
   createVoiceProfileSource,
   deleteBookSource,
-  deleteProject,
   deleteCustomSpeechPolicyProfile,
   deletePreparedSource,
+  deleteProject,
   deleteVoiceJob,
   deleteVoiceProfile,
-  getBookSourceScope,
   getAdapterDiagnostics,
+  getBookSourceScope,
   getContentIR,
   getHighlightMap,
   getHighlightMapV2,
@@ -68,50 +65,45 @@ import {
   getTemporarySource,
   getTemporaryStorageUsageSummary,
   getVoiceJob,
-  buildVoiceProfileArtifact,
   getVoiceProfileCredentials,
   getVoiceProfileSource,
   getVoiceProfileSourceDiagnostics,
   isApiNotFoundError,
   listPreparedSources,
   listProjectBookSources,
-  listTemporarySourceJobs,
-  listTemporarySources,
-  listProjectProgress,
-  listSpeechPolicyProfiles,
-  listTTSEngines,
   listProjectJobs,
+  listProjectProgress,
   listProjects,
   listResearchModules,
+  listSpeechPolicyProfiles,
+  listTemporarySourceJobs,
+  listTemporarySources,
+  listTTSEngines,
   listVoiceProfiles,
   previewBookSourceScopeSpeechPolicy,
-  previewPreparedSourceSpeechPolicy,
   previewContentIRSpeechPolicy,
+  previewPreparedSourceSpeechPolicy,
   promoteTemporarySource,
   queueVoiceProfileTarget,
-  reopenTemporarySource,
   refreshVoiceProfileCandidateTranscript,
   refreshVoiceProfileSourceTranscript,
   renameBookSource,
   renamePreparedSource,
   renameProject,
   renameVoiceProfile,
+  reopenTemporarySource,
   retryVoiceJob,
   saveHuggingFaceToken,
   startPlaybackSession,
   subscribeToVoiceJob,
   syncPlaybackSession,
   updateBookSourceSpeechPolicy,
-  updateProjectSpeechPolicy,
   updateCustomSpeechPolicyProfile,
   updatePlaybackProgress,
   updatePreparedSourceSpeechPolicy,
+  updateProjectSpeechPolicy,
   type VoicePreviewAudio,
 } from "./api";
-
-import { formatDuration } from "./format";
-import type { QuickListenMode } from "./features/quick-listen";
-import { formatPlaybackClock, playbackTimeLabels } from "./features/playback";
 import {
   activeWordIndexForProgress,
   estimateFirstAudioETA,
@@ -133,240 +125,61 @@ import {
 } from "./appHelpers";
 import {
   type ActivityStatus,
-  resolveVoiceCloningActivity,
-  type VoiceCloningActivitySummary,
   isVoiceProfileSourceActive,
   profileHasActiveTarget,
-  profileHasTargetAttention,
   profileHasReadyCloneTarget,
+  profileHasTargetAttention,
+  resolveVoiceCloningActivity,
+  type VoiceCloningActivitySummary,
   voiceCloningProgressRatio,
 } from "./appVoiceCloningHelpers";
+import { useAudioWaveformBars } from "./audioWaveform";
+import type {
+  BundleOperationActivity,
+  BundleOperationReport,
+  BundlePanelMode,
+} from "./BundlePanels";
+import type { ContentIRDocument } from "./content-ir";
 import {
-  DEFAULT_READER_ACCESSIBILITY_SETTINGS,
-  READER_ACCESSIBILITY_STORAGE_KEY,
-  normalizeReaderAccessibilitySettings,
-  type ReaderAccessibilitySettings,
-  bookSourceName,
+  Button,
+  type ButtonVariant,
+  compactHitTargetClassName,
+  cx,
+  minInteractiveSize,
+  Panel,
+  StatusChip,
+  type StatusChipTone,
+} from "./design";
+import { liveStatusMessages, useLiveStatus } from "./features/accessibility";
+import {
   bookScopeKey,
   bookScopeText,
+  bookSourceName,
+  DEFAULT_READER_ACCESSIBILITY_SETTINGS,
   normalizeBookScopeForBook,
+  normalizeReaderAccessibilitySettings,
+  READER_ACCESSIBILITY_STORAGE_KEY,
+  type ReaderAccessibilitySettings,
   resolveBookActiveWordIndex,
   resolveDefaultBookScope,
 } from "./features/book-cinema/model";
-import type {
-  MarkdownBlockHighlight,
-  MarkdownWordAnchors,
-  MarkdownWordCueState,
-} from "./MarkdownRenderer";
-import { looksLikeMermaidDiagram } from "./markdownModel";
-import { findKokoroVoicepack, kokoroVoicepackDetail, kokoroVoicepackLabel } from "./kokoroVoices";
+import type { CinemaFocusMode, CinemaSurfaceKind } from "./features/cinema";
 import {
-  applyKokoroRenderMode,
-  applySpeechPolicyToCreateVoiceJobRequest,
-  buildCreateVoiceJobRequest,
-  createRunConfiguration,
-  getRunModePreset,
-  isKokoroRenderEngine,
-  KOKORO_RENDER_MODE_OPTIONS,
-  kokoroEngineFamilyValue,
-  kokoroRenderModeForConfiguration,
-  normalizeRunConfiguration,
-  RUN_CONFIG_STORAGE_KEY,
-  type KokoroRenderMode,
-  type RunConfiguration,
-} from "./runConfig";
-import { RunPlannerSummaryPanel } from "./features/run-config/RunPlannerSummaryPanel";
+  preparedSourceCinemaActionLabel,
+  preparedSourceCinemaJobMatchesSource,
+  preparedSourceCinemaKind,
+} from "./features/cinema/preparedSourceModel";
+import type { CommandPaletteView } from "./features/command-palette/CommandPalette";
 import {
-  buildRunPlannerSummary,
-  compareRunPlannerSummaries,
-  runConfigurationFromVoiceJob,
-} from "./features/run-config/runConfigSteps";
-import {
-  ACTIVE_PROJECT_ID_STORAGE_KEY,
-  clearProjectWorkspaceState,
-  loadProjectWorkspaceState,
-  migrateLegacyWorkspaceState,
-  saveProjectWorkspaceState,
-} from "./projectState";
-import type { CommandCenterSectionId } from "./WorkspaceDrawerHelpers";
-import {
-  SUPERTONIC_LANGUAGE_CODES,
-  SUPERTONIC_LANGUAGE_OPTIONS,
-  SUPERTONIC_VOICE_STYLES,
-  supertonicLanguageLabel,
-} from "./supertonic";
-import {
-  DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS,
-  TELEPROMPTER_SETTINGS_STORAGE_KEY,
-  buildTeleprompterCue,
-  normalizeTeleprompterHighlightSettings,
-  pickTeleprompterWordIndex,
-  type TeleprompterCue,
-  type TeleprompterHighlightSettings,
-} from "./teleprompter";
-
-import {
-  readingPositionForHighlightCue,
-  resolveHighlightCue,
-  secondsForReadingPosition,
-} from "./highlightMap";
-import {
-  DEFAULT_THEME_NAME,
-  THEME_STORAGE_KEY,
-  VOICE_STUDIO_THEMES,
-  normalizeThemeName,
-} from "./theme";
-import type { ActivityFooterMode } from "./activityFooter";
-import {
-  RailMiniStack,
-  overlayDataAttributes,
-  railColumnWidth,
-  workspaceOverlayState,
-} from "./features/layout";
-import {
-  buildTemporaryReviewStateAdapter,
-  normalizeReviewPane,
-  normalizeReviewMode,
-  selectReviewBlockId,
-  type ReviewOpenFocusRequest,
-  type ReviewMode,
-  type ReviewPane,
-  type TemporaryReviewStateAdapter,
-} from "./features/review/model";
-import {
-  applyRevisionSessionState,
-  buildCanonicalPreviewSpeechPlan,
-  canonicalPreviewSpeechPlanHasBlocks,
-  composeReviewedSpeechText,
-  deriveRevisionBlockStatus,
-  normalizeRevisionPolicyNoteType,
-  REVISION_STATUS_LABELS,
-  revisionBlockIsSpeakable,
-  revisionTextIsStandaloneArtifactToken,
-  revisionTextLooksLikeReferenceCueLeak,
-  stripRevisionTrailingReferenceNumberText,
-  summarizeRevisionHealth,
-  type CanonicalPreviewSpeechPlan,
-  type RevisionBlock,
-  type RevisionHistoryEntry,
-  type RevisionStatus,
-  type RevisionTabId,
-} from "./features/revision";
-import {
-  submitBookNarrationJob as submitBookNarrationJobFromFeature,
-  submitPreparedSourceJob as submitPreparedSourceJobFromFeature,
-  submitVoiceJob as submitVoiceJobFromFeature,
-  type AssetNarrationGenerationOptions,
-  type SubmissionDependencies,
-} from "./features/revision/assetGenerationSubmission";
-import {
-  loadUiMemory,
-  rememberCinemaFocusState,
-  rememberReviewPane,
-  rememberTelepromptTheatreSettings,
-  rememberTelepromptReturnStage,
-  rememberWorkspaceCustomLayout,
-  rememberWorkspaceDisclosurePin,
-  rememberWorkspaceLayoutMode,
-  resetUiMemory,
-  resetWorkspaceUiMemory,
-  resolveCinemaFocusState,
-  resolveReviewPane,
-  resolveTelepromptTheatreSettings,
-  resolveTelepromptReturnStage,
-  resolveWorkspaceCustomLayout,
-  resolveWorkspaceDisclosurePins,
-  resolveWorkspaceLayoutMode,
-  saveUiMemory,
-  updateUiMemoryPreference,
-  type UiMemoryCinemaState,
-  type UiMemoryPreferenceId,
-  type UiMemoryState,
-} from "./features/preferences";
-import type { UiMemoryImportApplyResult } from "./features/ui-memory/UiMemoryPreferences";
-import type { UiMemoryResetScope } from "./features/ui-memory/uiMemoryModel";
-import type { HeaderContextSummaryProps } from "./features/header";
-import { liveStatusMessages, useLiveStatus } from "./features/accessibility";
-import { nextReaderPlaybackRate } from "./features/reader-accessibility";
-import {
-  DEFAULT_READ_ALONG_PREFERENCES,
-  clearReadAlongMotionCursor,
-  clearStoredReadAlongPreferences,
-  effectiveReadAlongPreferences,
-  loadReadAlongPreferences,
-  markReadAlongPerformance,
-  readAlongPreferenceDataAttributes,
-  registerReadAlongAudioElement,
-  saveReadAlongPreferences,
-  updateReadAlongMotionCursor,
-  type HighlightMapV2,
-  type ReadAlongCueRole,
-  type ReadAlongPreferences,
-  type ReadAlongWordRole,
-} from "./features/readalong";
-import { ReadingFollowAlongRenderer } from "./features/reading-surface";
-import {
-  normalizeTelepromptTheatreSettings,
-  type TelepromptTheatreSettings,
-} from "./features/teleprompt/telepromptTheatreSettings";
-import {
-  canQueueGeneratedAudioPlayback,
-  generatedAudioLifecycleFromJob,
-  generatedAudioLifecycleLabel,
-  type GeneratedAudioLifecycleState,
-} from "./features/playback/generatedAudioLifecycle";
-import {
-  findRestorableWorkbenchJob,
-  type WorkbenchAudioRestoreSource,
-} from "./features/playback/workbenchAudioRestore";
-import {
-  isAudioGenerationWorking,
-  resolveAudioGenerationPipelineModel,
-  type AudioGenerationPipelineModel,
-} from "./features/playback/audioGenerationPipeline";
-import {
-  audioReviewWarningCount,
-  audioReviewWarningReasons,
-  audioReviewWarningSummary,
-  audioReviewWarningTotal,
-} from "./features/playback/audioReviewWarnings";
-import {
-  providerCapabilityGate,
-  resolveProviderRuntimeCapabilities,
-} from "./features/provider-capabilities";
-import { providerRuntimeLeavesLocalBoundary } from "./features/provider-capabilities/providerCapabilityLite";
-import {
-  createAndListenAriaLabel,
-  workspacePlaybackActionDataAttributes,
-  type CreateAndListenScope,
-} from "./features/playback/workspacePlaybackActions";
-import {
-  previewPlayerVariantForSurface,
-  shouldShowGlobalPreviewPlayer,
-} from "./features/playback/playbackSurfaceRules";
-import {
-  resolvePreviewReadinessModel,
-  type PreviewReadinessModel,
-  type PreviewReadinessRow,
-} from "./features/preview/previewReadiness";
-import { resolvePreviewAudioCurrentness } from "./features/preview/previewAudioCurrentness";
-import {
-  PREVIEW_AUDITION_NOT_FOUND_MESSAGE,
-  PreviewGeneratedAudioPanel,
-  PreviewConfirmationStrip,
-  PreviewReadinessChecklist,
-  VoiceAuditionPanel,
-  type PreviewTemporaryVoiceOption,
-} from "./features/preview/PreviewReadinessPanels";
-import {
-  playbackActionAriaLabel,
-  playbackActionDataAttributes,
-  playbackActionDisabledReason,
-} from "./features/playback/playbackActionRules";
-import {
-  LocalizedPlaybackToolbar,
-  type LocalizedPlaybackToolbarModel,
-} from "./features/playback/LocalizedPlaybackToolbar";
+  buildCommandEntries,
+  buildCommandPaletteHandlers,
+  type CommandBookmarkData,
+  type CommandMetadataState,
+  type CommandRecentData,
+  type CommandWayfindingState,
+  loadCommandMetadata,
+} from "./features/command-palette/commandPaletteHelpers";
+import type { CommandEntry } from "./features/command-palette/commandRegistry";
 import type {
   ContextPanelDisplayState,
   InspectorFact,
@@ -378,42 +191,219 @@ import type {
   WorkspaceInspectorTarget,
   WorkspaceInspectorTemporaryModel,
 } from "./features/context-panel";
-import { useAudioWaveformBars } from "./audioWaveform";
+import type { DemoProject } from "./features/demo";
+import { demoVoiceLabel, demoVoices } from "./features/demo/demoVoices";
+import {
+  quickListenDisabledReason,
+  studioFeatureFlags,
+  temporaryCinemaDisabledReason,
+  temporaryPromotionDisabledReason,
+} from "./features/featureFlags";
+import type { HeaderContextSummaryProps } from "./features/header";
+import {
+  orderedKokoroVoicepacksForLanguage,
+  voiceProfileMatchesLanguage,
+} from "./features/i18n/languageVoiceMapping";
+import type { IntakePreparationTarget } from "./features/intake";
+import {
+  overlayDataAttributes,
+  RailMiniStack,
+  railColumnWidth,
+  workspaceOverlayState,
+} from "./features/layout";
+import type {
+  CinemaAdvancedCommandTarget,
+  HelpCommandTarget,
+  SettingsCommandTarget,
+} from "./features/navigation/commands";
+import {
+  LazyPanelFallback,
+  recordColdUsableMetric,
+  recordFrontendDegradedState,
+  useDelayedBusy,
+  useInteractionTiming,
+} from "./features/performance";
+import { formatPlaybackClock, playbackTimeLabels } from "./features/playback";
+import {
+  type AudioGenerationPipelineModel,
+  isAudioGenerationWorking,
+  resolveAudioGenerationPipelineModel,
+} from "./features/playback/audioGenerationPipeline";
+import {
+  audioReviewWarningCount,
+  audioReviewWarningReasons,
+  audioReviewWarningSummary,
+  audioReviewWarningTotal,
+} from "./features/playback/audioReviewWarnings";
+import {
+  canQueueGeneratedAudioPlayback,
+  type GeneratedAudioLifecycleState,
+  generatedAudioLifecycleFromJob,
+  generatedAudioLifecycleLabel,
+} from "./features/playback/generatedAudioLifecycle";
+import {
+  LocalizedPlaybackToolbar,
+  type LocalizedPlaybackToolbarModel,
+} from "./features/playback/LocalizedPlaybackToolbar";
+import {
+  playbackActionAriaLabel,
+  playbackActionDataAttributes,
+  playbackActionDisabledReason,
+} from "./features/playback/playbackActionRules";
+import {
+  previewPlayerVariantForSurface,
+  shouldShowGlobalPreviewPlayer,
+} from "./features/playback/playbackSurfaceRules";
+import {
+  type CreateAndListenScope,
+  createAndListenAriaLabel,
+  workspacePlaybackActionDataAttributes,
+} from "./features/playback/workspacePlaybackActions";
+import { sessionSpeechPolicyRequest } from "./features/policy/model";
+import {
+  loadUiMemory,
+  rememberCinemaFocusState,
+  rememberReviewPane,
+  rememberTelepromptReturnStage,
+  rememberTelepromptTheatreSettings,
+  rememberWorkspaceCustomLayout,
+  rememberWorkspaceDisclosurePin,
+  rememberWorkspaceLayoutMode,
+  resetUiMemory,
+  resetWorkspaceUiMemory,
+  resolveCinemaFocusState,
+  resolveReviewPane,
+  resolveTelepromptTheatreSettings,
+  resolveWorkspaceCustomLayout,
+  resolveWorkspaceDisclosurePins,
+  resolveWorkspaceLayoutMode,
+  saveUiMemory,
+  type UiMemoryCinemaState,
+  type UiMemoryPreferenceId,
+  type UiMemoryState,
+  updateUiMemoryPreference,
+} from "./features/preferences";
+import {
+  PREVIEW_AUDITION_NOT_FOUND_MESSAGE,
+  PreviewConfirmationStrip,
+  PreviewGeneratedAudioPanel,
+  PreviewReadinessChecklist,
+  type PreviewTemporaryVoiceOption,
+  VoiceAuditionPanel,
+} from "./features/preview/PreviewReadinessPanels";
+import { resolvePreviewAudioCurrentness } from "./features/preview/previewAudioCurrentness";
+import {
+  type PreviewReadinessModel,
+  type PreviewReadinessRow,
+  resolvePreviewReadinessModel,
+} from "./features/preview/previewReadiness";
+import {
+  providerCapabilityGate,
+  resolveProviderRuntimeCapabilities,
+} from "./features/provider-capabilities";
+import { providerRuntimeLeavesLocalBoundary } from "./features/provider-capabilities/providerCapabilityLite";
+import type { QuickListenMode } from "./features/quick-listen";
+import {
+  temporarySessionPrefersBookCinema,
+  temporarySessionToBookSource,
+  temporarySessionToPreparedSource,
+} from "./features/quick-listen";
+import {
+  clearReadAlongMotionCursor,
+  clearStoredReadAlongPreferences,
+  DEFAULT_READ_ALONG_PREFERENCES,
+  effectiveReadAlongPreferences,
+  type HighlightMapV2,
+  loadReadAlongPreferences,
+  markReadAlongPerformance,
+  type ReadAlongCueRole,
+  type ReadAlongPreferences,
+  type ReadAlongWordRole,
+  readAlongPreferenceDataAttributes,
+  registerReadAlongAudioElement,
+  saveReadAlongPreferences,
+  updateReadAlongMotionCursor,
+} from "./features/readalong";
+import { nextReaderPlaybackRate } from "./features/reader-accessibility";
+import { ReadingFollowAlongRenderer } from "./features/reading-surface";
+import {
+  buildTemporaryReviewStateAdapter,
+  normalizeReviewMode,
+  normalizeReviewPane,
+  type ReviewMode,
+  type ReviewOpenFocusRequest,
+  type ReviewPane,
+  selectReviewBlockId,
+  type TemporaryReviewStateAdapter,
+} from "./features/review/model";
+import {
+  applyRevisionSessionState,
+  buildCanonicalPreviewSpeechPlan,
+  type CanonicalPreviewSpeechPlan,
+  canonicalPreviewSpeechPlanHasBlocks,
+  composeReviewedSpeechText,
+  deriveRevisionBlockStatus,
+  normalizeRevisionPolicyNoteType,
+  REVISION_STATUS_LABELS,
+  type RevisionBlock,
+  type RevisionHistoryEntry,
+  type RevisionStatus,
+  type RevisionTabId,
+  revisionBlockIsSpeakable,
+  revisionTextIsStandaloneArtifactToken,
+  revisionTextLooksLikeReferenceCueLeak,
+  stripRevisionTrailingReferenceNumberText,
+  summarizeRevisionHealth,
+} from "./features/revision";
+import {
+  type AssetNarrationGenerationOptions,
+  type SubmissionDependencies,
+  submitBookNarrationJob as submitBookNarrationJobFromFeature,
+  submitPreparedSourceJob as submitPreparedSourceJobFromFeature,
+  submitVoiceJob as submitVoiceJobFromFeature,
+} from "./features/revision/assetGenerationSubmission";
+import { RunPlannerSummaryPanel } from "./features/run-config/RunPlannerSummaryPanel";
+import {
+  buildRunPlannerSummary,
+  compareRunPlannerSummaries,
+  runConfigurationFromVoiceJob,
+} from "./features/run-config/runConfigSteps";
+import {
+  DEFAULT_TEMPORARY_SOURCE_BEHAVIOR,
+  type TemporarySourceBehaviorSettings,
+} from "./features/settings/model";
+import {
+  loadShortcutPreferences,
+  type ResolvedShortcutCommand,
+  resetShortcutPreferences,
+  resolveGlobalShortcutCommand,
+  resolveShortcutCommandBinding,
+  type ShortcutCommandId,
+  type ShortcutPreferences,
+  saveShortcutPreferences,
+  shortcutLabelForCommand,
+  shouldIgnoreGlobalShortcutTarget,
+  shouldIgnoreNarrationShortcutEvent,
+} from "./features/shortcuts/shortcutRuntime";
 import type {
   SourceLifecycleEnvelope,
   SourceLifecycleSurface,
 } from "./features/source-lifecycle/sourceLifecycleCore";
 import {
-  Button,
-  Panel,
-  StatusChip,
-  compactHitTargetClassName,
-  cx,
-  minInteractiveSize,
-  type ButtonVariant,
-  type StatusChipTone,
-} from "./design";
+  type NarrationStatusChip,
+  NarrationStatusStrip,
+  resolveNarrationStatusModel,
+} from "./features/status-strip";
 import {
-  createWorkspaceContext,
-  DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
-  defaultWorkspaceLayoutMode,
-  WORKSPACE_STAGES,
-  withWorkspaceActiveBlock,
-  withWorkspaceSource,
-  withWorkspaceSpeechPolicyProfile,
-  withWorkspaceVoiceProfile,
-  workspaceStageMeta,
-  workspaceStageShowsGlobalChrome,
-  workspaceLayoutRails,
-  workspaceResolvedLayout,
-  type WorkspaceContext,
-  type WorkspaceCustomLayout,
-  type WorkspaceLayoutMode,
-  type WorkspaceLayoutSlotDensity,
-  type WorkspaceReturnStage,
-  type WorkspaceSourceType,
-  type WorkspaceStage,
-} from "./features/workspace/model";
+  normalizeTelepromptTheatreSettings,
+  type TelepromptTheatreSettings,
+} from "./features/teleprompt/telepromptTheatreSettings";
+import {
+  TEMPORARY_SOURCE_COPY,
+  temporarySourceFailureCopy,
+} from "./features/temporary-source-copy";
+import type { UiMemoryImportApplyResult } from "./features/ui-memory/UiMemoryPreferences";
+import type { UiMemoryResetScope } from "./features/ui-memory/uiMemoryModel";
 import {
   confirmTemporaryVoiceCloneConsent,
   defaultTemporaryVoiceSelection,
@@ -421,8 +411,8 @@ import {
   loadTemporaryVoiceState,
   providerTemporaryVoiceSelection,
   recordTemporaryVoiceAudition,
-  saveTemporaryVoiceState,
   savedProfileTemporaryVoiceSelection,
+  saveTemporaryVoiceState,
   selectTemporaryVoiceForSource,
   type TemporaryVoiceSelection,
   type TemporaryVoiceState,
@@ -430,34 +420,145 @@ import {
 import {
   DEFAULT_WORKSPACE_DISCLOSURE_PINS,
   resolveWorkspaceDisclosure,
-  workspaceDisclosureRails,
   type WorkspaceDisclosureModel,
   type WorkspaceDisclosurePanelId,
   type WorkspaceDisclosurePins,
+  workspaceDisclosureRails,
 } from "./features/workspace/disclosure";
 import {
-  NarrationStatusStrip,
-  resolveNarrationStatusModel,
-  type NarrationStatusChip,
-} from "./features/status-strip";
+  createWorkspaceContext,
+  DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
+  defaultWorkspaceLayoutMode,
+  WORKSPACE_STAGES,
+  type WorkspaceContext,
+  type WorkspaceCustomLayout,
+  type WorkspaceLayoutMode,
+  type WorkspaceLayoutSlotDensity,
+  type WorkspaceSourceType,
+  type WorkspaceStage,
+  withWorkspaceActiveBlock,
+  withWorkspaceSource,
+  withWorkspaceSpeechPolicyProfile,
+  withWorkspaceVoiceProfile,
+  workspaceLayoutRails,
+  workspaceResolvedLayout,
+  workspaceStageMeta,
+  workspaceStageShowsGlobalChrome,
+} from "./features/workspace/model";
 import {
   resolveWorkspaceStageStatus,
   transitionWorkspaceContextForStageAction,
+  type WorkspaceStageActionId,
+  type WorkspaceStageStatus,
   workspaceStageActionLabel,
   workspaceStageActionTestId,
   workspaceStageNavigationAction,
-  type WorkspaceStageStatus,
-  type WorkspaceStageActionId,
 } from "./features/workspace/stageActions";
-import type { IntakePreparationTarget } from "./features/intake";
-import type { DemoProject } from "./features/demo";
-import { demoVoiceLabel, demoVoices } from "./features/demo/demoVoices";
+import { formatDuration } from "./format";
+import {
+  readingPositionForHighlightCue,
+  resolveHighlightCue,
+  secondsForReadingPosition,
+} from "./highlightMap";
+import { findKokoroVoicepack, kokoroVoicepackDetail, kokoroVoicepackLabel } from "./kokoroVoices";
 import type {
-  BookSource,
+  MarkdownBlockHighlight,
+  MarkdownWordAnchors,
+  MarkdownWordCueState,
+} from "./MarkdownRenderer";
+import {
+  markdownBlockText,
+  type PreparedSourceActiveWord,
+  resolvePreparedSourceActiveWord,
+} from "./markdownCinema";
+import { looksLikeMermaidDiagram } from "./markdownModel";
+import {
+  humanizeProfileTargetProblem,
+  isVoiceProfileTargetReadyForEngine,
+  voiceProfileTargetReadinessText,
+} from "./profileTargets";
+import {
+  ACTIVE_PROJECT_ID_STORAGE_KEY,
+  clearProjectWorkspaceState,
+  migrateLegacyWorkspaceState,
+  saveProjectWorkspaceState,
+} from "./projectState";
+import {
+  authoritativePreparedProgress,
+  authoritativeResumePlan,
+  projectIdFromSearch,
+  projectLoaderResponseIsCurrent,
+  projectReaderWorkspaceIntent,
+  ReaderWorkspaceClient,
+  type ReaderWorkspaceNomination,
+  ReaderWorkspaceRestorationCoordinator,
+  type ReaderWorkspaceView,
+  readerWorkspaceBaselineResponseIsCurrent,
+  readerWorkspaceBlockNavigationPosition,
+  readerWorkspaceNominationFromBaseline,
+  readerWorkspacePersistenceDecision,
+  readerWorkspaceSuccessfulAckNeedsRestoration,
+  resolveAuthoritativePreparedBlockId,
+  resolveAuthoritativeSourceKind,
+  serverWorkspaceOwnsNavigation,
+  validateAuthoritativeVoiceJob,
+  visibleAuthoritativePreparedProgress,
+} from "./readerWorkspace";
+import {
+  applyKokoroRenderMode,
+  applySpeechPolicyToCreateVoiceJobRequest,
+  buildCreateVoiceJobRequest,
+  createRunConfiguration,
+  getRunModePreset,
+  isKokoroRenderEngine,
+  KOKORO_RENDER_MODE_OPTIONS,
+  type KokoroRenderMode,
+  kokoroEngineFamilyValue,
+  kokoroRenderModeForConfiguration,
+  normalizeRunConfiguration,
+  RUN_CONFIG_STORAGE_KEY,
+  type RunConfiguration,
+} from "./runConfig";
+import {
+  clearSpeechPolicyOverrides,
+  compactSpeechPolicyOverrides,
+  DEFAULT_SPEECH_POLICY_DEFINITION,
+  DEFAULT_SPEECH_POLICY_PROFILE,
+  hasSpeechPolicyOverrides,
+  loadSpeechPolicyOverrides,
+  normalizeSpeechPolicyProfile,
+  SPEECH_POLICY_PROFILE_OPTIONS,
+  saveSpeechPolicyOverrides,
+  speechPolicyProfileDisplayName,
+  speechPolicyProfileLabel,
+} from "./speechPolicy";
+import {
+  SUPERTONIC_LANGUAGE_CODES,
+  SUPERTONIC_LANGUAGE_OPTIONS,
+  SUPERTONIC_VOICE_STYLES,
+  supertonicLanguageLabel,
+} from "./supertonic";
+import {
+  buildTeleprompterCue,
+  DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS,
+  normalizeTeleprompterHighlightSettings,
+  pickTeleprompterWordIndex,
+  TELEPROMPTER_SETTINGS_STORAGE_KEY,
+  type TeleprompterCue,
+  type TeleprompterHighlightSettings,
+} from "./teleprompter";
+import {
+  DEFAULT_THEME_NAME,
+  normalizeThemeName,
+  THEME_STORAGE_KEY,
+  VOICE_STUDIO_THEMES,
+} from "./theme";
+import type {
+  AdapterDiagnostics,
   BookScope,
+  BookSource,
   BookSourceImportOptions,
   BookSourceScopeContent,
-  AdapterDiagnostics,
   CreateVoiceJobRequest,
   CreateVoiceProfileFromCandidateRequest,
   CreateVoiceProfileSourceRequest,
@@ -469,17 +570,17 @@ import type {
   PlaybackSession,
   PreparedSource,
   ProjectBundleImportResult,
-  ReadingPosition,
   ProjectStorageSummary,
+  ReadingPosition,
   ResearchModuleDiagnostics,
   RunMode,
+  SourceReadiness,
+  SourceReadinessConfirmationRequest,
+  SourceSpeechPolicyUpdateRequest,
   SpeechPolicyDefinition,
   SpeechPolicyOverrides,
   SpeechPolicyProfile,
   SpeechPolicySettings,
-  SourceSpeechPolicyUpdateRequest,
-  SourceReadiness,
-  SourceReadinessConfirmationRequest,
   StageStatus,
   SystemMetrics,
   TemporarySourcePromotionKeep,
@@ -489,102 +590,13 @@ import type {
   TTSEngineDiagnostics,
   VoiceJob,
   VoiceProfile,
-  VoiceProfileCredentialStatus,
   VoiceProfileCandidate,
+  VoiceProfileCredentialStatus,
   VoiceProfileSource,
   VoiceProfileSourceDiagnostics,
   VoiceProject,
 } from "./types";
-import {
-  DEFAULT_SPEECH_POLICY_DEFINITION,
-  DEFAULT_SPEECH_POLICY_PROFILE,
-  SPEECH_POLICY_PROFILE_OPTIONS,
-  clearSpeechPolicyOverrides,
-  compactSpeechPolicyOverrides,
-  hasSpeechPolicyOverrides,
-  loadSpeechPolicyOverrides,
-  normalizeSpeechPolicyProfile,
-  saveSpeechPolicyOverrides,
-  speechPolicyProfileDisplayName,
-  speechPolicyProfileLabel,
-} from "./speechPolicy";
-import type { ContentIRDocument } from "./content-ir";
-import {
-  markdownBlockText,
-  resolvePreparedSourceActiveWord,
-  type PreparedSourceActiveWord,
-} from "./markdownCinema";
-import { sessionSpeechPolicyRequest } from "./features/policy/model";
-import {
-  preparedSourceCinemaActionLabel,
-  preparedSourceCinemaKind,
-  preparedSourceCinemaJobMatchesSource,
-} from "./features/cinema/preparedSourceModel";
-import type { CinemaFocusMode, CinemaSurfaceKind } from "./features/cinema";
-import type {
-  CinemaAdvancedCommandTarget,
-  HelpCommandTarget,
-  SettingsCommandTarget,
-} from "./features/navigation/commands";
-import {
-  DEFAULT_TEMPORARY_SOURCE_BEHAVIOR,
-  type TemporarySourceBehaviorSettings,
-} from "./features/settings/model";
-import type { CommandPaletteView } from "./features/command-palette/CommandPalette";
-import type { CommandEntry } from "./features/command-palette/commandRegistry";
-import {
-  buildCommandEntries,
-  buildCommandPaletteHandlers,
-  type CommandBookmarkData,
-  type CommandRecentData,
-  type CommandMetadataState,
-  type CommandWayfindingState,
-  loadCommandMetadata,
-} from "./features/command-palette/commandPaletteHelpers";
-import {
-  loadShortcutPreferences,
-  resetShortcutPreferences,
-  resolveGlobalShortcutCommand,
-  resolveShortcutCommandBinding,
-  saveShortcutPreferences,
-  shortcutLabelForCommand,
-  shouldIgnoreGlobalShortcutTarget,
-  shouldIgnoreNarrationShortcutEvent,
-  type ResolvedShortcutCommand,
-  type ShortcutCommandId,
-  type ShortcutPreferences,
-} from "./features/shortcuts/shortcutRuntime";
-import {
-  humanizeProfileTargetProblem,
-  isVoiceProfileTargetReadyForEngine,
-  voiceProfileTargetReadinessText,
-} from "./profileTargets";
-import {
-  LazyPanelFallback,
-  recordColdUsableMetric,
-  recordFrontendDegradedState,
-  useDelayedBusy,
-  useInteractionTiming,
-} from "./features/performance";
-import {
-  orderedKokoroVoicepacksForLanguage,
-  voiceProfileMatchesLanguage,
-} from "./features/i18n/languageVoiceMapping";
-import {
-  temporarySessionPrefersBookCinema,
-  temporarySessionToBookSource,
-  temporarySessionToPreparedSource,
-} from "./features/quick-listen";
-import {
-  TEMPORARY_SOURCE_COPY,
-  temporarySourceFailureCopy,
-} from "./features/temporary-source-copy";
-import {
-  quickListenDisabledReason,
-  studioFeatureFlags,
-  temporaryCinemaDisabledReason,
-  temporaryPromotionDisabledReason,
-} from "./features/featureFlags";
+import type { CommandCenterSectionId } from "./WorkspaceDrawerHelpers";
 
 type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
 type TemporaryQuickListenDestination = "review" | "preview" | "cinema";
@@ -832,6 +844,23 @@ const DISABLED_PLAYBACK_CONTROLLER: PlaybackController = {
   skipBy: undefined,
   seekTo: undefined,
 };
+
+function applyAuthoritativeFollowPreference(
+  current: ReadAlongPreferences,
+  followPreference: boolean | null,
+): ReadAlongPreferences {
+  if (followPreference === null) return current;
+  let scrollFollow = current.scrollFollow;
+  if (!followPreference) {
+    scrollFollow = "off";
+  } else if (scrollFollow === "off") {
+    scrollFollow = "gentle";
+  }
+  return {
+    ...current,
+    scrollFollow,
+  };
+}
 
 function formatPlaybackClockSeconds(value: number): string {
   return formatPlaybackClock(value);
@@ -2766,11 +2795,54 @@ export function App() {
   const [refreshingTranscriptKey, setRefreshingTranscriptKey] = useState<string | null>(null);
   const [uiMemory, setUiMemory] = useState<UiMemoryState>(() => loadUiMemory());
   const [projects, setProjects] = useState<VoiceProject[]>([]);
-  const [activeProjectId, setActiveProjectId] = useState(() =>
-    uiMemory.rememberLastProject
+  const [activeProjectId, setActiveProjectId] = useState(() => {
+    const queryProjectId = projectIdFromSearch(globalThis.location.search);
+    if (queryProjectId) {
+      return queryProjectId;
+    }
+    return uiMemory.rememberLastProject
       ? (localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) ?? "default")
-      : "default",
-  );
+      : "default";
+  });
+  const readerWorkspaceStateHandlerRef = useRef<(state: ReaderWorkspaceView) => void>(() => {
+    return;
+  });
+  const readerWorkspaceClientRef = useRef<ReaderWorkspaceClient | null>(null);
+  const readerWorkspaceSnapshotRef = useRef<ReaderWorkspaceView["snapshot"]>(null);
+  const readerWorkspaceBlockedIntentRef = useRef<ReaderWorkspaceView["snapshot"]>(null);
+  const readerWorkspaceUserIntentGenerationRef = useRef(0);
+  const readerWorkspaceBlockedIntentGenerationRef = useRef<number | null>(null);
+  const authoritativePlaybackRateRef = useRef<number | null>(null);
+  const readerWorkspaceRestoringProjectRef = useRef<string | null>(null);
+  const readerWorkspaceResponseGenerationRef = useRef(0);
+  const readerWorkspaceBaselineGenerationRef = useRef(0);
+  const projectLoaderGenerationRef = useRef(0);
+  const installReaderWorkspaceBaseline = (
+    candidate: ReaderWorkspaceView["snapshot"],
+    responseGeneration: number,
+  ) => {
+    if (
+      !candidate ||
+      !readerWorkspaceBaselineResponseIsCurrent(
+        readerWorkspaceBaselineGenerationRef.current,
+        responseGeneration,
+      )
+    )
+      return;
+    readerWorkspaceBaselineGenerationRef.current = responseGeneration;
+    readerWorkspaceSnapshotRef.current = candidate;
+  };
+  readerWorkspaceClientRef.current ??= new ReaderWorkspaceClient({
+    onChange: (state) => {
+      readerWorkspaceStateHandlerRef.current(state);
+    },
+  });
+  const readerWorkspaceClient = readerWorkspaceClientRef.current;
+  const activeProjectIdRef = useRef(activeProjectId);
+  activeProjectIdRef.current = activeProjectId;
+  const readerWorkspaceRestorationRef = useRef<ReaderWorkspaceRestorationCoordinator | null>(null);
+  readerWorkspaceRestorationRef.current ??= new ReaderWorkspaceRestorationCoordinator();
+  const authoritativeResumePendingRef = useRef(false);
   const [uiMemoryResetSignal, setUiMemoryResetSignal] = useState(0);
   const [projectStateReadyId, setProjectStateReadyId] = useState<string | null>(null);
   const [projectJobs, setProjectJobs] = useState<VoiceJob[]>([]);
@@ -2838,9 +2910,72 @@ export function App() {
   const [activePlaybackSession, setActivePlaybackSession] = useState<PlaybackSession | null>(null);
   const [pendingPlaybackResume, setPendingPlaybackResume] = useState<{
     autoplay: boolean;
+    playbackRate?: number;
     readingPosition?: ReadingPosition;
     seconds: number;
   } | null>(null);
+  const [authoritativePreparedResume, setAuthoritativePreparedResume] =
+    useState<PlaybackProgress | null>(null);
+  const [preparedReaderNavigationPosition, setPreparedReaderNavigationPosition] =
+    useState<ReadingPosition | null>(null);
+  const [readerWorkspaceNomination, setReaderWorkspaceNominationState] =
+    useState<ReaderWorkspaceNomination | null>(null);
+  const readerWorkspaceNominationRef = useRef<ReaderWorkspaceNomination | null>(null);
+  const setReaderWorkspaceNomination = useCallback(
+    (nomination: ReaderWorkspaceNomination | null) => {
+      readerWorkspaceNominationRef.current = nomination;
+      setReaderWorkspaceNominationState(nomination);
+    },
+    [],
+  );
+  const [readerWorkspaceUserIntentGeneration, setReaderWorkspaceUserIntentGeneration] = useState(0);
+  const markReaderWorkspaceUserIntent = useCallback(() => {
+    const nextGeneration = readerWorkspaceUserIntentGenerationRef.current + 1;
+    readerWorkspaceUserIntentGenerationRef.current = nextGeneration;
+    setReaderWorkspaceUserIntentGeneration(nextGeneration);
+    const projectId = activeProjectIdRef.current;
+    if (readerWorkspaceRestorationRef.current?.cancelForUserIntent(projectId)) {
+      readerWorkspaceRestoringProjectRef.current = null;
+      authoritativeResumePendingRef.current = false;
+      authoritativePlaybackRateRef.current = null;
+      setReaderWorkspaceNomination(
+        readerWorkspaceNominationFromBaseline(readerWorkspaceSnapshotRef.current),
+      );
+      setProjectStateReadyId(projectId);
+    }
+    setPreparedReaderNavigationPosition(null);
+  }, [setReaderWorkspaceNomination]);
+  const nominateReaderWorkspaceSource = useCallback(
+    (sourceId: string) => {
+      if (!sourceId) return;
+      markReaderWorkspaceUserIntent();
+      setReaderWorkspaceNomination({ sourceId, runId: null });
+    },
+    [markReaderWorkspaceUserIntent, setReaderWorkspaceNomination],
+  );
+  const nominateReaderWorkspaceJob = useCallback(
+    (nextJob: VoiceJob) => {
+      const sourceId = nextJob.preparedSourceId ?? nextJob.bookSourceId;
+      if (!sourceId || nextJob.temporarySourceId) return;
+      markReaderWorkspaceUserIntent();
+      setReaderWorkspaceNomination({ sourceId, runId: nextJob.id });
+    },
+    [markReaderWorkspaceUserIntent, setReaderWorkspaceNomination],
+  );
+  const markReaderWorkspaceBlockNavigation = useCallback(
+    (sourceId: string | null, blockId: string) => {
+      markReaderWorkspaceUserIntent();
+      setAuthoritativePreparedResume(null);
+      setPreparedReaderNavigationPosition(
+        readerWorkspaceBlockNavigationPosition(
+          readerWorkspaceNominationRef.current?.sourceId,
+          sourceId,
+          blockId,
+        ),
+      );
+    },
+    [markReaderWorkspaceUserIntent],
+  );
   const [resumeFallbackNotice, setResumeFallbackNotice] = useState<string | null>(null);
   const [resumeRestoreStartedAt, setResumeRestoreStartedAt] = useState<number | null>(null);
   const [isBookCinemaOpen, setIsBookCinemaOpen] = useState(false);
@@ -3464,7 +3599,7 @@ export function App() {
       }
       return bookSources.find((book) => book.id === selectedBookSourceId) ?? null;
     }
-    return bookSources[0] ?? null;
+    return null;
   }, [activeTemporaryBookSource, bookSources, selectedBookSourceId]);
   const selectedPreparedSource = useMemo(() => {
     if (selectedPreparedSourceId) {
@@ -3473,7 +3608,7 @@ export function App() {
       }
       return preparedSources.find((source) => source.id === selectedPreparedSourceId) ?? null;
     }
-    return preparedSources[0] ?? null;
+    return null;
   }, [activeTemporaryPreparedSource, preparedSources, selectedPreparedSourceId]);
   const effectiveBookScope = useMemo(
     () =>
@@ -3510,15 +3645,6 @@ export function App() {
     () => (activeTemporarySource ? workspaceTemporaryInspectorModel(activeTemporarySource) : null),
     [activeTemporarySource],
   );
-  const workbenchAudioRestoreSource = useMemo<WorkbenchAudioRestoreSource>(() => {
-    if (activeNarrationPreparedSource) {
-      return { mode: "prepared", source: activeNarrationPreparedSource };
-    }
-    if (activeNarrationBookSource) {
-      return { mode: "book", scope: effectiveBookScope, source: activeNarrationBookSource };
-    }
-    return { mode: "draft", text };
-  }, [activeNarrationBookSource, activeNarrationPreparedSource, effectiveBookScope, text]);
   const activeSourceReadiness = sourceReadinessForWorkbench({
     selectedBookSource: activeNarrationBookSource,
     selectedPreparedSource: activeNarrationPreparedSource,
@@ -3804,9 +3930,25 @@ export function App() {
         : null,
     [playbackCursorSec, preparedSourceCinemaJob, teleprompterSettings],
   );
+  const visibleAuthoritativePreparedResume = useMemo(() => {
+    if (
+      !authoritativePreparedResume ||
+      !preparedSourceCinemaSource ||
+      authoritativePreparedResume.preparedSourceId !== preparedSourceCinemaSource.id
+    ) {
+      return null;
+    }
+    return visibleAuthoritativePreparedProgress(
+      preparedSourceCinemaSource,
+      authoritativePreparedResume,
+    );
+  }, [authoritativePreparedResume, preparedSourceCinemaSource]);
   const preparedSourceCinemaProgress = useMemo(() => {
     if (!preparedSourceCinemaSource) {
       return null;
+    }
+    if (visibleAuthoritativePreparedResume) {
+      return visibleAuthoritativePreparedResume;
     }
     if (preparedSourceCinemaJob) {
       const targetId = progressTargetIdForJob(preparedSourceCinemaJob);
@@ -3827,7 +3969,13 @@ export function App() {
           progress.targetId === `prepared:${preparedSourceCinemaSource.id}`,
       ) ?? null
     );
-  }, [latestProgress, preparedSourceCinemaJob, preparedSourceCinemaSource, projectProgress]);
+  }, [
+    latestProgress,
+    preparedSourceCinemaJob,
+    preparedSourceCinemaSource,
+    projectProgress,
+    visibleAuthoritativePreparedResume,
+  ]);
   const openPreparedSourceCinema = useCallback(
     (source: PreparedSource) => {
       preparedSourceCinemaOpenTiming.start({
@@ -3997,9 +4145,10 @@ export function App() {
     const scopeKey = bookScopeKey(effectiveBookScope);
     if (
       hashReadingPosition?.bookSourceId === selectedBookSource.id &&
-      hashReadingPosition.scopeKey === scopeKey
+      (hashReadingPosition.scopeKey === scopeKey ||
+        hashReadingPosition.locatorEnvelope?.sourceId === selectedBookSource.id)
     ) {
-      return hashReadingPosition;
+      return { ...hashReadingPosition, scopeKey };
     }
     return {
       activeWordIndex: selectedBookProgress?.activeWordIndex ?? 0,
@@ -4589,10 +4738,13 @@ export function App() {
         return;
       }
       setSelectedBookSourceId(book.id);
+      if (book.status === "ready" && book.sourceOwner !== "temporary") {
+        nominateReaderWorkspaceSource(book.id);
+      }
       setSelectedBookScope(resolveDefaultBookScope(book));
       setBookScopeContent(null);
     },
-    [bookSources],
+    [bookSources, nominateReaderWorkspaceSource],
   );
   useEffect(() => {
     if (hasRecordedColdUsableRef.current) {
@@ -4632,6 +4784,14 @@ export function App() {
 
   useEffect(() => {
     const syncHashPosition = () => {
+      if (
+        serverWorkspaceOwnsNavigation(
+          activeProjectIdRef.current,
+          readerWorkspaceRestoringProjectRef.current,
+          readerWorkspaceSnapshotRef.current?.projectId,
+        )
+      )
+        return;
       setHashReadingPosition(parseBookCinemaHash(globalThis.location.hash));
     };
     globalThis.addEventListener("hashchange", syncHashPosition);
@@ -4641,6 +4801,15 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (
+      serverWorkspaceOwnsNavigation(
+        activeProjectIdRef.current,
+        readerWorkspaceRestoringProjectRef.current,
+        readerWorkspaceSnapshotRef.current?.projectId,
+      )
+    ) {
+      return;
+    }
     if (!hashReadingPosition?.bookSourceId) {
       return;
     }
@@ -4931,22 +5100,39 @@ export function App() {
     }
   }, [rememberActiveProjectId]);
 
-  const refreshProjectJobs = useCallback(async (projectId: string) => {
-    if (projectId.trim().length === 0) {
-      setProjectJobs([]);
-      return;
-    }
-    try {
-      const jobs = await listProjectJobs(projectId);
-      setProjectJobs(jobs);
-      setProjectError(null);
-    } catch (caughtError) {
-      setProjectJobs([]);
-      setProjectError(
-        caughtError instanceof Error ? caughtError.message : "Unable to load project jobs",
+  const projectLoaderGuard = useCallback((projectId: string) => {
+    const generation = projectLoaderGenerationRef.current;
+    return () =>
+      projectLoaderResponseIsCurrent(
+        projectId,
+        generation,
+        activeProjectIdRef.current,
+        projectLoaderGenerationRef.current,
       );
-    }
   }, []);
+
+  const refreshProjectJobs = useCallback(
+    async (projectId: string) => {
+      const isCurrent = projectLoaderGuard(projectId);
+      if (projectId.trim().length === 0) {
+        setProjectJobs([]);
+        return;
+      }
+      try {
+        const jobs = await listProjectJobs(projectId);
+        if (!isCurrent()) return;
+        setProjectJobs(jobs);
+        setProjectError(null);
+      } catch (caughtError) {
+        if (!isCurrent()) return;
+        setProjectJobs([]);
+        setProjectError(
+          caughtError instanceof Error ? caughtError.message : "Unable to load project jobs",
+        );
+      }
+    },
+    [projectLoaderGuard],
+  );
 
   const refreshBookSources = useCallback(
     async (projectId: string) => {
@@ -4959,16 +5145,18 @@ export function App() {
       }
       try {
         const books = await listProjectBookSources(projectId);
+        if (activeProjectIdRef.current !== projectId) return;
         setBookSources(books);
         setSelectedBookSourceId((currentId) => {
           if (currentId && books.some((book) => book.id === currentId)) {
             return currentId;
           }
-          return books[0]?.id ?? null;
+          return null;
         });
         setSelectedBookScope((currentScope) => currentScope);
         setBookSourceError(null);
       } catch (caughtError) {
+        if (activeProjectIdRef.current !== projectId) return;
         setBookSources([]);
         setSelectedBookSourceId(null);
         setSelectedBookScope(null);
@@ -4984,69 +5172,47 @@ export function App() {
     [refreshProjects],
   );
 
-  const refreshPreparedSources = useCallback(
+  const refreshProjectProgress = useCallback(
     async (projectId: string) => {
+      const isCurrent = projectLoaderGuard(projectId);
       if (projectId.trim().length === 0) {
-        setPreparedSources([]);
-        setSelectedPreparedSourceId(null);
+        setProjectProgress([]);
         return;
       }
       try {
-        const sources = await listPreparedSources(projectId);
-        setPreparedSources((currentSources) =>
-          mergePreparedSourcesPreservingFullContent(currentSources, sources),
-        );
-        setSelectedPreparedSourceId((currentId) => {
-          if (currentId && activeTemporaryPreparedSource?.id === currentId) {
-            return currentId;
-          }
-          if (currentId && sources.some((source) => source.id === currentId)) {
-            return currentId;
-          }
-          return sources[0]?.id ?? null;
-        });
-        setSourcePrepError(null);
-      } catch (caughtError) {
-        setPreparedSources([]);
-        setSelectedPreparedSourceId(null);
-        if (isApiNotFoundError(caughtError)) {
-          setSourcePrepError(null);
-          void refreshProjects();
-          return;
-        }
-        setSourcePrepError(formatErrorMessage(caughtError, "Unable to load prepared sources"));
+        const progress = await listProjectProgress(projectId);
+        if (!isCurrent()) return;
+        setProjectProgress(progress);
+      } catch {
+        if (!isCurrent()) return;
+        setProjectProgress([]);
       }
     },
-    [activeTemporaryPreparedSource, refreshProjects],
+    [projectLoaderGuard],
   );
 
-  const refreshProjectProgress = useCallback(async (projectId: string) => {
-    if (projectId.trim().length === 0) {
-      setProjectProgress([]);
-      return;
-    }
-    try {
-      setProjectProgress(await listProjectProgress(projectId));
-    } catch {
-      setProjectProgress([]);
-    }
-  }, []);
-
-  const refreshProjectStorage = useCallback(async (projectId: string) => {
-    if (projectId.trim().length === 0) {
-      setProjectStorage(null);
-      return;
-    }
-    try {
-      setProjectStorage(await getProjectStorageSummary(projectId));
-      setProjectStorageError(null);
-    } catch (caughtError) {
-      setProjectStorage(null);
-      setProjectStorageError(
-        caughtError instanceof Error ? caughtError.message : "Unable to load project storage",
-      );
-    }
-  }, []);
+  const refreshProjectStorage = useCallback(
+    async (projectId: string) => {
+      const isCurrent = projectLoaderGuard(projectId);
+      if (projectId.trim().length === 0) {
+        setProjectStorage(null);
+        return;
+      }
+      try {
+        const storage = await getProjectStorageSummary(projectId);
+        if (!isCurrent()) return;
+        setProjectStorage(storage);
+        setProjectStorageError(null);
+      } catch (caughtError) {
+        if (!isCurrent()) return;
+        setProjectStorage(null);
+        setProjectStorageError(
+          caughtError instanceof Error ? caughtError.message : "Unable to load project storage",
+        );
+      }
+    },
+    [projectLoaderGuard],
+  );
 
   const refreshSpeechPolicyProfiles = useCallback(async () => {
     try {
@@ -5065,23 +5231,31 @@ export function App() {
     }
   }, []);
 
-  const refreshProjectSpeechPolicy = useCallback(async (projectId: string) => {
-    if (projectId.trim().length === 0) {
-      setSpeechPolicyProfile(DEFAULT_SPEECH_POLICY_PROFILE);
-      setCustomSpeechPolicyProfiles([]);
-      return;
-    }
-    try {
-      const settings = await getProjectSpeechPolicy(projectId);
-      setSpeechPolicyProfile(normalizeSpeechPolicyProfile(settings.profile));
-      setCustomSpeechPolicyProfiles(settings.customProfiles ?? []);
-      setSpeechPolicyError(null);
-    } catch (caughtError) {
-      setSpeechPolicyProfile(DEFAULT_SPEECH_POLICY_PROFILE);
-      setCustomSpeechPolicyProfiles([]);
-      setSpeechPolicyError(formatErrorMessage(caughtError, "Unable to load project speech policy"));
-    }
-  }, []);
+  const refreshProjectSpeechPolicy = useCallback(
+    async (projectId: string) => {
+      const isCurrent = projectLoaderGuard(projectId);
+      if (projectId.trim().length === 0) {
+        setSpeechPolicyProfile(DEFAULT_SPEECH_POLICY_PROFILE);
+        setCustomSpeechPolicyProfiles([]);
+        return;
+      }
+      try {
+        const settings = await getProjectSpeechPolicy(projectId);
+        if (!isCurrent()) return;
+        setSpeechPolicyProfile(normalizeSpeechPolicyProfile(settings.profile));
+        setCustomSpeechPolicyProfiles(settings.customProfiles ?? []);
+        setSpeechPolicyError(null);
+      } catch (caughtError) {
+        if (!isCurrent()) return;
+        setSpeechPolicyProfile(DEFAULT_SPEECH_POLICY_PROFILE);
+        setCustomSpeechPolicyProfiles([]);
+        setSpeechPolicyError(
+          formatErrorMessage(caughtError, "Unable to load project speech policy"),
+        );
+      }
+    },
+    [projectLoaderGuard],
+  );
 
   const refreshProfileSourceDiagnostics = useCallback(async () => {
     try {
@@ -5620,9 +5794,14 @@ export function App() {
       setBookSources([]);
       setSelectedBookSourceId(null);
       setSelectedBookScope(null);
+      setHashReadingPosition(null);
       setBookScopeContent(null);
       setPreparedSources([]);
       setSelectedPreparedSourceId(null);
+      setPreparedSourceCinemaSourceId(null);
+      setAuthoritativePreparedResume(null);
+      setPreparedReaderNavigationPosition(null);
+      setReaderWorkspaceNomination(null);
       setSourcePrepError(null);
       setSourceMode("text");
       setWorkspaceContext(() =>
@@ -5637,125 +5816,283 @@ export function App() {
       setActiveReviewPane(resolveReviewPane(currentUiMemory, projectId));
       setProjectProgress([]);
       setActivePlaybackSession(null);
+      setIsPlaybackActive(false);
       setPendingPlaybackResume(null);
       setBookSourceError(null);
       setIsBookCinemaOpen(false);
       resetPlaybackSurface();
-      setProjectStateReadyId(projectId);
     },
-    [resetPlaybackSurface, selectedVoiceProfileId, speechPolicyProfile],
+    [
+      resetPlaybackSurface,
+      selectedVoiceProfileId,
+      setReaderWorkspaceNomination,
+      speechPolicyProfile,
+    ],
   );
 
-  const restoreProjectWorkspace = useCallback(
-    async (projectId: string) => {
-      const currentUiMemory = uiMemoryRef.current;
-      setProjectStateReadyId(null);
-      setError(null);
-      setProfileSource(null);
-      const hashPosition = parseBookCinemaHash(globalThis.location.hash);
-      if (hashPosition?.bookSourceId) {
-        setSelectedBookSourceId(hashPosition.bookSourceId);
-      } else {
-        setSelectedBookSourceId(null);
-        setSelectedBookScope(null);
+  // Keep transport acknowledgements and fail-closed restoration events in one ordered owner.
+  // eslint-disable-next-line sonarjs/cognitive-complexity
+  readerWorkspaceStateHandlerRef.current = (state) => {
+    if (state.projectId !== activeProjectIdRef.current) {
+      return;
+    }
+    const projectId = state.projectId;
+    if (!projectId) {
+      return;
+    }
+    const responseGeneration = readerWorkspaceResponseGenerationRef.current + 1;
+    readerWorkspaceResponseGenerationRef.current = responseGeneration;
+    const isSuccessfulAcknowledgement =
+      state.event === "write-ack" || state.event === "conflict-retry-ack";
+    if (isSuccessfulAcknowledgement) {
+      const authoritativeSnapshot = state.baselineSnapshot ?? state.snapshot;
+      installReaderWorkspaceBaseline(authoritativeSnapshot, responseGeneration);
+      const coordinator = readerWorkspaceRestorationRef.current;
+      coordinator?.installBaseline(projectId);
+      if (readerWorkspaceRestoringProjectRef.current === projectId) {
+        readerWorkspaceRestoringProjectRef.current = null;
       }
-      setBookScopeContent(null);
-      setActivePlaybackSession(null);
-      setPendingPlaybackResume(null);
-      resetPlaybackSurface();
-      const savedState = loadProjectWorkspaceState(projectId);
-      setText(savedState.text);
-      setSourceMode(savedState.sourceMode);
-      if (savedState.preparedSourceId) {
-        setSelectedPreparedSourceId(savedState.preparedSourceId);
-      }
-      if (savedState.voiceProfileId) {
-        setSelectedVoiceProfileId(savedState.voiceProfileId);
-      }
-      if (savedState.speechPolicyProfile) {
-        setSpeechPolicyProfile(savedState.speechPolicyProfile);
-      }
-      setActiveReviewPane(resolveReviewPane(currentUiMemory, projectId));
-      let telepromptReturnStage: WorkspaceReturnStage = "review";
-      switch (savedState.stage) {
-        case "teleprompt":
-        case "theatre": {
-          telepromptReturnStage = resolveTelepromptReturnStage(currentUiMemory, projectId);
-          break;
-        }
-        case "preview": {
-          telepromptReturnStage = "preview";
-          break;
-        }
-        case "intake": {
-          telepromptReturnStage = "intake";
-          break;
-        }
-        default: {
-          telepromptReturnStage = "review";
-        }
-      }
-      setWorkspaceContext((currentContext) =>
-        createWorkspaceContext({
-          ...currentContext,
-          activeBlockId: savedState.activeBlockId,
-          customLayout: resolveWorkspaceCustomLayout(currentUiMemory, projectId),
-          layoutMode: resolveWorkspaceLayoutMode(currentUiMemory, projectId),
-          sourceId: savedState.preparedSourceId ?? savedState.bookSourceId,
-          sourceType: savedState.sourceType,
-          speechPolicyProfile: savedState.speechPolicyProfile ?? currentContext.speechPolicyProfile,
-          stage: savedState.stage,
-          telepromptReturnStage,
-          voiceProfileId: savedState.voiceProfileId ?? currentContext.voiceProfileId,
-        }),
-      );
-      setWorkspaceDisclosurePins(resolveWorkspaceDisclosurePins(currentUiMemory, projectId));
-      if (hashPosition?.bookSourceId) {
-        setSelectedBookSourceId(hashPosition.bookSourceId);
-      } else {
-        setSelectedBookSourceId(savedState.bookSourceId);
-        setSelectedBookScope(savedState.bookScope);
-      }
-
-      if (!savedState.jobId) {
-        setJob(null);
-        setRequestState("idle");
+      if (
+        !state.snapshot ||
+        !authoritativeSnapshot ||
+        !readerWorkspaceSuccessfulAckNeedsRestoration(
+          state.snapshot,
+          authoritativeSnapshot,
+          state.sentIntentGeneration,
+          readerWorkspaceUserIntentGenerationRef.current,
+          state.hasNewerIntent,
+        )
+      ) {
+        authoritativeResumePendingRef.current = false;
+        authoritativePlaybackRateRef.current = null;
         setProjectStateReadyId(projectId);
         return;
       }
+    }
+    if (state.event === "conflict-current-pending") {
+      readerWorkspaceBlockedIntentRef.current = state.snapshot;
+      readerWorkspaceBlockedIntentGenerationRef.current =
+        readerWorkspaceUserIntentGenerationRef.current;
+    } else if (state.event === "conflict-retry-pending") {
+      readerWorkspaceBlockedIntentRef.current = null;
+      readerWorkspaceBlockedIntentGenerationRef.current = null;
+    }
+    if (state.event === "load-start") {
+      readerWorkspaceRestoringProjectRef.current = projectId;
+      readerWorkspaceRestorationRef.current?.invalidate(projectId);
+      authoritativeResumePendingRef.current = false;
+      authoritativePlaybackRateRef.current = null;
+      readerWorkspaceBlockedIntentRef.current = null;
+      readerWorkspaceBlockedIntentGenerationRef.current = null;
+      readerWorkspaceSnapshotRef.current = null;
+      clearVisibleProjectWorkspace(projectId);
+      setProjectStateReadyId(null);
+      return;
+    }
+    if (state.event === "write-error") {
+      if (state.snapshot) {
+        readerWorkspaceSnapshotRef.current = state.snapshot;
+      }
+      setError(state.error?.message ?? "Unable to save the project workspace.");
+      return;
+    }
+    if (state.event === "load-error") {
+      if (readerWorkspaceRestoringProjectRef.current === projectId) {
+        readerWorkspaceRestoringProjectRef.current = null;
+      }
+      authoritativeResumePendingRef.current = false;
+      authoritativePlaybackRateRef.current = null;
+      readerWorkspaceBlockedIntentRef.current = null;
+      readerWorkspaceBlockedIntentGenerationRef.current = null;
+      readerWorkspaceSnapshotRef.current = null;
+      clearVisibleProjectWorkspace(projectId);
+      setProjectStateReadyId(null);
+      setError(state.error?.message ?? "Unable to restore the project workspace.");
+      return;
+    }
+    const snapshot = isSuccessfulAcknowledgement ? state.baselineSnapshot : state.snapshot;
+    if (!snapshot) {
+      return;
+    }
+    const restorationBaseline = state.baselineSnapshot ?? snapshot;
+    if (state.event.startsWith("conflict-")) {
+      installReaderWorkspaceBaseline(restorationBaseline, responseGeneration);
+    } else {
+      readerWorkspaceBlockedIntentRef.current = null;
+    }
 
+    const coordinator = readerWorkspaceRestorationRef.current;
+    if (!coordinator) {
+      return;
+    }
+    const acknowledgementIntentGeneration = isSuccessfulAcknowledgement
+      ? state.sentIntentGeneration
+      : undefined;
+    const token = coordinator.begin(projectId, snapshot, {
+      cancelOnUserIntent: isSuccessfulAcknowledgement,
+      intentGeneration: acknowledgementIntentGeneration,
+    });
+    authoritativePlaybackRateRef.current = snapshot.playbackRate;
+    readerWorkspaceRestoringProjectRef.current = projectId;
+    authoritativeResumePendingRef.current = false;
+    if (!isSuccessfulAcknowledgement && !state.event.startsWith("conflict-")) {
+      readerWorkspaceSnapshotRef.current = null;
+    }
+    const conflictWarning =
+      state.event === "conflict-current-pending"
+        ? "Workspace changed again; your newer reading position is retained until your next edit."
+        : null;
+    clearVisibleProjectWorkspace(projectId);
+    if (conflictWarning) {
+      setError(conflictWarning);
+    }
+    setProjectStateReadyId(null);
+    const restorationIsStale = () =>
+      !coordinator.isCurrent(token, readerWorkspaceUserIntentGenerationRef.current) ||
+      activeProjectIdRef.current !== projectId;
+
+    // Keep the fail-closed hydration transaction ordered: every async boundary rechecks the
+    // restoration token before any visible or durable state becomes authoritative.
+    // eslint-disable-next-line sonarjs/cognitive-complexity
+    void (async () => {
       try {
-        const restoredJob = await getVoiceJob(savedState.jobId);
-        if ((restoredJob.projectId || "default") !== projectId) {
-          throw new Error("Stored job belongs to another project.");
+        if (!snapshot.sourceId) {
+          const [books, sources] = await Promise.all([
+            listProjectBookSources(projectId),
+            listPreparedSources(projectId),
+          ]);
+          if (restorationIsStale()) return;
+          setBookSources(books);
+          setPreparedSources((current) =>
+            mergePreparedSourcesPreservingFullContent(current, sources),
+          );
+          setPlaybackCursorSec(Math.max(0, (snapshot.playbackCursorMs ?? 0) / 1000));
+          setReadAlongPreferences((current) =>
+            applyAuthoritativeFollowPreference(current, snapshot.followPreference),
+          );
+          if (!coordinator.complete(token, readerWorkspaceUserIntentGenerationRef.current)) return;
+          installReaderWorkspaceBaseline(restorationBaseline, responseGeneration);
+          readerWorkspaceRestoringProjectRef.current = null;
+          setProjectStateReadyId(projectId);
+          if (conflictWarning) setError(conflictWarning);
+          return;
         }
-        setJob(restoredJob);
-        if (typeof restoredJob.inputText === "string") {
-          setText(restoredJob.inputText);
+
+        const [books, sources] = await Promise.all([
+          listProjectBookSources(projectId),
+          listPreparedSources(projectId),
+        ]);
+        if (restorationIsStale()) return;
+        const sourceKind = resolveAuthoritativeSourceKind(
+          snapshot.sourceId,
+          books.map((source) => source.id),
+          sources.map((source) => source.id),
+        );
+        setBookSources(books);
+        setPreparedSources((current) =>
+          mergePreparedSourcesPreservingFullContent(current, sources),
+        );
+        const restoredSourceMode = sourceKind === "book" ? "book" : "fileUrl";
+        setSourceMode(restoredSourceMode);
+        setSelectedBookSourceId(sourceKind === "book" ? snapshot.sourceId : null);
+        setSelectedPreparedSourceId(sourceKind === "prepared" ? snapshot.sourceId : null);
+        const preparedResume =
+          sourceKind === "prepared" ? authoritativePreparedProgress(projectId, snapshot) : null;
+        const preparedSource =
+          sourceKind === "prepared"
+            ? sources.find((source) => source.id === snapshot.sourceId)
+            : undefined;
+        const restoredActiveBlockId =
+          (preparedSource && preparedResume
+            ? resolveAuthoritativePreparedBlockId(preparedSource, preparedResume.readingPosition)
+            : null) ??
+          snapshot.readerLocator?.nodeId ??
+          null;
+        setWorkspaceContext((current) => ({
+          ...withWorkspaceSource(
+            current,
+            workspaceSourceType(restoredSourceMode),
+            snapshot.sourceId,
+          ),
+          activeBlockId: restoredActiveBlockId,
+        }));
+        if (sourceKind === "book" && snapshot.readerLocator) {
+          const restoredBook = books.find((source) => source.id === snapshot.sourceId);
+          const readingPosition = {
+            ...authoritativeResumePlan(snapshot).readingPosition,
+            bookSourceId: snapshot.sourceId,
+          };
+          setHashReadingPosition(readingPosition);
+          if (restoredBook) {
+            setSelectedBookScope(
+              scopeFromBookScopeKey(restoredBook, readingPosition.scopeKey ?? "book"),
+            );
+            setIsBookCinemaOpen(restoredBook.status === "ready");
+          }
+        } else if (sourceKind === "prepared") {
+          setAuthoritativePreparedResume(preparedResume);
+          setPreparedSourceCinemaSourceId(preparedResume ? snapshot.sourceId : null);
         }
-        applyJobStatusState(restoredJob);
-      } catch {
-        saveProjectWorkspaceState(projectId, {
-          activeBlockId: savedState.activeBlockId,
-          bookScope: savedState.bookScope,
-          bookSourceId: savedState.bookSourceId,
-          jobId: null,
-          preparedSourceId: savedState.preparedSourceId,
-          readingPosition: savedState.readingPosition,
-          sourceMode: savedState.sourceMode,
-          sourceType: savedState.sourceType,
-          speechPolicyProfile: savedState.speechPolicyProfile,
-          stage: savedState.stage,
-          text: savedState.text,
-          voiceProfileId: savedState.voiceProfileId,
-        });
+        setPlaybackCursorSec(Math.max(0, (snapshot.playbackCursorMs ?? 0) / 1000));
+        setReadAlongPreferences((current) =>
+          applyAuthoritativeFollowPreference(current, snapshot.followPreference),
+        );
+
+        let restoredJob: VoiceJob | null = null;
+        if (snapshot.runId) {
+          restoredJob = await getVoiceJob(snapshot.runId);
+          if (restorationIsStale()) return;
+          validateAuthoritativeVoiceJob(restoredJob, snapshot, sourceKind);
+          setJob(restoredJob);
+          if (typeof restoredJob.inputText === "string") {
+            setText(restoredJob.inputText);
+          }
+          applyJobStatusState(restoredJob);
+        } else {
+          setJob(null);
+          setRequestState("idle");
+        }
+
+        if (restorationIsStale()) return;
+        authoritativeResumePendingRef.current = Boolean(restoredJob);
+        setPendingPlaybackResume(restoredJob ? authoritativeResumePlan(snapshot) : null);
+        if (restorationIsStale()) return;
+        setReaderWorkspaceNomination({ sourceId: snapshot.sourceId, runId: snapshot.runId });
+        if (!coordinator.complete(token, readerWorkspaceUserIntentGenerationRef.current)) return;
+        installReaderWorkspaceBaseline(restorationBaseline, responseGeneration);
+        readerWorkspaceRestoringProjectRef.current = null;
+        setProjectStateReadyId(projectId);
+        if (conflictWarning) setError(conflictWarning);
+      } catch (caughtError) {
+        if (restorationIsStale()) return;
+        readerWorkspaceRestoringProjectRef.current = null;
+        authoritativeResumePendingRef.current = false;
+        authoritativePlaybackRateRef.current = null;
+        readerWorkspaceSnapshotRef.current = null;
+        setReaderWorkspaceNomination(null);
         setJob(null);
         setRequestState("idle");
-      } finally {
-        setProjectStateReadyId(projectId);
+        setSelectedBookSourceId(null);
+        setSelectedPreparedSourceId(null);
+        setSourceMode("text");
+        setText("");
+        setPendingPlaybackResume(null);
+        setProjectStateReadyId(null);
+        setError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "The server workspace could not be restored exactly.",
+        );
       }
+    })();
+  };
+
+  const restoreProjectWorkspace = useCallback(
+    async (projectId: string) => {
+      clearProjectWorkspaceState(projectId);
+      await readerWorkspaceClient.load(projectId);
     },
-    [applyJobStatusState, resetPlaybackSurface],
+    [readerWorkspaceClient],
   );
 
   const selectProject = useCallback(
@@ -5947,6 +6284,7 @@ export function App() {
         nextSourceMode = "fileUrl";
       }
       const nextSourceType = workspaceSourceType(nextSourceMode);
+      nominateReaderWorkspaceJob(nextJob);
       setJob(nextJob);
       setSelectedBookSourceId(nextJob.bookSourceId ?? null);
       setSelectedBookScope(nextJob.bookScope ?? null);
@@ -5996,6 +6334,7 @@ export function App() {
     [
       activeProjectId,
       applyJobStatusState,
+      nominateReaderWorkspaceJob,
       rememberActiveProjectId,
       selectedVoiceProfileId,
       speechPolicyProfile,
@@ -6315,9 +6654,12 @@ export function App() {
         return;
       }
       setSelectedPreparedSourceId(source.id);
+      if (source.status === "ready" && source.sourceOwner !== "temporary") {
+        nominateReaderWorkspaceSource(source.id);
+      }
       openPreparedSourceCinema(source);
     },
-    [openPreparedSourceCinema, preparedSources],
+    [nominateReaderWorkspaceSource, openPreparedSourceCinema, preparedSources],
   );
 
   const handlePrepareSourceUrl = useCallback(
@@ -7285,6 +7627,9 @@ export function App() {
         setBookScopeContent(null);
         setSourceMode("fileUrl");
         setSelectedPreparedSourceId(promoted.id);
+        if (promoted.projectId === activeProjectId && promoted.status === "ready") {
+          nominateReaderWorkspaceSource(promoted.id);
+        }
         setPreparedSourceCinemaSourceId(promoted.id);
         setIsBookCinemaOpen(false);
         if (promoted.projectId !== activeProjectId) {
@@ -7315,6 +7660,7 @@ export function App() {
     [
       activeProjectId,
       announcePolite,
+      nominateReaderWorkspaceSource,
       pendingTemporaryPromotion,
       selectProject,
       selectWorkspaceInspectorTarget,
@@ -7325,6 +7671,7 @@ export function App() {
     async (source: PreparedSource) => {
       if (source.sourceOwner !== "temporary") {
         setActiveTemporaryPreparedSource(null);
+        if (source.status === "ready") nominateReaderWorkspaceSource(source.id);
       }
       setSelectedPreparedSourceId(source.id);
       setSourceMode("fileUrl");
@@ -7353,7 +7700,7 @@ export function App() {
         setText(nextSource.speechText);
       }
     },
-    [selectWorkspaceInspectorTarget, setContentMode],
+    [nominateReaderWorkspaceSource, selectWorkspaceInspectorTarget, setContentMode],
   );
 
   const handleConfirmPreparedReadiness = useCallback(
@@ -7379,13 +7726,14 @@ export function App() {
         ...currentSources.filter((item) => item.id !== confirmed.id),
       ]);
       setSelectedPreparedSourceId(confirmed.id);
+      if (confirmed.status === "ready") nominateReaderWorkspaceSource(confirmed.id);
       setSourceMode("fileUrl");
       if (confirmed.speechText) {
         setText(confirmed.speechText);
       }
       return confirmed;
     },
-    [],
+    [nominateReaderWorkspaceSource],
   );
 
   const handleConfirmBookReadiness = useCallback(
@@ -7396,6 +7744,7 @@ export function App() {
         ...currentBooks.filter((item) => item.id !== confirmed.id),
       ]);
       setSelectedBookSourceId(confirmed.id);
+      if (confirmed.status === "ready") nominateReaderWorkspaceSource(confirmed.id);
       const nextScope = request.scope ?? selectedBookScope ?? resolveDefaultBookScope(confirmed);
       setSelectedBookScope(nextScope);
       setSourceMode("book");
@@ -7404,7 +7753,7 @@ export function App() {
       }
       return confirmed;
     },
-    [selectedBookScope],
+    [nominateReaderWorkspaceSource, selectedBookScope],
   );
 
   const handleInspectContentIR = useCallback(
@@ -7446,6 +7795,9 @@ export function App() {
         return;
       }
       setSelectedBookSourceId(book.id);
+      if (book.sourceOwner !== "temporary") {
+        nominateReaderWorkspaceSource(book.id);
+      }
       setSelectedBookScope(scope);
       setSourceMode("book");
       setContentMode("review");
@@ -7457,7 +7809,12 @@ export function App() {
       setText(scopedText);
       setBookSourceError(null);
     },
-    [bookScopeContent, selectWorkspaceInspectorTarget, setContentMode],
+    [
+      bookScopeContent,
+      nominateReaderWorkspaceSource,
+      selectWorkspaceInspectorTarget,
+      setContentMode,
+    ],
   );
   const openBookCinemaFromIntake = useCallback(
     (book?: BookSource, scope?: BookScope) => {
@@ -7465,6 +7822,9 @@ export function App() {
       if (nextBook?.status === "ready") {
         const nextScope = scope ?? resolveDefaultBookScope(nextBook);
         setSelectedBookSourceId(nextBook.id);
+        if (nextBook.sourceOwner !== "temporary") {
+          nominateReaderWorkspaceSource(nextBook.id);
+        }
         setSelectedBookScope(nextScope);
         setSourceMode("book");
         setContentMode("review");
@@ -7484,6 +7844,7 @@ export function App() {
     },
     [
       bookCinemaOpenTiming,
+      nominateReaderWorkspaceSource,
       openSelectedBookCinema,
       selectWorkspaceInspectorTarget,
       selectedBookSource,
@@ -7495,6 +7856,43 @@ export function App() {
   const handlePlaybackControlsChange = useCallback((controls: PlaybackController | null) => {
     setPlaybackControls(controls ?? DISABLED_PLAYBACK_CONTROLLER);
   }, []);
+
+  const userIntentPlaybackControls = useMemo<PlaybackController>(
+    () => ({
+      ...playbackControls,
+      play: () => {
+        markReaderWorkspaceUserIntent();
+        return playbackControls.play();
+      },
+      pause: () => {
+        markReaderWorkspaceUserIntent();
+        playbackControls.pause();
+      },
+      restart: () => {
+        markReaderWorkspaceUserIntent();
+        return playbackControls.restart();
+      },
+      setPlaybackRate: playbackControls.setPlaybackRate
+        ? (rate) => {
+            markReaderWorkspaceUserIntent();
+            playbackControls.setPlaybackRate?.(rate);
+          }
+        : undefined,
+      skipBy: playbackControls.skipBy
+        ? (seconds) => {
+            markReaderWorkspaceUserIntent();
+            playbackControls.skipBy?.(seconds);
+          }
+        : undefined,
+      seekTo: playbackControls.seekTo
+        ? (seconds) => {
+            markReaderWorkspaceUserIntent();
+            playbackControls.seekTo?.(seconds);
+          }
+        : undefined,
+    }),
+    [markReaderWorkspaceUserIntent, playbackControls],
+  );
 
   const handleGlobalPreviewVoiceChange = useCallback(
     (profileId: string) => {
@@ -7531,28 +7929,28 @@ export function App() {
     if (!playbackLifecycleReady) {
       return;
     }
-    if (playbackControls.isPlaying) {
-      playbackControls.pause();
+    if (userIntentPlaybackControls.isPlaying) {
+      userIntentPlaybackControls.pause();
       return;
     }
-    void playbackControls.play();
-  }, [playbackControls, playbackLifecycleReady]);
+    void userIntentPlaybackControls.play();
+  }, [playbackLifecycleReady, userIntentPlaybackControls]);
 
   const handleBookCinemaRestart = useCallback(() => {
     if (!playbackLifecycleReady) {
       return;
     }
-    void playbackControls.restart();
-  }, [playbackControls, playbackLifecycleReady]);
+    void userIntentPlaybackControls.restart();
+  }, [playbackLifecycleReady, userIntentPlaybackControls]);
 
   const handleBookCinemaSkip = useCallback(
     (seconds: number) => {
       if (!playbackLifecycleReady) {
         return;
       }
-      playbackControls.skipBy?.(seconds);
+      userIntentPlaybackControls.skipBy?.(seconds);
     },
-    [playbackControls, playbackLifecycleReady],
+    [playbackLifecycleReady, userIntentPlaybackControls],
   );
 
   const activeWordIndexForPlaybackProgress = useCallback(
@@ -7605,25 +8003,45 @@ export function App() {
     [activeWordIndexForPlaybackProgress, effectiveBookScope, highlightMap, selectedBookSource],
   );
 
+  const livePlaybackReadingPosition = useMemo<ReadingPosition | null>(() => {
+    if (!job) return null;
+    const resolved = readingPositionForPlaybackProgress(job, playbackCursorSec);
+    if (resolved) return resolved;
+    if (
+      preparedSourceCinemaSource &&
+      job.preparedSourceId === preparedSourceCinemaSource.id &&
+      preparedSourceCinemaCue
+    ) {
+      return { activeWordIndex: preparedSourceCinemaCue.documentActiveWordIndex };
+    }
+    return null;
+  }, [
+    job,
+    playbackCursorSec,
+    preparedSourceCinemaCue,
+    preparedSourceCinemaSource,
+    readingPositionForPlaybackProgress,
+  ]);
+
   useEffect(() => {
     if (!isBookCinemaOpen || !selectedBookSource || !effectiveBookScope) {
       return;
     }
     let readingPosition: ReadingPosition | null | undefined = currentReadingPosition;
     if (job?.bookSourceId === selectedBookSource.id) {
-      readingPosition = readingPositionForPlaybackProgress(job, playbackCursorSec);
+      readingPosition = livePlaybackReadingPosition;
     }
     if (!readingPosition) {
       return;
     }
+    setHashReadingPosition(readingPosition);
     replaceBookCinemaHash(readingPosition);
   }, [
     currentReadingPosition,
     effectiveBookScope,
     isBookCinemaOpen,
     job,
-    playbackCursorSec,
-    readingPositionForPlaybackProgress,
+    livePlaybackReadingPosition,
     selectedBookSource,
   ]);
 
@@ -7715,11 +8133,10 @@ export function App() {
   ]);
 
   useEffect(() => {
+    projectLoaderGenerationRef.current += 1;
     rememberActiveProjectId(activeProjectId);
     migrateLegacyWorkspaceState(activeProjectId);
     void refreshProjectJobs(activeProjectId);
-    void refreshBookSources(activeProjectId);
-    void refreshPreparedSources(activeProjectId);
     void refreshProjectProgress(activeProjectId);
     void refreshProjectStorage(activeProjectId);
     void refreshProjectSpeechPolicy(activeProjectId);
@@ -7727,8 +8144,6 @@ export function App() {
     setSpeechPolicyOverrides(loadSpeechPolicyOverrides(activeProjectId));
   }, [
     activeProjectId,
-    refreshBookSources,
-    refreshPreparedSources,
     refreshProjectJobs,
     refreshProjectProgress,
     refreshProjectStorage,
@@ -7998,63 +8413,72 @@ export function App() {
   }, [profileSource, refreshProfileSourceDiagnostics]);
 
   useEffect(() => {
-    if (activeDemoProjectId || projectStateReadyId !== activeProjectId) {
+    const persisted = readerWorkspaceSnapshotRef.current;
+    if (
+      activeDemoProjectId ||
+      projectStateReadyId !== activeProjectId ||
+      persisted?.projectId !== activeProjectId ||
+      !readerWorkspaceRestorationRef.current?.isPersistenceEnabled(activeProjectId) ||
+      pendingPlaybackResume !== null ||
+      authoritativeResumePendingRef.current
+    ) {
       return;
     }
-    const restoredJob = findRestorableWorkbenchJob({
-      activeProjectId,
-      currentJob: job,
-      jobs: projectJobs,
-      source: workbenchAudioRestoreSource,
+    const playbackCursorMs = Math.max(0, Math.round(playbackCursorSec * 1000));
+    const playbackRate = playbackControls.isAvailable
+      ? playbackControls.playbackRate
+      : (authoritativePlaybackRateRef.current ?? persisted.playbackRate ?? 1);
+    const followPreference = readAlongPreferences.scrollFollow !== "off";
+    const desired = projectReaderWorkspaceIntent(persisted, readerWorkspaceNomination, {
+      readMode: "paused",
+      readingPosition:
+        preparedReaderNavigationPosition ??
+        livePlaybackReadingPosition ??
+        currentReadingPosition ??
+        authoritativePreparedResume?.readingPosition ??
+        preparedSourceCinemaProgress?.readingPosition ??
+        (preparedSourceCinemaProgress
+          ? { activeWordIndex: preparedSourceCinemaProgress.activeWordIndex }
+          : undefined),
+      playbackCursorMs,
+      playbackRate,
+      followPreference,
     });
-    if (!restoredJob || restoredJob.id === job?.id) {
+    if (!desired) return;
+    const blockedIntent = readerWorkspaceBlockedIntentRef.current;
+    const persistenceDecision = readerWorkspacePersistenceDecision(
+      persisted,
+      desired,
+      readerWorkspaceBlockedIntentGenerationRef.current,
+      readerWorkspaceUserIntentGeneration,
+    );
+    if (persistenceDecision === "blocked") {
       return;
     }
-    setJob(restoredJob);
-    applyJobStatusState(restoredJob);
+    if (blockedIntent) {
+      readerWorkspaceBlockedIntentRef.current = null;
+      readerWorkspaceBlockedIntentGenerationRef.current = null;
+    }
+    if (persistenceDecision === "unchanged") {
+      return;
+    }
+    readerWorkspaceClientRef.current?.update(() => desired, readerWorkspaceUserIntentGeneration);
   }, [
     activeDemoProjectId,
     activeProjectId,
-    applyJobStatusState,
-    job,
-    projectJobs,
-    projectStateReadyId,
-    workbenchAudioRestoreSource,
-  ]);
-
-  useEffect(() => {
-    if (activeDemoProjectId || projectStateReadyId !== activeProjectId) {
-      return;
-    }
-    saveProjectWorkspaceState(activeProjectId, {
-      activeBlockId: workspaceContext.activeBlockId,
-      bookScope: selectedBookScope,
-      bookSourceId: selectedBookSourceId,
-      jobId: job?.id ?? null,
-      preparedSourceId: selectedPreparedSourceId,
-      readingPosition: currentReadingPosition,
-      sourceMode,
-      sourceType: workspaceSourceType(sourceMode),
-      speechPolicyProfile,
-      stage: contentMode,
-      text,
-      voiceProfileId: selectedVoiceProfileId,
-    });
-  }, [
-    activeProjectId,
-    activeDemoProjectId,
-    contentMode,
-    job?.id,
+    authoritativePreparedResume,
     currentReadingPosition,
+    livePlaybackReadingPosition,
+    playbackControls.playbackRate,
+    playbackControls.isAvailable,
+    playbackCursorSec,
+    pendingPlaybackResume,
+    preparedReaderNavigationPosition,
+    preparedSourceCinemaProgress,
     projectStateReadyId,
-    selectedPreparedSourceId,
-    selectedBookScope,
-    selectedBookSourceId,
-    selectedVoiceProfileId,
-    sourceMode,
-    speechPolicyProfile,
-    text,
-    workspaceContext.activeBlockId,
+    readAlongPreferences.scrollFollow,
+    readerWorkspaceNomination,
+    readerWorkspaceUserIntentGeneration,
   ]);
 
   useEffect(() => {
@@ -8128,10 +8552,14 @@ export function App() {
 
   useEffect(() => {
     const hasJob = Boolean(job?.id);
-    setPlaybackCursorSec(0);
+    setPlaybackCursorSec(
+      authoritativeResumePendingRef.current
+        ? Math.max(0, (readerWorkspaceSnapshotRef.current?.playbackCursorMs ?? 0) / 1000)
+        : 0,
+    );
     setPlaybackControls(DISABLED_PLAYBACK_CONTROLLER);
     setActivePlaybackSession(null);
-    setPendingPlaybackResume(null);
+    setPendingPlaybackResume((current) => (authoritativeResumePendingRef.current ? current : null));
     setResumeFallbackNotice(null);
     if (hasJob) {
       setIsPlaybackActive(false);
@@ -8147,7 +8575,12 @@ export function App() {
       pendingPlaybackResume.readingPosition,
     );
     const usedLocator = locatorSeconds !== null;
-    const targetSeconds = Math.max(0, locatorSeconds ?? pendingPlaybackResume.seconds);
+    const targetSeconds = Math.max(0, pendingPlaybackResume.seconds);
+    const restoredPlaybackRate =
+      pendingPlaybackResume.playbackRate ?? readerWorkspaceSnapshotRef.current?.playbackRate;
+    if (restoredPlaybackRate && playbackControls.setPlaybackRate) {
+      playbackControls.setPlaybackRate(restoredPlaybackRate);
+    }
     if (pendingPlaybackResume.readingPosition && !usedLocator) {
       recordFrontendDegradedState("resume-position-fallback", "reader-resume", {
         fallback: "saved-elapsed-seconds",
@@ -8182,6 +8615,9 @@ export function App() {
       usedLocator,
     });
     setResumeRestoreStartedAt(null);
+    authoritativeResumePendingRef.current = false;
+    authoritativePlaybackRateRef.current = null;
+    setAuthoritativePreparedResume(null);
     setPendingPlaybackResume(null);
   }, [
     highlightMap,
@@ -8191,25 +8627,6 @@ export function App() {
     readerResumeTiming,
     resumeRestoreStartedAt,
   ]);
-
-  useEffect(() => {
-    const restoreJobId = new URLSearchParams(globalThis.location.search).get("jobId");
-
-    if (!restoreJobId) {
-      return;
-    }
-
-    const restore = async () => {
-      try {
-        const restoredJob = await getVoiceJob(restoreJobId);
-        applyVoiceJobToState(restoredJob);
-      } catch {
-        setError("Unable to restore the requested job.");
-      }
-    };
-
-    void restore();
-  }, [applyVoiceJobToState]);
 
   useEffect(() => {
     if (!activeJobId) {
@@ -8857,6 +9274,7 @@ export function App() {
           announcePolite("No review issues.");
           return;
         }
+        markReaderWorkspaceBlockNavigation(workspaceContext.sourceId, nextIssueBlockId);
         setWorkspaceContext((currentContext) =>
           withWorkspaceActiveBlock(currentContext, nextIssueBlockId),
         );
@@ -8867,22 +9285,25 @@ export function App() {
         if (!playbackLifecycleReady) {
           return;
         }
-        if (playbackControls.isPlaying) {
-          playbackControls.pause();
+        if (userIntentPlaybackControls.isPlaying) {
+          userIntentPlaybackControls.pause();
           return;
         }
-        void playbackControls.play();
+        void userIntentPlaybackControls.play();
         return;
       }
       if (shortcut === "restart") {
         if (playbackLifecycleReady) {
-          void playbackControls.restart();
+          void userIntentPlaybackControls.restart();
         }
         return;
       }
       if (shortcut === "speedDown" || shortcut === "speedUp") {
-        playbackControls.setPlaybackRate?.(
-          nextReaderPlaybackRate(playbackControls.playbackRate, shortcut === "speedDown" ? -1 : 1),
+        userIntentPlaybackControls.setPlaybackRate?.(
+          nextReaderPlaybackRate(
+            userIntentPlaybackControls.playbackRate,
+            shortcut === "speedDown" ? -1 : 1,
+          ),
         );
         return;
       }
@@ -8895,9 +9316,9 @@ export function App() {
         if (
           playbackLifecycleReady &&
           seekTargetSec !== null &&
-          (playbackControls.seekTo ?? playbackControls.skipBy)
+          (userIntentPlaybackControls.seekTo ?? userIntentPlaybackControls.skipBy)
         ) {
-          seekPlaybackToSeconds(playbackControls, seekTargetSec, playbackCursorSec);
+          seekPlaybackToSeconds(userIntentPlaybackControls, seekTargetSec, playbackCursorSec);
         }
         return;
       }
@@ -8910,6 +9331,7 @@ export function App() {
         Math.min(narrationPreviewBlocks.length - 1, selectedBlockIndex + direction),
       );
       const nextBlock = narrationPreviewBlocks[nextIndex];
+      markReaderWorkspaceBlockNavigation(workspaceContext.sourceId, nextBlock.id);
       setWorkspaceContext((currentContext) =>
         withWorkspaceActiveBlock(currentContext, nextBlock.id),
       );
@@ -8927,12 +9349,14 @@ export function App() {
     isSettingsOpen,
     inspectWorkspaceCue,
     job,
+    markReaderWorkspaceBlockNavigation,
     narrationPreviewBlocks,
-    playbackControls,
     playbackCursorSec,
     playbackLifecycleReady,
     shortcutPreferences,
+    userIntentPlaybackControls,
     workspaceContext.activeBlockId,
+    workspaceContext.sourceId,
   ]);
 
   const studioProjectName = activeProject?.name ?? DEFAULT_PROJECT_NAME;
@@ -9149,11 +9573,11 @@ export function App() {
     if (!playbackLifecycleReady) {
       return;
     }
-    if (playbackControls.isPlaying) {
-      playbackControls.pause();
+    if (userIntentPlaybackControls.isPlaying) {
+      userIntentPlaybackControls.pause();
       return;
     }
-    void playbackControls.play();
+    void userIntentPlaybackControls.play();
   };
   const selectedNarrationCommandBlockIndex = narrationPreviewBlocks.findIndex(
     (block) => block.id === selectedNarrationCommandBlockId,
@@ -9167,6 +9591,7 @@ export function App() {
       Math.min(narrationPreviewBlocks.length - 1, selectedNarrationCommandBlockIndex + direction),
     );
     const nextBlock = narrationPreviewBlocks[nextIndex];
+    markReaderWorkspaceBlockNavigation(workspaceContext.sourceId, nextBlock.id);
     setWorkspaceContext((currentContext) => withWorkspaceActiveBlock(currentContext, nextBlock.id));
     inspectWorkspaceCue(nextBlock.id);
   };
@@ -9179,9 +9604,9 @@ export function App() {
     if (
       playbackLifecycleReady &&
       seekTargetSec !== null &&
-      (playbackControls.seekTo ?? playbackControls.skipBy)
+      (userIntentPlaybackControls.seekTo ?? userIntentPlaybackControls.skipBy)
     ) {
-      seekPlaybackToSeconds(playbackControls, seekTargetSec, playbackCursorSec);
+      seekPlaybackToSeconds(userIntentPlaybackControls, seekTargetSec, playbackCursorSec);
     }
   };
   let temporaryProjectVoiceCommandReason: string | undefined;
@@ -9220,7 +9645,7 @@ export function App() {
       owner: "playback",
       perform: () => {
         if (playbackLifecycleReady) {
-          void playbackControls.restart();
+          void userIntentPlaybackControls.restart();
         }
       },
       section: "Playback",
@@ -9240,8 +9665,8 @@ export function App() {
       keywords: ["speed", "rate", "audio", "keyboard"],
       owner: "playback",
       perform: () => {
-        playbackControls.setPlaybackRate?.(
-          nextReaderPlaybackRate(playbackControls.playbackRate, 1),
+        userIntentPlaybackControls.setPlaybackRate?.(
+          nextReaderPlaybackRate(userIntentPlaybackControls.playbackRate, 1),
         );
       },
       section: "Playback",
@@ -9397,6 +9822,7 @@ export function App() {
           selectedNarrationCommandBlockId,
         );
         if (nextIssueBlockId) {
+          markReaderWorkspaceBlockNavigation(workspaceContext.sourceId, nextIssueBlockId);
           setWorkspaceContext((currentContext) =>
             withWorkspaceActiveBlock(currentContext, nextIssueBlockId),
           );
@@ -10012,7 +10438,10 @@ export function App() {
             onCreateCustomSpeechPolicyProfile={handleCreateCustomSpeechPolicyProfile}
             onDeleteCustomSpeechPolicyProfile={handleDeleteCustomSpeechPolicyProfile}
             onReaderAccessibilitySettingsChange={setReaderAccessibilitySettings}
-            onReadAlongPreferencesChange={setReadAlongPreferences}
+            onReadAlongPreferencesChange={(preferences) => {
+              markReaderWorkspaceUserIntent();
+              setReadAlongPreferences(preferences);
+            }}
             onRunConfigurationChange={setRunConfiguration}
             onSaveBookSourcePolicy={handleSaveBookSourcePolicy}
             onSavePreparedSourcePolicy={handleSavePreparedSourcePolicy}
@@ -10096,7 +10525,7 @@ export function App() {
             generatedAudioLifecycle={generatedAudioLifecycle}
             job={job}
             mode={contentMode === "preview" ? "full" : "comparison-only"}
-            playbackControls={playbackControls}
+            playbackControls={userIntentPlaybackControls}
             playbackCursorSec={playbackCursorSec}
             placement={workspaceOverlay.previewPlacement}
             policyOptions={globalPreviewPolicyOptions}
@@ -10125,6 +10554,11 @@ export function App() {
             voiceOptions={globalPreviewVoiceOptions}
             voiceProfileLabel={activePreviewVoiceLabel}
             onActiveBlockChange={(blockId) => {
+              if (blockId) {
+                markReaderWorkspaceBlockNavigation(workspaceContext.sourceId, blockId);
+              } else {
+                markReaderWorkspaceUserIntent();
+              }
               setWorkspaceContext((currentContext) =>
                 withWorkspaceActiveBlock(currentContext, blockId),
               );
@@ -10145,7 +10579,7 @@ export function App() {
         latestProgress={latestProgress}
         openSignal={teleprompterOpenSignal}
         generatedAudioLifecycle={generatedAudioLifecycle}
-        playbackControls={playbackControls}
+        playbackControls={userIntentPlaybackControls}
         playbackCursorSec={playbackCursorSec}
         preparedSourceForCinema={jobPreparedSource ?? selectedPreparedSource}
         readAlongPreferences={readAlongPreferences}
@@ -10158,6 +10592,7 @@ export function App() {
           setIsSettingsOpen(true);
         }}
         onResumeProgress={(progress) => {
+          markReaderWorkspaceUserIntent();
           void handleResumeProgress(progress);
         }}
       />
@@ -10170,6 +10605,7 @@ export function App() {
           onPlaybackControlsChange={handlePlaybackControlsChange}
           onPlaybackStateChange={setIsPlaybackActive}
           onResumeProgress={(progress) => {
+            markReaderWorkspaceUserIntent();
             void handleResumeProgress(progress);
           }}
         />
@@ -10193,14 +10629,14 @@ export function App() {
             isProcessing={isProcessing}
             isResumeRestoring={isResumeRestoring}
             job={job}
-            playbackControls={playbackControls}
+            playbackControls={userIntentPlaybackControls}
             playbackCursorSec={playbackCursorSec}
             policyDefinition={speechPolicyDefinition}
             policyError={speechPolicyError}
             policyOverrides={speechPolicyOverrides}
             policyProfile={speechPolicyProfile}
             policyProfiles={speechPolicyProfiles}
-            progress={selectedBookProgress ?? hashProgress}
+            progress={hashProgress ?? selectedBookProgress}
             progressItems={projectProgress}
             resumeFallbackNotice={resumeFallbackNotice}
             readAlongPreferences={readAlongPreferences}
@@ -10217,6 +10653,7 @@ export function App() {
             highlightMapV2={highlightMapV2}
             themeName={bookCinemaThemeName}
             onClose={() => {
+              markReaderWorkspaceUserIntent();
               setIsBookCinemaOpen(false);
             }}
             onCreateAudio={(book, scope) => {
@@ -10244,12 +10681,19 @@ export function App() {
               handleKeepTemporaryBookSource(book, title);
             }}
             onRestart={handleBookCinemaRestart}
-            onScopeChange={setSelectedBookScope}
-            onSelectBook={handleSelectBookCinemaSource}
+            onScopeChange={(scope) => {
+              markReaderWorkspaceUserIntent();
+              setSelectedBookScope(scope);
+            }}
+            onSelectBook={(bookId) => {
+              markReaderWorkspaceUserIntent();
+              handleSelectBookCinemaSource(bookId);
+            }}
             onShortcutCheatSheetOpen={openShortcutCheatSheet}
             onSkip={handleBookCinemaSkip}
             onClearSourcePolicy={() => handleClearBookSourcePolicy(selectedBookSource.id)}
             onResumeProgress={(progress, seconds) => {
+              markReaderWorkspaceUserIntent();
               void handleResumeProgress(progress, seconds);
             }}
             onSaveSourcePolicy={(request) =>
@@ -10265,7 +10709,11 @@ export function App() {
         <Suspense fallback={<LazySurfaceFallback label="Loading source cinema..." />}>
           <PreparedCinemaOverlay
             accessibilitySettings={readerAccessibilitySettings}
-            activeWordIndex={preparedSourceCinemaCue?.documentActiveWordIndex ?? -1}
+            activeWordIndex={
+              visibleAuthoritativePreparedResume?.activeWordIndex ??
+              preparedSourceCinemaCue?.documentActiveWordIndex ??
+              -1
+            }
             canCreateAudio={!isProcessing}
             highlightMap={highlightMap}
             highlightMapV2={highlightMapV2}
@@ -10277,7 +10725,7 @@ export function App() {
               preparedSourceCinemaJobMatchesSource(job, preparedSourceCinemaSource)
             }
             job={preparedSourceCinemaJob}
-            playbackControls={playbackControls}
+            playbackControls={userIntentPlaybackControls}
             playbackCursorSec={playbackCursorSec}
             customPolicyProfiles={customSpeechPolicyProfiles}
             policyDefinition={speechPolicyDefinition}
@@ -10310,6 +10758,9 @@ export function App() {
               handleClearPreparedSourcePolicy(preparedSourceCinemaSource.id)
             }
             onClose={() => {
+              markReaderWorkspaceUserIntent();
+              setAuthoritativePreparedResume(null);
+              setPreparedReaderNavigationPosition(null);
               setPreparedSourceCinemaSourceId(null);
             }}
             onCreateAudio={(source) => {
@@ -10329,14 +10780,25 @@ export function App() {
             onHelpOpen={openContextualHelp}
             keepTemporarySourceDisabledReason={temporaryPromotionUnavailableReason}
             onRerunWebsiteExtraction={handleRerunWebsiteExtraction}
+            onReaderNavigate={(item) => {
+              markReaderWorkspaceBlockNavigation(preparedSourceCinemaSource.id, item.blockId);
+            }}
             onRestart={handleBookCinemaRestart}
             onResumeProgress={(progress) => {
+              markReaderWorkspaceUserIntent();
+              setAuthoritativePreparedResume(null);
+              setPreparedReaderNavigationPosition(progress.readingPosition ?? null);
               void handleResumeProgress(progress);
             }}
             onSaveSourcePolicy={(request) =>
               handleSavePreparedSourcePolicy(preparedSourceCinemaSource.id, request)
             }
-            onSelectSource={handleSelectPreparedCinemaSource}
+            onSelectSource={(sourceId) => {
+              markReaderWorkspaceUserIntent();
+              setAuthoritativePreparedResume(null);
+              setPreparedReaderNavigationPosition(null);
+              handleSelectPreparedCinemaSource(sourceId);
+            }}
             onShortcutCheatSheetOpen={openShortcutCheatSheet}
             onSkip={handleBookCinemaSkip}
             onThemeChange={setPreparedSourceCinemaThemeName}
@@ -10626,7 +11088,7 @@ export function App() {
                     highlightMapV2={highlightMapV2}
                     isPlaybackActive={isPlaybackActive}
                     job={job}
-                    playbackControls={playbackControls}
+                    playbackControls={userIntentPlaybackControls}
                     playbackCursorSec={playbackCursorSec}
                     policyProfile={speechPolicyProfileDisplayName(
                       speechPolicyProfile,
@@ -10684,6 +11146,9 @@ export function App() {
                       );
                       inspectWorkspaceCue(blockId);
                     }}
+                    onUserNavigate={(blockId) => {
+                      markReaderWorkspaceBlockNavigation(workspaceContext.sourceId, blockId);
+                    }}
                     onBackToPreview={() => {
                       runWorkspaceStageAction("previewSpeech");
                     }}
@@ -10724,7 +11189,7 @@ export function App() {
               createAndListenDisabledReason={createAndListenDisabledReason}
               createAndListenScope={createAndListenScope}
               isPlaybackActive={isPlaybackActive}
-              playbackControls={playbackControls}
+              playbackControls={userIntentPlaybackControls}
               playbackCursorSec={playbackCursorSec}
               onAuditionVoice={auditionVoicePreviewFromCurrentConfig}
               onTemporaryVoiceChange={
@@ -10788,6 +11253,9 @@ export function App() {
                   withWorkspaceActiveBlock(currentContext, blockId),
                 );
                 inspectWorkspaceCue(blockId);
+              }}
+              onReviewUserNavigate={(blockId) => {
+                markReaderWorkspaceBlockNavigation(workspaceContext.sourceId, blockId);
               }}
               onEditedTextByBlockIdChange={setRevisionEditedTextByBlockId}
               onHistoryEntriesChange={setRevisionHistoryEntries}
@@ -13792,6 +14260,7 @@ function SourceTextPanel({
   keepTemporarySourceDisabledReason,
   onSpeechPolicyProfileChange,
   onReviewBlockChange,
+  onReviewUserNavigate,
   onEditedTextByBlockIdChange,
   onHistoryEntriesChange,
   onReviewPaneChange,
@@ -13898,6 +14367,7 @@ function SourceTextPanel({
   keepTemporarySourceDisabledReason?: string;
   onSpeechPolicyProfileChange: (profile: string) => void;
   onReviewBlockChange: (blockId: string | null) => void;
+  onReviewUserNavigate: (blockId: string) => void;
   onEditedTextByBlockIdChange: Dispatch<SetStateAction<Record<string, string>>>;
   onHistoryEntriesChange: Dispatch<SetStateAction<RevisionHistoryEntry[]>>;
   onReviewPaneChange: (pane: ReviewPane) => void;
@@ -14056,6 +14526,7 @@ function SourceTextPanel({
             onInspectBookSource={onInspectBookSource}
             onInspectPreparedSource={onInspectPreparedSource}
             onActiveBlockChange={onReviewBlockChange}
+            onUserNavigate={onReviewUserNavigate}
             onActivePaneChange={onReviewPaneChange}
             onDiscardTemporarySource={onDiscardTemporarySource}
             onEditedTextByBlockIdChange={onEditedTextByBlockIdChange}
@@ -14112,6 +14583,7 @@ function SourceTextPanel({
           onOpenCinema={onOpenCinema}
           onOpenTheatre={onOpenTheatre}
           onActiveBlockChange={onReviewBlockChange}
+          onUserNavigate={onReviewUserNavigate}
           onOpenTeleprompt={() => {
             onStageAction("openTeleprompt");
           }}
@@ -14290,6 +14762,7 @@ function NarrationPreviewStage({
   createAndListenDisabledReason: externalCreateAndListenDisabledReason,
   createAndListenScope,
   onActiveBlockChange,
+  onUserNavigate,
   onAuditionVoice,
   onTemporaryVoiceChange,
   onCancelRun,
@@ -14332,6 +14805,7 @@ function NarrationPreviewStage({
   createAndListenDisabledReason?: string;
   createAndListenScope: CreateAndListenScope;
   onActiveBlockChange: (blockId: string | null) => void;
+  onUserNavigate?: (blockId: string) => void;
   onAuditionVoice: (sampleText: string) => Promise<VoicePreviewAudio>;
   onTemporaryVoiceChange?: (voiceId: string) => void;
   onCancelRun: () => void;
@@ -14557,6 +15031,7 @@ function NarrationPreviewStage({
     if (!nextBlock) {
       return;
     }
+    onUserNavigate?.(nextBlock.id);
     onActiveBlockChange(nextBlock.id);
   };
   let previewPlaybackStatusLabel = "Ready";
@@ -17533,6 +18008,7 @@ function NarrationReviewWorkbench({
   onInspectBookSource,
   onInspectPreparedSource,
   onActiveBlockChange,
+  onUserNavigate,
   onActivePaneChange,
   onDiscardTemporarySource,
   onEditedTextByBlockIdChange,
@@ -17568,6 +18044,7 @@ function NarrationReviewWorkbench({
   job: VoiceJob | null;
   isPlaybackActive: boolean;
   onActiveBlockChange: (blockId: string | null) => void;
+  onUserNavigate?: (blockId: string) => void;
   onActivePaneChange: (pane: ReviewPane) => void;
   onDiscardTemporarySource: () => void;
   onEditedTextByBlockIdChange: Dispatch<SetStateAction<Record<string, string>>>;
@@ -17673,11 +18150,13 @@ function NarrationReviewWorkbench({
       Math.min(reviewBlocks.length - 1, selectedBlockIndex + direction),
     );
     const nextBlock = reviewBlocks[nextIndex];
+    onUserNavigate?.(nextBlock.id);
     onActiveBlockChange(nextBlock.id);
   };
   const moveToNextReviewIssue = () => {
     const nextIssueBlockId = selectNextReviewIssueBlockId(reviewBlocks, selectedBlockId);
     if (nextIssueBlockId) {
+      onUserNavigate?.(nextIssueBlockId);
       onActiveBlockChange(nextIssueBlockId);
     }
   };
@@ -17844,6 +18323,7 @@ function NarrationReviewWorkbench({
             ) : null
           }
           onActiveBlockChange={onActiveBlockChange}
+          onUserNavigate={onUserNavigate}
           onEditedTextByBlockIdChange={onEditedTextByBlockIdChange}
           onHistoryEntriesChange={onHistoryEntriesChange}
           onInspectStructure={inspectStructure}

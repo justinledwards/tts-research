@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -14,6 +15,7 @@ import { DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS } from "../../teleprompter";
 import {
   TELEPROMPT_WAVEFORM_BAR_COUNT,
   TelepromptStudio,
+  notifyTelepromptUserNavigation,
   telepromptCueMarkers,
   telepromptWaveformAudioSource,
   type TelepromptStudioProps,
@@ -74,6 +76,36 @@ const blocks: RevisionBlock[] = [
   block({ id: "b", spokenText: "Four five." }),
   block({ id: "c", spokenText: "Six." }),
 ];
+
+describe("teleprompt user navigation", () => {
+  it("emits only an explicitly selected cue identity", () => {
+    const navigated: string[] = [];
+
+    notifyTelepromptUserNavigation((blockId) => {
+      navigated.push(blockId);
+    }, "cue-2");
+
+    expect(navigated).toEqual(["cue-2"]);
+  });
+
+  it("does nothing when the user-navigation seam is absent", () => {
+    expect(() => {
+      notifyTelepromptUserNavigation(undefined, "cue-2");
+    }).not.toThrow();
+  });
+
+  it("keeps automatic restoration and cue sync outside the user-navigation seam", () => {
+    const source = readFileSync(new URL("TelepromptStudio.tsx", import.meta.url), "utf8");
+    const automaticStart = source.indexOf("const restoredBlock = findTelepromptBlockById");
+    const manualStart = source.indexOf("const moveCue = useCallback");
+    const automaticSource = source.slice(automaticStart, manualStart);
+
+    expect(automaticStart).toBeGreaterThanOrEqual(0);
+    expect(manualStart).toBeGreaterThan(automaticStart);
+    expect(automaticSource).not.toContain("notifyTelepromptUserNavigation");
+    expect(source.match(/notifyTelepromptUserNavigation\(onUserNavigate,/g)).toHaveLength(3);
+  });
+});
 
 describe("teleprompt toolbar model", () => {
   it("resolves keyboard shortcuts while ignoring modified keys", () => {

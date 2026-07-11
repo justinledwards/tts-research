@@ -117,6 +117,7 @@ export interface RevisionPanelProps {
   validationTranscript: string;
   voiceProfileLabel: string;
   onActiveBlockChange: (blockId: string | null) => void;
+  onUserNavigate?: (blockId: string) => void;
   onEditedTextByBlockIdChange: Dispatch<SetStateAction<Record<string, string>>>;
   onHistoryEntriesChange: Dispatch<SetStateAction<RevisionHistoryEntry[]>>;
   onInspectStructure?: () => void;
@@ -163,6 +164,7 @@ export function RevisionPanel({
   validationTranscript,
   voiceProfileLabel,
   onActiveBlockChange,
+  onUserNavigate,
   onEditedTextByBlockIdChange,
   onHistoryEntriesChange,
   onInspectStructure,
@@ -713,6 +715,7 @@ export function RevisionPanel({
             groups={triageGroups}
             selectedBlockIds={selectedBlockIds}
             onActiveBlockChange={onActiveBlockChange}
+            onUserNavigate={onUserNavigate}
             onToggleBlockSelection={toggleBlockSelection}
           />
         </section>
@@ -1160,12 +1163,14 @@ function RevisionRepairQueue({
   groups,
   selectedBlockIds,
   onActiveBlockChange,
+  onUserNavigate,
   onToggleBlockSelection,
 }: Readonly<{
   activeBlockId: string | null;
   groups: RevisionTriageGroup[];
   selectedBlockIds: ReadonlySet<string>;
   onActiveBlockChange: (blockId: string | null) => void;
+  onUserNavigate?: (blockId: string) => void;
   onToggleBlockSelection: (blockId: string, selected: boolean) => void;
 }>) {
   if (groups.length === 0) {
@@ -1194,6 +1199,7 @@ function RevisionRepairQueue({
               key={item.block.id}
               selected={selectedBlockIds.has(item.block.id)}
               onActiveBlockChange={onActiveBlockChange}
+              onUserNavigate={onUserNavigate}
               onToggleBlockSelection={onToggleBlockSelection}
             />
           ))}
@@ -1208,12 +1214,14 @@ function RevisionRepairQueueRow({
   item,
   selected,
   onActiveBlockChange,
+  onUserNavigate,
   onToggleBlockSelection,
 }: Readonly<{
   active: boolean;
   item: RevisionTriageItem;
   selected: boolean;
   onActiveBlockChange: (blockId: string | null) => void;
+  onUserNavigate?: (blockId: string) => void;
   onToggleBlockSelection: (blockId: string, selected: boolean) => void;
 }>) {
   const { block } = item;
@@ -1241,7 +1249,7 @@ function RevisionRepairQueueRow({
         className="min-w-0 border-transparent bg-transparent p-0 shadow-none hover:bg-transparent"
         data-testid={`revision-block-${block.id}`}
         onClick={() => {
-          onActiveBlockChange(block.id);
+          activateRevisionBlockNavigation(block.id, onUserNavigate, onActiveBlockChange);
         }}
         selected={active}
         variant="ghost"
@@ -1269,6 +1277,15 @@ function RevisionRepairQueueRow({
       </div>
     </div>
   );
+}
+
+export function activateRevisionBlockNavigation(
+  blockId: string,
+  onUserNavigate: ((blockId: string) => void) | undefined,
+  onActiveBlockChange: (blockId: string | null) => void,
+): void {
+  onUserNavigate?.(blockId);
+  onActiveBlockChange(blockId);
 }
 
 function RevisionSelectedBlockEditor({

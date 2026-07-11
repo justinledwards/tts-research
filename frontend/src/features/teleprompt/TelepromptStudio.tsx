@@ -156,6 +156,7 @@ export interface TelepromptStudioProps {
   readonly theatreOpenSignal?: number;
   readonly voiceProfile: string;
   readonly onActiveBlockChange: (blockId: string | null) => void;
+  readonly onUserNavigate?: (blockId: string) => void;
   readonly onBackToPreview: () => void;
   readonly onBackToReview: () => void;
   readonly onCreateAndListen: () => void;
@@ -164,6 +165,13 @@ export interface TelepromptStudioProps {
   readonly onOpenTheatreStage?: () => void;
   readonly onRefreshTemporarySource?: (temporarySourceId: string) => Promise<void> | void;
   readonly onTheatreSettingsChange: (settings: TelepromptTheatreSettings) => void;
+}
+
+export function notifyTelepromptUserNavigation(
+  onUserNavigate: ((blockId: string) => void) | undefined,
+  blockId: string,
+): void {
+  onUserNavigate?.(blockId);
 }
 
 function findTelepromptBlockById(
@@ -265,6 +273,7 @@ export function TelepromptStudio({
   theatreOpenSignal = 0,
   voiceProfile,
   onActiveBlockChange,
+  onUserNavigate,
   onBackToPreview,
   onBackToReview,
   onCreateAndListen,
@@ -826,6 +835,7 @@ export function TelepromptStudio({
         setStatusMessage(direction < 0 ? "Already at the first cue." : "Already at the final cue.");
         return;
       }
+      notifyTelepromptUserNavigation(onUserNavigate, nextId);
       onActiveBlockChange(nextId);
       persistSnapshot(returnTarget, nextId);
       setStatusMessage(direction < 0 ? "Moved to previous cue." : "Moved to next cue.");
@@ -841,6 +851,7 @@ export function TelepromptStudio({
       announcePolite,
       blocks,
       onActiveBlockChange,
+      onUserNavigate,
       persistSnapshot,
       returnTarget,
     ],
@@ -913,12 +924,14 @@ export function TelepromptStudio({
       setStatusMessage("Current audio cue is not available yet.");
       return;
     }
+    notifyTelepromptUserNavigation(onUserNavigate, sourceBlockId);
     onActiveBlockChange(sourceBlockId);
     persistSnapshot(returnTarget, sourceBlockId);
     setStatusMessage("Jumped to the current audio cue.");
   }, [
     cueSync.activeCue?.sourceBlockId,
     onActiveBlockChange,
+    onUserNavigate,
     persistSnapshot,
     audioFollowAvailable,
     returnTarget,
@@ -1768,6 +1781,7 @@ export function TelepromptStudio({
                     onSelect={() => {
                       setWorkMode("rehearsal");
                       setCueSyncMode("manual");
+                      notifyTelepromptUserNavigation(onUserNavigate, block.id);
                       onActiveBlockChange(block.id);
                       persistSnapshot(returnTarget, block.id);
                       setStatusMessage(`Selected cue ${block.index.toString()}.`);

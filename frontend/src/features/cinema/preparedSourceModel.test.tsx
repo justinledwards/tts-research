@@ -1,6 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { PreparedSourceCinemaOverlay } from "./PreparedSourceCinemaBase";
+import {
+  notifyPreparedReaderNavigation,
+  PreparedSourceCinemaOverlay,
+} from "./PreparedSourceCinemaBase";
 import { DEFAULT_READER_ACCESSIBILITY_SETTINGS } from "../reader-accessibility";
 import { DEFAULT_READ_ALONG_PREFERENCES } from "../readalong";
 import { DEFAULT_SPEECH_POLICY_DEFINITION } from "../../speechPolicy";
@@ -28,6 +31,21 @@ const noop = () => {
 };
 
 describe("prepared source cinema helpers", () => {
+  it("publishes genuine outline navigation through the reader callback seam", () => {
+    const item = {
+      blockId: "source:block-7",
+      id: "outline:block-7",
+      index: 7,
+      label: "Results",
+      level: 2,
+    };
+    const navigated: (typeof item)[] = [];
+
+    notifyPreparedReaderNavigation(item, (nextItem) => navigated.push(nextItem));
+
+    expect(navigated).toEqual([item]);
+  });
+
   it("labels URL sources as Website Cinema and file sources as Source Cinema", () => {
     expect(preparedSourceCinemaActionLabel(makePreparedSource({ kind: "url" }))).toBe(
       "Open Website Cinema",

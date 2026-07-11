@@ -3,6 +3,7 @@ import {
   ApiRequestError,
   audioSource,
   backendAssetUrl,
+  buildVoiceProfileArtifact,
   clearHuggingFaceToken,
   confirmTemporarySourceReadiness,
   createCustomSpeechPolicyProfile,
@@ -10,25 +11,27 @@ import {
   createTemporarySource,
   createTemporarySourceJob,
   createVoicePreview,
-  buildVoiceProfileArtifact,
   deleteProject,
   deleteVoiceJob,
-  getProjectLexicon,
   getAdapterCapabilities,
   getAdapterDiagnostics,
   getContentIR,
   getContentIRSpeechPlan,
   getJobSpeechPlan,
+  getProjectLexicon,
+  getReaderWorkspace,
   getTemporaryStorageUsageSummary,
   getVoiceProfileCredentials,
+  isApiNotFoundError,
   listTemporarySourceJobs,
   listTemporarySources,
-  previewMathSpeech,
   previewContentIRSpeechPolicy,
-  isApiNotFoundError,
+  previewMathSpeech,
   previewPreparedSourceSpeechPolicy,
-  saveHuggingFaceToken,
+  putReaderWorkspace,
+  ReaderWorkspacePreconditionError,
   reopenTemporarySource,
+  saveHuggingFaceToken,
   subscribeToVoiceJob,
   updateBookSourceSpeechPolicy,
   updatePreparedSourceSpeechPolicy,
@@ -39,6 +42,77 @@ describe("API errors", () => {
   it("identifies structured 404 errors for stale local source state", () => {
     expect(isApiNotFoundError(new ApiRequestError(404, "not found"))).toBe(true);
     expect(isApiNotFoundError(new ApiRequestError(500, "server error"))).toBe(false);
+  });
+
+  it("GETs a reader workspace with its exact ETag", async () => {
+    const originalFetch = globalThis.fetch;
+    const exact = readerWorkspaceResponse();
+    globalThis.fetch = (input) => {
+      expect(fetchInputUrl(input)).toBe("/api/projects/project%2Fone/reader-workspace");
+      return Promise.resolve(Response.json(exact, { headers: { ETag: '"revision-7"' } }));
+    };
+    try {
+      await expect(getReaderWorkspace("project/one")).resolves.toEqual({
+        snapshot: exact,
+        etag: '"revision-7"',
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("PUTs a reader workspace with If-Match and exposes 412 server-current state", async () => {
+    const originalFetch = globalThis.fetch;
+    const current = readerWorkspaceResponse({ projectRevision: 8, playbackCursorMs: 9000 });
+    const requests: RequestInit[] = [];
+    globalThis.fetch = (_input, init) => {
+      requests.push(init ?? {});
+      return Promise.resolve(
+        Response.json(
+          { current, error: "stale", retryToken: '"revision-8"' },
+          { headers: { ETag: '"revision-8"' }, status: 412 },
+        ),
+      );
+    };
+    try {
+      const error = await putReaderWorkspace(
+        "project-1",
+        readerWorkspaceResponse(),
+        '"revision-7"',
+      ).catch((error_: unknown) => error_);
+      expect(requests[0]?.method).toBe("PUT");
+      expect(requests[0]?.headers).toEqual({
+        "Content-Type": "application/json",
+        "If-Match": '"revision-7"',
+      });
+      expect(error).toBeInstanceOf(ReaderWorkspacePreconditionError);
+      expect(error).toMatchObject({ current, etag: '"revision-8"', status: 412 });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("fails closed when a 412 omits both ETag and a non-empty retry token", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = () =>
+      Promise.resolve(
+        Response.json(
+          { current: readerWorkspaceResponse(), error: "stale", retryToken: "  " },
+          { status: 412 },
+        ),
+      );
+    try {
+      const error = await putReaderWorkspace(
+        "project-1",
+        readerWorkspaceResponse(),
+        '"revision-7"',
+      ).catch((error_: unknown) => error_);
+      expect(error).toBeInstanceOf(ApiRequestError);
+      expect(error).not.toBeInstanceOf(ReaderWorkspacePreconditionError);
+      expect(error).toMatchObject({ status: 412 });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   it("builds backend asset URLs for download links", () => {
@@ -980,6 +1054,29 @@ describe("API errors", () => {
     }
   });
 });
+
+function readerWorkspaceResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    schemaVersion: "reader_workspace_snapshot.v1" as const,
+    projectId: "project-1",
+    projectRevision: 7,
+    readMode: "paused" as const,
+    sourceId: "source-exact",
+    sourceRevisionId: "revision-exact",
+    sourceContentHash: "hash-exact",
+    runId: "run-exact",
+    runCompatibilityKey: "compat-exact",
+    mediaManifestVersion: 3,
+    timingRevision: 2,
+    syncFidelity: "exact_word" as const,
+    readerLocator: null,
+    playbackCursorMs: 4200,
+    playbackRate: 1.25,
+    followPreference: true,
+    updatedAt: "2026-07-11T10:00:00Z",
+    ...overrides,
+  };
+}
 
 function fetchInputUrl(input: RequestInfo | URL): string {
   if (typeof input === "string") {

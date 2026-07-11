@@ -178,6 +178,13 @@ const PreparedMermaidDiagram = lazy(() =>
 );
 const PREPARED_SOURCE_RENDERER_DEGRADED_AFTER_MS = 2500;
 
+export function notifyPreparedReaderNavigation(
+  item: PreparedSourceCinemaOutlineItem,
+  onReaderNavigate?: (item: PreparedSourceCinemaOutlineItem) => void,
+): void {
+  onReaderNavigate?.(item);
+}
+
 export interface PreparedSourceCinemaPlaybackControls {
   isAvailable: boolean;
   isPlaying: boolean;
@@ -284,6 +291,7 @@ export function PreparedSourceCinemaOverlay({
   onPlayPause,
   onRerunWebsiteExtraction,
   onRestart,
+  onReaderNavigate,
   onResumeProgress,
   onSaveSourcePolicy,
   onSelectSource,
@@ -338,6 +346,7 @@ export function PreparedSourceCinemaOverlay({
   onPlayPause: () => void;
   onRerunWebsiteExtraction?: (source: PreparedSource, containerSelector: string) => void;
   onRestart: () => void;
+  onReaderNavigate?: (item: PreparedSourceCinemaOutlineItem) => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
   onSaveSourcePolicy: (request: SourceSpeechPolicyUpdateRequest) => Promise<void> | void;
   onSelectSource: (sourceId: string) => void;
@@ -472,6 +481,7 @@ export function PreparedSourceCinemaOverlay({
     announceTransportAction("Cinema playback restarted.");
   }, [announceTransportAction, onRestart]);
   const handleOutlineNavigate = (item: PreparedSourceCinemaOutlineItem) => {
+    notifyPreparedReaderNavigation(item, onReaderNavigate);
     setPointedBlockId(item.blockId);
     scrollToCinemaBlock(item.blockId, scrollBehavior);
   };

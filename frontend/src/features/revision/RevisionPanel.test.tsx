@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { RevisionPanel } from "./RevisionPanel";
+import { activateRevisionBlockNavigation, RevisionPanel } from "./RevisionPanel";
 import type { RevisionHistoryEntry } from "./revisionHistory";
 import type { RevisionBlock, RevisionStatus } from "./revisionFilters";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
@@ -14,6 +15,37 @@ const setTextNoop = noop as Dispatch<SetStateAction<Record<string, string>>>;
 const setHistoryNoop = noop as Dispatch<SetStateAction<RevisionHistoryEntry[]>>;
 
 describe("RevisionPanel", () => {
+  it("records explicit repair-row navigation exactly once before changing active selection", () => {
+    const calls: string[] = [];
+
+    activateRevisionBlockNavigation(
+      "empty",
+      (blockId) => calls.push(`intent:${blockId}`),
+      (blockId) => calls.push(`active:${blockId ?? "null"}`),
+    );
+
+    expect(calls).toEqual(["intent:empty", "active:empty"]);
+  });
+
+  it("still changes active selection when the explicit navigation callback is omitted", () => {
+    const calls: (string | null)[] = [];
+
+    activateRevisionBlockNavigation("empty", undefined, (blockId) => calls.push(blockId));
+
+    expect(calls).toEqual(["empty"]);
+  });
+
+  it("keeps the Review focus-request normalization passive", () => {
+    const source = readFileSync(new URL("RevisionPanel.tsx", import.meta.url), "utf8");
+    const effectStart = source.indexOf('reviewOpenFocusRequest?.focus !== "needsRepair"');
+    const effectEnd = source.indexOf("  ]);", effectStart);
+    const focusRequestEffect = source.slice(effectStart, effectEnd);
+
+    expect(effectStart).toBeGreaterThanOrEqual(0);
+    expect(focusRequestEffect).toContain("onActiveBlockChange(nextBlockId)");
+    expect(focusRequestEffect).not.toContain("onUserNavigate");
+  });
+
   it("renders health, grouped repair queue, selected editor, and pronunciation repair rows", () => {
     const markup = renderRevisionPanel();
 
