@@ -1,6 +1,6 @@
 {
   "schemaVersion": "tts-research.reader-first-release-contract.v2",
-  "status": "peer_approved_linear_created_rfa_01_product_authorized",
+  "status": "peer_approved_rfa_01_completed_rfa_02_product_authorized",
   "planPath": "docs/plans/2026-07-10-reader-first-release-reset.md",
   "ownerDecision": {
     "authority": "acting_product_owner",
@@ -15,8 +15,8 @@
     "peerApproved": true,
     "linearCreationAuthorized": true,
     "productImplementationAuthorized": true,
-    "graphUnblockedIssues": ["RFA-01"],
-    "authorizedIssues": ["RFA-01"]
+    "graphUnblockedIssues": ["RFA-02"],
+    "authorizedIssues": ["RFA-02"]
   },
   "customerRequirements": [
     {
@@ -685,9 +685,13 @@
   },
   "liveLinearManifest": {
     "path": "docs/project-management/linear/tts-research-reader-first-release-batch.manifest.json",
-    "sha256": "5f18e3e86d204a40dbd69f6640b1c442be8d3f473ab313d34707b713661a22d8",
+    "sha256": "f9aa05aa04221f34bea1e0b3a0b0f7c0c6b4ce8c7fc26d1b948435ac5c29608b",
     "issueCount": 20,
     "relationCount": 65,
-    "verifiedAt": "2026-07-11T01:05:48Z"
+    "verifiedAt": "2026-07-11T02:31:15Z"
+  },
+  "parentAuthorization": {
+    "path": "docs/reviews/reader-first-rfa02-parent-authorization.json",
+    "sha256": "41fa61517142af7c1ad5d2e9204aaaa4fa7c3020d21443df311a4532a329d265"
   }
 }

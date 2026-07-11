@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "tts-research.reader-first-parent-authorization.v1",
+  "recordedAt": "2026-07-11T02:31:15Z",
+  "authority": "canonical_parent_authorization_transition",
+  "peerApproval": {
+    "round": "reader-first-release-v8",
+    "verdict": "approved",
+    "responsePath": "docs/reviews/chatgpt-reader-first-release-response-v8.md",
+    "responseSha256": "db77ea725ec44d7916c12ff243554a5b7ae34975e2b2ad61d283a6fb221bfe01",
+    "parentApprovalPath": "docs/reviews/reader-first-release-peer-approval-v8.json",
+    "parentApprovalSha256": "29710a3b5af4fc21be5091b454a57fc7c2b14d363a9fc46706e403e901e7ecef",
+    "archive": "tts-research-reader-first-peer-review-v8.zip",
+    "archiveSha256": "b91a683ac8c94bd44ca618b53b275cbe93c2d55d8a5cac1b11e6d9d1aeafc7de",
+    "productImplementationPermitted": true
+  },
+  "liveLinearManifest": {
+    "path": "docs/project-management/linear/tts-research-reader-first-release-batch.manifest.json",
+    "sha256": "f9aa05aa04221f34bea1e0b3a0b0f7c0c6b4ce8c7fc26d1b948435ac5c29608b",
+    "verifiedAt": "2026-07-11T02:31:15Z"
+  },
+  "completedDependency": {
+    "localId": "RFA-01",
+    "linearIdentifier": "QQP-613",
+    "linearState": "Done",
+    "linearStateType": "completed",
+    "completionCommit": "44aa1ad0640aad8c9c18014346a6923189228b41",
+    "historicalAuthorization": {
+      "status": "peer_approved_linear_created_rfa_01_product_authorized",
+      "graphUnblockedIssues": ["RFA-01"],
+      "authorizedIssues": ["RFA-01"]
+    },
+    "immutableEvidence": {
+      "verificationPath": "docs/evidence/reader-first/RFA-01/verification.json",
+      "verificationSha256": "8bfffb270cb7d4c1ccb4ffc52297a9589f8349726ac685afe726ac942b07ba96",
+      "rollbackPath": "docs/evidence/reader-first/RFA-01/rollback.json",
+      "rollbackSha256": "83097e307834b600029136dc70f08ac67a9793a041e44e42cecac9e82bce0383"
+    }
+  },
+  "authorizedCandidate": {
+    "localId": "RFA-02",
+    "linearIdentifier": "QQP-614",
+    "linearState": "Backlog",
+    "linearStateType": "backlog",
+    "dependencies": ["RFA-01"],
+    "dependencyClosure": [
+      {
+        "localId": "RFA-01",
+        "linearIdentifier": "QQP-613",
+        "linearState": "Done",
+        "linearStateType": "completed",
+        "completionCommit": "44aa1ad0640aad8c9c18014346a6923189228b41"
+      }
+    ],
+    "dependencyClosureSatisfied": true,
+    "productImplementationAuthorized": true,
+    "linearTransitionPerformed": false
+  },
+  "currentAuthorization": {
+    "ownerAccepted": true,
+    "peerApproved": true,
+    "linearCreationAuthorized": true,
+    "productImplementationAuthorized": true,
+    "graphUnblockedIssues": ["RFA-02"],
+    "authorizedIssues": ["RFA-02"]
+  },
+  "blockedUnauthorizedIssues": [
+    "RFA-03",
+    "RFA-04",
+    "RFA-05",
+    "RFA-06",
+    "RFA-07",
+    "RFA-08",
+    "RFA-09",
+    "RFA-10",
+    "RFA-11",
+    "RFA-12",
+    "RFA-13",
+    "RFA-14",
+    "RFA-15",
+    "RFA-16",
+    "RFA-17",
+    "RFA-18",
+    "RFA-19",
+    "RFA-20"
+  ],
+  "linearMutationPerformed": false,
+  "productMutationPerformed": false
+}

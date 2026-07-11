@@ -1,6 +1,6 @@
 {
   "schemaVersion": "tts-research.reader-first-linear-live.v1",
-  "verifiedAt": "2026-07-11T01:05:48Z",
+  "verifiedAt": "2026-07-11T02:31:15Z",
   "project": {
     "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
     "name": "TTS-Research",
@@ -18,9 +18,8 @@
     "pagesRead": 1,
     "hasNextPage": false,
     "unarchivedCount": 20,
-    "activeCount": 20,
+    "activeCount": 19,
     "activeIdentifiers": [
-      "QQP-613",
       "QQP-614",
       "QQP-615",
       "QQP-616",
@@ -48,8 +47,8 @@
     "peerApproved": true,
     "linearCreationAuthorized": true,
     "productImplementationAuthorized": true,
-    "graphUnblockedIssues": ["RFA-01"],
-    "authorizedIssues": ["RFA-01"]
+    "graphUnblockedIssues": ["RFA-02"],
+    "authorizedIssues": ["RFA-02"]
   },
   "sourcePacket": "docs/project-management/linear/tts-research-reader-first-release-batch-draft.json",
   "peerApproval": "docs/reviews/reader-first-release-peer-approval-v8.json",
@@ -60,8 +59,8 @@
       "identifier": "QQP-613",
       "title": "[RFA-01] Freeze Reader-First lifecycle, identity, UX, and performance contract",
       "url": "https://linear.app/niklas-olsson/issue/QQP-613/rfa-01-freeze-reader-first-lifecycle-identity-ux-and-performance",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Done",
+      "stateType": "completed",
       "priority": 3
     },
     {

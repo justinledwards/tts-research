@@ -1,16 +1,23 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
 import {
   CONTRACT_PATH,
+  LIVE_MANIFEST_PATH,
   MARKDOWN_PATH,
   PACKET_PATH,
+  PARENT_AUTHORIZATION_PATH,
+  RFA_01_ROLLBACK_PATH,
+  RFA_01_VERIFICATION_PATH,
   renderPacketMarkdown,
   runValidation,
   validateExecutableOcrFixture,
+  validateParentAuthorization,
   validateReaderFirstRelease,
+  validateRfa01Evidence,
 } from "./validate-reader-first-release.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -18,6 +25,21 @@ const [CONTRACT, PACKET] = await Promise.all([
   readFile(path.join(ROOT, CONTRACT_PATH), "utf8").then(JSON.parse),
   readFile(path.join(ROOT, PACKET_PATH), "utf8").then(JSON.parse),
 ]);
+const [
+  PARENT_AUTHORIZATION,
+  LIVE_MANIFEST,
+  RFA_01_VERIFICATION,
+  RFA_01_ROLLBACK,
+  PEER_APPROVAL_TEXT,
+] = await Promise.all([
+  readFile(path.join(ROOT, PARENT_AUTHORIZATION_PATH), "utf8").then(JSON.parse),
+  readFile(path.join(ROOT, LIVE_MANIFEST_PATH), "utf8").then(JSON.parse),
+  readFile(path.join(ROOT, RFA_01_VERIFICATION_PATH), "utf8").then(JSON.parse),
+  readFile(path.join(ROOT, RFA_01_ROLLBACK_PATH), "utf8").then(JSON.parse),
+  readFile(path.join(ROOT, "docs/reviews/reader-first-release-peer-approval-v8.json"), "utf8"),
+]);
+const PEER_APPROVAL = JSON.parse(PEER_APPROVAL_TEXT);
+const PEER_APPROVAL_SHA256 = createHash("sha256").update(PEER_APPROVAL_TEXT).digest("hex");
 const OCR_OVERLAY = await readFile(
   path.join(ROOT, "fixtures/pdf/scanned_fixture.expected-overlay.json"),
   "utf8",
@@ -54,7 +76,7 @@ test("Peer approval, Linear creation, and root-only product authorization reject
     }, /authorization drift/);
   }
   rejectContract((contract) => {
-    contract.authorization.authorizedIssues = ["RFA-01", "RFA-02"];
+    contract.authorization.authorizedIssues = ["RFA-01"];
   }, /authorization drift/);
   rejectPacket((packet) => {
     packet.creationPlan.eligibleForProductImplementation = [];
@@ -63,8 +85,67 @@ test("Peer approval, Linear creation, and root-only product authorization reject
     packet.issues[0].linear.identifier = "QQP-999";
   }, /RFA-01: live issue authorization\/binding drift/);
   rejectPacket((packet) => {
-    packet.issues[1].productImplementationAuthorized = true;
+    packet.issues[1].productImplementationAuthorized = false;
   }, /RFA-02: live issue authorization\/binding drift/);
+});
+
+test("completed RFA-01 to sole authorized RFA-02 transition fails closed", () => {
+  rejectContract((contract) => {
+    contract.authorization.graphUnblockedIssues = ["RFA-01"];
+    contract.authorization.authorizedIssues = ["RFA-01"];
+  }, /authorization drift/);
+  rejectContract((contract) => {
+    contract.authorization.graphUnblockedIssues = [];
+    contract.authorization.authorizedIssues = [];
+  }, /authorization drift/);
+  rejectContract((contract) => {
+    contract.authorization.graphUnblockedIssues = ["RFA-02", "RFA-03"];
+    contract.authorization.authorizedIssues = ["RFA-02", "RFA-03"];
+  }, /authorization drift/);
+  rejectPacket((packet) => {
+    packet.issues[1].dependencyUnblocked = false;
+  }, /RFA-02: graph\/status drift/);
+  rejectPacket((packet) => {
+    packet.issues[1].linear.state = "In Progress";
+    packet.issues[1].linear.stateType = "started";
+  }, /RFA-02: live issue authorization\/binding drift/);
+
+  const startedAuthorization = structuredClone(PARENT_AUTHORIZATION);
+  startedAuthorization.authorizedCandidate.linearState = "In Progress";
+  startedAuthorization.authorizedCandidate.linearStateType = "started";
+  startedAuthorization.authorizedCandidate.linearTransitionPerformed = true;
+  assert.throws(
+    () => validateParentAuthorization(startedAuthorization, LIVE_MANIFEST),
+    /RFA-02 authorization, dependency closure, or Backlog fact drift/,
+  );
+
+  const staleAuthorization = structuredClone(PARENT_AUTHORIZATION);
+  staleAuthorization.recordedAt = "2026-07-11T01:05:48Z";
+  assert.throws(
+    () => validateParentAuthorization(staleAuthorization, LIVE_MANIFEST),
+    /stale or has unexpected authority/,
+  );
+  const wrongCompletion = structuredClone(PARENT_AUTHORIZATION);
+  wrongCompletion.completedDependency.completionCommit = "0".repeat(40);
+  assert.throws(
+    () => validateParentAuthorization(wrongCompletion, LIVE_MANIFEST),
+    /RFA-01 completion fact or commit binding drift/,
+  );
+
+  const tamperedVerification = structuredClone(RFA_01_VERIFICATION);
+  tamperedVerification.authorizationState.authorizedIssues = ["RFA-02"];
+  assert.throws(
+    () =>
+      validateRfa01Evidence(
+        tamperedVerification,
+        RFA_01_ROLLBACK,
+        PACKET,
+        "ignored-current-validator-hash",
+        PEER_APPROVAL,
+        PEER_APPROVAL_SHA256,
+      ),
+    /historical capture authorization binding drift/,
+  );
 });
 
 test("snapshot migration, browser transition, and revision concurrency are semantic invariants", () => {

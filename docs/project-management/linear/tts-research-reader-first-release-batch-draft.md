@@ -2,11 +2,13 @@
 
 # TTS-Research Reader-First Architecture release batch
 
-Status: `peer_approved_linear_created_rfa_01_product_authorized`
+Status: `peer_approved_rfa_01_completed_rfa_02_product_authorized`
 
-Linear target: team `QQP`, project `TTS-Research` (0 / 20 active).
+Linear target: team `QQP`, project `TTS-Research` (20 / 20 unarchived).
 
-Peer, Linear creation, and product implementation remain unauthorized.
+RFA-01 is completed in Linear; its immutable evidence preserves the historical RFA-01 authorization capture.
+
+RFA-02 is the sole currently graph-unblocked and product-authorized issue and remains Backlog until the parent performs the Linear transition.
 
 ## DAG
 
