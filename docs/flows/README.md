@@ -1,33 +1,19 @@
 # TTS-Research application flow registry
 
-Status: `candidate_pending_chatgpt`
+Status: `candidate_pending_chatgpt_v8_recheck`
 
-This registry covers the complete known application architecture at the product-flow level: **34 flows** spanning application shell, projects, sources, voice profiles, synthesis, events, persistence, artifacts, playback, reader modes, repair, portability, settings, error recovery, trust boundaries, and diagnostics.
+This registry is the canonical candidate architecture map for **39 primary flows**. The current Go AST inventory contains **123 HTTP routes** with exactly one declared primary flow owner and **161 required implementation-state symbols**.
 
-The read-only inventory observed **123 direct HTTP routes** and only five effective pre-existing application-flow diagrams. This candidate pack closes the architecture-map gap without claiming exact route ownership yet.
+## Canonical and generated files
 
-## Files
+- `manifest.json` — canonical contracts, ownership, state machines, trust boundaries, and evidence claims.
+- `application-ux.md` — generated state tables, transition tables, and Mermaid diagrams.
+- `content-audio-reader.md` — generated state tables, transition tables, and Mermaid diagrams.
+- `runtime-data-security.md` — generated state tables, transition tables, and Mermaid diagrams.
+- `coverage-report.json` — generated exact counts and inventory summary.
 
-- `application-ux.md` — application shell, project, intake, review, policy, preview, and Teleprompt.
-- `content-audio-reader.md` — voice, synthesis, events, persistence, artifacts, playback, reader modes, progress, and repair.
-- `runtime-data-security.md` — import/export, UI memory, settings, recovery, trust boundaries, and diagnostics.
-- `manifest.json` — stable IDs, owners, versions, and required semantic branches.
+`pnpm validate:flows` fails on semantic schema violations, universal normalized templates, route/state/evidence drift, or byte drift in any generated document, README, or report. `pnpm validate:flows -- --write` regenerates derived artifacts only after the canonical contracts pass validation.
 
-## Definition of complete
+## Approval status
 
-A flow is complete only when:
-
-1. entry, success, failure, recovery/retry, and cancellation semantics are explicit;
-2. every implementation route/state belongs to exactly one primary flow or a declared shared concern;
-3. trust-boundary crossings declare data class and egress policy;
-4. executable tests prove critical branches;
-5. Mermaid and semantic freshness checks pass deterministically;
-6. ChatGPT returns `AGREED TTS BEST-IN-CLASS ARCHITECTURE BATCH` for this packet;
-7. repo-local validators and PO verification remain authoritative.
-
-## Current non-claims
-
-- Candidate diagrams are not yet peer-agreed.
-- Exact mapping of all 123 routes and implementation state constants is not yet proven.
-- No CI enforcement exists yet.
-- The diagrams do not authorize implementation outside an agreed Linear issue.
+The candidate remains blocked from Linear creation until the archive-first ChatGPT gate returns `AGREED TTS BEST-IN-CLASS ARCHITECTURE BATCH`. Passing repository validators does not substitute for that advisory gate or PO verification.

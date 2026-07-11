@@ -1,0 +1,12 @@
+[P A R T I |
+
+DESIGNING FOR PEOPLE
+Good design begins with the people who must live with it.
+Tools should reveal their purpose, preserve context, and make
+recovery possible when work is interrupted.
+A reader should be able to continue on another device without
+guessing which source, voice, or position was last authoritative.
+When evidence is uncertain, the system must ask for review
+instead of narrating a convenient fiction.
+
+42

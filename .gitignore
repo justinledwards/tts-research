@@ -60,7 +60,8 @@ backend/voice/
 backend/model-cache/
 backend/output/
 backend/tmp/
-demo/
+demo/*
+!demo/deep-research-report.md
 !frontend/src/features/demo/
 !frontend/src/features/demo/**
 model/

@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 2,
+  "checkedAt": "2026-07-11T01:05:48Z",
+  "readOnly": false,
+  "viewer": {
+    "id": "8b704226-8d25-44d3-8cde-20b1d74813c7",
+    "name": "Niklas Olsson"
+  },
+  "team": {
+    "id": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+    "key": "QQP",
+    "name": "QQ-PWN",
+    "matchesProjectTeam": true
+  },
+  "project": {
+    "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+    "name": "TTS-Research",
+    "url": "https://linear.app/niklas-olsson/project/tts-research-9683c18e447c",
+    "matchCount": 1
+  },
+  "capacity": {
+    "cap": 20,
+    "pagesRead": 1,
+    "hasNextPage": false,
+    "unarchivedCount": 20,
+    "activeCount": 20,
+    "activeIdentifiers": [
+      "QQP-613",
+      "QQP-614",
+      "QQP-615",
+      "QQP-616",
+      "QQP-617",
+      "QQP-618",
+      "QQP-619",
+      "QQP-620",
+      "QQP-621",
+      "QQP-622",
+      "QQP-623",
+      "QQP-624",
+      "QQP-625",
+      "QQP-626",
+      "QQP-627",
+      "QQP-628",
+      "QQP-629",
+      "QQP-630",
+      "QQP-631",
+      "QQP-632"
+    ],
+    "availableSlots": 0
+  },
+  "relations": {
+    "expected": 65,
+    "verified": 65,
+    "allType": "blocks",
+    "allDirectionsMatchDag": true
+  },
+  "queryContract": {
+    "identity": "viewer + team(id=QQP live UUID) + project(id=TTS-Research live UUID)",
+    "capacity": "project(id).issues(first=100, includeArchived=false), hasNextPage=false",
+    "relations": "per-issue relations + inverseRelations, first=100, hasNextPage=false",
+    "activeStateTypesExcluded": ["completed", "canceled"]
+  },
+  "authorization": {
+    "ownerAccepted": true,
+    "peerApproved": true,
+    "linearCreationAuthorized": true,
+    "productImplementationAuthorized": true,
+    "graphUnblockedIssues": ["RFA-01"],
+    "authorizedIssues": ["RFA-01"]
+  }
+}

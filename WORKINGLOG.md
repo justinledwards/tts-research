@@ -1,3 +1,171 @@
+## 2026-07-11 03:06 CEST - Reader-First Peer approval and live Linear batch
+
+- [x] archive exact v8 `PEER APPROVED` response bound to `tts-research-reader-first-peer-review-v8.zip` (`b91a683ac8c94bd44ca618b53b275cbe93c2d55d8a5cac1b11e6d9d1aeafc7de`)
+- [x] record parent approval and fresh live Linear capacity: TTS-Research / QQP, 0/20 active before creation, no pagination or duplicate RFA issues
+- [x] create exact RFA-01–RFA-20 batch as QQP-613–QQP-632 in Backlog at priority 3
+- [x] create and independently re-read all 65 native `blocks` relations; exact DAG directions match
+- [x] bind live 20/20 capacity, issue UUIDs/URLs, approval evidence, and relation manifest into the canonical contract and packet
+- [x] authorize product implementation only for sole graph root RFA-01; RFA-02–RFA-20 remain dependency-blocked
+- [x] pass focused Reader-First tests 20/20, complete script suite 140/140, Markdown 18/18, PDF 10/10 with 1 optional skip, all Go packages, frontend 111 files / 774 tests, lint, format, and diff checks
+- [ ] implement and verify RFA-01
+
+Live manifest: `docs/project-management/linear/tts-research-reader-first-release-batch.manifest.json`.
+
+## 2026-07-10 17:29 CEST - Responsive architecture Peer requests 15-issue replacement
+
+- [x] reproduce the current product failures in dev and production: source-ready Cinema is terminal-audio gated; normal narration is routed through Preview; partial playback primitives are neutralized; overlays intercept controls; source-list bootstrap is oversized
+- [x] record production timing/payload evidence and complete 11-finding local dogfood report
+- [x] isolate Camofox picker/session recycling and complete the first Peer submission with one fail-closed model verification cycle; later 503s remain transport failures, never false passes
+- [x] submit exact responsive v1 archive (`fef0fa919baf138a194c59d88e79400595b3040ea6b5c8f26afe20a44d1b3b8f`) in ChatGPT TTS-Research Project conversation `6a510786-19a4-83ed-8a43-0a3ee17be8df` using verified GPT-5.6 Sol / Pro
+- [x] archive exact `TTS_RESPONSIVE_ARCHITECTURE_REQUEST_CHANGES` response (`6778a6fe0833313f7ea679379fb6a4962e0e2d3cfc3ea2e3525dc6bf20a4e1f7`)
+- [x] replace the active 20-issue candidate with a validator-backed, provenance-preserving `RSP-01`–`RSP-15` draft; exact title/DAG/authorization parity passes an independent Peer-derived verifier
+- [x] encode the target lifecycle as one source/run/manifest/playback/sync authority, 12 durable event types, 20 p50/p95 budgets, source-ready Cinema, and voice-only Preview/Audition
+- [x] pass final plan gates: Biome format/lint; 120/120 script tests; 39-flow registry; both responsive validators; both independent oracles; exact frozen BIC hashes; `git diff --check`
+- [ ] obtain explicit owner acceptance and second Peer approval before any Linear mutation or product implementation
+
+Linear mutation remains prohibited; replacement issues created: 0. Only `RSP-01` is dependency-unblocked in the proposed graph, and it is not implementation-authorized yet.
+
+## 2026-07-10 16:33 CEST - Responsive Cinema and progressive narration architecture reset
+
+- [ ] reproduce live responsiveness, Cinema-readiness, playback/read-along, and preview-player failures
+- [ ] map preprocessing, narration generation, progressive playback, Cinema, and read-along control/data flow
+- [ ] root-cause Camofox browser death after successful ChatGPT model selection
+- [ ] obtain a fresh ChatGPT Peer architecture checkpoint from exact current evidence
+- [ ] replace the prior batch with atomic dependency-safe issues, measurable responsiveness budgets, and evidence gates
+
+Linear mutation remains prohibited; replacement issues created: 0. The frozen v10 review archive is superseded by this architecture reset.
+
+## 2026-07-10 17:05 CEST - ChatGPT architecture v9 blocked; v10 repairs dispatched
+
+- [x] pass exact v8 route, evidence, Linear, full `pnpm check`, flow, parity, and diff gates on v9 bytes
+- [x] build and independently verify `tts-research-best-in-class-v9.zip` (`fe0f9466f571aeb43c28379e4e45efabba436660571e3c84bd42d51b6467beca`): 1,314 source files, 12 modified tracked paths, ZIP integrity pass
+- [x] submit exact archive in verified `TTS-Research` Project conversation `6a50ef49-6de4-83eb-9764-abda9e39a44e` with GPT-5.6 Sol / Pro
+- [x] archive exact v9 `REQUEST_CHANGES` response and one-to-one v9→v10 repair matrix
+- [x] independently query live Linear: real TTS-Research project `010252d0-b34c-473d-82f2-05bc4d7bc685`, QQP team `cdc92ef0-dc69-47b5-8896-312dbc1e2d93`, no pagination; reject unrelated IDs accidentally supplied by the v9 brief
+- [x] repair callable/path-local route analysis and switch/range/send expression traversal; direct IIFE, alias, generic-call, exclusive-branch, and early-return regressions pass
+- [x] bind executable evidence to exact canonical TypeScript runner includes and Go build selection; full-validator substitution/GOOS/legacy-build negatives pass
+- [x] make creation gates explicit false booleans and artifact provenance validator-owned/exact-hash
+- [x] pass fresh post-worker focused/full gates on v10 bytes: route and symbol Go suites, 15 flow tests, 19 Linear tests, 103 script tests, 18 Markdown adapters, 10 PDF tests (1 skipped), all Go packages, 774 frontend tests, generated parity, and `git diff --check`
+- [ ] freeze v10 and obtain exact ChatGPT approval before any Linear mutation
+
+Linear mutation remains prohibited; replacement issues created: 0.
+
+## 2026-07-10 15:35 CEST - ChatGPT architecture v8 blocked; v9 repairs in progress
+
+- [x] freeze and independently audit `tts-best-in-class-v8-final-20260710T110608Z.zip` (`e79c59177b3024b34600302c403f74be6669d257a8acb06ee39e70a3944e84f3`): 1,312 source files, 12 modified paths, source closure/CRC/status-patch parity/reverse-apply pass
+- [x] submit in fresh `tts-research` Project conversation `6a50d28a-d148-83eb-b459-39630f09a1fd` with Pro reasoning
+- [x] archive exact v8 `REQUEST_CHANGES` response with 12 reproducible blocker groups
+- [ ] repair route lexical scope, callable/expression coverage, multiplicity, reachability, and build selection
+- [ ] repair executable-evidence constant reachability, terminal calls, runner glob, and Go build selection
+- [ ] repair Linear lifecycle, capacity/source provenance, reconciliation, and issue command contracts
+- [ ] independently reproduce all v8 probes and pass fresh focused/full gates on v9 bytes
+- [ ] obtain v9 approval before any Linear mutation
+
+Linear mutation remains prohibited; replacement issues created: 0.
+
+## 2026-07-10 14:45 CEST - ChatGPT architecture v7 blocked; v8 candidate completed
+
+- [x] freeze and independently audit `tts-best-in-class-v7-20260710T101606Z.zip` (`3861aff7b2c3c89b1e0cce6f359eac1c58616f4903b328d763a11b1f966cda4f`): 1,310 source files, 12 modified paths, 1,728,372-byte patch, source closure/CRC/reverse-apply pass
+- [x] submit in a fresh verified `tts-research` Project conversation with GPT-5.6 Sol / Pro
+- [x] archive v7 `REQUEST_CHANGES` verdict from conversation `6a50c8cb-e78c-83eb-a0b9-c9876c99b4fe`
+- [x] independently reproduce all final v7 probes on current bytes
+- [x] unify route traversal across ordinary registration and returned-router evaluation; preserve all reachable receiver environments and atomic simultaneous assignment
+- [x] require reachable assertions in real unshadowed test-runner registrations
+- [x] pass fresh focused and full gates on v8 bytes
+- [x] obtain v8 review: `REQUEST_CHANGES`; no Linear mutation
+
+Linear mutation remains prohibited; replacement issues created: 0.
+
+## 2026-07-10 13:05 CEST - ChatGPT architecture v6 blocked; v7 candidate completed
+
+- [x] freeze and audit `tts-best-in-class-v6-20260710T105635Z.zip` (`ae4d296e2517905848be5c1236bff447971c099cd29dcba3edfa4815f270acb1`)
+- [x] submit in fresh verified `tts-research` Project conversation with GPT-5.6 Sol / Pro
+- [x] archive v6 `REQUEST_CHANGES` verdict from conversation `6a50bb4c-6a5c-83ed-acb0-cf71fd306cf9`
+- [x] repair path-sensitive Router-return analysis and unsupported control flow
+- [x] replace test-evidence and state-symbol scanners with complete-source AST analysis
+- [x] build a source-closed, uncapped, reverse-applicable review archive pipeline
+- [x] enforce exact candidate/null Linear capacity invariants
+- [x] pass fresh full gates on v7 bytes: 89 script tests, 18 Markdown adapters, 10 PDF tests (1 skipped), all Go packages, and 774 frontend tests
+- [x] obtain v7 review: `REQUEST_CHANGES`; no Linear mutation
+
+Linear mutation remains prohibited; replacement issues created: 0.
+
+## 2026-07-10 12:20 CEST - ChatGPT architecture v5 repair and v6 recheck candidate
+
+- [x] save v5 `REQUEST_CHANGES` response and archive/thread metadata
+- [x] recursively include `else if` Router-return branches; exact ambiguous negative now passes
+- [x] require real case-local flowAssert calls; reject comments, strings, and uncalled nested helpers in JS and Go
+- [x] reconcile packet 677/0/0 thresholds against independently computed manifest and coverage-report values
+- [x] enforce exact machine classes, class bindings, cache/build states, metadata bindings, and issue/contract artifact triplets
+- [x] render packet-root measurement thresholds concretely and reject unresolved/undefined Markdown values
+- [x] correct v4 repair matrix to actual stale-state-reference and 677/0/0 source blockers; ownership/measurement labeled supplemental
+- [x] pass focused flow 8/8, packet 8/8, route inventory 11/11; zero generated Markdown `undefined`
+- [x] pass fresh full `pnpm check`, format, diff, and deterministic-generation gates on v6 bytes: 80 script tests, 18 adapters, 10 PDF (1 skipped), all Go packages, 774 frontend tests
+- [ ] archive-first ChatGPT v6 recheck; no Linear mutation until exact `AGREED` marker
+
+## 2026-07-10 11:35 CEST - ChatGPT architecture v4 repair and v5 recheck candidate
+
+- [x] save v4 `REQUEST_CHANGES` response and exact archive/thread metadata
+- [x] replace file-global route receiver discovery with package-level call-site scope propagation and schema v2
+- [x] pass 10 route tests and live 123/123 inventory
+- [x] bind FLOW_ASSERT only inside the cited executable test case; reject sibling/top-level/helper markers
+- [x] enforce exact-once flow/route/state ownership across all 20 issue rows
+- [x] add first-class runtime/frontend machine classes, repetitions, variance, bindings, artifacts, and final freshness
+- [x] pass targeted 8 flow suites and 7 packet suites
+- [x] pass fresh full `pnpm check` on v5 bytes: 79 script tests, 18 adapters, 10 PDF (1 skipped), all Go packages, 774 frontend tests
+- [ ] archive-first ChatGPT v5 recheck; no Linear mutation until `AGREED`
+
+## 2026-07-10 10:20 CEST - ChatGPT architecture v3 repair and v4 recheck candidate
+
+- [x] save v3 `REQUEST_CHANGES` response and exact archive/thread metadata
+- [x] re-author 39 flow machines into 16 declared semantic families with 11/12/13/16 states and 677 stable transition IDs
+- [x] enforce first-readable/playable, Preview outcomes, Playback lifecycle, UI-memory authority, unique rollback, and exact cancellation parity
+- [x] expand semantic-template signatures to roles, decisions, guards, cancellation, retry, commit, rollback, and invariants
+- [x] make Fiber route discovery propagate aliases, `fiber.Router` helpers, and returned groups while rejecting unknown receivers
+- [x] move every unsupported evidence claim to exact owner-bound planned transition evidence; require executable FLOW_ASSERT markers for coverage
+- [x] pass focused gates: flow suite 7/7, route-inventory suite 8/8, packet suite 5/5, 123/123 routes
+- [x] pass fresh full `pnpm check` on v4 bytes: 76 script tests, 18 adapters, 10 PDF (1 skipped), all Go packages, 774 frontend tests
+- [ ] obtain exact ChatGPT v4 agreement marker
+- [ ] create the 20-issue Linear batch and start BIC-01
+
+Artifacts:
+
+- `docs/reviews/chatgpt-best-in-class-architecture-response-v3.md`
+- `docs/reviews/chatgpt-best-in-class-architecture-repair-matrix-v3.md`
+- `docs/flows/manifest.json`
+- `docs/flows/coverage-report.json`
+- `backend/cmd/flow-route-inventory/main.go`
+- `scripts/validate-flow-registry.mjs`
+- `docs/project-management/linear/tts-research-best-in-class-batch-draft.json`
+
+## 2026-07-10 08:38 CEST - ChatGPT architecture v2 repair and v3 recheck candidate
+
+- [x] save v2 `REQUEST_CHANGES` response and exact archive/thread metadata
+- [x] replace 39-way universal flow topology with 15 domain-family structures (maximum reuse 3)
+- [x] replace regex route discovery with fail-closed Go AST inventory (123 exact routes)
+- [x] expand exact state inventory to 161 source declarations with one primary owner each
+- [x] bind 198 executable case names and classify every branch as covered or issue-owned planned evidence
+- [x] generate Mermaid, three flow docs, README, and coverage report from canonical manifest with byte parity
+- [x] narrow BIC-03 to infrastructure and reconcile BIC-04–10 to 38 flows / 123 routes / 161 symbols
+- [x] require post-change BIC-11–17 and final-byte BIC-20 performance evidence
+- [x] pass fresh full `pnpm check`: 75 script tests, 18 adapters, 10 PDF (1 skipped), all Go packages, 774 frontend tests
+- [ ] obtain exact ChatGPT v3 agreement marker
+- [ ] create the 20-issue Linear batch and start BIC-01
+
+Artifacts:
+- `docs/reviews/chatgpt-best-in-class-architecture-response-v2.md`
+- `docs/reviews/chatgpt-best-in-class-architecture-repair-matrix-v2.md`
+- `docs/flows/manifest.json`
+- `docs/flows/coverage-report.json`
+- `docs/project-management/linear/tts-research-best-in-class-batch-draft.json`
+
+## 2026-07-10 07:12 CEST - UX/performance architecture baseline protocol
+
+- [ ] revise product spine, core-surface state matrix, and explicit UX contracts
+- [ ] make benchmark thresholds the sole numerical source and document reproducible protocol
+- [ ] capture offline-capable baselines without relaxing limits
+- [ ] run formatting and focused performance checks
+
 ## 2026-07-09 21:34 CEST - CPU-first startup and best-in-class PO reset
 
 - [x] verify API_PORT/PORT startup with lean CPU Kokoro and no heavy model bootstrap
@@ -6,6 +174,13 @@
 - [x] inventory all app flows and draft canonical flowcharts
 - [ ] run archive-first ChatGPT flowchart, architecture, UX, and atomicity gates
 - [ ] create the agreed capped Linear issue batch and start the first unblocked issue
+
+ChatGPT architecture gate v1:
+- reviewed clean commit `e97ff6f` from verified archive SHA-256 `a091e1c49712bebbda3d780467cb318a782d83150191cdd117a207ae15562aa9`;
+- returned `REQUEST_CHANGES TTS BEST-IN-CLASS ARCHITECTURE BATCH` after 19m34s;
+- exact response recorded in `docs/reviews/chatgpt-best-in-class-architecture-response-v1.md`;
+- blocking corrections cover domain-specific flow state machines, missing flow domains/shared concerns, progressive UX/state evidence, exact no-eager startup, reproducible performance protocols, atomic 20-issue structure, and current capacity/reconciliation;
+- fresh Linear API capacity artifact records 0 active unarchived / 20 available slots; no Linear issues were created or mutated.
 
 Evidence/RCA:
 - exact custom-port startup and reversible project create/delete passed;
@@ -3394,3 +3569,10 @@ duplicating every implementation detail from commits, PR text, or generated revi
   - SHA256: `0fc43f2b9dee3c4e930ead45f309af16866ef93f4b3b7a13ab1da2c920146967`.
 - QQP-542 SPEC PASS and stale EOF-only QUALITY blocker remain resolved by parent hygiene; Book Cinema responsive budget evidence is green.
 - QQP-441 blocker is cleared: final UX action-audit gate is now green/waived, so QQP-441 evidence package can proceed to commit/Linear closeout.
+
+## 2026-07-10 07:12 CEST - Best-in-class Linear packet redesign
+
+- [ ] Reconcile the peer verdict with the completed first-batch archive and current packet.
+- [ ] Replace the canonical packet with exactly BIC-01 through BIC-20 and deterministic Markdown generation.
+- [ ] Add the UX state/evidence matrix and accessibility/hierarchy contracts.
+- [ ] Run JSON, parity, format, DAG, capacity, and schema validation.

@@ -1,0 +1,409 @@
+{
+  "schemaVersion": "tts-research.linear-existing-issues.v1",
+  "capturedAt": "2026-07-10T07:15:40.998513+02:00",
+  "source": "Linear GraphQL project-scoped issues(includeArchived:true), paginated",
+  "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+  "issueCount": 22,
+  "stateTypeCounts": {
+    "completed": 22
+  },
+  "archivedCount": 22,
+  "issues": [
+    {
+      "id": "a9bbef20-a2bd-4883-88e4-9ddb79e3c627",
+      "identifier": "QQP-543",
+      "title": "Resolve final UX UI action audit debt blocking QQP-441",
+      "description": "## Problem\n\n`mise exec -- pnpm validate:ux-final` is the remaining blocker for QQP-441 after the Book Cinema responsive budget was repaired in QQP-542.\n\nFresh report: `output/final-ux-gates/latest/final-ux-summary.md`\n\nObserved final UX status:\n\n* 12/13 gates passed.\n* Failed gate: UI action audit is review-complete or explicitly waived.\n* Blocking failed activations:\n  * `workspace-preview-generation-failed`: timeout waiting for `Audio does not match the current source, voice, policy, or scope`.\n  * `workspace-preview-asr-warning`: timeout waiting for `localized-preview-playback-toolbar`.\n* Duplicate registry debt:\n  * 73 unclassified duplicate action groups.\n  * 31 overexposed duplicate groups with burn-down owners.\n  * 8 needs-consolidation duplicate groups.\n\n## Acceptance\n\n* `mise exec -- pnpm validate:ux-final` passes, or any intentionally remaining UI-action findings have explicit repo/Linear waivers with owners and review dates.\n* Scenario inventories for `workspace-preview-generation-failed` and `workspace-preview-asr-warning` are deterministic.\n* Duplicate action groups are either removed, classified in the waiver registry, or moved to explicit burn-down owner/issues.\n* Do not relax Book Cinema canvas budgets or QQP-542 responsive evidence.\n\n## Linked blocker\n\nBlocks QQP-441 final closeout. QQP-542 resolved the responsive Book Cinema theatre budget blocker separately.",
+      "archivedAt": "2026-07-09T19:42:00.621Z",
+      "createdAt": "2026-07-09T02:01:08.585Z",
+      "updatedAt": "2026-07-09T11:37:02.009Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-543/resolve-final-ux-ui-action-audit-debt-blocking-qqp-441"
+    },
+    {
+      "id": "a0c98d9a-4640-4c10-96e1-6662f9df8d4c",
+      "identifier": "QQP-542",
+      "title": "Book Cinema Theatre compact phone controls exceed canvas budget",
+      "description": "Blocks QQP-441: [QQP-441](https://linear.app/niklas-olsson/issue/QQP-441/first-batch-active-processing-and-canonical-fixture-evidence-gate)\n\nRCA: real product/UI failure, not stale budget or harness bug.\n\nEvidence:\n\n* `mise exec -- pnpm e2e:book-cinema:responsive` fails at `book:phone-390:theatre`.\n* Footer measures `343px` / `40.64%` viewport; compact budget allows max `188px` / `25%`.\n* Canvas height is `31.85%`; compact read/theatre budget requires `43%`.\n* Blocker screenshot: `output/e2e-book-cinema/screenshots/responsive-book-phone-390-theatre.png`.\n* `frontend/src/features/cinema/canvasBudget.ts` defines the product budget; `CinemaShell.tsx` publishes it as `data-cinema-*`; the E2E harness reads that live budget.\n\nLikely source:\n\n* `frontend/src/features/cinema/CinemaTheatre.tsx` / theatre transport renders duplicated mini progress/status plus full `LocalizedPlaybackToolbar`.\n* `frontend/src/features/playback/LocalizedPlaybackToolbar.tsx` may need a compact/action-only theatre variant.\n\nAcceptance:\n\n* Keep `canvasBudget.ts` thresholds unchanged unless demonstrably impossible after a real compact UI fix.\n* Phone Book Cinema Theatre visible controls fit budget: footer <= `188px` and <= `25%`, canvas >= `43%` viewport.\n* Avoid duplicate progress/status in compact theatre mode.\n* `mise exec -- pnpm e2e:book-cinema:responsive` passes.\n* `mise exec -- pnpm --filter @tts-research/frontend test` passes.\n* `mise exec -- pnpm check` passes.\n* If screenshots/UI evidence changes are committed, `mise exec -- pnpm review:chatgpt` passes.\n\nScope note:\n\n* QQP-441 remains evidence-only and should only rerun/collect final evidence after this UI repair lands.",
+      "archivedAt": "2026-07-09T19:42:00.952Z",
+      "createdAt": "2026-07-09T00:35:42.844Z",
+      "updatedAt": "2026-07-09T07:29:25.229Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-542/book-cinema-theatre-compact-phone-controls-exceed-canvas-budget"
+    },
+    {
+      "id": "45b1cc50-6a65-43fd-a16a-a6e0631aeb7c",
+      "identifier": "QQP-441",
+      "title": "First-batch active-processing and canonical fixture evidence gate",
+      "description": "Slug: `active-processing-evidence-gates`\n\nAtomic deliverable: Produce the final deterministic evidence package for the canonical fixture, performance budgets, degraded modes, screenshots, logs, and review handoff.\n\nScope: Evidence-only: screenshots, budgets, fixture runs, logs, and review package; no feature implementation beyond test/evidence harnesses.\n\nDependencies: quick-listen-promotion-crosswalk, reader-windowing-highlight-scheduling, retry-interrupted-artifact-semantics, minimal-repair-overlay-supersession, lower-tier-adapter-contract-fit\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-09T19:42:01.308Z",
+      "createdAt": "2026-07-07T09:48:59.421Z",
+      "updatedAt": "2026-07-09T07:29:26.967Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-441/first-batch-active-processing-and-canonical-fixture-evidence-gate"
+    },
+    {
+      "id": "906d0ddf-17cb-4484-a9ab-63d1e70a259f",
+      "identifier": "QQP-440",
+      "title": "Reader windowing and highlight scheduling",
+      "description": "Slug: `reader-windowing-highlight-scheduling`\n\nAtomic deliverable: Implement internal reader windowing, high-frequency highlight isolation, and low-resource fidelity downgrade behavior.\n\nScope: No new visual design system.\n\nDependencies: sync-fidelity-gates, reader-shell-state-vocabulary, reader-transport-state-machine\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-09T19:42:01.764Z",
+      "createdAt": "2026-07-07T09:48:59.150Z",
+      "updatedAt": "2026-07-08T21:40:05.785Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-440/reader-windowing-and-highlight-scheduling"
+    },
+    {
+      "id": "1615aafd-1886-4cb1-a5fa-0baa5590f4d1",
+      "identifier": "QQP-439",
+      "title": "Reader transport state machine",
+      "description": "Slug: `reader-transport-state-machine`\n\nAtomic deliverable: Add shared Reader transport states for pre-audio, generating, unchecked, checked, stale/replaced, failed/retryable, and degraded playback.\n\nScope: Shared transport state mapping; no unrelated UI redesign.\n\nDependencies: partial-audio-artifact-states, reader-shell-state-vocabulary\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-09T19:42:02.174Z",
+      "createdAt": "2026-07-07T09:48:58.899Z",
+      "updatedAt": "2026-07-08T18:53:55.264Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-439/reader-transport-state-machine"
+    },
+    {
+      "id": "c58a01f3-9c9e-4b29-99dd-be9266a55667",
+      "identifier": "QQP-438",
+      "title": "Reader shell state vocabulary and mode labels",
+      "description": "Slug: `reader-shell-state-vocabulary`\n\nAtomic deliverable: Add Reader shell labels/state vocabulary for source-only, generating, unchecked, checked, degraded, stale, failed, retryable, and superseded states.\n\nScope: No visual redesign.\n\nDependencies: frontend-source-manifest-store\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-09T19:42:02.902Z",
+      "createdAt": "2026-07-07T09:48:58.660Z",
+      "updatedAt": "2026-07-08T16:48:02.025Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-438/reader-shell-state-vocabulary-and-mode-labels"
+    },
+    {
+      "id": "fe4dea9d-cf6e-4424-a9b7-5f0977e82a4a",
+      "identifier": "QQP-437",
+      "title": "Quick Listen to project promotion crosswalk",
+      "description": "Slug: `quick-listen-promotion-crosswalk`\n\nAtomic deliverable: Promote temporary Quick Listen sources into durable project sources while preserving mapped progress, artifacts, highlights, and source identity.\n\nScope: Links/rescopes QQP-4 as capture anchor; do not duplicate Quick Listen capture.\n\nDependencies: QQP-4, source-lifecycle-storage, manifest-snapshot-storage-api, partial-audio-artifact-states, durable-progress-resume-resolver\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-09T19:42:03.195Z",
+      "createdAt": "2026-07-07T09:48:58.437Z",
+      "updatedAt": "2026-07-08T23:37:03.547Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-437/quick-listen-to-project-promotion-crosswalk"
+    },
+    {
+      "id": "5f4a077e-a800-4b9f-8edc-eba53d862873",
+      "identifier": "QQP-436",
+      "title": "Minimal repair overlay and manifest supersession",
+      "description": "Slug: `minimal-repair-overlay-supersession`\n\nAtomic deliverable: Add immutable repair overlays, superseding manifests, affected-artifact stale marking, and revision-map-based progress remap.\n\nScope: No full repair UI/workbench.\n\nDependencies: readalong-contracts, manifest-snapshot-storage-api, durable-progress-resume-resolver, retry-interrupted-artifact-semantics\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-09T19:42:03.497Z",
+      "createdAt": "2026-07-07T09:48:58.106Z",
+      "updatedAt": "2026-07-08T15:56:12.684Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-436/minimal-repair-overlay-and-manifest-supersession"
+    },
+    {
+      "id": "98600d49-e72e-4164-82c2-d4cc6dfc6a79",
+      "identifier": "QQP-435",
+      "title": "Retry and interrupted artifact semantics",
+      "description": "Slug: `retry-interrupted-artifact-semantics`\n\nAtomic deliverable: Implement artifact/segment-scoped retry behavior across cancellation, provider failure, backend restart, checking failure, and compatible reuse.\n\nScope: No broad job orchestration rewrite.\n\nDependencies: source-lifecycle-storage, partial-audio-artifact-states, durable-progress-resume-resolver\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-08T14:48:32.517Z",
+      "createdAt": "2026-07-07T09:48:57.774Z",
+      "updatedAt": "2026-07-08T14:08:00.891Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-435/retry-and-interrupted-artifact-semantics"
+    },
+    {
+      "id": "7c679e9f-e4ea-4cb8-8990-b8bba75b06b6",
+      "identifier": "QQP-434",
+      "title": "Durable progress and manifest-aware resume resolver",
+      "description": "Slug: `durable-progress-resume-resolver`\n\nAtomic deliverable: Persist canonical progress and deterministically resolve reopen/resume state across current, stale, degraded, failed, interrupted, remapped, and superseded manifests.\n\nScope: Browser localStorage remains non-authoritative.\n\nDependencies: source-lifecycle-storage, manifest-snapshot-storage-api, sync-fidelity-gates\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-08T14:48:32.945Z",
+      "createdAt": "2026-07-07T09:48:57.536Z",
+      "updatedAt": "2026-07-08T12:56:58.856Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-434/durable-progress-and-manifest-aware-resume-resolver"
+    },
+    {
+      "id": "b4b0aaa6-4cbd-48dc-b07f-93fa1a4fc07e",
+      "identifier": "QQP-433",
+      "title": "Sync fidelity gates for exact, phrase, block, audio-only, and source-only modes",
+      "description": "Slug: `sync-fidelity-gates`\n\nAtomic deliverable: Gate sync/highlight fidelity so exact word highlighting is only allowed with sufficient revision, mapping, timing, and resource evidence.\n\nScope: Decision layer only.\n\nDependencies: partial-audio-artifact-states\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-08T14:48:33.288Z",
+      "createdAt": "2026-07-07T09:48:57.306Z",
+      "updatedAt": "2026-07-08T03:56:19.720Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-433/sync-fidelity-gates-for-exact-phrase-block-audio-only-and-source-only"
+    },
+    {
+      "id": "2a0b110f-287c-485b-a8d4-34fba39bddc8",
+      "identifier": "QQP-432",
+      "title": "Partial audio artifact states and replacement semantics",
+      "description": "Slug: `partial-audio-artifact-states`\n\nAtomic deliverable: Persist segment-level audio artifact states and replacement/reuse semantics for unchecked, checked, stale, replaced, failed, and retryable audio.\n\nScope: Audio artifact state machine only; no sync fidelity UI.\n\nDependencies: incremental-speech-plan-segmentation\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-08T14:48:33.869Z",
+      "createdAt": "2026-07-07T09:48:57.072Z",
+      "updatedAt": "2026-07-08T02:28:54.038Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-432/partial-audio-artifact-states-and-replacement-semantics"
+    },
+    {
+      "id": "d84345cd-6109-4d61-a5ca-3f5f72079885",
+      "identifier": "QQP-431",
+      "title": "Incremental speech-plan segmentation for first narratable prefix",
+      "description": "Slug: `incremental-speech-plan-segmentation`\n\nAtomic deliverable: Generate speech-plan segments tied to source/revision/manifest/unit identity from the earliest contiguous narratable prefix.\n\nScope: Backend/contracted data slice; no audio artifact state implementation.\n\nDependencies: readalong-contracts, manifest-snapshot-storage-api, epub-html-incremental-extraction\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-08T14:48:34.230Z",
+      "createdAt": "2026-07-07T09:48:56.820Z",
+      "updatedAt": "2026-07-08T01:07:30.399Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-431/incremental-speech-plan-segmentation-for-first-narratable-prefix"
+    },
+    {
+      "id": "a0919f90-c26f-4456-a18a-5dbbda09a643",
+      "identifier": "QQP-430",
+      "title": "Frontend source/manifest store",
+      "description": "Slug: `frontend-source-manifest-store`\n\nAtomic deliverable: Add a frontend store keyed by source/revision/manifest identity with reconnect and snapshot fallback behavior.\n\nScope: Disposable frontend cache/store and render coalescing.\n\nDependencies: source-manifest-event-stream, manifest-snapshot-storage-api\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-08T14:48:34.657Z",
+      "createdAt": "2026-07-07T09:48:56.608Z",
+      "updatedAt": "2026-07-07T23:03:33.239Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-430/frontend-sourcemanifest-store"
+    },
+    {
+      "id": "278dba07-6e7a-4219-8b58-006db0376d71",
+      "identifier": "QQP-429",
+      "title": "Source and manifest backend event stream",
+      "description": "Slug: `source-manifest-event-stream`\n\nAtomic deliverable: Implement a sequenced backend source/manifest event protocol with deterministic tests and snapshot fallback.\n\nScope: Backend event stream only; no frontend store.\n\nDependencies: readalong-contracts, manifest-snapshot-storage-api\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-08T14:48:35.013Z",
+      "createdAt": "2026-07-07T09:48:56.399Z",
+      "updatedAt": "2026-07-07T21:35:56.503Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-429/source-and-manifest-backend-event-stream"
+    },
+    {
+      "id": "dadca4ff-fe65-48d0-9d69-b9625cf9bc4e",
+      "identifier": "QQP-428",
+      "title": "Incremental extraction proof for HTML and EPUB",
+      "description": "Slug: `epub-html-incremental-extraction`\n\nAtomic deliverable: Emit readable HTML/EPUB units incrementally and write manifest snapshots as units become available.\n\nScope: First long-form proof path only; no unrelated adapter upgrades.\n\nDependencies: source-lifecycle-storage, manifest-snapshot-storage-api, stable-unit-ir-core-adapters\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-08T14:48:35.336Z",
+      "createdAt": "2026-07-07T09:48:56.126Z",
+      "updatedAt": "2026-07-07T20:33:42.751Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-428/incremental-extraction-proof-for-html-and-epub"
+    },
+    {
+      "id": "20f9755e-e146-4db2-a08c-55425b333ab7",
+      "identifier": "QQP-427",
+      "title": "Lower-tier adapter contract-fit reports",
+      "description": "Slug: `lower-tier-adapter-contract-fit`\n\nAtomic deliverable: Produce deterministic contract-fit reports and warnings for non-core adapters without claiming best-in-class behavior.\n\nScope: DOCX/PDF/OCR report/warning lane only.\n\nDependencies: readalong-contracts\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-08T14:48:35.654Z",
+      "createdAt": "2026-07-07T09:48:55.933Z",
+      "updatedAt": "2026-07-07T19:46:53.197Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-427/lower-tier-adapter-contract-fit-reports"
+    },
+    {
+      "id": "5b4996d8-2104-4806-9453-9c74decf70bc",
+      "identifier": "QQP-426",
+      "title": "Stable unit identity for core adapters",
+      "description": "Slug: `stable-unit-ir-core-adapters`\n\nAtomic deliverable: Make HTML, EPUB, and Markdown core adapters emit stable unit IDs, order keys, fingerprints, locators, and provenance.\n\nScope: No PDF/DOCX/OCR best-in-class work.\n\nDependencies: readalong-contracts\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-08T14:48:36.051Z",
+      "createdAt": "2026-07-07T09:48:55.711Z",
+      "updatedAt": "2026-07-07T16:14:49.748Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-426/stable-unit-identity-for-core-adapters"
+    },
+    {
+      "id": "933a5453-3e73-4da3-b778-10be5a40fd84",
+      "identifier": "QQP-425",
+      "title": "Manifest snapshot storage API",
+      "description": "Slug: `manifest-snapshot-storage-api`\n\nAtomic deliverable: Persist and retrieve reading-unit/readalong manifest snapshots by source/revision/manifest identity.\n\nScope: Backend storage/API with current/superseded semantics; no SSE/client store.\n\nDependencies: readalong-contracts, source-lifecycle-storage\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-08T14:48:36.633Z",
+      "createdAt": "2026-07-07T09:48:55.392Z",
+      "updatedAt": "2026-07-07T18:31:51.693Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-425/manifest-snapshot-storage-api"
+    },
+    {
+      "id": "25fe5eb8-f811-4dc0-8415-34c19388e269",
+      "identifier": "QQP-424",
+      "title": "Backend source lifecycle storage and startup interruption marking",
+      "description": "Slug: `source-lifecycle-storage`\n\nAtomic deliverable: Persist source identity, source revisions, raw source artifacts, and startup interrupted_retriable marking for orphaned active work.\n\nScope: Backend only: no manifest snapshot API, audio retry implementation, or frontend store.\n\nDependencies: readalong-contracts\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-08T14:48:36.961Z",
+      "createdAt": "2026-07-07T09:48:55.170Z",
+      "updatedAt": "2026-07-07T14:48:28.298Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-424/backend-source-lifecycle-storage-and-startup-interruption-marking"
+    },
+    {
+      "id": "2895b459-d032-459a-93ac-520145d4dd6e",
+      "identifier": "QQP-423",
+      "title": "Readalong source, manifest, artifact, repair, promotion, event, and progress contract pack",
+      "description": "Slug: `readalong-contracts`\n\nAtomic deliverable: Add the complete first-batch sidecar contract pack with docs, schemas, fixtures, and validation, without runtime implementation.\n\nScope: Contracts include SourceEnvelope, SourceRevision, ExtractionRevision, ReadingUnitManifest, ReadalongManifest, AudioArtifact state, ArtifactCompatibility, RepairOverlay, RevisionMap, PromotionCrosswalk, SourceManifestEvent, DurableProgress, ResumeResolution, and optionally SyncFidelityDecision if not fully represented elsewhere.\n\nDependencies: none\n\nAcceptance criteria:\n\n* Delivers only the atomic scope above; adjacent subsystem work is not hidden in this issue.\n* Preserves the source/manifest/revision invariants in `docs/architecture/source-reader-flow-invariants.md`.\n* Produces deterministic tests, fixtures, screenshots, or evidence appropriate to this issue type.\n* Does not duplicate `QQP-4`; Quick Listen capture remains anchored there.\n\nVerification evidence:\n\n* Run the issue-specific command(s) named during implementation.\n* Run `mise exec -- pnpm check` before marking complete.\n* Run `mise exec -- pnpm review:chatgpt` for screenshot/evidence-impacting work.\n\nValidated preflight:\n\n* `mise exec -- pnpm generate:contracts` passed\n* `mise exec -- pnpm validate:ir` passed\n* `mise exec -- pnpm test:adapters` passed\n\nReference docs:\n\n* docs/architecture/source-reader-flow-invariants.md\n* docs/project-management/linear/tts-research-first-batch-atomicity-review.md\n* docs/project-management/linear/tts-research-first-batch.draft.manifest.json\n* docs/reviews/chatgpt/008-atomic-flow-linear-batch.response.md",
+      "archivedAt": "2026-07-08T14:48:37.341Z",
+      "createdAt": "2026-07-07T09:48:54.885Z",
+      "updatedAt": "2026-07-07T12:12:06.948Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-423/readalong-source-manifest-artifact-repair-promotion-event-and-progress"
+    },
+    {
+      "id": "d60a8996-f8cf-423a-b70e-1d5e0025bb3f",
+      "identifier": "QQP-4",
+      "title": "Quick Narrate Pasted URL",
+      "description": "Fast track URL narration without requiring a project",
+      "archivedAt": "2026-07-09T19:42:03.962Z",
+      "createdAt": "2026-06-06T15:53:07.980Z",
+      "updatedAt": "2026-07-08T22:28:11.947Z",
+      "state": {
+        "name": "Done",
+        "type": "completed"
+      },
+      "parent": null,
+      "labels": {
+        "nodes": []
+      },
+      "url": "https://linear.app/niklas-olsson/issue/QQP-4/quick-narrate-pasted-url"
+    }
+  ]
+}

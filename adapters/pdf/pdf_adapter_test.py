@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from .orchestrator import emit_adapter
 
@@ -73,7 +74,12 @@ class PDFAdapterTests(unittest.TestCase):
         self.assertEqual(nodes[1]["speech"]["policyHint"]["emphasis"], "subheading")
 
     def test_uses_fixture_ocr_for_scanned_pdf(self):
-        result = self.emit("fixtures/pdf/scanned_fixture.pdf")
+        fixture_ocr = (ROOT / "fixtures/pdf/scanned_fixture.ocr.txt").read_text(encoding="utf-8")
+        with patch(
+            "adapters.pdf.ocr_with_ocrmypdf_or_tesseract._fixture_text",
+            return_value=fixture_ocr,
+        ):
+            result = self.emit("fixtures/pdf/scanned_fixture.pdf")
         self.assertEqual(result["metadata"]["supportTier"], "C")
         self.assertEqual(result["document"]["nodes"][0]["provenance"]["locator"]["type"], "ocr")
         report = result["contractFitReport"]
