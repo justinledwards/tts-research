@@ -3379,6 +3379,209 @@
           "additionalProperties": true
         }
       }
+    },
+    "reader_workspace_snapshot.v1": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://tts-research.local/schemas/reader-workspace-snapshot.v1.schema.json",
+      "title": "ReaderWorkspaceSnapshot v1",
+      "description": "Bounded server-authored transport projection for restoring one project's readable source and optional paused playback state. Shape validation does not grant compatibility authority to a browser; the server validates revision, run, media, timing, and progress semantics.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "projectId",
+        "projectRevision",
+        "readMode",
+        "sourceId",
+        "sourceRevisionId",
+        "sourceContentHash",
+        "runId",
+        "runCompatibilityKey",
+        "mediaManifestVersion",
+        "timingRevision",
+        "syncFidelity",
+        "readerLocator",
+        "playbackCursorMs",
+        "playbackRate",
+        "followPreference",
+        "updatedAt"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "reader_workspace_snapshot.v1"
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "projectRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "readMode": {
+          "enum": ["paused", "readable"]
+        },
+        "sourceId": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "sourceRevisionId": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "sourceContentHash": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "runId": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "runCompatibilityKey": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "mediaManifestVersion": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "timingRevision": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "syncFidelity": {
+          "enum": ["exact_word", "phrase", "block", "audio_only", "source_only", "none", null]
+        },
+        "readerLocator": {
+          "anyOf": [
+            {
+              "$ref": "locator-envelope.v1.schema.json"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "playbackCursorMs": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "playbackRate": {
+          "type": ["number", "null"],
+          "exclusiveMinimum": 0,
+          "maximum": 4
+        },
+        "followPreference": {
+          "type": ["boolean", "null"]
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "sourceId": {
+                "const": ""
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "readMode": {
+                "const": "paused"
+              },
+              "sourceRevisionId": {
+                "const": ""
+              },
+              "sourceContentHash": {
+                "const": ""
+              },
+              "runId": {
+                "const": null
+              },
+              "runCompatibilityKey": {
+                "const": null
+              },
+              "mediaManifestVersion": {
+                "const": null
+              },
+              "timingRevision": {
+                "const": null
+              },
+              "syncFidelity": {
+                "const": "none"
+              },
+              "readerLocator": {
+                "const": null
+              },
+              "playbackCursorMs": {
+                "const": null
+              },
+              "playbackRate": {
+                "const": 1
+              },
+              "followPreference": {
+                "const": null
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "sourceId": {
+                "minLength": 1
+              },
+              "sourceRevisionId": {
+                "minLength": 1
+              },
+              "sourceContentHash": {
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "runId": {
+                "type": "string"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "runCompatibilityKey": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "runCompatibilityKey": {
+                "type": "string"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "runId": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

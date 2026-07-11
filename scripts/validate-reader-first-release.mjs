@@ -21,6 +21,18 @@ export const PARENT_AUTHORIZATION_PATH =
   "docs/reviews/reader-first-rfa02-parent-authorization.json";
 export const RFA_02_START_AUTHORIZATION_PATH =
   "docs/reviews/reader-first-rfa02-start-scope-authorization.json";
+export const RFA_02_FRONTEND_AUTHORIZATION_PATH =
+  "docs/reviews/reader-first-rfa02-frontend-scope-authorization.json";
+export const FLOW_MANIFEST_PATH = "docs/flows/manifest.json";
+export const FLOW_README_PATH = "docs/flows/README.md";
+export const FLOW_APPLICATION_UX_PATH = "docs/flows/application-ux.md";
+export const FLOW_COVERAGE_REPORT_PATH = "docs/flows/coverage-report.json";
+export const BIC_PACKET_PATH =
+  "docs/project-management/linear/tts-research-best-in-class-batch-draft.json";
+export const BIC_MARKDOWN_PATH =
+  "docs/project-management/linear/tts-research-best-in-class-batch-draft.md";
+export const BIC_VALIDATOR_PATH = "scripts/validate-linear-batch.mjs";
+export const BIC_VALIDATOR_TEST_PATH = "scripts/validate-linear-batch.test.mjs";
 export const RFA_01_VERIFICATION_PATH = "docs/evidence/reader-first/RFA-01/verification.json";
 export const RFA_01_ROLLBACK_PATH = "docs/evidence/reader-first/RFA-01/rollback.json";
 const VALIDATOR_PATH = "scripts/validate-reader-first-release.mjs";
@@ -29,14 +41,15 @@ export const ISSUE_IDS = Array.from(
   (_, index) => `RFA-${String(index + 1).padStart(2, "0")}`,
 );
 
-const EXPECTED_CONTRACT_SHA256 = "f7fd41ae66e7b68fdc8e2af75a8061dbccbf05a974a70605ba4eebdac82e27c7";
+const EXPECTED_CONTRACT_SHA256 = "e5ab5ce6a49f041522245cde7a9d5e4b1cdbae6991701570d71606bd7b5eb968";
 const EXPECTED_CONTRACT_CANONICAL_SHA256 =
-  "80b161f49ce2ae97bc4a8b49bd603ad1eaefe1844b16cdb59aa42ecd652ffefe";
-const EXPECTED_PACKET_SHA256 = "54155e7c1aebd54310dc484b28eaa1f1002c7764e8ed8977d6a7b822eb045c6c";
+  "324bc6d4db032c939a1a962a8d6d4031816e83ec438f3e254b14793d9b4bfc00";
+const EXPECTED_PACKET_SHA256 = "0441317ec90f4e35df0dd5d69244cdf7b240953ba36cac02ef008d32a32711af";
 const EXPECTED_PACKET_CANONICAL_SHA256 =
-  "cf46cbc248ef0938e0d4fc09a532a7a3b7998887acfd7ae96e9f0ccb81508705";
-const EXPECTED_MARKDOWN_SHA256 = "e22d928bb4b88e89ca80fb7a89791196b1a02c57a2613ccd4ed361bcd1e97066";
-const EXPECTED_STATUS = "peer_approved_rfa_01_completed_rfa_02_in_progress_product_authorized";
+  "134d4aba6570e0b23d06867924eca9e267497a9d7a907a5aa402464ac849eadb";
+const EXPECTED_MARKDOWN_SHA256 = "125cb2fa8eb3d5342e98191ba0d7f1385154f9a8cceab5c874e905234dd2288c";
+const EXPECTED_STATUS =
+  "peer_approved_rfa_01_completed_rfa_02_in_progress_product_mutation_started_frontend_scope_pending_commit";
 const EXPECTED_AUTHORIZATION = {
   ownerAccepted: true,
   peerApproved: true,
@@ -63,14 +76,48 @@ const HISTORICAL_RFA_01_AUTHORIZATION = {
 const EXPECTED_PARENT_AUTHORIZATION_SHA256 =
   "41fa61517142af7c1ad5d2e9204aaaa4fa7c3020d21443df311a4532a329d265";
 const EXPECTED_LIVE_MANIFEST_SHA256 =
-  "54b00631d390e4ba504708191f6ccf4b4f2bce04974fe27fd3e5cef339c1595a";
+  "8999920d9453a3b1294f36b91158fbd2b383ead0f3eaae40f406b1f02333b3fb";
 const EXPECTED_RFA_02_START_AUTHORIZATION_SHA256 =
   "14463389f0b9b686e194deaec3f7bb27616e32c2f09c48615259bf86748ea07c";
-const RFA_02_AUTHORIZATION_COMMIT = "836cf2c8f4631e237543d234fea339a659828529";
+const EXPECTED_RFA_02_FRONTEND_AUTHORIZATION_SHA256 =
+  "f957869b774e0978c42e67e5a0017b9ed1c7fb4d292ece20219ed6a16b118bc3";
+const EXPECTED_FLOW_ARTIFACTS = [
+  {
+    path: FLOW_MANIFEST_PATH,
+    sha256: "4f789e39e9c0e12e6c67abed73492b4139aebe4b16786123324d567b5ae0b28d",
+  },
+  {
+    path: FLOW_README_PATH,
+    sha256: "f99e1fd689e755a4f036aaeae9bf1dc4cf17316ed877c62ed282cbd05cb97fa4",
+  },
+  {
+    path: FLOW_APPLICATION_UX_PATH,
+    sha256: "2d4dfe18678c1d59e541d87ebdeae3f60c2dbc1ecd212d15f12f673955ee1d6c",
+  },
+  {
+    path: FLOW_COVERAGE_REPORT_PATH,
+    sha256: "d6045a1386d99f0a4c98f039fd138421e6ed395af2c97c6f152a5fb092823691",
+  },
+];
+const EXPECTED_FLOW_MANIFEST_SHA256 = EXPECTED_FLOW_ARTIFACTS[0].sha256;
+const RFA_02_START_AUTHORIZATION_COMMIT = "836cf2c8f4631e237543d234fea339a659828529";
+const RFA_02_FRONTEND_AUTHORIZATION_COMMIT = "672ca619b70ca0cebdfb4bae69bb876ebb83f228";
 const RFA_02_PO_COMMENT_URL =
   "https://linear.app/niklas-olsson/issue/QQP-614/rfa-02-add-server-authoritative-project-restoration-snapshot-and#comment-87c70bed";
+const RFA_02_FRONTEND_PO_COMMENT_URL =
+  "https://linear.app/niklas-olsson/issue/QQP-614/rfa-02-add-server-authoritative-project-restoration-snapshot-and#comment-81bb29b1";
+const RFA_02_FRONTEND_PO_COMMENT_ID = "81bb29b1-a56f-4c55-9422-e9ba3ed0bd2a";
+const RFA_02_EXACT_FLOW_PO_COMMENT_URL =
+  "https://linear.app/niklas-olsson/issue/QQP-614/rfa-02-add-server-authoritative-project-restoration-snapshot-and#comment-db93aae6";
+const RFA_02_EXACT_FLOW_PO_COMMENT_ID = "db93aae6-67bf-497f-b466-9dffcdb890e1";
+const RFA_02_EXACT_BIC_PO_COMMENT_URL =
+  "https://linear.app/niklas-olsson/issue/QQP-614/rfa-02-add-server-authoritative-project-restoration-snapshot-and#comment-dfdce9da";
+const RFA_02_EXACT_BIC_PO_COMMENT_ID = "dfdce9da-0fab-482e-9d3e-be6e4a3f0410";
+const RFA_02_POST_FREEZE_PO_COMMENT_URL =
+  "https://linear.app/niklas-olsson/issue/QQP-614/rfa-02-add-server-authoritative-project-restoration-snapshot-and#comment-107ca6a9";
+const RFA_02_POST_FREEZE_PO_COMMENT_ID = "107ca6a9-ab3d-4687-89a0-0b7473cb6ad9";
 const RFA_02_STARTED_STATE_ID = "8952b964-26ec-474c-838b-de6ecc3facb3";
-const EXPECTED_RFA_02_SCOPE_PATHS = [
+const HISTORICAL_RFA_02_SCOPE_PATHS = [
   "backend/internal/httpapi",
   "packages/schema",
   "backend/data",
@@ -82,18 +129,89 @@ const EXPECTED_RFA_02_SCOPE_PATHS = [
   "fixtures/contracts/schema-snapshots",
   "docs/contracts/schema-bundle.v1.json",
 ];
-const EXPECTED_RFA_02_SCOPE_SYMBOLS = [
+const HISTORICAL_RFA_02_SCOPE_SYMBOLS = [
   "ReaderWorkspaceSnapshot",
   "GET/PUT project reader-workspace",
   "snapshot v0-to-v1 migrator",
   "canonical ReaderWorkspaceSnapshot schema generation",
   "minimum server-derived source-revision/run-compatibility read projection",
 ];
-const EXPECTED_RFA_02_NON_GOALS = [
+const HISTORICAL_RFA_02_NON_GOALS = [
   "No audio delivery or generation behavior changes",
   "No automatic playback on restore",
   "No browser-provided compatibility or browser authority",
 ];
+const EXPECTED_RFA_02_SCOPE_PATHS = [
+  ...HISTORICAL_RFA_02_SCOPE_PATHS,
+  "docs/flows/manifest.json",
+  "frontend/src/App.tsx",
+  "frontend/src/api.ts",
+  "frontend/src/api.test.ts",
+  "frontend/src/projectState.ts",
+  "frontend/src/projectState.test.ts",
+  "frontend/src/readerWorkspace.ts",
+  "frontend/src/readerWorkspace.test.ts",
+  FLOW_README_PATH,
+  FLOW_APPLICATION_UX_PATH,
+  FLOW_COVERAGE_REPORT_PATH,
+  BIC_VALIDATOR_PATH,
+  BIC_VALIDATOR_TEST_PATH,
+];
+const EXPECTED_RFA_02_SCOPE_SYMBOLS = [
+  ...HISTORICAL_RFA_02_SCOPE_SYMBOLS,
+  "server GET snapshot authority for exact source revision, exact run, reader locator, playback cursor, playback rate, and follow preference",
+  "?projectId clean-browser deterministic selection seam",
+  "paused restore in both read modes with no autoplay",
+  "legacy and project local workspace keys cleanup-only and non-authoritative",
+  "in-memory workspace ETag",
+  "serialized and coalesced If-Match workspace writes",
+  "412 current snapshot wins with at most one explicit-current-intent retry",
+];
+const EXPECTED_RFA_02_NON_GOALS = [
+  ...HISTORICAL_RFA_02_NON_GOALS,
+  "No browser compatibility or rebuild inference",
+  "No backend or schema redesign by the frontend lane",
+  "No presentation preference removal",
+];
+const EXPECTED_WORKSPACE_ROUTES = [
+  "GET /api/projects/:id/reader-workspace",
+  "PUT /api/projects/:id/reader-workspace",
+];
+const EXPECTED_BIC_ARTIFACTS = [
+  {
+    path: BIC_PACKET_PATH,
+    sha256: "1ae22003178761e60de4661d763f239a2c22e3ca4624e14a29d155b50eb264c0",
+  },
+  {
+    path: BIC_MARKDOWN_PATH,
+    sha256: "589d54b0534091bb2442d5d84a1c93df3a36d719c9a04c37e0dfa5e306187e7c",
+  },
+];
+const EXPECTED_BIC_VALIDATOR_ARTIFACTS = [
+  {
+    path: BIC_VALIDATOR_PATH,
+    sha256: "7ea517a9d05c67f430c84a8bd8567bc973af3c8fae4600e8ff040c1f1a695a99",
+  },
+  {
+    path: BIC_VALIDATOR_TEST_PATH,
+    sha256: "1486bfa3fc78b94483ea42b00efb94d08148d651de808b057637d5aa39d4c36f",
+  },
+];
+const EXPECTED_POST_FREEZE_ROUTE_SEMANTICS = {
+  frozenAssignmentsRemainUnique: true,
+  allowlistIsExact: true,
+  allowlistIsDisjointFromFrozenAssignments: true,
+  allowlistedRoutesExistExactlyOnceUnderOwnerFlow: true,
+  frozenAssignmentsPlusAllowlistEqualCurrentCanonicalRouteInventoryExactlyOnce: true,
+  flowIdsAndStateSymbolsRemainExactUnchanged: true,
+};
+const EXPECTED_CROSS_REGISTRY_ROUTE_OWNERSHIP = {
+  frozenBicArtifacts: EXPECTED_BIC_ARTIFACTS,
+  validatorArtifacts: EXPECTED_BIC_VALIDATOR_ARTIFACTS,
+  postFreezeRouteAllowlist: EXPECTED_WORKSPACE_ROUTES,
+  ownerFlowId: "APP-NAV-001",
+  semantics: EXPECTED_POST_FREEZE_ROUTE_SEMANTICS,
+};
 const RFA_01_COMPLETION_COMMIT = "44aa1ad0640aad8c9c18014346a6923189228b41";
 const EVIDENCE_SCHEMA_VERSION = "tts-research.reader-first-evidence-manifest.v1";
 const EVIDENCE_SEMANTICS = "static_attestation_of_recorded_execution";
@@ -348,6 +466,19 @@ const EVIDENCE_BINDINGS = [
   [LIVE_MANIFEST_PATH, EXPECTED_LIVE_MANIFEST_SHA256],
   [PARENT_AUTHORIZATION_PATH, EXPECTED_PARENT_AUTHORIZATION_SHA256],
   [RFA_02_START_AUTHORIZATION_PATH, EXPECTED_RFA_02_START_AUTHORIZATION_SHA256],
+  [RFA_02_FRONTEND_AUTHORIZATION_PATH, EXPECTED_RFA_02_FRONTEND_AUTHORIZATION_SHA256],
+  ...EXPECTED_FLOW_ARTIFACTS.map(({ path: artifactPath, sha256: artifactSha256 }) => [
+    artifactPath,
+    artifactSha256,
+  ]),
+  ...EXPECTED_BIC_ARTIFACTS.map(({ path: artifactPath, sha256: artifactSha256 }) => [
+    artifactPath,
+    artifactSha256,
+  ]),
+  ...EXPECTED_BIC_VALIDATOR_ARTIFACTS.map(({ path: artifactPath, sha256: artifactSha256 }) => [
+    artifactPath,
+    artifactSha256,
+  ]),
 ];
 
 export function invariant(condition, message) {
@@ -479,10 +610,7 @@ export function validateParentAuthorization(record) {
   );
 }
 
-export function validateRfa02StartAuthorization(record, manifest, packet) {
-  const rfa01 = manifest?.issues?.find(({ localId }) => localId === "RFA-01");
-  const rfa02 = manifest?.issues?.find(({ localId }) => localId === "RFA-02");
-  const packetRfa02 = packet?.issues?.find(({ localId }) => localId === "RFA-02");
+export function validateRfa02StartAuthorization(record) {
   invariant(
     record?.schemaVersion === "tts-research.reader-first-rfa02-start-scope-authorization.v1" &&
       record.recordedAt === "2026-07-11T09:25:28Z" &&
@@ -493,22 +621,15 @@ export function validateRfa02StartAuthorization(record, manifest, packet) {
     same(record.previousAuthorization, {
       path: PARENT_AUTHORIZATION_PATH,
       sha256: EXPECTED_PARENT_AUTHORIZATION_SHA256,
-      authorizationCommit: RFA_02_AUTHORIZATION_COMMIT,
+      authorizationCommit: RFA_02_START_AUTHORIZATION_COMMIT,
     }),
     "RFA-02 previous authorization commit/hash binding drift",
   );
   invariant(
     record.liveLinearManifest?.path === LIVE_MANIFEST_PATH &&
-      record.liveLinearManifest?.sha256 === EXPECTED_LIVE_MANIFEST_SHA256 &&
-      record.liveLinearManifest?.verifiedAt === manifest?.verifiedAt &&
-      manifest?.verifiedAt === "2026-07-11T09:25:28Z" &&
-      rfa01?.identifier === "QQP-613" &&
-      rfa01?.state === "Done" &&
-      rfa01?.stateType === "completed" &&
-      rfa02?.identifier === "QQP-614" &&
-      rfa02?.state === "In Progress" &&
-      rfa02?.stateType === "started" &&
-      rfa02?.stateId === RFA_02_STARTED_STATE_ID &&
+      record.liveLinearManifest?.sha256 ===
+        "54b00631d390e4ba504708191f6ccf4b4f2bce04974fe27fd3e5cef339c1595a" &&
+      record.liveLinearManifest?.verifiedAt === "2026-07-11T09:25:28Z" &&
       same(record.liveLinearManifest.completedDependency, {
         localId: "RFA-01",
         linearIdentifier: "QQP-613",
@@ -533,20 +654,203 @@ export function validateRfa02StartAuthorization(record, manifest, packet) {
   );
   invariant(
     record.authorizedScope?.localId === "RFA-02" &&
+      same(record.authorizedScope?.paths, HISTORICAL_RFA_02_SCOPE_PATHS) &&
+      same(record.authorizedScope?.symbols, HISTORICAL_RFA_02_SCOPE_SYMBOLS) &&
+      same(record.authorizedScope?.nonGoals, HISTORICAL_RFA_02_NON_GOALS),
+    "RFA-02 historical start scope drift",
+  );
+  invariant(
+    same(record.currentAuthorization, EXPECTED_AUTHORIZATION) &&
+      same(record.blockedUnauthorizedIssues, ISSUE_IDS.slice(2)) &&
+      record.productMutationPerformed === false,
+    "historical sole RFA-02 start authorization drift",
+  );
+}
+
+export function validateRfa02FrontendAuthorization(
+  record,
+  manifest,
+  packet,
+  flowManifest,
+  flowArtifactTexts,
+  bicPacket,
+  bicArtifactTexts,
+) {
+  const rfa01 = manifest?.issues?.find(({ localId }) => localId === "RFA-01");
+  const rfa02 = manifest?.issues?.find(({ localId }) => localId === "RFA-02");
+  const packetRfa02 = packet?.issues?.find(({ localId }) => localId === "RFA-02");
+  const appNav = flowManifest?.flows?.find(({ id }) => id === "APP-NAV-001");
+  invariant(
+    record?.schemaVersion === "tts-research.reader-first-rfa02-frontend-scope-authorization.v1" &&
+      record.recordedAt === "2026-07-11T11:17:02.632Z" &&
+      record.authority ===
+        "acting_product_owner_frontend_flow_and_evidence_safe_post_freeze_route_reconciliation_transition",
+    "RFA-02 frontend scope authorization identity drift",
+  );
+  invariant(
+    same(record.previousAuthorization, {
+      path: RFA_02_START_AUTHORIZATION_PATH,
+      sha256: EXPECTED_RFA_02_START_AUTHORIZATION_SHA256,
+      authorizationCommit: RFA_02_FRONTEND_AUTHORIZATION_COMMIT,
+    }) && record.previousAuthorization.path !== RFA_02_FRONTEND_AUTHORIZATION_PATH,
+    "RFA-02 frontend authorization prior-record/hash/commit binding drift",
+  );
+  invariant(
+    record.liveLinearManifest?.path === LIVE_MANIFEST_PATH &&
+      record.liveLinearManifest?.sha256 === EXPECTED_LIVE_MANIFEST_SHA256 &&
+      record.liveLinearManifest?.verifiedAt === manifest?.verifiedAt &&
+      manifest?.verifiedAt === "2026-07-11T10:22:20Z" &&
+      manifest?.capacity?.unarchivedCount === 20 &&
+      manifest?.capacity?.activeCount === 19 &&
+      manifest?.capacity?.activeIdentifiers?.length === 19 &&
+      rfa01?.identifier === "QQP-613" &&
+      rfa01?.state === "Done" &&
+      rfa01?.stateType === "completed" &&
+      rfa02?.id === "bcc7a896-6150-438d-9718-81c4dcf211fd" &&
+      rfa02?.identifier === "QQP-614" &&
+      rfa02?.state === "In Progress" &&
+      rfa02?.stateType === "started" &&
+      rfa02?.stateId === RFA_02_STARTED_STATE_ID &&
+      same(record.liveLinearManifest?.blockedIssues, ISSUE_IDS.slice(2)) &&
+      record.liveLinearManifest?.activeCount === 19 &&
+      record.liveLinearManifest?.unarchivedCount === 20,
+    "RFA-02 frontend authorization live Linear binding drift",
+  );
+  invariant(
+    record.productOwnerDecision?.commentUrl === RFA_02_FRONTEND_PO_COMMENT_URL &&
+      record.productOwnerDecision?.commentId === RFA_02_FRONTEND_PO_COMMENT_ID &&
+      record.productOwnerDecision?.issueId === "bcc7a896-6150-438d-9718-81c4dcf211fd" &&
+      record.productOwnerDecision?.linearState === "In Progress" &&
+      record.productOwnerDecision?.linearStateType === "started" &&
+      record.productOwnerDecision?.linearStateId === RFA_02_STARTED_STATE_ID &&
+      record.productOwnerDecision?.decision ===
+        "approve_exact_rfa02_frontend_and_flow_scope_after_governance_commit" &&
+      record.exactFlowDerivedScopeDecision?.commentUrl === RFA_02_EXACT_FLOW_PO_COMMENT_URL &&
+      record.exactFlowDerivedScopeDecision?.commentId === RFA_02_EXACT_FLOW_PO_COMMENT_ID &&
+      record.exactFlowDerivedScopeDecision?.issueId === "bcc7a896-6150-438d-9718-81c4dcf211fd" &&
+      record.exactFlowDerivedScopeDecision?.linearState === "In Progress" &&
+      record.exactFlowDerivedScopeDecision?.linearStateType === "started" &&
+      record.exactFlowDerivedScopeDecision?.linearStateId === RFA_02_STARTED_STATE_ID &&
+      record.exactFlowDerivedScopeDecision?.decision ===
+        "approve_exact_four_official_flow_renderer_artifacts_after_governance_commit" &&
+      record.supersededBicArtifactAuthorizationDecision?.commentUrl ===
+        RFA_02_EXACT_BIC_PO_COMMENT_URL &&
+      record.supersededBicArtifactAuthorizationDecision?.commentId ===
+        RFA_02_EXACT_BIC_PO_COMMENT_ID &&
+      record.supersededBicArtifactAuthorizationDecision?.issueId ===
+        "bcc7a896-6150-438d-9718-81c4dcf211fd" &&
+      record.supersededBicArtifactAuthorizationDecision?.linearIdentifier === "QQP-614" &&
+      record.supersededBicArtifactAuthorizationDecision?.linearState === "In Progress" &&
+      record.supersededBicArtifactAuthorizationDecision?.linearStateType === "started" &&
+      record.supersededBicArtifactAuthorizationDecision?.linearStateId ===
+        RFA_02_STARTED_STATE_ID &&
+      record.supersededBicArtifactAuthorizationDecision?.decision ===
+        "approve_exact_bic04_route_ownership_artifacts_after_governance_commit" &&
+      record.supersededBicArtifactAuthorizationDecision?.effective === false &&
+      record.supersededBicArtifactAuthorizationDecision?.supersededBy ===
+        RFA_02_POST_FREEZE_PO_COMMENT_ID &&
+      record.postFreezeRouteReconciliationDecision?.commentUrl ===
+        RFA_02_POST_FREEZE_PO_COMMENT_URL &&
+      record.postFreezeRouteReconciliationDecision?.commentId ===
+        RFA_02_POST_FREEZE_PO_COMMENT_ID &&
+      record.postFreezeRouteReconciliationDecision?.issueId ===
+        "bcc7a896-6150-438d-9718-81c4dcf211fd" &&
+      record.postFreezeRouteReconciliationDecision?.linearIdentifier === "QQP-614" &&
+      record.postFreezeRouteReconciliationDecision?.linearState === "In Progress" &&
+      record.postFreezeRouteReconciliationDecision?.linearStateType === "started" &&
+      record.postFreezeRouteReconciliationDecision?.linearStateId === RFA_02_STARTED_STATE_ID &&
+      record.postFreezeRouteReconciliationDecision?.decision ===
+        "preserve_frozen_bic_provenance_and_authorize_exact_post_freeze_route_reconciliation_after_governance_commit" &&
+      record.postFreezeRouteReconciliationDecision?.effective === true,
+    "RFA-02 PO decision history, latest correction, and supersession binding drift",
+  );
+  invariant(
+    flowManifest?.routeInventory?.directHttpRoutesObserved === 125 &&
+      same(appNav?.routePatterns, EXPECTED_WORKSPACE_ROUTES) &&
+      same(record.flowRegistry, {
+        path: FLOW_MANIFEST_PATH,
+        sha256: EXPECTED_FLOW_MANIFEST_SHA256,
+        officialRendererCommand: "node scripts/validate-flow-registry.mjs --write",
+        artifacts: EXPECTED_FLOW_ARTIFACTS,
+        directHttpRoutesObserved: 125,
+        ownerFlowId: "APP-NAV-001",
+        routes: EXPECTED_WORKSPACE_ROUTES,
+      }),
+    "RFA-02 workspace route count or exact one-owner flow binding drift",
+  );
+  invariant(
+    EXPECTED_FLOW_ARTIFACTS.every(
+      ({ path: artifactPath, sha256: artifactSha256 }) =>
+        typeof flowArtifactTexts?.[artifactPath] === "string" &&
+        sha256(flowArtifactTexts[artifactPath]) === artifactSha256,
+    ),
+    "RFA-02 exact official flow renderer artifact output/hash drift",
+  );
+  const coverageReport = JSON.parse(flowArtifactTexts[FLOW_COVERAGE_REPORT_PATH]);
+  invariant(
+    coverageReport?.directRouteCount === 125 &&
+      coverageReport?.uniqueRouteOwnerCount === 125 &&
+      EXPECTED_WORKSPACE_ROUTES.every((route) => coverageReport?.routes?.includes(route)),
+    "RFA-02 official flow coverage count/route output drift",
+  );
+  const routeOwners = flowManifest.flows.flatMap((flow) =>
+    flow.routePatterns
+      .filter((route) => EXPECTED_WORKSPACE_ROUTES.includes(route))
+      .map((route) => [route, flow.id]),
+  );
+  invariant(
+    same(
+      routeOwners,
+      EXPECTED_WORKSPACE_ROUTES.map((route) => [route, "APP-NAV-001"]),
+    ),
+    "RFA-02 workspace routes must have exactly one APP-NAV-001 owner",
+  );
+  invariant(
+    same(record.crossRegistryRouteOwnership, EXPECTED_CROSS_REGISTRY_ROUTE_OWNERSHIP),
+    "RFA-02 exact validator-based cross-registry reconciliation binding drift",
+  );
+  const frozenAssignedRoutes = bicPacket?.issues?.flatMap((issue) => issue.routePatterns) ?? [];
+  invariant(
+    new Set(frozenAssignedRoutes).size === frozenAssignedRoutes.length &&
+      EXPECTED_WORKSPACE_ROUTES.every((route) => !frozenAssignedRoutes.includes(route)),
+    "RFA-02 frozen BIC assignments must remain unique and disjoint from the exact allowlist",
+  );
+  const canonicalRoutes = flowManifest.flows.flatMap((flow) => flow.routePatterns);
+  const reconciledRoutes = [...frozenAssignedRoutes, ...EXPECTED_WORKSPACE_ROUTES];
+  invariant(
+    new Set(canonicalRoutes).size === canonicalRoutes.length &&
+      new Set(reconciledRoutes).size === reconciledRoutes.length &&
+      same([...reconciledRoutes].sort(), [...canonicalRoutes].sort()),
+    "RFA-02 frozen assignments plus exact allowlist must equal canonical routes exactly once",
+  );
+  invariant(
+    [...EXPECTED_BIC_ARTIFACTS, ...EXPECTED_BIC_VALIDATOR_ARTIFACTS].every(
+      ({ path: artifactPath, sha256: artifactSha256 }) =>
+        typeof bicArtifactTexts?.[artifactPath] === "string" &&
+        sha256(bicArtifactTexts[artifactPath]) === artifactSha256,
+    ),
+    "RFA-02 frozen BIC or exact validator/test artifact hash drift",
+  );
+  invariant(
+    record.authorizedScope?.localId === "RFA-02" &&
       same(record.authorizedScope?.paths, EXPECTED_RFA_02_SCOPE_PATHS) &&
       same(record.authorizedScope?.symbols, EXPECTED_RFA_02_SCOPE_SYMBOLS) &&
       same(record.authorizedScope?.nonGoals, EXPECTED_RFA_02_NON_GOALS) &&
       same(packetRfa02?.inScope?.paths, EXPECTED_RFA_02_SCOPE_PATHS) &&
       same(packetRfa02?.inScope?.symbols, EXPECTED_RFA_02_SCOPE_SYMBOLS) &&
       same(packetRfa02?.nonGoals, EXPECTED_RFA_02_NON_GOALS),
-    "RFA-02 exact authorized scope path/symbol/non-goal drift",
+    "RFA-02 exact frontend/flow authorized scope drift",
   );
   invariant(
     same(record.currentAuthorization, EXPECTED_AUTHORIZATION) &&
+      same(manifest.authorization, EXPECTED_AUTHORIZATION) &&
       same(record.blockedUnauthorizedIssues, ISSUE_IDS.slice(2)) &&
-      record.productMutationPerformed === false &&
-      same(manifest.authorization, EXPECTED_AUTHORIZATION),
-    "sole current RFA-02 execution authorization drift",
+      record.productMutationPerformed === true &&
+      record.frontendProductMutationPerformed === false &&
+      record.frontendAuthorization?.frontendProductMutationPerformed === false &&
+      record.frontendAuthorization?.effectiveOnlyAfterGovernanceTransitionReviewedAndCommitted ===
+        true,
+    "sole RFA-02 product/frontend mutation authorization drift",
   );
 }
 
@@ -708,6 +1012,22 @@ export function validateReaderFirstRelease(contract, packet) {
       server.concurrentBrowserConflictPolicy ===
         "reject_stale_revision_return_current_snapshot_and_retry_token",
     "cross-browser concurrency contract drift",
+  );
+  invariant(
+    same(server.frontendRestorationIntegration, {
+      authoritativeRead: "server_get_exact_source_revision_run_locator_cursor_rate_follow",
+      cleanBrowserSelectionSeam: "?projectId",
+      restorePlaybackState: "paused_in_both_read_modes_no_autoplay",
+      localWorkspaceStorage: "cleanup_only_non_authoritative_never_put_candidate",
+      presentationPreferencesRemainLocal: true,
+      etagStorage: "memory_only",
+      writeScheduling: "serialized_and_coalesced_if_match",
+      preconditionFailure: "412_current_snapshot_wins_explicit_current_intent_retry_at_most_once",
+      browserCompatibilityInference: false,
+      browserRebuildInference: false,
+      frontendMayRedesignBackendOrSchema: false,
+    }),
+    "RFA-02 frontend server-authority/paused/CAS semantics drift",
   );
 
   const structure = contract.structureContract;
@@ -957,10 +1277,10 @@ export function validateReaderFirstRelease(contract, packet) {
   );
   invariant(
     contract.liveLinearManifest?.path === LIVE_MANIFEST_PATH &&
-      contract.liveLinearManifest?.sha256 === EVIDENCE_BINDINGS[23][1] &&
+      contract.liveLinearManifest?.sha256 === EXPECTED_LIVE_MANIFEST_SHA256 &&
       contract.liveLinearManifest?.issueCount === 20 &&
       contract.liveLinearManifest?.relationCount === 65 &&
-      contract.liveLinearManifest?.verifiedAt === "2026-07-11T09:25:28Z",
+      contract.liveLinearManifest?.verifiedAt === "2026-07-11T10:22:20Z",
     "live Linear manifest binding drift",
   );
   invariant(
@@ -971,11 +1291,40 @@ export function validateReaderFirstRelease(contract, packet) {
     "RFA-02 parent authorization binding drift",
   );
   invariant(
-    same(contract.currentExecutionAuthorization, {
+    same(contract.previousExecutionAuthorization, {
       path: RFA_02_START_AUTHORIZATION_PATH,
       sha256: EXPECTED_RFA_02_START_AUTHORIZATION_SHA256,
+    }) &&
+      same(contract.currentExecutionAuthorization, {
+        path: RFA_02_FRONTEND_AUTHORIZATION_PATH,
+        sha256: EXPECTED_RFA_02_FRONTEND_AUTHORIZATION_SHA256,
+      }),
+    "RFA-02 historical/current execution authorization DAG drift",
+  );
+  invariant(
+    same(contract.flowRegistry, {
+      path: FLOW_MANIFEST_PATH,
+      sha256: EXPECTED_FLOW_MANIFEST_SHA256,
+      officialRendererCommand: "node scripts/validate-flow-registry.mjs --write",
+      artifacts: EXPECTED_FLOW_ARTIFACTS,
+      directHttpRoutesObserved: 125,
+      ownerFlowId: "APP-NAV-001",
+      routes: EXPECTED_WORKSPACE_ROUTES,
     }),
-    "RFA-02 current execution authorization binding drift",
+    "RFA-02 flow registry binding drift",
+  );
+  invariant(
+    same(contract.crossRegistryRouteOwnership, EXPECTED_CROSS_REGISTRY_ROUTE_OWNERSHIP),
+    "RFA-02 BIC cross-registry route ownership binding drift",
+  );
+  invariant(
+    same(contract.implementationState, {
+      localId: "RFA-02",
+      productMutationPerformed: true,
+      frontendProductMutationPerformed: false,
+      frontendAuthorizationEffectiveOnlyAfterGovernanceTransitionReviewedAndCommitted: true,
+    }),
+    "RFA-02 truthful product/frontend mutation state drift",
   );
 
   invariant(
@@ -1001,7 +1350,11 @@ export function validateReaderFirstRelease(contract, packet) {
       same(packet.peerReviewHistory, contract.peerReviewHistory) &&
       same(packet.liveLinearManifest, contract.liveLinearManifest) &&
       same(packet.parentAuthorization, contract.parentAuthorization) &&
-      same(packet.currentExecutionAuthorization, contract.currentExecutionAuthorization),
+      same(packet.previousExecutionAuthorization, contract.previousExecutionAuthorization) &&
+      same(packet.currentExecutionAuthorization, contract.currentExecutionAuthorization) &&
+      same(packet.flowRegistry, contract.flowRegistry) &&
+      same(packet.crossRegistryRouteOwnership, contract.crossRegistryRouteOwnership) &&
+      same(packet.implementationState, contract.implementationState),
     "packet contract evidence/authorization mirror drift",
   );
   invariant(
@@ -1023,7 +1376,9 @@ export function validateReaderFirstRelease(contract, packet) {
       eligibleForProductImplementation: ["RFA-02"],
       newIssuesCreatedNow: 20,
       linearMutationPerformed: true,
-      productMutationPerformed: false,
+      productMutationPerformed: true,
+      frontendProductMutationPerformed: false,
+      frontendAuthorizationEffectiveOnlyAfterGovernanceTransitionReviewedAndCommitted: true,
     }),
     "post-creation Linear/product authorization drift",
   );
@@ -1047,6 +1402,34 @@ export function validateReaderFirstRelease(contract, packet) {
       same(byId.get("RFA-02")?.inScope?.symbols, EXPECTED_RFA_02_SCOPE_SYMBOLS) &&
       same(byId.get("RFA-02")?.nonGoals, EXPECTED_RFA_02_NON_GOALS),
     "RFA-02 exact authorized scope path/symbol/non-goal drift",
+  );
+  const rfa02 = byId.get("RFA-02");
+  invariant(
+    rfa02.productMutationPerformed === true &&
+      rfa02.frontendProductMutationPerformed === false &&
+      rfa02.frontendAuthorizationEffectiveOnlyAfterGovernanceTransitionReviewedAndCommitted ===
+        true,
+    "RFA-02 frontend mutation may not be claimed before governance commit",
+  );
+  invariant(
+    rfa02.acceptanceProbes
+      .find(({ id }) => id === "RFA-02-AC01")
+      ?.assertion.includes("?projectId") &&
+      rfa02.acceptanceProbes
+        .find(({ id }) => id === "RFA-02-AC01")
+        ?.assertion.includes("server-authoritative exact source revision, exact run") &&
+      rfa02.acceptanceProbes
+        .find(({ id }) => id === "RFA-02-AC02")
+        ?.assertion.includes("Both read modes restore paused with no autoplay") &&
+      [
+        "ETags remain in memory",
+        "serialized and coalesced with If-Match",
+        "on 412",
+        "retries at most once",
+      ].every((term) =>
+        rfa02.acceptanceProbes.find(({ id }) => id === "RFA-02-AC04")?.assertion.includes(term),
+      ),
+    "RFA-02 frontend authority/paused/CAS acceptance semantics drift",
   );
   const requiredSourceScopes = {
     "RFA-09": {
@@ -1255,7 +1638,7 @@ export function validateReaderFirstRelease(contract, packet) {
           (completed
             ? "completed_linear_done"
             : unblocked
-              ? "in_progress_product_authorized"
+              ? "in_progress_product_mutation_started_frontend_scope_pending_commit"
               : "dependency_blocked_linear_created"),
       `${prefix}: graph/status drift`,
     );
@@ -1531,7 +1914,7 @@ export function renderPacketMarkdown(packet) {
     "",
     "RFA-01 is completed in Linear; its immutable evidence preserves the historical RFA-01 authorization capture.",
     "",
-    "RFA-02 is In Progress and remains the sole currently graph-unblocked and product-authorized issue; no product mutation has yet been performed.",
+    "RFA-02 is In Progress and remains the sole currently graph-unblocked and product-authorized issue. Authorized backend/schema product mutation has started; frontend product mutation remains false and becomes effective only after this governance transition is reviewed and committed.",
     "",
     "## DAG",
     "",
@@ -2178,21 +2561,59 @@ async function runValidationCore({
     validatorBytes,
     parentAuthorizationText,
     startAuthorizationText,
+    frontendAuthorizationText,
     manifestText,
+    flowManifestText,
+    flowReadmeText,
+    flowApplicationUxText,
+    flowCoverageReportText,
+    bicPacketText,
+    bicMarkdownText,
+    bicValidatorText,
+    bicValidatorTestText,
   ] = await Promise.all([
     readFile(path.join(root, CONTRACT_PATH), "utf8"),
     readFile(path.join(root, PACKET_PATH), "utf8"),
     readFile(path.join(root, VALIDATOR_PATH)),
     readFile(path.join(root, PARENT_AUTHORIZATION_PATH), "utf8"),
     readFile(path.join(root, RFA_02_START_AUTHORIZATION_PATH), "utf8"),
+    readFile(path.join(root, RFA_02_FRONTEND_AUTHORIZATION_PATH), "utf8"),
     readFile(path.join(root, LIVE_MANIFEST_PATH), "utf8"),
+    readFile(path.join(root, FLOW_MANIFEST_PATH), "utf8"),
+    readFile(path.join(root, FLOW_README_PATH), "utf8"),
+    readFile(path.join(root, FLOW_APPLICATION_UX_PATH), "utf8"),
+    readFile(path.join(root, FLOW_COVERAGE_REPORT_PATH), "utf8"),
+    readFile(path.join(root, BIC_PACKET_PATH), "utf8"),
+    readFile(path.join(root, BIC_MARKDOWN_PATH), "utf8"),
+    readFile(path.join(root, BIC_VALIDATOR_PATH), "utf8"),
+    readFile(path.join(root, BIC_VALIDATOR_TEST_PATH), "utf8"),
   ]);
   const contract = JSON.parse(contractText);
   const packet = JSON.parse(packetText);
   const manifest = JSON.parse(manifestText);
+  const flowManifest = JSON.parse(flowManifestText);
   validateReaderFirstRelease(contract, packet);
   validateParentAuthorization(JSON.parse(parentAuthorizationText));
-  validateRfa02StartAuthorization(JSON.parse(startAuthorizationText), manifest, packet);
+  validateRfa02StartAuthorization(JSON.parse(startAuthorizationText));
+  validateRfa02FrontendAuthorization(
+    JSON.parse(frontendAuthorizationText),
+    manifest,
+    packet,
+    flowManifest,
+    {
+      [FLOW_MANIFEST_PATH]: flowManifestText,
+      [FLOW_README_PATH]: flowReadmeText,
+      [FLOW_APPLICATION_UX_PATH]: flowApplicationUxText,
+      [FLOW_COVERAGE_REPORT_PATH]: flowCoverageReportText,
+    },
+    JSON.parse(bicPacketText),
+    {
+      [BIC_PACKET_PATH]: bicPacketText,
+      [BIC_MARKDOWN_PATH]: bicMarkdownText,
+      [BIC_VALIDATOR_PATH]: bicValidatorText,
+      [BIC_VALIDATOR_TEST_PATH]: bicValidatorTestText,
+    },
+  );
   const negativeFixtures = validateNegativeFixtures(contract, packet);
   invariant(sha256(contractText) === EXPECTED_CONTRACT_SHA256, "contract file-byte SHA-256 drift");
   invariant(sha256(packetText) === EXPECTED_PACKET_SHA256, "packet file-byte SHA-256 drift");

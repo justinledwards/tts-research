@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -8,6 +9,7 @@ import {
   DEFAULT_JSON_PATH,
   DEFAULT_MARKDOWN_PATH,
   loadInputs,
+  POST_FREEZE_ROUTE_RECONCILIATION,
   PROVENANCE_MANIFEST_PATH,
   renderMarkdown,
   run,
@@ -23,8 +25,16 @@ function validatePacket(
   flowManifest = null,
   flowCoverage = null,
   sourceEvidence = CANONICAL_INPUTS.sourceEvidence,
+  postFreezeRouteReconciliation = POST_FREEZE_ROUTE_RECONCILIATION,
 ) {
-  return validatePacketImpl(packet, benches, flowManifest, flowCoverage, sourceEvidence);
+  return validatePacketImpl(
+    packet,
+    benches,
+    flowManifest,
+    flowCoverage,
+    sourceEvidence,
+    postFreezeRouteReconciliation,
+  );
 }
 
 function validateLoaded(inputs, packet = inputs.packet, sourceEvidence = inputs.sourceEvidence) {
@@ -595,7 +605,98 @@ test("validator rejects canonical flow/route/state scope drift", async () => {
     () => validatePacket(stateDrift, benches, flowManifest, flowCoverage),
     /stateSymbols: issues must exactly own the canonical inventory once/,
   );
+  await validateExactPostFreezeAllowlist();
+  await validatePostFreezeManifestOwnership();
+  await validateFrozenBicBytes();
 });
+
+async function validateExactPostFreezeAllowlist() {
+  const inputs = await loadInputs(ROOT);
+  for (const routes of [
+    POST_FREEZE_ROUTE_RECONCILIATION.routes.slice(0, 1),
+    [...POST_FREEZE_ROUTE_RECONCILIATION.routes, "GET /api/not-authorized"],
+  ]) {
+    assert.throws(
+      () =>
+        validatePacket(
+          inputs.packet,
+          inputs.benches,
+          inputs.flowManifest,
+          inputs.flowCoverage,
+          inputs.sourceEvidence,
+          { ...POST_FREEZE_ROUTE_RECONCILIATION, routes },
+        ),
+      /post-freeze route allowlist must be the exact authorized reconciliation/,
+    );
+  }
+
+  const overlap = structuredClone(inputs.packet);
+  overlap.issues
+    .find(({ localId }) => localId === "BIC-04")
+    .routePatterns.push(POST_FREEZE_ROUTE_RECONCILIATION.routes[0]);
+  assert.throws(
+    () => validateLoaded(inputs, overlap),
+    /post-freeze route allowlist must be unique and disjoint from frozen assignments/,
+  );
+}
+
+async function validatePostFreezeManifestOwnership() {
+  const inputs = await loadInputs(ROOT);
+  const missing = structuredClone(inputs.flowManifest);
+  const missingOwner = missing.flows.find(({ id }) => id === "APP-NAV-001");
+  missingOwner.routePatterns.splice(
+    missingOwner.routePatterns.indexOf(POST_FREEZE_ROUTE_RECONCILIATION.routes[0]),
+    1,
+  );
+  assert.throws(
+    () => validatePacket(inputs.packet, inputs.benches, missing, inputs.flowCoverage),
+    /each post-freeze route must exist exactly once under APP-NAV-001/,
+  );
+
+  const wrongOwner = structuredClone(inputs.flowManifest);
+  const appNav = wrongOwner.flows.find(({ id }) => id === "APP-NAV-001");
+  appNav.routePatterns.splice(
+    appNav.routePatterns.indexOf(POST_FREEZE_ROUTE_RECONCILIATION.routes[0]),
+    1,
+  );
+  wrongOwner.flows
+    .find(({ id }) => id !== "APP-NAV-001")
+    .routePatterns.push(POST_FREEZE_ROUTE_RECONCILIATION.routes[0]);
+  assert.throws(
+    () => validatePacket(inputs.packet, inputs.benches, wrongOwner, inputs.flowCoverage),
+    /each post-freeze route must exist exactly once under APP-NAV-001/,
+  );
+
+  const duplicate = structuredClone(inputs.flowManifest);
+  const duplicatedRoute = inputs.packet.issues.flatMap(({ routePatterns }) => routePatterns)[0];
+  duplicate.flows.find(({ id }) => id === "APP-NAV-001").routePatterns.push(duplicatedRoute);
+  assert.throws(
+    () => validatePacket(inputs.packet, inputs.benches, duplicate, inputs.flowCoverage),
+    /canonical route inventory must not contain duplicates/,
+  );
+}
+
+async function validateFrozenBicBytes() {
+  const [packetBytes, markdownBytes] = await Promise.all([
+    readFile(path.join(ROOT, DEFAULT_JSON_PATH)),
+    readFile(path.join(ROOT, DEFAULT_MARKDOWN_PATH)),
+  ]);
+  assert.equal(
+    createHash("sha256").update(packetBytes).digest("hex"),
+    "1ae22003178761e60de4661d763f239a2c22e3ca4624e14a29d155b50eb264c0",
+  );
+  assert.equal(
+    createHash("sha256").update(markdownBytes).digest("hex"),
+    "589d54b0534091bb2442d5d84a1c93df3a36d719c9a04c37e0dfa5e306187e7c",
+  );
+  const inputs = await loadInputs(ROOT);
+  const mutation = structuredClone(inputs.packet);
+  mutation.issues.find(({ localId }) => localId === "BIC-04").routePatterns.pop();
+  assert.throws(
+    () => validateLoaded(inputs, mutation),
+    /routePatterns: issues must exactly own the canonical inventory once after exact post-freeze reconciliation/,
+  );
+}
 
 test("validator rejects ownership overlap across all 20 issues", async () => {
   const { packet, benches, flowManifest, flowCoverage } = await loadInputs(ROOT);

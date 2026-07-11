@@ -1,0 +1,237 @@
+{
+  "schemaVersion": "tts-research.reader-first-rfa02-frontend-scope-authorization.v1",
+  "recordedAt": "2026-07-11T11:17:02.632Z",
+  "authority": "acting_product_owner_frontend_flow_and_evidence_safe_post_freeze_route_reconciliation_transition",
+  "previousAuthorization": {
+    "path": "docs/reviews/reader-first-rfa02-start-scope-authorization.json",
+    "sha256": "14463389f0b9b686e194deaec3f7bb27616e32c2f09c48615259bf86748ea07c",
+    "authorizationCommit": "672ca619b70ca0cebdfb4bae69bb876ebb83f228"
+  },
+  "liveLinearManifest": {
+    "path": "docs/project-management/linear/tts-research-reader-first-release-batch.manifest.json",
+    "sha256": "8999920d9453a3b1294f36b91158fbd2b383ead0f3eaae40f406b1f02333b3fb",
+    "verifiedAt": "2026-07-11T10:22:20Z",
+    "completedDependency": {
+      "localId": "RFA-01",
+      "linearIdentifier": "QQP-613",
+      "linearState": "Done",
+      "linearStateType": "completed"
+    },
+    "activeIssue": {
+      "localId": "RFA-02",
+      "linearIssueId": "bcc7a896-6150-438d-9718-81c4dcf211fd",
+      "linearIdentifier": "QQP-614",
+      "linearState": "In Progress",
+      "linearStateType": "started",
+      "linearStateId": "8952b964-26ec-474c-838b-de6ecc3facb3"
+    },
+    "blockedIssues": [
+      "RFA-03",
+      "RFA-04",
+      "RFA-05",
+      "RFA-06",
+      "RFA-07",
+      "RFA-08",
+      "RFA-09",
+      "RFA-10",
+      "RFA-11",
+      "RFA-12",
+      "RFA-13",
+      "RFA-14",
+      "RFA-15",
+      "RFA-16",
+      "RFA-17",
+      "RFA-18",
+      "RFA-19",
+      "RFA-20"
+    ],
+    "activeCount": 19,
+    "unarchivedCount": 20
+  },
+  "productOwnerDecision": {
+    "commentUrl": "https://linear.app/niklas-olsson/issue/QQP-614/rfa-02-add-server-authoritative-project-restoration-snapshot-and#comment-81bb29b1",
+    "commentId": "81bb29b1-a56f-4c55-9422-e9ba3ed0bd2a",
+    "issueId": "bcc7a896-6150-438d-9718-81c4dcf211fd",
+    "linearState": "In Progress",
+    "linearStateType": "started",
+    "linearStateId": "8952b964-26ec-474c-838b-de6ecc3facb3",
+    "decision": "approve_exact_rfa02_frontend_and_flow_scope_after_governance_commit"
+  },
+  "exactFlowDerivedScopeDecision": {
+    "commentUrl": "https://linear.app/niklas-olsson/issue/QQP-614/rfa-02-add-server-authoritative-project-restoration-snapshot-and#comment-db93aae6",
+    "commentId": "db93aae6-67bf-497f-b466-9dffcdb890e1",
+    "issueId": "bcc7a896-6150-438d-9718-81c4dcf211fd",
+    "linearState": "In Progress",
+    "linearStateType": "started",
+    "linearStateId": "8952b964-26ec-474c-838b-de6ecc3facb3",
+    "decision": "approve_exact_four_official_flow_renderer_artifacts_after_governance_commit"
+  },
+  "flowRegistry": {
+    "path": "docs/flows/manifest.json",
+    "sha256": "4f789e39e9c0e12e6c67abed73492b4139aebe4b16786123324d567b5ae0b28d",
+    "officialRendererCommand": "node scripts/validate-flow-registry.mjs --write",
+    "artifacts": [
+      {
+        "path": "docs/flows/manifest.json",
+        "sha256": "4f789e39e9c0e12e6c67abed73492b4139aebe4b16786123324d567b5ae0b28d"
+      },
+      {
+        "path": "docs/flows/README.md",
+        "sha256": "f99e1fd689e755a4f036aaeae9bf1dc4cf17316ed877c62ed282cbd05cb97fa4"
+      },
+      {
+        "path": "docs/flows/application-ux.md",
+        "sha256": "2d4dfe18678c1d59e541d87ebdeae3f60c2dbc1ecd212d15f12f673955ee1d6c"
+      },
+      {
+        "path": "docs/flows/coverage-report.json",
+        "sha256": "d6045a1386d99f0a4c98f039fd138421e6ed395af2c97c6f152a5fb092823691"
+      }
+    ],
+    "directHttpRoutesObserved": 125,
+    "ownerFlowId": "APP-NAV-001",
+    "routes": ["GET /api/projects/:id/reader-workspace", "PUT /api/projects/:id/reader-workspace"]
+  },
+  "authorizedScope": {
+    "localId": "RFA-02",
+    "paths": [
+      "backend/internal/httpapi",
+      "packages/schema",
+      "backend/data",
+      "scripts/e2e-reader-first-continuity.mjs",
+      "backend/internal/contentir/schema",
+      "backend/internal/pipeline",
+      "scripts/generate-contract-types-templates.mjs",
+      "packages/sdk-py/src/voice_studio_sdk/schema_files",
+      "fixtures/contracts/schema-snapshots",
+      "docs/contracts/schema-bundle.v1.json",
+      "docs/flows/manifest.json",
+      "frontend/src/App.tsx",
+      "frontend/src/api.ts",
+      "frontend/src/api.test.ts",
+      "frontend/src/projectState.ts",
+      "frontend/src/projectState.test.ts",
+      "frontend/src/readerWorkspace.ts",
+      "frontend/src/readerWorkspace.test.ts",
+      "docs/flows/README.md",
+      "docs/flows/application-ux.md",
+      "docs/flows/coverage-report.json",
+      "scripts/validate-linear-batch.mjs",
+      "scripts/validate-linear-batch.test.mjs"
+    ],
+    "symbols": [
+      "ReaderWorkspaceSnapshot",
+      "GET/PUT project reader-workspace",
+      "snapshot v0-to-v1 migrator",
+      "canonical ReaderWorkspaceSnapshot schema generation",
+      "minimum server-derived source-revision/run-compatibility read projection",
+      "server GET snapshot authority for exact source revision, exact run, reader locator, playback cursor, playback rate, and follow preference",
+      "?projectId clean-browser deterministic selection seam",
+      "paused restore in both read modes with no autoplay",
+      "legacy and project local workspace keys cleanup-only and non-authoritative",
+      "in-memory workspace ETag",
+      "serialized and coalesced If-Match workspace writes",
+      "412 current snapshot wins with at most one explicit-current-intent retry"
+    ],
+    "nonGoals": [
+      "No audio delivery or generation behavior changes",
+      "No automatic playback on restore",
+      "No browser-provided compatibility or browser authority",
+      "No browser compatibility or rebuild inference",
+      "No backend or schema redesign by the frontend lane",
+      "No presentation preference removal"
+    ]
+  },
+  "currentAuthorization": {
+    "ownerAccepted": true,
+    "peerApproved": true,
+    "linearCreationAuthorized": true,
+    "productImplementationAuthorized": true,
+    "graphUnblockedIssues": ["RFA-02"],
+    "authorizedIssues": ["RFA-02"]
+  },
+  "frontendAuthorization": {
+    "effectiveOnlyAfterGovernanceTransitionReviewedAndCommitted": true,
+    "frontendProductMutationPerformed": false
+  },
+  "blockedUnauthorizedIssues": [
+    "RFA-03",
+    "RFA-04",
+    "RFA-05",
+    "RFA-06",
+    "RFA-07",
+    "RFA-08",
+    "RFA-09",
+    "RFA-10",
+    "RFA-11",
+    "RFA-12",
+    "RFA-13",
+    "RFA-14",
+    "RFA-15",
+    "RFA-16",
+    "RFA-17",
+    "RFA-18",
+    "RFA-19",
+    "RFA-20"
+  ],
+  "productMutationPerformed": true,
+  "frontendProductMutationPerformed": false,
+  "supersededBicArtifactAuthorizationDecision": {
+    "commentUrl": "https://linear.app/niklas-olsson/issue/QQP-614/rfa-02-add-server-authoritative-project-restoration-snapshot-and#comment-dfdce9da",
+    "commentId": "dfdce9da-0fab-482e-9d3e-be6e4a3f0410",
+    "issueId": "bcc7a896-6150-438d-9718-81c4dcf211fd",
+    "linearIdentifier": "QQP-614",
+    "linearState": "In Progress",
+    "linearStateType": "started",
+    "linearStateId": "8952b964-26ec-474c-838b-de6ecc3facb3",
+    "decision": "approve_exact_bic04_route_ownership_artifacts_after_governance_commit",
+    "effective": false,
+    "supersededBy": "107ca6a9-ab3d-4687-89a0-0b7473cb6ad9"
+  },
+  "postFreezeRouteReconciliationDecision": {
+    "commentUrl": "https://linear.app/niklas-olsson/issue/QQP-614/rfa-02-add-server-authoritative-project-restoration-snapshot-and#comment-107ca6a9",
+    "commentId": "107ca6a9-ab3d-4687-89a0-0b7473cb6ad9",
+    "issueId": "bcc7a896-6150-438d-9718-81c4dcf211fd",
+    "linearIdentifier": "QQP-614",
+    "linearState": "In Progress",
+    "linearStateType": "started",
+    "linearStateId": "8952b964-26ec-474c-838b-de6ecc3facb3",
+    "decision": "preserve_frozen_bic_provenance_and_authorize_exact_post_freeze_route_reconciliation_after_governance_commit",
+    "effective": true
+  },
+  "crossRegistryRouteOwnership": {
+    "frozenBicArtifacts": [
+      {
+        "path": "docs/project-management/linear/tts-research-best-in-class-batch-draft.json",
+        "sha256": "1ae22003178761e60de4661d763f239a2c22e3ca4624e14a29d155b50eb264c0"
+      },
+      {
+        "path": "docs/project-management/linear/tts-research-best-in-class-batch-draft.md",
+        "sha256": "589d54b0534091bb2442d5d84a1c93df3a36d719c9a04c37e0dfa5e306187e7c"
+      }
+    ],
+    "validatorArtifacts": [
+      {
+        "path": "scripts/validate-linear-batch.mjs",
+        "sha256": "7ea517a9d05c67f430c84a8bd8567bc973af3c8fae4600e8ff040c1f1a695a99"
+      },
+      {
+        "path": "scripts/validate-linear-batch.test.mjs",
+        "sha256": "1486bfa3fc78b94483ea42b00efb94d08148d651de808b057637d5aa39d4c36f"
+      }
+    ],
+    "postFreezeRouteAllowlist": [
+      "GET /api/projects/:id/reader-workspace",
+      "PUT /api/projects/:id/reader-workspace"
+    ],
+    "ownerFlowId": "APP-NAV-001",
+    "semantics": {
+      "frozenAssignmentsRemainUnique": true,
+      "allowlistIsExact": true,
+      "allowlistIsDisjointFromFrozenAssignments": true,
+      "allowlistedRoutesExistExactlyOnceUnderOwnerFlow": true,
+      "frozenAssignmentsPlusAllowlistEqualCurrentCanonicalRouteInventoryExactlyOnce": true,
+      "flowIdsAndStateSymbolsRemainExactUnchanged": true
+    }
+  }
+}

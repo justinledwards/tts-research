@@ -2,7 +2,7 @@
 
 Status: `candidate_pending_chatgpt_v8_recheck`
 
-This registry is the canonical candidate architecture map for **39 primary flows**. The current Go AST inventory contains **123 HTTP routes** with exactly one declared primary flow owner and **161 required implementation-state symbols**.
+This registry is the canonical candidate architecture map for **39 primary flows**. The current Go AST inventory contains **125 HTTP routes** with exactly one declared primary flow owner and **161 required implementation-state symbols**.
 
 ## Canonical and generated files
 

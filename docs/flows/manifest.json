@@ -4,7 +4,7 @@
   "validationCommand": "pnpm validate:flows",
   "routeInventory": {
     "source": "backend/internal/httpapi/*.go app.Get/Post/Put/Patch/Delete string-literal registrations",
-    "directHttpRoutesObserved": 123,
+    "directHttpRoutesObserved": 125,
     "exactOwnershipStatus": "validated_fail_closed"
   },
   "governance": {
@@ -1539,7 +1539,10 @@
       "primaryOwner": "experience",
       "secondaryOwners": [],
       "diagram": "stateDiagram-v2\n  state \"navigation intent received\" as APP_NAV_001_REQUESTCAPTURED\n  state \"route context resolved\" as APP_NAV_001_PRECONDITIONSCHECKED\n  state \"target stage loading\" as APP_NAV_001_DOMAINWORKACTIVE\n  state \"valid target route selected\" as APP_NAV_001_DURABLEEFFECTRECORDED\n  state \"target surface focused\" as APP_NAV_001_FLOWCOMPLETED\n  state \"stale or blocked context shown\" as APP_NAV_001_CLASSIFIEDFAILURE\n  state \"navigation superseded\" as APP_NAV_001_CLEANUPINPROGRESS\n  state \"prior surface retained\" as APP_NAV_001_CANCELEDCLEAN\n  state \"safe library fallback selected\" as APP_NAV_001_RECOVERYCONTEXTREADY\n  state \"Navigation or command guard decision evaluated\" as APP_NAV_001_GUARDDECISION\n  state \"Stable focus and route state restored\" as APP_NAV_001_FOCUSRESTORED\n  [*] --> APP_NAV_001_REQUESTCAPTURED\n  APP_NAV_001_REQUESTCAPTURED --> APP_NAV_001_PRECONDITIONSCHECKED: capture request [required input and ownership context are present] / entry\n  APP_NAV_001_PRECONDITIONSCHECKED --> APP_NAV_001_DOMAINWORKACTIVE: start domain work [preconditions and trust-boundary checks pass] / entry\n  APP_NAV_001_DOMAINWORKACTIVE --> APP_NAV_001_GUARDDECISION: advance from domainWorkActive to guardDecision [domainWorkActive produced the evidence required by guardDecision] / success\n  APP_NAV_001_GUARDDECISION --> APP_NAV_001_FOCUSRESTORED: advance from guardDecision to focusRestored [guardDecision produced the evidence required by focusRestored] / success\n  APP_NAV_001_FOCUSRESTORED --> APP_NAV_001_DURABLEEFFECTRECORDED: advance from focusRestored to durableEffectRecorded [focusRestored produced the evidence required by durableEffectRecorded] / success\n  APP_NAV_001_DURABLEEFFECTRECORDED --> APP_NAV_001_FLOWCOMPLETED: advance from durableEffectRecorded to flowCompleted [durableEffectRecorded produced the evidence required by flowCompleted] / success\n  APP_NAV_001_PRECONDITIONSCHECKED --> APP_NAV_001_CLASSIFIEDFAILURE: classify preconditionsChecked failure [preconditionsChecked produced a domain-classified error] / failure\n  APP_NAV_001_DOMAINWORKACTIVE --> APP_NAV_001_CLASSIFIEDFAILURE: classify domainWorkActive failure [domainWorkActive produced a domain-classified error] / failure\n  APP_NAV_001_GUARDDECISION --> APP_NAV_001_CLASSIFIEDFAILURE: classify guardDecision failure [guardDecision produced a domain-classified error] / failure\n  APP_NAV_001_CLASSIFIEDFAILURE --> APP_NAV_001_RECOVERYCONTEXTREADY: prepare bounded recovery [failure is retryable and identity is preserved] / recovery\n  APP_NAV_001_RECOVERYCONTEXTREADY --> APP_NAV_001_DOMAINWORKACTIVE: retry owned work [retry budget remains and committed effects are compatible] / retry\n  APP_NAV_001_DOMAINWORKACTIVE --> APP_NAV_001_CLEANUPINPROGRESS: cancel while domainWorkActive [the flow remains in a declared cancellable phase] / cancel\n  APP_NAV_001_GUARDDECISION --> APP_NAV_001_CLEANUPINPROGRESS: cancel while guardDecision [the flow remains in a declared cancellable phase] / cancel\n  APP_NAV_001_FOCUSRESTORED --> APP_NAV_001_CLEANUPINPROGRESS: cancel while focusRestored [the flow remains in a declared cancellable phase] / cancel\n  APP_NAV_001_CLEANUPINPROGRESS --> APP_NAV_001_CANCELEDCLEAN: finish owned cleanup [owned transient work and descendants are gone or quarantined] / cleanup\n  APP_NAV_001_FLOWCOMPLETED --> [*]\n  APP_NAV_001_CANCELEDCLEAN --> [*]\n",
-      "routePatterns": [],
+      "routePatterns": [
+        "GET /api/projects/:id/reader-workspace",
+        "PUT /api/projects/:id/reader-workspace"
+      ],
       "sharedConcerns": ["RECOVERY", "ACCESSIBILITY", "I18N", "OPERATIONAL_STATUS"],
       "states": [
         {

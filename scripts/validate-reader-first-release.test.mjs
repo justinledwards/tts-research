@@ -7,13 +7,22 @@ import test from "node:test";
 import { promisify } from "node:util";
 
 import {
+  BIC_MARKDOWN_PATH,
+  BIC_PACKET_PATH,
+  BIC_VALIDATOR_PATH,
+  BIC_VALIDATOR_TEST_PATH,
   CONTRACT_PATH,
+  FLOW_APPLICATION_UX_PATH,
+  FLOW_COVERAGE_REPORT_PATH,
+  FLOW_MANIFEST_PATH,
+  FLOW_README_PATH,
   LIVE_MANIFEST_PATH,
   MARKDOWN_PATH,
   PACKET_PATH,
   PARENT_AUTHORIZATION_PATH,
   RFA_01_ROLLBACK_PATH,
   RFA_01_VERIFICATION_PATH,
+  RFA_02_FRONTEND_AUTHORIZATION_PATH,
   RFA_02_START_AUTHORIZATION_PATH,
   renderPacketMarkdown,
   runValidation,
@@ -21,6 +30,7 @@ import {
   validateParentAuthorization,
   validateReaderFirstRelease,
   validateRfa01Evidence,
+  validateRfa02FrontendAuthorization,
   validateRfa02StartAuthorization,
 } from "./validate-reader-first-release.mjs";
 
@@ -33,18 +43,44 @@ const [CONTRACT, PACKET] = await Promise.all([
 const [
   PARENT_AUTHORIZATION,
   RFA_02_START_AUTHORIZATION,
+  RFA_02_FRONTEND_AUTHORIZATION,
   LIVE_MANIFEST,
+  FLOW_MANIFEST_TEXT,
+  BIC_PACKET_TEXT,
+  BIC_MARKDOWN_TEXT,
+  BIC_VALIDATOR_TEXT,
+  BIC_VALIDATOR_TEST_TEXT,
   RFA_01_VERIFICATION,
   RFA_01_ROLLBACK,
   PEER_APPROVAL_TEXT,
 ] = await Promise.all([
   readFile(path.join(ROOT, PARENT_AUTHORIZATION_PATH), "utf8").then(JSON.parse),
   readFile(path.join(ROOT, RFA_02_START_AUTHORIZATION_PATH), "utf8").then(JSON.parse),
+  readFile(path.join(ROOT, RFA_02_FRONTEND_AUTHORIZATION_PATH), "utf8").then(JSON.parse),
   readFile(path.join(ROOT, LIVE_MANIFEST_PATH), "utf8").then(JSON.parse),
+  readFile(path.join(ROOT, FLOW_MANIFEST_PATH), "utf8"),
+  readFile(path.join(ROOT, BIC_PACKET_PATH), "utf8"),
+  readFile(path.join(ROOT, BIC_MARKDOWN_PATH), "utf8"),
+  readFile(path.join(ROOT, BIC_VALIDATOR_PATH), "utf8"),
+  readFile(path.join(ROOT, BIC_VALIDATOR_TEST_PATH), "utf8"),
   readFile(path.join(ROOT, RFA_01_VERIFICATION_PATH), "utf8").then(JSON.parse),
   readFile(path.join(ROOT, RFA_01_ROLLBACK_PATH), "utf8").then(JSON.parse),
   readFile(path.join(ROOT, "docs/reviews/reader-first-release-peer-approval-v8.json"), "utf8"),
 ]);
+const FLOW_MANIFEST = JSON.parse(FLOW_MANIFEST_TEXT);
+const BIC_PACKET = JSON.parse(BIC_PACKET_TEXT);
+const BIC_ARTIFACT_TEXTS = {
+  [BIC_PACKET_PATH]: BIC_PACKET_TEXT,
+  [BIC_MARKDOWN_PATH]: BIC_MARKDOWN_TEXT,
+  [BIC_VALIDATOR_PATH]: BIC_VALIDATOR_TEXT,
+  [BIC_VALIDATOR_TEST_PATH]: BIC_VALIDATOR_TEST_TEXT,
+};
+const FLOW_ARTIFACT_TEXTS = {
+  [FLOW_MANIFEST_PATH]: FLOW_MANIFEST_TEXT,
+  [FLOW_README_PATH]: await readFile(path.join(ROOT, FLOW_README_PATH), "utf8"),
+  [FLOW_APPLICATION_UX_PATH]: await readFile(path.join(ROOT, FLOW_APPLICATION_UX_PATH), "utf8"),
+  [FLOW_COVERAGE_REPORT_PATH]: await readFile(path.join(ROOT, FLOW_COVERAGE_REPORT_PATH), "utf8"),
+};
 const PEER_APPROVAL = JSON.parse(PEER_APPROVAL_TEXT);
 const PEER_APPROVAL_SHA256 = createHash("sha256").update(PEER_APPROVAL_TEXT).digest("hex");
 const OCR_OVERLAY = await readFile(
@@ -151,35 +187,25 @@ test("completed RFA-01 to sole authorized In Progress RFA-02 transition fails cl
   );
 });
 
-test("RFA-02 start authorization rejects stale state, scope drift, authority drift, and tampering", () => {
-  assert.doesNotThrow(() =>
-    validateRfa02StartAuthorization(RFA_02_START_AUTHORIZATION, LIVE_MANIFEST, PACKET),
-  );
+test("RFA-02 historical start authorization remains immutable and rejects tampering", () => {
+  assert.doesNotThrow(() => validateRfa02StartAuthorization(RFA_02_START_AUTHORIZATION));
   const rejectStart = (mutator, expected) => {
     const authorization = structuredClone(RFA_02_START_AUTHORIZATION);
-    const manifest = structuredClone(LIVE_MANIFEST);
-    const packet = structuredClone(PACKET);
-    mutator(authorization, manifest, packet);
-    assert.throws(() => validateRfa02StartAuthorization(authorization, manifest, packet), expected);
+    mutator(authorization);
+    assert.throws(() => validateRfa02StartAuthorization(authorization), expected);
   };
-  rejectStart((_authorization, manifest) => {
-    const issue = manifest.issues.find(({ localId }) => localId === "RFA-02");
-    issue.state = "Backlog";
-    issue.stateType = "backlog";
-  }, /current In Progress live Linear binding drift/);
-  rejectStart((authorization) => {
-    authorization.authorizedScope.paths.pop();
-  }, /exact authorized scope path/);
-  rejectStart((authorization) => {
-    authorization.authorizedScope.paths.push("frontend/src/App.tsx");
-  }, /exact authorized scope path/);
-  rejectStart((authorization) => {
-    authorization.authorizedScope.symbols.pop();
-  }, /exact authorized scope path/);
-  rejectStart((authorization) => {
-    authorization.authorizedScope.nonGoals[2] =
-      "Browser compatibility may be provided by the client";
-  }, /exact authorized scope path/);
+  rejectStart(
+    (authorization) => authorization.authorizedScope.paths.pop(),
+    /historical start scope/,
+  );
+  rejectStart(
+    (authorization) => authorization.authorizedScope.paths.push("frontend/src/App.tsx"),
+    /historical start scope/,
+  );
+  rejectStart(
+    (authorization) => authorization.authorizedScope.symbols.pop(),
+    /historical start scope/,
+  );
   rejectStart((authorization) => {
     authorization.previousAuthorization.sha256 = "0".repeat(64);
   }, /previous authorization commit\/hash binding drift/);
@@ -189,16 +215,244 @@ test("RFA-02 start authorization rejects stale state, scope drift, authority dri
   rejectStart((authorization) => {
     authorization.productOwnerDecision.commentUrl = "https://linear.app/wrong-comment";
   }, /PO comment\/start decision binding drift/);
-  rejectStart((authorization) => {
-    authorization.liveLinearManifest.startedIssue.linearState = "Backlog";
-  }, /current In Progress live Linear binding drift/);
-  for (let number = 3; number <= 20; number += 1) {
-    const issueId = `RFA-${String(number).padStart(2, "0")}`;
-    rejectStart((authorization) => {
-      authorization.currentAuthorization.authorizedIssues = ["RFA-02", issueId];
-      authorization.currentAuthorization.graphUnblockedIssues = ["RFA-02", issueId];
-    }, /sole current RFA-02 execution authorization drift/);
+});
+
+test("RFA-02 frontend/flow authorization rejects scope, authority, CAS, DAG, and route drift", () => {
+  assert.doesNotThrow(() =>
+    validateRfa02FrontendAuthorization(
+      RFA_02_FRONTEND_AUTHORIZATION,
+      LIVE_MANIFEST,
+      PACKET,
+      FLOW_MANIFEST,
+      FLOW_ARTIFACT_TEXTS,
+      BIC_PACKET,
+      BIC_ARTIFACT_TEXTS,
+    ),
+  );
+  const rejectFrontend = (mutator, expected) => {
+    const authorization = structuredClone(RFA_02_FRONTEND_AUTHORIZATION);
+    const manifest = structuredClone(LIVE_MANIFEST);
+    const packet = structuredClone(PACKET);
+    const flowManifest = structuredClone(FLOW_MANIFEST);
+    const flowArtifactTexts = structuredClone(FLOW_ARTIFACT_TEXTS);
+    const bicPacket = structuredClone(BIC_PACKET);
+    const bicArtifactTexts = structuredClone(BIC_ARTIFACT_TEXTS);
+    mutator(
+      authorization,
+      manifest,
+      packet,
+      flowManifest,
+      flowArtifactTexts,
+      bicPacket,
+      bicArtifactTexts,
+    );
+    assert.throws(
+      () =>
+        validateRfa02FrontendAuthorization(
+          authorization,
+          manifest,
+          packet,
+          flowManifest,
+          flowArtifactTexts,
+          bicPacket,
+          bicArtifactTexts,
+        ),
+      expected,
+    );
+  };
+  rejectFrontend(
+    (authorization) => authorization.authorizedScope.paths.pop(),
+    /exact frontend\/flow/,
+  );
+  rejectFrontend(
+    (authorization) => authorization.authorizedScope.paths.push("frontend/src/not-authorized.ts"),
+    /exact frontend\/flow/,
+  );
+  const exactFlowPaths = [
+    FLOW_MANIFEST_PATH,
+    FLOW_README_PATH,
+    FLOW_APPLICATION_UX_PATH,
+    FLOW_COVERAGE_REPORT_PATH,
+  ];
+  for (const flowPath of exactFlowPaths) {
+    rejectFrontend((authorization) => {
+      authorization.authorizedScope.paths = authorization.authorizedScope.paths.filter(
+        (value) => value !== flowPath,
+      );
+    }, /exact frontend\/flow/);
+    rejectPacket((packet) => {
+      packet.issues[1].inScope.paths = packet.issues[1].inScope.paths.filter(
+        (value) => value !== flowPath,
+      );
+    }, /RFA-02 exact authorized scope path\/symbol\/non-goal drift/);
   }
+  rejectFrontend((authorization) => {
+    authorization.authorizedScope.paths.push("docs/flows/not-an-official-renderer-output.md");
+  }, /exact frontend\/flow/);
+  rejectPacket((packet) => {
+    packet.issues[1].inScope.paths.push("docs/flows/not-an-official-renderer-output.md");
+  }, /RFA-02 exact authorized scope path\/symbol\/non-goal drift/);
+  const exactValidatorPaths = [BIC_VALIDATOR_PATH, BIC_VALIDATOR_TEST_PATH];
+  for (const validatorPath of exactValidatorPaths) {
+    rejectFrontend((authorization) => {
+      authorization.authorizedScope.paths = authorization.authorizedScope.paths.filter(
+        (value) => value !== validatorPath,
+      );
+    }, /exact frontend\/flow authorized scope drift/);
+    rejectPacket((packet) => {
+      packet.issues[1].inScope.paths = packet.issues[1].inScope.paths.filter(
+        (value) => value !== validatorPath,
+      );
+    }, /RFA-02 exact authorized scope path\/symbol\/non-goal drift/);
+  }
+  for (const bicPath of [BIC_PACKET_PATH, BIC_MARKDOWN_PATH]) {
+    rejectFrontend((authorization) => {
+      authorization.authorizedScope.paths.push(bicPath);
+    }, /exact frontend\/flow authorized scope drift/);
+    rejectPacket((packet) => {
+      packet.issues[1].inScope.paths.push(bicPath);
+    }, /RFA-02 exact authorized scope path\/symbol\/non-goal drift/);
+  }
+  rejectFrontend((authorization) => {
+    authorization.authorizedScope.paths.push("docs/project-management/linear/not-authorized.json");
+  }, /exact frontend\/flow authorized scope drift/);
+  rejectPacket((packet) => {
+    packet.issues[1].inScope.paths.push("docs/project-management/linear/not-authorized.json");
+  }, /RFA-02 exact authorized scope path\/symbol\/non-goal drift/);
+  rejectFrontend(
+    (authorization) => (authorization.previousAuthorization.sha256 = "0".repeat(64)),
+    /prior-record\/hash\/commit/,
+  );
+  rejectFrontend(
+    (authorization) => (authorization.previousAuthorization.authorizationCommit = "0".repeat(40)),
+    /prior-record\/hash\/commit/,
+  );
+  rejectFrontend(
+    (authorization) =>
+      (authorization.previousAuthorization.path = RFA_02_FRONTEND_AUTHORIZATION_PATH),
+    /prior-record\/hash\/commit/,
+  );
+  rejectFrontend(
+    (authorization) => (authorization.liveLinearManifest.sha256 = "0".repeat(64)),
+    /live Linear binding drift/,
+  );
+  rejectFrontend(
+    (authorization) => (authorization.productOwnerDecision.commentId = "wrong"),
+    /PO decision history, latest correction, and supersession/,
+  );
+  rejectFrontend(
+    (authorization) => (authorization.exactFlowDerivedScopeDecision.commentId = "wrong"),
+    /PO decision history, latest correction, and supersession/,
+  );
+  rejectFrontend(
+    (authorization) =>
+      (authorization.exactFlowDerivedScopeDecision.commentUrl =
+        "https://linear.app/niklas-olsson/issue/QQP-614#comment-wrong"),
+    /PO decision history, latest correction, and supersession/,
+  );
+  for (const field of [
+    "commentId",
+    "commentUrl",
+    "issueId",
+    "linearIdentifier",
+    "linearState",
+    "linearStateType",
+    "linearStateId",
+    "decision",
+  ]) {
+    rejectFrontend((authorization) => {
+      authorization.postFreezeRouteReconciliationDecision[field] = "wrong";
+    }, /latest correction, and supersession/);
+  }
+  rejectFrontend((authorization) => {
+    authorization.supersededBicArtifactAuthorizationDecision.effective = true;
+  }, /latest correction, and supersession/);
+  rejectFrontend((authorization) => {
+    authorization.supersededBicArtifactAuthorizationDecision.supersededBy = "wrong";
+  }, /latest correction, and supersession/);
+  rejectFrontend(
+    (authorization) => (authorization.frontendProductMutationPerformed = true),
+    /product\/frontend mutation authorization/,
+  );
+  rejectFrontend((authorization) => {
+    authorization.currentAuthorization.authorizedIssues.push("RFA-03");
+    authorization.currentAuthorization.graphUnblockedIssues.push("RFA-03");
+  }, /product\/frontend mutation authorization/);
+  for (const flowPath of exactFlowPaths) {
+    rejectFrontend((_authorization, _manifest, _packet, _flowManifest, flowArtifactTexts) => {
+      flowArtifactTexts[flowPath] += "\n<!-- stale derived output -->\n";
+    }, /official flow renderer artifact output\/hash drift/);
+  }
+  rejectFrontend((authorization) => {
+    authorization.flowRegistry.artifacts[1].sha256 = "0".repeat(64);
+  }, /route count or exact one-owner flow binding drift/);
+  rejectFrontend(
+    (_authorization, _manifest, _packet, flowManifest) =>
+      (flowManifest.routeInventory.directHttpRoutesObserved = 123),
+    /route count or exact one-owner/,
+  );
+  rejectFrontend((_authorization, _manifest, _packet, flowManifest) => {
+    flowManifest.flows.find(({ id }) => id === "APP-NAV-001").routePatterns.pop();
+  }, /route count or exact one-owner/);
+  rejectFrontend((_authorization, _manifest, _packet, flowManifest) => {
+    flowManifest.flows
+      .find(({ id }) => id !== "APP-NAV-001")
+      .routePatterns.push("GET /api/projects/:id/reader-workspace");
+  }, /exactly one APP-NAV-001 owner/);
+
+  rejectFrontend((authorization) => {
+    authorization.crossRegistryRouteOwnership.validatorArtifacts[0].sha256 = "0".repeat(64);
+  }, /validator-based cross-registry reconciliation binding drift/);
+  rejectFrontend((authorization) => {
+    authorization.crossRegistryRouteOwnership.postFreezeRouteAllowlist.pop();
+  }, /validator-based cross-registry reconciliation binding drift/);
+  rejectFrontend((authorization) => {
+    authorization.crossRegistryRouteOwnership.semantics.allowlistIsDisjointFromFrozenAssignments = false;
+  }, /validator-based cross-registry reconciliation binding drift/);
+  for (const artifactPath of [
+    BIC_PACKET_PATH,
+    BIC_MARKDOWN_PATH,
+    BIC_VALIDATOR_PATH,
+    BIC_VALIDATOR_TEST_PATH,
+  ]) {
+    rejectFrontend(
+      (
+        _authorization,
+        _manifest,
+        _packet,
+        _flowManifest,
+        _flowArtifactTexts,
+        _bicPacket,
+        bicArtifactTexts,
+      ) => {
+        bicArtifactTexts[artifactPath] += "\n// stale frozen or validator artifact\n";
+      },
+      /frozen BIC or exact validator\/test artifact hash drift/,
+    );
+  }
+  rejectFrontend(
+    (_authorization, _manifest, _packet, _flowManifest, _flowArtifactTexts, bicPacket) => {
+      bicPacket.issues
+        .find(({ localId }) => localId === "BIC-05")
+        .routePatterns.push("PUT /api/projects/:id/reader-workspace");
+    },
+    /frozen BIC assignments must remain unique and disjoint/,
+  );
+
+  rejectContract((contract) => {
+    contract.serverAuthority.frontendRestorationIntegration.localWorkspaceStorage =
+      "localStorage_workflow_authority";
+  }, /frontend server-authority\/paused\/CAS/);
+  rejectContract((contract) => {
+    contract.serverAuthority.frontendRestorationIntegration.restorePlaybackState = "autoplay";
+  }, /frontend server-authority\/paused\/CAS/);
+  rejectContract((contract) => {
+    contract.serverAuthority.frontendRestorationIntegration.writeScheduling =
+      "parallel_last_write_wins";
+  }, /frontend server-authority\/paused\/CAS/);
+  rejectPacket((packet) => {
+    packet.issues[1].frontendProductMutationPerformed = true;
+  }, /frontend mutation may not be claimed before governance commit/);
 });
 
 test("public RFA-01 capture command fails immediately without mutating immutable evidence", async () => {
@@ -387,7 +641,7 @@ test("issue execution schema requires owner, repository scope, non-goals, comman
 test("every acceptance assertion is bound to an issue command, evidence file, and fail-closed result", () => {
   rejectPacket((packet) => {
     packet.issues[1].acceptanceProbes[0].assertion = "x";
-  }, /RFA-02: measurable acceptance assertion/);
+  }, /RFA-02 (?:frontend authority\/paused\/CAS acceptance semantics drift|measurable acceptance assertion)/);
   rejectPacket((packet) => {
     packet.issues[8].acceptanceProbes[0].verificationCommand = "true";
   }, /RFA-09: acceptance command\/evidence\/failure binding/);

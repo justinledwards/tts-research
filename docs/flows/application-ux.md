@@ -273,7 +273,8 @@ stateDiagram-v2
 
 ### Route ownership
 
-- none
+- `GET /api/projects/:id/reader-workspace`
+- `PUT /api/projects/:id/reader-workspace`
 
 ### State contract
 

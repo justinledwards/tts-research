@@ -20,6 +20,10 @@ export const schemaFiles = [
   { file: "durable-progress.v1.schema.json", kind: "durable-progress.v1" },
   { file: "resume-resolution.v1.schema.json", kind: "resume-resolution.v1" },
   { file: "sync-fidelity-decision.v1.schema.json", kind: "sync-fidelity-decision.v1" },
+  {
+    file: "reader-workspace-snapshot.v1.schema.json",
+    kind: "reader_workspace_snapshot.v1",
+  },
 ];
 
 export function buildContractsContent() {
@@ -47,6 +51,7 @@ export const SOURCE_MANIFEST_EVENT_SCHEMA_VERSION = "source-manifest-event.v1";
 export const DURABLE_PROGRESS_SCHEMA_VERSION = "durable-progress.v1";
 export const RESUME_RESOLUTION_SCHEMA_VERSION = "resume-resolution.v1";
 export const SYNC_FIDELITY_DECISION_SCHEMA_VERSION = "sync-fidelity-decision.v1";
+export const READER_WORKSPACE_SNAPSHOT_SCHEMA_VERSION = "reader_workspace_snapshot.v1";
 
 export type ContentIRSchemaVersion = typeof CONTENT_IR_SCHEMA_VERSION;
 export type LocatorEnvelopeSchemaVersion = typeof LOCATOR_ENVELOPE_SCHEMA_VERSION;
@@ -68,6 +73,7 @@ export type SourceManifestEventSchemaVersion = typeof SOURCE_MANIFEST_EVENT_SCHE
 export type DurableProgressSchemaVersion = typeof DURABLE_PROGRESS_SCHEMA_VERSION;
 export type ResumeResolutionSchemaVersion = typeof RESUME_RESOLUTION_SCHEMA_VERSION;
 export type SyncFidelityDecisionSchemaVersion = typeof SYNC_FIDELITY_DECISION_SCHEMA_VERSION;
+export type ReaderWorkspaceSnapshotSchemaVersion = typeof READER_WORKSPACE_SNAPSHOT_SCHEMA_VERSION;
 
 export interface ContentIRDocument {
   schemaVersion: ContentIRSchemaVersion;
@@ -809,6 +815,28 @@ export interface SyncFidelityDecision {
   evidence: Record<string, unknown>;
   metadata?: Record<string, unknown>;
 }
+
+export type ReaderWorkspaceReadMode = "paused" | "readable";
+
+export interface ReaderWorkspaceSnapshot {
+  schemaVersion: ReaderWorkspaceSnapshotSchemaVersion;
+  projectId: string;
+  projectRevision: number;
+  readMode: ReaderWorkspaceReadMode;
+  sourceId: string;
+  sourceRevisionId: string;
+  sourceContentHash: string;
+  runId: string | null;
+  runCompatibilityKey: string | null;
+  mediaManifestVersion: number | null;
+  timingRevision: number | null;
+  syncFidelity: SyncFidelity | null;
+  readerLocator: LocatorEnvelope | null;
+  playbackCursorMs: number | null;
+  playbackRate: number | null;
+  followPreference: boolean | null;
+  updatedAt: string;
+}
 `;
 }
 
@@ -840,7 +868,7 @@ export const schemaBundle = ${JSON.stringify(schemaBundle, null, 2)} as const;
 
 function schemaExportName(kind) {
   return `${kind
-    .split(/[.-]/)
+    .split(/[._-]/)
     .map((part, index) => (index === 0 ? part : `${part[0].toUpperCase()}${part.slice(1)}`))
     .join("")}Schema`;
 }

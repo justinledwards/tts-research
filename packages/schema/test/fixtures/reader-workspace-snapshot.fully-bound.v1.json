@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "reader_workspace_snapshot.v1",
+  "projectId": "project-reader-1",
+  "projectRevision": 7,
+  "readMode": "paused",
+  "sourceId": "source-book-1",
+  "sourceRevisionId": "source-revision-7",
+  "sourceContentHash": "sha256:source-revision-7",
+  "runId": "run-compatible-7",
+  "runCompatibilityKey": "source-revision-7:voice-profile-2",
+  "mediaManifestVersion": 3,
+  "timingRevision": 2,
+  "syncFidelity": "exact_word",
+  "readerLocator": {
+    "schemaVersion": "locator-envelope.v1",
+    "kind": "resume",
+    "sourceId": "source-book-1",
+    "nodeId": "chapter-4-paragraph-2",
+    "activeWordIndex": 18
+  },
+  "playbackCursorMs": 42850,
+  "playbackRate": 1.25,
+  "followPreference": true,
+  "updatedAt": "2026-07-11T10:05:00Z"
+}

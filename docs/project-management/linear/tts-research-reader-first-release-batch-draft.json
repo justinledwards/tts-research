@@ -1,6 +1,6 @@
 {
   "schemaVersion": "tts-research.reader-first-linear-batch.v2",
-  "status": "peer_approved_rfa_01_completed_rfa_02_in_progress_product_authorized",
+  "status": "peer_approved_rfa_01_completed_rfa_02_in_progress_product_mutation_started_frontend_scope_pending_commit",
   "architectureContractPath": "docs/architecture/reader-first-release-contract-v2.json",
   "planPath": "docs/plans/2026-07-10-reader-first-release-reset.md",
   "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685",
@@ -34,7 +34,9 @@
     "eligibleForProductImplementation": ["RFA-02"],
     "newIssuesCreatedNow": 20,
     "linearMutationPerformed": true,
-    "productMutationPerformed": false
+    "productMutationPerformed": true,
+    "frontendProductMutationPerformed": false,
+    "frontendAuthorizationEffectiveOnlyAfterGovernanceTransitionReviewedAndCommitted": true
   },
   "dag": {
     "RFA-01": [],
@@ -182,15 +184,15 @@
       "acceptanceProbes": [
         {
           "id": "RFA-02-AC01",
-          "assertion": "A clean browser restores the preferred source revision and latest compatible run without localStorage.",
-          "verificationCommand": "cd backend && go test ./internal/httpapi -run 'Snapshot|Workspace|Restore|Revision'",
+          "assertion": "A clean browser selected by ?projectId restores the server-authoritative exact source revision, exact run, reader locator, playback cursor, playback rate, and follow preference without localStorage authority.",
+          "verificationCommand": "pnpm --dir frontend exec vitest run src/api.test.ts src/projectState.test.ts src/readerWorkspace.test.ts",
           "evidenceArtifact": "docs/evidence/reader-first/RFA-02/verification.json",
           "onFailure": "block_issue_and_preserve_prior_authoritative_path"
         },
         {
           "id": "RFA-02-AC02",
-          "assertion": "Progress restoration is paused and revision/run compatible; invalid checkpoints degrade to readable source state.",
-          "verificationCommand": "node scripts/e2e-reader-first-continuity.mjs --case legacy-snapshot-migration",
+          "assertion": "Both read modes restore paused with no autoplay; invalid checkpoints degrade to readable source state.",
+          "verificationCommand": "pnpm --dir frontend exec vitest run src/api.test.ts src/projectState.test.ts src/readerWorkspace.test.ts",
           "evidenceArtifact": "docs/evidence/reader-first/RFA-02/verification.json",
           "onFailure": "block_issue_and_preserve_prior_authoritative_path"
         },
@@ -203,7 +205,7 @@
         },
         {
           "id": "RFA-02-AC04",
-          "assertion": "Workspace writes require revision/ETag preconditions and reject stale cross-browser updates.",
+          "assertion": "ETags remain in memory; writes are serialized and coalesced with If-Match; on 412 the current server snapshot wins and explicit current intent retries at most once.",
           "verificationCommand": "node scripts/e2e-reader-first-continuity.mjs --case legacy-snapshot-migration",
           "evidenceArtifact": "docs/evidence/reader-first/RFA-02/verification.json",
           "onFailure": "block_issue_and_preserve_prior_authoritative_path"
@@ -249,7 +251,7 @@
       "linearCreationAuthorized": true,
       "productImplementationAuthorized": true,
       "dependencyUnblocked": true,
-      "status": "in_progress_product_authorized",
+      "status": "in_progress_product_mutation_started_frontend_scope_pending_commit",
       "linear": {
         "id": "bcc7a896-6150-438d-9718-81c4dcf211fd",
         "identifier": "QQP-614",
@@ -260,7 +262,7 @@
         "priority": 3,
         "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
       },
-      "accountableOwnerSurface": "Backend Workspace State",
+      "accountableOwnerSurface": "Backend Workspace State and Frontend Restoration Integration",
       "inScope": {
         "paths": [
           "backend/internal/httpapi",
@@ -272,30 +274,58 @@
           "scripts/generate-contract-types-templates.mjs",
           "packages/sdk-py/src/voice_studio_sdk/schema_files",
           "fixtures/contracts/schema-snapshots",
-          "docs/contracts/schema-bundle.v1.json"
+          "docs/contracts/schema-bundle.v1.json",
+          "docs/flows/manifest.json",
+          "frontend/src/App.tsx",
+          "frontend/src/api.ts",
+          "frontend/src/api.test.ts",
+          "frontend/src/projectState.ts",
+          "frontend/src/projectState.test.ts",
+          "frontend/src/readerWorkspace.ts",
+          "frontend/src/readerWorkspace.test.ts",
+          "docs/flows/README.md",
+          "docs/flows/application-ux.md",
+          "docs/flows/coverage-report.json",
+          "scripts/validate-linear-batch.mjs",
+          "scripts/validate-linear-batch.test.mjs"
         ],
         "symbols": [
           "ReaderWorkspaceSnapshot",
           "GET/PUT project reader-workspace",
           "snapshot v0-to-v1 migrator",
           "canonical ReaderWorkspaceSnapshot schema generation",
-          "minimum server-derived source-revision/run-compatibility read projection"
+          "minimum server-derived source-revision/run-compatibility read projection",
+          "server GET snapshot authority for exact source revision, exact run, reader locator, playback cursor, playback rate, and follow preference",
+          "?projectId clean-browser deterministic selection seam",
+          "paused restore in both read modes with no autoplay",
+          "legacy and project local workspace keys cleanup-only and non-authoritative",
+          "in-memory workspace ETag",
+          "serialized and coalesced If-Match workspace writes",
+          "412 current snapshot wins with at most one explicit-current-intent retry"
         ]
       },
       "nonGoals": [
         "No audio delivery or generation behavior changes",
         "No automatic playback on restore",
-        "No browser-provided compatibility or browser authority"
+        "No browser-provided compatibility or browser authority",
+        "No browser compatibility or rebuild inference",
+        "No backend or schema redesign by the frontend lane",
+        "No presentation preference removal"
       ],
       "verificationCommands": [
         "cd backend && go test ./internal/httpapi -run 'Snapshot|Workspace|Restore|Revision'",
-        "node scripts/e2e-reader-first-continuity.mjs --case legacy-snapshot-migration"
+        "node scripts/e2e-reader-first-continuity.mjs --case legacy-snapshot-migration",
+        "pnpm --dir frontend exec vitest run src/api.test.ts src/projectState.test.ts src/readerWorkspace.test.ts",
+        "pnpm validate:flows"
       ],
       "evidenceArtifacts": [
         "docs/evidence/reader-first/RFA-02/verification.json",
         "docs/evidence/reader-first/RFA-02/rollback.json"
       ],
-      "legacyRemovalOwned": []
+      "legacyRemovalOwned": [],
+      "productMutationPerformed": true,
+      "frontendProductMutationPerformed": false,
+      "frontendAuthorizationEffectiveOnlyAfterGovernanceTransitionReviewedAndCommitted": true
     },
     {
       "localId": "RFA-03",
@@ -609,7 +639,7 @@
     {
       "localId": "RFA-06",
       "title": "Enforce bounded first-playable segmentation and durable segment publication",
-      "objective": "Publish a contiguous 4\u20138 second target prefix before checking and final assembly",
+      "objective": "Publish a contiguous 4–8 second target prefix before checking and final assembly",
       "dependencies": ["RFA-02", "RFA-05"],
       "acceptanceProbes": [
         {
@@ -1317,7 +1347,7 @@
         },
         {
           "id": "RFA-13-AC03",
-          "assertion": "While at least two eligible unbuffered segments are within bounded lookahead, the scheduler sustains 2\u20134 concurrent requests; sustained one-request operation is allowed only with concurrencyReason exactly saveData, effectiveType_2g, deviceMemory_below_2gb, or active_manifest_has_one_remaining_segment. Seek cancellation and backpressure are transient lifecycle events, never sustained-concurrency exceptions. Never more than four requests are in flight, and lookahead/back-buffer stay at or below 60 seconds with eviction.",
+          "assertion": "While at least two eligible unbuffered segments are within bounded lookahead, the scheduler sustains 2–4 concurrent requests; sustained one-request operation is allowed only with concurrencyReason exactly saveData, effectiveType_2g, deviceMemory_below_2gb, or active_manifest_has_one_remaining_segment. Seek cancellation and backpressure are transient lifecycle events, never sustained-concurrency exceptions. Never more than four requests are in flight, and lookahead/back-buffer stay at or below 60 seconds with eviction.",
           "verificationCommand": "node scripts/e2e-reader-first-media.mjs --case bounded-playback",
           "evidenceArtifact": "docs/evidence/reader-first/RFA-13/verification.json",
           "onFailure": "block_issue_and_preserve_prior_authoritative_path"
@@ -2402,17 +2432,88 @@
   "linearTargetEvidence": null,
   "liveLinearManifest": {
     "path": "docs/project-management/linear/tts-research-reader-first-release-batch.manifest.json",
-    "sha256": "54b00631d390e4ba504708191f6ccf4b4f2bce04974fe27fd3e5cef339c1595a",
+    "sha256": "8999920d9453a3b1294f36b91158fbd2b383ead0f3eaae40f406b1f02333b3fb",
     "issueCount": 20,
     "relationCount": 65,
-    "verifiedAt": "2026-07-11T09:25:28Z"
+    "verifiedAt": "2026-07-11T10:22:20Z"
   },
   "parentAuthorization": {
     "path": "docs/reviews/reader-first-rfa02-parent-authorization.json",
     "sha256": "41fa61517142af7c1ad5d2e9204aaaa4fa7c3020d21443df311a4532a329d265"
   },
   "currentExecutionAuthorization": {
+    "path": "docs/reviews/reader-first-rfa02-frontend-scope-authorization.json",
+    "sha256": "f957869b774e0978c42e67e5a0017b9ed1c7fb4d292ece20219ed6a16b118bc3"
+  },
+  "previousExecutionAuthorization": {
     "path": "docs/reviews/reader-first-rfa02-start-scope-authorization.json",
     "sha256": "14463389f0b9b686e194deaec3f7bb27616e32c2f09c48615259bf86748ea07c"
+  },
+  "flowRegistry": {
+    "path": "docs/flows/manifest.json",
+    "sha256": "4f789e39e9c0e12e6c67abed73492b4139aebe4b16786123324d567b5ae0b28d",
+    "officialRendererCommand": "node scripts/validate-flow-registry.mjs --write",
+    "artifacts": [
+      {
+        "path": "docs/flows/manifest.json",
+        "sha256": "4f789e39e9c0e12e6c67abed73492b4139aebe4b16786123324d567b5ae0b28d"
+      },
+      {
+        "path": "docs/flows/README.md",
+        "sha256": "f99e1fd689e755a4f036aaeae9bf1dc4cf17316ed877c62ed282cbd05cb97fa4"
+      },
+      {
+        "path": "docs/flows/application-ux.md",
+        "sha256": "2d4dfe18678c1d59e541d87ebdeae3f60c2dbc1ecd212d15f12f673955ee1d6c"
+      },
+      {
+        "path": "docs/flows/coverage-report.json",
+        "sha256": "d6045a1386d99f0a4c98f039fd138421e6ed395af2c97c6f152a5fb092823691"
+      }
+    ],
+    "directHttpRoutesObserved": 125,
+    "ownerFlowId": "APP-NAV-001",
+    "routes": ["GET /api/projects/:id/reader-workspace", "PUT /api/projects/:id/reader-workspace"]
+  },
+  "implementationState": {
+    "localId": "RFA-02",
+    "productMutationPerformed": true,
+    "frontendProductMutationPerformed": false,
+    "frontendAuthorizationEffectiveOnlyAfterGovernanceTransitionReviewedAndCommitted": true
+  },
+  "crossRegistryRouteOwnership": {
+    "frozenBicArtifacts": [
+      {
+        "path": "docs/project-management/linear/tts-research-best-in-class-batch-draft.json",
+        "sha256": "1ae22003178761e60de4661d763f239a2c22e3ca4624e14a29d155b50eb264c0"
+      },
+      {
+        "path": "docs/project-management/linear/tts-research-best-in-class-batch-draft.md",
+        "sha256": "589d54b0534091bb2442d5d84a1c93df3a36d719c9a04c37e0dfa5e306187e7c"
+      }
+    ],
+    "validatorArtifacts": [
+      {
+        "path": "scripts/validate-linear-batch.mjs",
+        "sha256": "7ea517a9d05c67f430c84a8bd8567bc973af3c8fae4600e8ff040c1f1a695a99"
+      },
+      {
+        "path": "scripts/validate-linear-batch.test.mjs",
+        "sha256": "1486bfa3fc78b94483ea42b00efb94d08148d651de808b057637d5aa39d4c36f"
+      }
+    ],
+    "postFreezeRouteAllowlist": [
+      "GET /api/projects/:id/reader-workspace",
+      "PUT /api/projects/:id/reader-workspace"
+    ],
+    "ownerFlowId": "APP-NAV-001",
+    "semantics": {
+      "frozenAssignmentsRemainUnique": true,
+      "allowlistIsExact": true,
+      "allowlistIsDisjointFromFrozenAssignments": true,
+      "allowlistedRoutesExistExactlyOnceUnderOwnerFlow": true,
+      "frozenAssignmentsPlusAllowlistEqualCurrentCanonicalRouteInventoryExactlyOnce": true,
+      "flowIdsAndStateSymbolsRemainExactUnchanged": true
+    }
   }
 }

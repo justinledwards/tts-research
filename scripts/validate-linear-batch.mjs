@@ -12,6 +12,12 @@ export const DEFAULT_MARKDOWN_PATH =
 const BENCH_THRESHOLDS_PATH = "benches/thresholds.json";
 const FLOW_MANIFEST_PATH = "docs/flows/manifest.json";
 const FLOW_COVERAGE_PATH = "docs/flows/coverage-report.json";
+export const POST_FREEZE_ROUTE_RECONCILIATION = {
+  routes: ["GET /api/projects/:id/reader-workspace", "PUT /api/projects/:id/reader-workspace"],
+  ownerFlowId: "APP-NAV-001",
+  semantics:
+    "frozen_assignments_and_exact_disjoint_post_freeze_allowlist_equal_current_canonical_route_inventory_exactly_once",
+};
 const PROJECT_SETUP_PATH =
   "docs/project-management/linear/tts-research-project-setup.manifest.json";
 export const PROVENANCE_MANIFEST_PATH =
@@ -333,6 +339,7 @@ export function validatePacket(
   flowManifest = null,
   flowCoverage = null,
   sourceEvidence = null,
+  postFreezeRouteReconciliation = POST_FREEZE_ROUTE_RECONCILIATION,
 ) {
   assert(sourceEvidence, "canonical Linear provenance evidence is required");
   assert(packet.schemaVersion === "tts-research.linear-batch.v1", "unexpected schemaVersion");
@@ -1093,9 +1100,48 @@ export function validatePacket(
         JSON.stringify(["flowIds", "routePatterns", "stateSymbols"]),
       "ownershipContract must define the three exclusive ownership fields",
     );
+    const canonicalRoutes = flowManifest.flows.flatMap((flow) => flow.routePatterns);
+    const frozenAssignedRoutes = packet.issues.flatMap((issue) => issue.routePatterns);
+    const expectedPostFreezeRoutes = POST_FREEZE_ROUTE_RECONCILIATION.routes;
+    const postFreezeRoutes = postFreezeRouteReconciliation?.routes;
+    assert(
+      JSON.stringify(postFreezeRouteReconciliation) ===
+        JSON.stringify(POST_FREEZE_ROUTE_RECONCILIATION),
+      "post-freeze route allowlist must be the exact authorized reconciliation",
+    );
+    assert(
+      new Set(frozenAssignedRoutes).size === frozenAssignedRoutes.length,
+      "routePatterns: issue ownership must not overlap",
+    );
+    assert(
+      Array.isArray(postFreezeRoutes) &&
+        new Set(postFreezeRoutes).size === postFreezeRoutes.length &&
+        postFreezeRoutes.every((route) => !frozenAssignedRoutes.includes(route)),
+      "post-freeze route allowlist must be unique and disjoint from frozen assignments",
+    );
+    const allowlistedOwners = flowManifest.flows.flatMap((flow) =>
+      flow.routePatterns
+        .filter((route) => expectedPostFreezeRoutes.includes(route))
+        .map((route) => [route, flow.id]),
+    );
+    assert(
+      JSON.stringify(allowlistedOwners) ===
+        JSON.stringify(expectedPostFreezeRoutes.map((route) => [route, "APP-NAV-001"])),
+      "each post-freeze route must exist exactly once under APP-NAV-001",
+    );
+    const reconciledRoutes = [...frozenAssignedRoutes, ...postFreezeRoutes];
+    assert(
+      new Set(canonicalRoutes).size === canonicalRoutes.length,
+      "canonical route inventory must not contain duplicates",
+    );
+    assert(
+      new Set(reconciledRoutes).size === reconciledRoutes.length &&
+        JSON.stringify([...reconciledRoutes].sort()) ===
+          JSON.stringify([...canonicalRoutes].sort()),
+      "routePatterns: issues must exactly own the canonical inventory once after exact post-freeze reconciliation",
+    );
     const exactOwnership = [
       ["flowIds", flowManifest.flows.map(({ id }) => id)],
-      ["routePatterns", flowManifest.flows.flatMap((flow) => flow.routePatterns)],
       ["stateSymbols", flowManifest.requiredStateSymbols.map(({ symbol }) => symbol)],
     ];
     for (const [field, canonicalValues] of exactOwnership) {
@@ -1139,7 +1185,13 @@ export function validatePacket(
     for (const issue of domainIssues) {
       const flows = issue.flowIds.map((id) => flowById.get(id));
       assert(flows.every(Boolean), `${issue.localId}: unknown canonical flow id`);
-      const expectedRoutes = [...new Set(flows.flatMap((flow) => flow.routePatterns))].sort();
+      const expectedRoutes = [
+        ...new Set(
+          flows
+            .flatMap((flow) => flow.routePatterns)
+            .filter((route) => !postFreezeRoutes.includes(route)),
+        ),
+      ].sort();
       const expectedSymbols = [
         ...new Set(
           flows.flatMap((flow) => [...flow.frontendStateSymbols, ...flow.backendStateSymbols]),
@@ -1164,7 +1216,11 @@ export function validatePacket(
       ...new Set(domainIssues.flatMap((issue) => issue.routePatterns)),
     ].sort();
     const allCanonicalRoutes = [
-      ...new Set(flowManifest.flows.flatMap((flow) => flow.routePatterns)),
+      ...new Set(
+        flowManifest.flows
+          .flatMap((flow) => flow.routePatterns)
+          .filter((route) => !postFreezeRoutes.includes(route)),
+      ),
     ].sort();
     assert(
       JSON.stringify(allDomainRoutes) === JSON.stringify(allCanonicalRoutes),

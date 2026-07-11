@@ -23,6 +23,7 @@ export const SCHEMA_KINDS = [
   "durable-progress.v1",
   "resume-resolution.v1",
   "sync-fidelity-decision.v1",
+  "reader_workspace_snapshot.v1",
 ] as const;
 
 export type SchemaKind = (typeof SCHEMA_KINDS)[number];
@@ -181,6 +182,10 @@ export function validateResumeResolution<T>(payload: unknown): ValidationResult<
 
 export function validateSyncFidelityDecision<T>(payload: unknown): ValidationResult<T> {
   return validateSchema<T>("sync-fidelity-decision.v1", payload);
+}
+
+export function validateReaderWorkspaceSnapshot<T>(payload: unknown): ValidationResult<T> {
+  return validateSchema<T>("reader_workspace_snapshot.v1", payload);
 }
 
 export function validationErrorsText(errors: ErrorObject[]): string {

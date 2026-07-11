@@ -34,7 +34,8 @@
     "./schemas/source-manifest-event.v1.schema.json": "./schemas/source-manifest-event.v1.schema.json",
     "./schemas/durable-progress.v1.schema.json": "./schemas/durable-progress.v1.schema.json",
     "./schemas/resume-resolution.v1.schema.json": "./schemas/resume-resolution.v1.schema.json",
-    "./schemas/sync-fidelity-decision.v1.schema.json": "./schemas/sync-fidelity-decision.v1.schema.json"
+    "./schemas/sync-fidelity-decision.v1.schema.json": "./schemas/sync-fidelity-decision.v1.schema.json",
+    "./schemas/reader-workspace-snapshot.v1.schema.json": "./schemas/reader-workspace-snapshot.v1.schema.json"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

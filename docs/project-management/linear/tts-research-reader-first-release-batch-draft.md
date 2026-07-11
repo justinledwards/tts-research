@@ -2,13 +2,13 @@
 
 # TTS-Research Reader-First Architecture release batch
 
-Status: `peer_approved_rfa_01_completed_rfa_02_in_progress_product_authorized`
+Status: `peer_approved_rfa_01_completed_rfa_02_in_progress_product_mutation_started_frontend_scope_pending_commit`
 
 Linear target: team `QQP`, project `TTS-Research` (20 / 20 unarchived).
 
 RFA-01 is completed in Linear; its immutable evidence preserves the historical RFA-01 authorization capture.
 
-RFA-02 is In Progress and remains the sole currently graph-unblocked and product-authorized issue; no product mutation has yet been performed.
+RFA-02 is In Progress and remains the sole currently graph-unblocked and product-authorized issue. Authorized backend/schema product mutation has started; frontend product mutation remains false and becomes effective only after this governance transition is reviewed and committed.
 
 ## DAG
 
@@ -104,7 +104,7 @@ Symbols/contracts:
 
 ## RFA-02 — Add server-authoritative project restoration snapshot and durable paused progress
 
-**Accountable owner surface:** Backend Workspace State
+**Accountable owner surface:** Backend Workspace State and Frontend Restoration Integration
 
 ### Objective
 
@@ -125,6 +125,19 @@ Paths:
 - `packages/sdk-py/src/voice_studio_sdk/schema_files`
 - `fixtures/contracts/schema-snapshots`
 - `docs/contracts/schema-bundle.v1.json`
+- `docs/flows/manifest.json`
+- `frontend/src/App.tsx`
+- `frontend/src/api.ts`
+- `frontend/src/api.test.ts`
+- `frontend/src/projectState.ts`
+- `frontend/src/projectState.test.ts`
+- `frontend/src/readerWorkspace.ts`
+- `frontend/src/readerWorkspace.test.ts`
+- `docs/flows/README.md`
+- `docs/flows/application-ux.md`
+- `docs/flows/coverage-report.json`
+- `scripts/validate-linear-batch.mjs`
+- `scripts/validate-linear-batch.test.mjs`
 
 Symbols/contracts:
 - `ReaderWorkspaceSnapshot`
@@ -132,28 +145,38 @@ Symbols/contracts:
 - `snapshot v0-to-v1 migrator`
 - `canonical ReaderWorkspaceSnapshot schema generation`
 - `minimum server-derived source-revision/run-compatibility read projection`
+- `server GET snapshot authority for exact source revision, exact run, reader locator, playback cursor, playback rate, and follow preference`
+- `?projectId clean-browser deterministic selection seam`
+- `paused restore in both read modes with no autoplay`
+- `legacy and project local workspace keys cleanup-only and non-authoritative`
+- `in-memory workspace ETag`
+- `serialized and coalesced If-Match workspace writes`
+- `412 current snapshot wins with at most one explicit-current-intent retry`
 
 ### Non-goals
 
 - No audio delivery or generation behavior changes
 - No automatic playback on restore
 - No browser-provided compatibility or browser authority
+- No browser compatibility or rebuild inference
+- No backend or schema redesign by the frontend lane
+- No presentation preference removal
 
 ### Acceptance and evidence
 
-- **RFA-02-AC01:** A clean browser restores the preferred source revision and latest compatible run without localStorage.
-  - Verify: `cd backend && go test ./internal/httpapi -run 'Snapshot|Workspace|Restore|Revision'`
+- **RFA-02-AC01:** A clean browser selected by ?projectId restores the server-authoritative exact source revision, exact run, reader locator, playback cursor, playback rate, and follow preference without localStorage authority.
+  - Verify: `pnpm --dir frontend exec vitest run src/api.test.ts src/projectState.test.ts src/readerWorkspace.test.ts`
   - Evidence: `docs/evidence/reader-first/RFA-02/verification.json`
   - Failure: `block_issue_and_preserve_prior_authoritative_path`
-- **RFA-02-AC02:** Progress restoration is paused and revision/run compatible; invalid checkpoints degrade to readable source state.
-  - Verify: `node scripts/e2e-reader-first-continuity.mjs --case legacy-snapshot-migration`
+- **RFA-02-AC02:** Both read modes restore paused with no autoplay; invalid checkpoints degrade to readable source state.
+  - Verify: `pnpm --dir frontend exec vitest run src/api.test.ts src/projectState.test.ts src/readerWorkspace.test.ts`
   - Evidence: `docs/evidence/reader-first/RFA-02/verification.json`
   - Failure: `block_issue_and_preserve_prior_authoritative_path`
 - **RFA-02-AC03:** Legacy projects select the latest compatible completed run, then a ready source, from server evidence when no saved workspace exists.
   - Verify: `cd backend && go test ./internal/httpapi -run 'Snapshot|Workspace|Restore|Revision'`
   - Evidence: `docs/evidence/reader-first/RFA-02/verification.json`
   - Failure: `block_issue_and_preserve_prior_authoritative_path`
-- **RFA-02-AC04:** Workspace writes require revision/ETag preconditions and reject stale cross-browser updates.
+- **RFA-02-AC04:** ETags remain in memory; writes are serialized and coalesced with If-Match; on 412 the current server snapshot wins and explicit current intent retries at most once.
   - Verify: `node scripts/e2e-reader-first-continuity.mjs --case legacy-snapshot-migration`
   - Evidence: `docs/evidence/reader-first/RFA-02/verification.json`
   - Failure: `block_issue_and_preserve_prior_authoritative_path`
@@ -162,6 +185,8 @@ Symbols/contracts:
 
 - `cd backend && go test ./internal/httpapi -run 'Snapshot|Workspace|Restore|Revision'`
 - `node scripts/e2e-reader-first-continuity.mjs --case legacy-snapshot-migration`
+- `pnpm --dir frontend exec vitest run src/api.test.ts src/projectState.test.ts src/readerWorkspace.test.ts`
+- `pnpm validate:flows`
 
 ### Required evidence artifacts
 

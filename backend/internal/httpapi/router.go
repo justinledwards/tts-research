@@ -44,7 +44,8 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	app.Use(cors.New(cors.Config{
 		AllowOriginsFunc:    corsAllowedOrigin,
 		AllowMethods:        []string{fiber.MethodGet, fiber.MethodPost, fiber.MethodPut, fiber.MethodPatch, fiber.MethodDelete, fiber.MethodOptions},
-		AllowHeaders:        []string{"Origin", "Content-Type", "Accept"},
+		AllowHeaders:        []string{"Origin", "Content-Type", "Accept", "If-Match", "If-None-Match"},
+		ExposeHeaders:       []string{"ETag"},
 		AllowPrivateNetwork: true,
 	}))
 
@@ -228,6 +229,7 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	})
 
 	registerProjectRoutes(app, service)
+	registerReaderWorkspaceRoutes(app, service)
 	registerVoiceJobRoutes(app, service)
 	registerTemporarySourceRoutes(app, service)
 	registerSourceManifestRoutes(app, service)

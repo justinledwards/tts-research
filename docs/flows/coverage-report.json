@@ -2,8 +2,8 @@
   "schemaVersion": "tts-research.flow-coverage.v2",
   "flowCount": 39,
   "transitionCount": 677,
-  "directRouteCount": 123,
-  "uniqueRouteOwnerCount": 123,
+  "directRouteCount": 125,
+  "uniqueRouteOwnerCount": 125,
   "requiredStateSymbolCount": 161,
   "evidenceReferenceCount": 40,
   "namedExecutableCaseCount": 198,
@@ -89,6 +89,7 @@
     "GET /api/projects/:id/lexicon",
     "GET /api/projects/:id/lexicon/export.pls",
     "GET /api/projects/:id/progress",
+    "GET /api/projects/:id/reader-workspace",
     "GET /api/projects/:id/source-preps",
     "GET /api/projects/:id/speech-policy",
     "GET /api/projects/:id/storage",
@@ -183,6 +184,7 @@
     "POST /api/voice-profiles/:id/targets/:targetId",
     "POST /api/voice-profiles/:id/targets/:targetId/cancel",
     "POST /api/voices",
+    "PUT /api/projects/:id/reader-workspace",
     "PUT /api/voice-profile-credentials/hugging-face-token"
   ]
 }

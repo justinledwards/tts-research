@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "reader_workspace_snapshot.v1",
+  "projectId": "project-reader-1",
+  "projectRevision": 1,
+  "readMode": "paused",
+  "sourceId": "",
+  "sourceRevisionId": "source-revision-1",
+  "sourceContentHash": "sha256:source-revision-1",
+  "runId": null,
+  "runCompatibilityKey": null,
+  "mediaManifestVersion": null,
+  "timingRevision": null,
+  "syncFidelity": "none",
+  "readerLocator": null,
+  "playbackCursorMs": null,
+  "playbackRate": 1,
+  "followPreference": null,
+  "updatedAt": "2026-07-11T10:00:00Z"
+}
