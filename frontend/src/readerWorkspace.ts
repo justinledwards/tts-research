@@ -1,11 +1,20 @@
 import {
+  getBookSource,
+  getPreparedSource,
   getReaderWorkspace,
+  isApiNotFoundError,
   putReaderWorkspace,
   ReaderWorkspacePreconditionError,
   type ReaderWorkspaceSnapshot,
   type ReaderWorkspaceVersionedSnapshot,
 } from "./api";
-import type { PlaybackProgress, ReadingPosition, VoiceJob } from "./types";
+import type {
+  BookSource,
+  PlaybackProgress,
+  PreparedSource,
+  ReadingPosition,
+  VoiceJob,
+} from "./types";
 
 export type ReaderWorkspaceEvent =
   | "load-start"
@@ -63,11 +72,6 @@ export function mutableReaderStateEqual(
   );
 }
 
-interface IntentDelta {
-  readonly version: number;
-  readonly fields: ReadonlySet<MutableReaderField>;
-}
-
 export type ReaderWorkspacePersistenceDecision = "blocked" | "unchanged" | "write";
 
 export function readerWorkspaceBaselineResponseIsCurrent(
@@ -100,6 +104,18 @@ export function readerWorkspaceSuccessfulAckNeedsRestoration(
     hasNewerIntent === false &&
     sentIntentGeneration === currentIntentGeneration &&
     !mutableReaderStateEqual(sent, authoritative)
+  );
+}
+
+export function readerWorkspaceSuccessfulAckNeedsNavigationRestoration(
+  sent: ReaderWorkspaceSnapshot,
+  authoritative: ReaderWorkspaceSnapshot,
+): boolean {
+  return (
+    sent.sourceId !== authoritative.sourceId ||
+    sent.runId !== authoritative.runId ||
+    sent.readMode !== authoritative.readMode ||
+    !semanticValueEqual(sent.readerLocator, authoritative.readerLocator)
   );
 }
 
@@ -385,6 +401,39 @@ export function projectLoaderResponseIsCurrent(
 
 export type AuthoritativeSourceKind = "book" | "prepared";
 
+export type AuthoritativeReaderSource =
+  | { readonly kind: "book"; readonly source: BookSource }
+  | { readonly kind: "prepared"; readonly source: PreparedSource };
+
+interface AuthoritativeReaderSourceOptions {
+  readonly getBook?: typeof getBookSource;
+  readonly getPrepared?: typeof getPreparedSource;
+}
+
+/** Resolve exactly one nominated source without hydrating either project-wide inventory. */
+export async function resolveAuthoritativeReaderSource(
+  sourceId: string,
+  projectId: string,
+  options: AuthoritativeReaderSourceOptions = {},
+): Promise<AuthoritativeReaderSource> {
+  const getPrepared = options.getPrepared ?? getPreparedSource;
+  try {
+    const source = await getPrepared(sourceId);
+    if (source.id !== sourceId || source.projectId !== projectId) {
+      throw new Error("The server workspace prepared source identity does not match.");
+    }
+    return { kind: "prepared", source };
+  } catch (error) {
+    if (!isApiNotFoundError(error)) throw error;
+  }
+  const getBook = options.getBook ?? getBookSource;
+  const source = await getBook(sourceId);
+  if (source.id !== sourceId || source.projectId !== projectId) {
+    throw new Error("The server workspace book source identity does not match.");
+  }
+  return { kind: "book", source };
+}
+
 export function resolveAuthoritativeSourceKind(
   sourceId: string,
   bookSourceIds: readonly string[],
@@ -498,6 +547,53 @@ export class ReaderWorkspaceRestorationCoordinator {
   }
 }
 
+/**
+ * Coalesces high-frequency automatic reader checkpoints while retaining an immediate seam for
+ * explicit intent. The transport remains timer-free and continues to own CAS reconciliation.
+ */
+export class ReaderWorkspacePersistenceScheduler {
+  private timer: ReturnType<typeof globalThis.setTimeout> | null = null;
+  private pending = false;
+
+  constructor(
+    private readonly persistLatest: () => void,
+    private readonly delayMs = 5000,
+  ) {}
+
+  scheduleAutomatic(): void {
+    this.pending = true;
+    if (this.timer !== null) return;
+    this.timer = globalThis.setTimeout(() => {
+      this.timer = null;
+      this.flush();
+    }, this.delayMs);
+  }
+
+  flush(): void {
+    if (!this.pending) return;
+    this.clearTimer();
+    this.pending = false;
+    this.persistLatest();
+  }
+
+  flushExplicit(): void {
+    this.clearTimer();
+    this.pending = false;
+    this.persistLatest();
+  }
+
+  cancel(): void {
+    this.clearTimer();
+    this.pending = false;
+  }
+
+  private clearTimer(): void {
+    if (this.timer === null) return;
+    globalThis.clearTimeout(this.timer);
+    this.timer = null;
+  }
+}
+
 export class ReaderWorkspaceClient {
   private readonly get: typeof getReaderWorkspace;
   private readonly put: typeof putReaderWorkspace;
@@ -507,8 +603,7 @@ export class ReaderWorkspaceClient {
   private current: ReaderWorkspaceVersionedSnapshot | null = null;
   private desired: ReaderWorkspaceSnapshot | null = null;
   private desiredIntentGeneration = 0;
-  private desiredVersion = 0;
-  private intentDeltas: IntentDelta[] = [];
+  private pendingFields = new Set<MutableReaderField>();
   private writing = false;
   private retryAvailable = true;
   private conflictReconciliationPending = false;
@@ -525,7 +620,7 @@ export class ReaderWorkspaceClient {
     this.projectId = projectId;
     this.current = null;
     this.desired = null;
-    this.intentDeltas = [];
+    this.pendingFields.clear();
     this.retryAvailable = true;
     this.conflictReconciliationPending = false;
     this.conflictIntentBlocked = false;
@@ -567,8 +662,7 @@ export class ReaderWorkspaceClient {
     this.desired = next;
     this.desiredIntentGeneration = intentGeneration;
     this.conflictIntentBlocked = false;
-    this.desiredVersion += 1;
-    this.intentDeltas.push({ version: this.desiredVersion, fields });
+    for (const field of fields) this.pendingFields.add(field);
     if (!this.writing) this.retryAvailable = true;
     void this.flush();
   }
@@ -613,13 +707,13 @@ export class ReaderWorkspaceClient {
     const generation = this.generation;
     const projectId = this.projectId;
     const sent = this.desired;
-    const sentVersion = this.desiredVersion;
     const sentIntentGeneration = this.desiredIntentGeneration;
+    this.pendingFields.clear();
     try {
       const result = await this.put(projectId, sent, this.current.etag);
       if (!this.isCurrent(generation, projectId)) return;
       this.current = result;
-      const hasNewerIntent = this.rebaseOrClearDesired(result.snapshot, sentVersion);
+      const hasNewerIntent = this.rebaseOrClearDesired(result.snapshot);
       let event: "write-ack" | "conflict-retry-pending" | "conflict-retry-ack" = "write-ack";
       if (this.conflictReconciliationPending) {
         event = hasNewerIntent ? "conflict-retry-pending" : "conflict-retry-ack";
@@ -628,7 +722,7 @@ export class ReaderWorkspaceClient {
       this.emitSnapshot(result, event, sent, { hasNewerIntent, sentIntentGeneration });
     } catch (error) {
       if (!this.isCurrent(generation, projectId)) return;
-      this.handleWriteFailure(error, projectId, sentVersion);
+      this.handleWriteFailure(error, projectId);
     } finally {
       this.writing = false;
       // A new project can queue intent while an old generation owns the write lock.
@@ -641,9 +735,9 @@ export class ReaderWorkspaceClient {
     return generation === this.generation && projectId === this.projectId;
   }
 
-  private rebaseOrClearDesired(current: ReaderWorkspaceSnapshot, sentVersion: number): boolean {
-    const newerFields = this.fieldsChangedAfter(sentVersion);
-    this.intentDeltas = this.intentDeltas.filter((delta) => delta.version > sentVersion);
+  private rebaseOrClearDesired(current: ReaderWorkspaceSnapshot): boolean {
+    const newerFields = new Set(this.pendingFields);
+    this.pendingFields.clear();
     if (newerFields.size === 0 || !this.desired) {
       this.desired = null;
       return false;
@@ -652,19 +746,10 @@ export class ReaderWorkspaceClient {
     return true;
   }
 
-  private fieldsChangedAfter(version: number): Set<MutableReaderField> {
-    const fields = new Set<MutableReaderField>();
-    for (const delta of this.intentDeltas) {
-      if (delta.version <= version) continue;
-      for (const field of delta.fields) fields.add(field);
-    }
-    return fields;
-  }
-
-  private handleWriteFailure(error: unknown, projectId: string, sentVersion: number): void {
+  private handleWriteFailure(error: unknown, projectId: string): void {
     if (!(error instanceof ReaderWorkspacePreconditionError)) {
       this.desired = null;
-      this.intentDeltas = [];
+      this.pendingFields.clear();
       this.onChange({
         projectId,
         snapshot: this.current?.snapshot ?? null,
@@ -677,7 +762,7 @@ export class ReaderWorkspaceClient {
     }
 
     this.current = { snapshot: error.current, etag: error.etag };
-    const hasNewerIntent = this.rebaseOrClearDesired(error.current, sentVersion);
+    const hasNewerIntent = this.rebaseOrClearDesired(error.current);
     if (hasNewerIntent && this.retryAvailable) {
       this.retryAvailable = false;
       this.conflictReconciliationPending = true;
@@ -699,7 +784,7 @@ export class ReaderWorkspaceClient {
       return;
     } else {
       this.desired = null;
-      this.intentDeltas = [];
+      this.pendingFields.clear();
     }
     this.conflictReconciliationPending = false;
     this.emitSnapshot(this.current, "conflict-current");

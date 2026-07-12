@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
+  ApiRequestError,
   ReaderWorkspacePreconditionError,
   type ReaderWorkspaceSnapshot,
   type ReaderWorkspaceVersionedSnapshot,
@@ -13,20 +14,23 @@ import {
   projectLoaderResponseIsCurrent,
   projectReaderWorkspaceIntent,
   ReaderWorkspaceClient,
+  ReaderWorkspacePersistenceScheduler,
   ReaderWorkspaceRestorationCoordinator,
   type ReaderWorkspaceView,
   readerWorkspaceBaselineResponseIsCurrent,
   readerWorkspaceBlockNavigationPosition,
   readerWorkspaceNominationFromBaseline,
   readerWorkspacePersistenceDecision,
+  readerWorkspaceSuccessfulAckNeedsNavigationRestoration,
   readerWorkspaceSuccessfulAckNeedsRestoration,
   resolveAuthoritativePreparedBlockId,
+  resolveAuthoritativeReaderSource,
   resolveAuthoritativeSourceKind,
   serverWorkspaceOwnsNavigation,
   validateAuthoritativeVoiceJob,
   visibleAuthoritativePreparedProgress,
 } from "./readerWorkspace";
-import type { VoiceJob } from "./types";
+import type { BookSource, PreparedSource, VoiceJob } from "./types";
 
 function snapshot(overrides: Partial<ReaderWorkspaceSnapshot> = {}): ReaderWorkspaceSnapshot {
   return {
@@ -170,6 +174,93 @@ describe("reader workspace persistence", () => {
     expect(projectIdFromSearch("?projectId=project%20one")).toBe("project one");
     expect(projectIdFromSearch("?projectId=%20%20")).toBeNull();
     expect(projectIdFromSearch("?jobId=old")).toBeNull();
+  });
+
+  it("resolves one authoritative source with at most two targeted requests and no inventory lists", async () => {
+    const prepared = { id: "prepared-1", projectId: "project-1" } as PreparedSource;
+    const preparedGet = vi.fn().mockResolvedValue(prepared);
+    const bookGet = vi.fn();
+
+    await expect(
+      resolveAuthoritativeReaderSource("prepared-1", "project-1", {
+        getPrepared: preparedGet,
+        getBook: bookGet,
+      }),
+    ).resolves.toEqual({ kind: "prepared", source: prepared });
+    expect(preparedGet).toHaveBeenCalledTimes(1);
+    expect(bookGet).not.toHaveBeenCalled();
+
+    const missingPrepared = vi.fn().mockRejectedValue(new ApiRequestError(404, "not found"));
+    const book = { id: "book-1", projectId: "project-1" } as BookSource;
+    bookGet.mockResolvedValue(book);
+    await expect(
+      resolveAuthoritativeReaderSource("book-1", "project-1", {
+        getPrepared: missingPrepared,
+        getBook: bookGet,
+      }),
+    ).resolves.toEqual({ kind: "book", source: book });
+    expect(missingPrepared).toHaveBeenCalledTimes(1);
+    expect(bookGet).toHaveBeenCalledTimes(1);
+
+    const restorationSource = readFileSync(new URL("App.tsx", import.meta.url), "utf8").slice(
+      readFileSync(new URL("App.tsx", import.meta.url), "utf8").indexOf(
+        "readerWorkspaceStateHandlerRef.current = (state)",
+      ),
+      readFileSync(new URL("App.tsx", import.meta.url), "utf8").indexOf(
+        "const restoreProjectWorkspace",
+      ),
+    );
+    expect(restorationSource).toContain(
+      "resolveAuthoritativeReaderSource(\n          snapshot.sourceId,\n          snapshot.projectId,",
+    );
+    expect(restorationSource).not.toContain("listProjectBookSources(");
+    expect(restorationSource).not.toContain("listPreparedSources(");
+  });
+
+  it("falls back only for not-found and propagates source service failures", async () => {
+    const bookGet = vi.fn();
+    const unavailable = new ApiRequestError(503, "unavailable");
+    await expect(
+      resolveAuthoritativeReaderSource("source-1", "project-1", {
+        getPrepared: vi.fn().mockRejectedValue(unavailable),
+        getBook: bookGet,
+      }),
+    ).rejects.toBe(unavailable);
+    expect(bookGet).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when a targeted source response does not match project identity", async () => {
+    const wrongPrepared = {
+      id: "source-1",
+      projectId: "other-project",
+    } as PreparedSource;
+    const bookGet = vi.fn();
+    await expect(
+      resolveAuthoritativeReaderSource("source-1", "project-1", {
+        getPrepared: vi.fn().mockResolvedValue(wrongPrepared),
+        getBook: bookGet,
+      }),
+    ).rejects.toThrow(/prepared source identity/);
+    expect(bookGet).not.toHaveBeenCalled();
+
+    const wrongBook = { id: "other-source", projectId: "project-1" } as BookSource;
+    await expect(
+      resolveAuthoritativeReaderSource("source-1", "project-1", {
+        getPrepared: vi.fn().mockRejectedValue(new ApiRequestError(404, "not found")),
+        getBook: vi.fn().mockResolvedValue(wrongBook),
+      }),
+    ).rejects.toThrow(/book source identity/);
+  });
+
+  it("marks an empty restoration ready without source inventory requests", () => {
+    const appSource = readFileSync(new URL("App.tsx", import.meta.url), "utf8");
+    const emptyStart = appSource.indexOf("if (!snapshot.sourceId) {");
+    const emptyEnd = appSource.indexOf("\n        const authoritativeSource", emptyStart);
+    const emptyRestoration = appSource.slice(emptyStart, emptyEnd);
+    expect(emptyRestoration).toContain("coordinator.complete(token");
+    expect(emptyRestoration).toContain("setProjectStateReadyId(projectId)");
+    expect(emptyRestoration).not.toContain("listProjectBookSources(");
+    expect(emptyRestoration).not.toContain("listPreparedSources(");
   });
 
   it("resolves source kind only after both authoritative inventories are available", () => {
@@ -386,6 +477,79 @@ describe("reader workspace persistence", () => {
     });
   });
 
+  it("checkpoints 600 60Hz updates on a bounded cadence and retains the final cursor", () => {
+    vi.useFakeTimers();
+    try {
+      let latestCursor = 0;
+      const persistedCursors: number[] = [];
+      const scheduler = new ReaderWorkspacePersistenceScheduler(() => {
+        persistedCursors.push(latestCursor);
+      });
+
+      for (let tick = 1; tick <= 600; tick += 1) {
+        latestCursor = tick;
+        scheduler.scheduleAutomatic();
+        vi.advanceTimersByTime(16);
+      }
+      vi.advanceTimersByTime(399);
+
+      expect(persistedCursors).toHaveLength(1);
+      expect(persistedCursors[0]).toBeGreaterThanOrEqual(312);
+      scheduler.flush();
+      expect(persistedCursors).toEqual([persistedCursors[0], 600]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("flushes explicit navigation promptly and cancels stale project checkpoints", () => {
+    vi.useFakeTimers();
+    try {
+      let latest = "cursor";
+      const persisted: string[] = [];
+      const scheduler = new ReaderWorkspacePersistenceScheduler(() => persisted.push(latest));
+
+      scheduler.scheduleAutomatic();
+      latest = "explicit-navigation";
+      scheduler.flushExplicit();
+      expect(persisted).toEqual(["explicit-navigation"]);
+
+      latest = "old-project";
+      scheduler.scheduleAutomatic();
+      scheduler.cancel();
+      vi.advanceTimersByTime(2000);
+      expect(persisted).toEqual(["explicit-navigation"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reconciles scalar-only acknowledgements without source navigation restoration", () => {
+    const sent = snapshot({ playbackCursorMs: 4200, playbackRate: 1, followPreference: true });
+    expect(
+      readerWorkspaceSuccessfulAckNeedsNavigationRestoration(sent, {
+        ...sent,
+        playbackCursorMs: 4000,
+        playbackRate: 1.25,
+        followPreference: false,
+      }),
+    ).toBe(false);
+    expect(
+      readerWorkspaceSuccessfulAckNeedsNavigationRestoration(sent, {
+        ...sent,
+        readerLocator: {
+          schemaVersion: "locator-envelope.v1",
+          kind: "resume",
+          sourceId: sent.sourceId,
+          nodeId: "block-2",
+        },
+      }),
+    ).toBe(true);
+
+    const appSource = readFileSync(new URL("App.tsx", import.meta.url), "utf8");
+    expect(appSource).toContain("playbackControls.setPlaybackRate(authoritativePlaybackRate)");
+  });
+
   it("restores exact server identity and paused state without inventing autoplay", async () => {
     const states: ReaderWorkspaceView[] = [];
     const exact = snapshot();
@@ -452,9 +616,11 @@ describe("reader workspace persistence", () => {
     await client.load("project-1");
 
     client.update((current) => ({ ...current, playbackCursorMs: 5000 }));
-    client.update((current) => ({ ...current, playbackCursorMs: 6000 }));
-    client.update((current) => ({ ...current, playbackCursorMs: 7000 }));
+    for (let cursor = 6000; cursor <= 10_005_000; cursor += 1000) {
+      client.update((current) => ({ ...current, playbackCursorMs: cursor }));
+    }
     expect(put).toHaveBeenCalledTimes(1);
+    expect((Reflect.get(client, "pendingFields") as ReadonlySet<string>).size).toBe(1);
     const initialCall = calls[0];
     expect(initialCall.etag).toBe('"etag-7"');
 
@@ -463,7 +629,7 @@ describe("reader workspace persistence", () => {
 
     expect(put).toHaveBeenCalledTimes(2);
     expect(calls[1]?.etag).toBe('"etag-8"');
-    expect(calls[1]?.snapshot.playbackCursorMs).toBe(7000);
+    expect(calls[1]?.snapshot.playbackCursorMs).toBe(10_005_000);
   });
 
   it("accepts 412 server-current and does not retry without newer unsaved intent", async () => {

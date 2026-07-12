@@ -893,6 +893,14 @@ export async function listProjectBookSources(projectId: string): Promise<BookSou
   return response.json() as Promise<BookSource[]>;
 }
 
+export async function getBookSource(id: string): Promise<BookSource> {
+  const response = await fetch(`${apiBaseUrl}/api/book-sources/${encodeURIComponent(id)}`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<BookSource>;
+}
+
 export async function renameBookSource(
   bookSourceId: string,
   request: RenameAssetRequest,

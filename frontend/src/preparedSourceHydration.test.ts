@@ -67,6 +67,32 @@ describe("prepared source hydration helpers", () => {
     expect(merged[0]).toBe(cachedSource);
   });
 
+  it("merges 10k sources without scanning the current array for every row", () => {
+    const count = 10_000;
+    const current = Array.from({ length: count }, (_, index) =>
+      preparedSource({
+        id: `source-${String(index)}`,
+        renderMode: "plain",
+        text: `full ${String(index)}`,
+        speechText: `spoken ${String(index)}`,
+      }),
+    );
+    const guardedCurrent = new Proxy(current, {
+      get(target, property, receiver) {
+        if (property === "find") {
+          throw new Error("quadratic current-source scan");
+        }
+        return Reflect.get(target, property, receiver) as unknown;
+      },
+    });
+    const summaries = current.map((source) => ({ ...source, text: "", speechText: "" }));
+
+    const merged = mergePreparedSourcesPreservingFullContent(guardedCurrent, summaries);
+
+    expect(merged).toHaveLength(count);
+    expect(merged.every((source, index) => source === current[index])).toBe(true);
+  });
+
   it("replaces an in-memory source when summary has a new timestamp", () => {
     const cachedSource = preparedSource({
       id: "new-time",

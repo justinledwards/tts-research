@@ -15,6 +15,7 @@ import {
   deleteVoiceJob,
   getAdapterCapabilities,
   getAdapterDiagnostics,
+  getBookSource,
   getContentIR,
   getContentIRSpeechPlan,
   getJobSpeechPlan,
@@ -39,6 +40,22 @@ import {
 } from "./api";
 
 describe("API errors", () => {
+  it("GETs one encoded book source without listing the project", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: string[] = [];
+    const exact = { id: "book/one", projectId: "project-1", sourceName: "Book One" };
+    globalThis.fetch = (input) => {
+      requests.push(fetchInputUrl(input));
+      return Promise.resolve(Response.json(exact));
+    };
+    try {
+      await expect(getBookSource("book/one")).resolves.toEqual(exact);
+      expect(requests).toEqual(["/api/book-sources/book%2Fone"]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("identifies structured 404 errors for stale local source state", () => {
     expect(isApiNotFoundError(new ApiRequestError(404, "not found"))).toBe(true);
     expect(isApiNotFoundError(new ApiRequestError(500, "server error"))).toBe(false);

@@ -53,6 +53,7 @@ import {
   deleteVoiceJob,
   deleteVoiceProfile,
   getAdapterDiagnostics,
+  getBookSource,
   getBookSourceScope,
   getContentIR,
   getHighlightMap,
@@ -69,7 +70,6 @@ import {
   getVoiceProfileSource,
   getVoiceProfileSourceDiagnostics,
   isApiNotFoundError,
-  listPreparedSources,
   listProjectBookSources,
   listProjectJobs,
   listProjectProgress,
@@ -491,15 +491,17 @@ import {
   projectReaderWorkspaceIntent,
   ReaderWorkspaceClient,
   type ReaderWorkspaceNomination,
+  ReaderWorkspacePersistenceScheduler,
   ReaderWorkspaceRestorationCoordinator,
   type ReaderWorkspaceView,
   readerWorkspaceBaselineResponseIsCurrent,
   readerWorkspaceBlockNavigationPosition,
   readerWorkspaceNominationFromBaseline,
   readerWorkspacePersistenceDecision,
+  readerWorkspaceSuccessfulAckNeedsNavigationRestoration,
   readerWorkspaceSuccessfulAckNeedsRestoration,
   resolveAuthoritativePreparedBlockId,
-  resolveAuthoritativeSourceKind,
+  resolveAuthoritativeReaderSource,
   serverWorkspaceOwnsNavigation,
   validateAuthoritativeVoiceJob,
   visibleAuthoritativePreparedProgress,
@@ -1470,6 +1472,10 @@ function upsertPreparedSource(
   return [source, ...currentSources.filter((item) => item.id !== source.id)];
 }
 
+function upsertBookSource(currentSources: BookSource[], source: BookSource): BookSource[] {
+  return [source, ...currentSources.filter((item) => item.id !== source.id)];
+}
+
 export function isPreparedSourceDisplayIncomplete(source: PreparedSource | null): boolean {
   if (!source) {
     return false;
@@ -1484,8 +1490,9 @@ export function mergePreparedSourcesPreservingFullContent(
   currentSources: PreparedSource[],
   nextSources: PreparedSource[],
 ): PreparedSource[] {
+  const currentById = new Map(currentSources.map((source) => [source.id, source]));
   return nextSources.map((nextSource) => {
-    const currentSource = currentSources.find((source) => source.id === nextSource.id);
+    const currentSource = currentById.get(nextSource.id);
     if (
       currentSource?.updatedAt === nextSource.updatedAt &&
       !isPreparedSourceDisplayIncomplete(currentSource)
@@ -2838,6 +2845,13 @@ export function App() {
     },
   });
   const readerWorkspaceClient = readerWorkspaceClientRef.current;
+  const readerWorkspacePersistLatestRef = useRef<() => void>(() => null);
+  const readerWorkspacePersistenceSchedulerRef = useRef<ReaderWorkspacePersistenceScheduler | null>(
+    null,
+  );
+  readerWorkspacePersistenceSchedulerRef.current ??= new ReaderWorkspacePersistenceScheduler(() => {
+    readerWorkspacePersistLatestRef.current();
+  });
   const activeProjectIdRef = useRef(activeProjectId);
   activeProjectIdRef.current = activeProjectId;
   const readerWorkspaceRestorationRef = useRef<ReaderWorkspaceRestorationCoordinator | null>(null);
@@ -5868,6 +5882,29 @@ export function App() {
         setProjectStateReadyId(projectId);
         return;
       }
+      if (
+        !readerWorkspaceSuccessfulAckNeedsNavigationRestoration(
+          state.snapshot,
+          authoritativeSnapshot,
+        )
+      ) {
+        authoritativeResumePendingRef.current = false;
+        const authoritativePlaybackRate = authoritativeSnapshot.playbackRate;
+        authoritativePlaybackRateRef.current = authoritativePlaybackRate;
+        if (
+          authoritativePlaybackRate !== null &&
+          playbackControls.setPlaybackRate &&
+          playbackControls.playbackRate !== authoritativePlaybackRate
+        ) {
+          playbackControls.setPlaybackRate(authoritativePlaybackRate);
+        }
+        setPlaybackCursorSec(Math.max(0, (authoritativeSnapshot.playbackCursorMs ?? 0) / 1000));
+        setReadAlongPreferences((current) =>
+          applyAuthoritativeFollowPreference(current, authoritativeSnapshot.followPreference),
+        );
+        setProjectStateReadyId(projectId);
+        return;
+      }
     }
     if (state.event === "conflict-current-pending") {
       readerWorkspaceBlockedIntentRef.current = state.snapshot;
@@ -5957,15 +5994,6 @@ export function App() {
     void (async () => {
       try {
         if (!snapshot.sourceId) {
-          const [books, sources] = await Promise.all([
-            listProjectBookSources(projectId),
-            listPreparedSources(projectId),
-          ]);
-          if (restorationIsStale()) return;
-          setBookSources(books);
-          setPreparedSources((current) =>
-            mergePreparedSourcesPreservingFullContent(current, sources),
-          );
           setPlaybackCursorSec(Math.max(0, (snapshot.playbackCursorMs ?? 0) / 1000));
           setReadAlongPreferences((current) =>
             applyAuthoritativeFollowPreference(current, snapshot.followPreference),
@@ -5978,30 +6006,30 @@ export function App() {
           return;
         }
 
-        const [books, sources] = await Promise.all([
-          listProjectBookSources(projectId),
-          listPreparedSources(projectId),
-        ]);
-        if (restorationIsStale()) return;
-        const sourceKind = resolveAuthoritativeSourceKind(
+        const authoritativeSource = await resolveAuthoritativeReaderSource(
           snapshot.sourceId,
-          books.map((source) => source.id),
-          sources.map((source) => source.id),
+          snapshot.projectId,
+          {
+            getBook: getBookSource,
+            getPrepared: getPreparedSource,
+          },
         );
-        setBookSources(books);
-        setPreparedSources((current) =>
-          mergePreparedSourcesPreservingFullContent(current, sources),
-        );
+        if (restorationIsStale()) return;
+        const sourceKind = authoritativeSource.kind;
+        if (authoritativeSource.kind === "book") {
+          setBookSources((current) => upsertBookSource(current, authoritativeSource.source));
+        } else {
+          setPreparedSources((current) =>
+            upsertPreparedSource(current, authoritativeSource.source),
+          );
+        }
         const restoredSourceMode = sourceKind === "book" ? "book" : "fileUrl";
         setSourceMode(restoredSourceMode);
         setSelectedBookSourceId(sourceKind === "book" ? snapshot.sourceId : null);
         setSelectedPreparedSourceId(sourceKind === "prepared" ? snapshot.sourceId : null);
         const preparedResume =
           sourceKind === "prepared" ? authoritativePreparedProgress(projectId, snapshot) : null;
-        const preparedSource =
-          sourceKind === "prepared"
-            ? sources.find((source) => source.id === snapshot.sourceId)
-            : undefined;
+        const preparedSource = sourceKind === "prepared" ? authoritativeSource.source : undefined;
         const restoredActiveBlockId =
           (preparedSource && preparedResume
             ? resolveAuthoritativePreparedBlockId(preparedSource, preparedResume.readingPosition)
@@ -6017,18 +6045,16 @@ export function App() {
           activeBlockId: restoredActiveBlockId,
         }));
         if (sourceKind === "book" && snapshot.readerLocator) {
-          const restoredBook = books.find((source) => source.id === snapshot.sourceId);
+          const restoredBook = authoritativeSource.source;
           const readingPosition = {
             ...authoritativeResumePlan(snapshot).readingPosition,
             bookSourceId: snapshot.sourceId,
           };
           setHashReadingPosition(readingPosition);
-          if (restoredBook) {
-            setSelectedBookScope(
-              scopeFromBookScopeKey(restoredBook, readingPosition.scopeKey ?? "book"),
-            );
-            setIsBookCinemaOpen(restoredBook.status === "ready");
-          }
+          setSelectedBookScope(
+            scopeFromBookScopeKey(restoredBook, readingPosition.scopeKey ?? "book"),
+          );
+          setIsBookCinemaOpen(restoredBook.status === "ready");
         } else if (sourceKind === "prepared") {
           setAuthoritativePreparedResume(preparedResume);
           setPreparedSourceCinemaSourceId(preparedResume ? snapshot.sourceId : null);
@@ -6100,6 +6126,7 @@ export function App() {
       if (projectId === activeProjectId) {
         return;
       }
+      readerWorkspacePersistenceSchedulerRef.current?.flush();
       if (!activeDemoProjectId && projectStateReadyId === activeProjectId) {
         saveProjectWorkspaceState(activeProjectId, {
           activeBlockId: workspaceContext.activeBlockId,
@@ -8412,7 +8439,7 @@ export function App() {
     };
   }, [profileSource, refreshProfileSourceDiagnostics]);
 
-  useEffect(() => {
+  readerWorkspacePersistLatestRef.current = () => {
     const persisted = readerWorkspaceSnapshotRef.current;
     if (
       activeDemoProjectId ||
@@ -8452,34 +8479,68 @@ export function App() {
       readerWorkspaceBlockedIntentGenerationRef.current,
       readerWorkspaceUserIntentGeneration,
     );
-    if (persistenceDecision === "blocked") {
-      return;
-    }
+    if (persistenceDecision === "blocked") return;
     if (blockedIntent) {
       readerWorkspaceBlockedIntentRef.current = null;
       readerWorkspaceBlockedIntentGenerationRef.current = null;
     }
-    if (persistenceDecision === "unchanged") {
-      return;
-    }
+    if (persistenceDecision === "unchanged") return;
     readerWorkspaceClientRef.current?.update(() => desired, readerWorkspaceUserIntentGeneration);
+  };
+
+  // Automatic reader movement arms one fixed-cadence checkpoint; projection occurs on flush.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reader values intentionally trigger a coalesced checkpoint without being retained.
+  useEffect(() => {
+    readerWorkspacePersistenceSchedulerRef.current?.scheduleAutomatic();
+  }, [
+    currentReadingPosition,
+    livePlaybackReadingPosition,
+    playbackCursorSec,
+    preparedSourceCinemaProgress,
+  ]);
+
+  // Durable explicit intent bypasses the debounce and includes the latest automatic cursor.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: explicit reader values intentionally trigger an immediate projection without being retained.
+  useEffect(() => {
+    readerWorkspacePersistenceSchedulerRef.current?.flushExplicit();
   }, [
     activeDemoProjectId,
     activeProjectId,
     authoritativePreparedResume,
-    currentReadingPosition,
-    livePlaybackReadingPosition,
-    playbackControls.playbackRate,
-    playbackControls.isAvailable,
-    playbackCursorSec,
     pendingPlaybackResume,
+    playbackControls.isAvailable,
+    playbackControls.playbackRate,
     preparedReaderNavigationPosition,
-    preparedSourceCinemaProgress,
     projectStateReadyId,
     readAlongPreferences.scrollFollow,
     readerWorkspaceNomination,
     readerWorkspaceUserIntentGeneration,
   ]);
+
+  useEffect(() => {
+    readerWorkspacePersistenceSchedulerRef.current?.cancel();
+    activeProjectIdRef.current = activeProjectId;
+  }, [activeProjectId]);
+
+  useEffect(() => {
+    if (!isPlaybackActive) readerWorkspacePersistenceSchedulerRef.current?.flush();
+  }, [isPlaybackActive]);
+
+  useEffect(() => {
+    const flushPendingWorkspace = () => {
+      readerWorkspacePersistenceSchedulerRef.current?.flush();
+    };
+    const flushHiddenWorkspace = () => {
+      if (document.visibilityState === "hidden") flushPendingWorkspace();
+    };
+    globalThis.addEventListener("pagehide", flushPendingWorkspace);
+    document.addEventListener("visibilitychange", flushHiddenWorkspace);
+    return () => {
+      globalThis.removeEventListener("pagehide", flushPendingWorkspace);
+      document.removeEventListener("visibilitychange", flushHiddenWorkspace);
+      flushPendingWorkspace();
+    };
+  }, []);
 
   useEffect(() => {
     sessionStorage.setItem(RUN_CONFIG_STORAGE_KEY, JSON.stringify(runConfiguration));
