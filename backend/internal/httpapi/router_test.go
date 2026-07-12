@@ -1,10 +1,8 @@
 package httpapi_test
 
 import (
-	"archive/zip"
 	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"io"
@@ -18,8 +16,6 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/justinedwards/tts-research/backend/internal/agents"
-	"github.com/justinedwards/tts-research/backend/internal/audio"
-	"github.com/justinedwards/tts-research/backend/internal/contentir"
 	"github.com/justinedwards/tts-research/backend/internal/httpapi"
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
 	"github.com/justinedwards/tts-research/backend/internal/speechplan"
@@ -414,6 +410,231 @@ func TestCreateJobEndpoint(t *testing.T) {
 	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
 }
 
+func TestDeleteVoiceJobEndpoint(t *testing.T) {
+	t.Parallel()
+
+	service := newService(t)
+	app := httpapi.NewRouter(service)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{Text: "Delete this generated narration."})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+
+	deleteRequest, err := http.NewRequest(http.MethodDelete, "/api/voice-jobs/"+job.ID, nil)
+	if err != nil {
+		t.Fatalf("NewRequest(delete) returned error: %v", err)
+	}
+	deleteResponse, err := app.Test(deleteRequest)
+	if err != nil {
+		t.Fatalf("app.Test(delete) returned error: %v", err)
+	}
+	defer deleteResponse.Body.Close()
+	if deleteResponse.StatusCode != http.StatusNoContent {
+		payload, _ := io.ReadAll(deleteResponse.Body)
+		t.Fatalf("delete status = %d, want %d, body = %s", deleteResponse.StatusCode, http.StatusNoContent, payload)
+	}
+
+	missingRequest, err := http.NewRequest(http.MethodDelete, "/api/voice-jobs/missing", nil)
+	if err != nil {
+		t.Fatalf("NewRequest(missing) returned error: %v", err)
+	}
+	missingResponse, err := app.Test(missingRequest)
+	if err != nil {
+		t.Fatalf("app.Test(missing) returned error: %v", err)
+	}
+	defer missingResponse.Body.Close()
+	if missingResponse.StatusCode != http.StatusNotFound {
+		payload, _ := io.ReadAll(missingResponse.Body)
+		t.Fatalf("missing status = %d, want %d, body = %s", missingResponse.StatusCode, http.StatusNotFound, payload)
+	}
+}
+
+func TestDeleteVoiceJobEndpointRejectsActiveJob(t *testing.T) {
+	t.Parallel()
+
+	optimizer := &httpBlockingOptimizer{started: make(chan struct{}, 1)}
+	service := pipeline.NewService(
+		optimizer,
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+	)
+	app := httpapi.NewRouter(service)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{Text: strings.Repeat("active. ", 80)})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	waitForHTTPOptimizerSignal(t, optimizer.started)
+
+	request, err := http.NewRequest(http.MethodDelete, "/api/voice-jobs/"+job.ID, nil)
+	if err != nil {
+		t.Fatalf("NewRequest(active delete) returned error: %v", err)
+	}
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test(active delete) returned error: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusConflict {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("active delete status = %d, want %d, body = %s", response.StatusCode, http.StatusConflict, payload)
+	}
+	if err := service.CancelJob(job.ID); err != nil {
+		t.Fatalf("CancelJob returned error: %v", err)
+	}
+}
+
+func TestCreateVoicePreviewEndpointReturnsRawAudio(t *testing.T) {
+	t.Parallel()
+
+	app := httpapi.NewRouter(newService(t))
+	body := bytes.NewBufferString(`{"text":"This selected block previews the narrator voice.","ttsEngine":"auto"}`)
+	request, err := http.NewRequest(http.MethodPost, "/api/voice-previews", body)
+	if err != nil {
+		t.Fatalf("NewRequest returned error: %v", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("status = %d, want %d, body = %s", response.StatusCode, http.StatusOK, payload)
+	}
+	if got := response.Header.Get("Content-Type"); !strings.Contains(got, "audio/wav") {
+		t.Fatalf("Content-Type = %q, want audio/wav", got)
+	}
+	if got := response.Header.Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got)
+	}
+	if got := response.Header.Get("X-Voice-Preview-Duration-Ms"); got == "" {
+		t.Fatal("duration header is empty")
+	}
+	if got := response.Header.Get("X-Voice-Preview-Provider"); got == "" {
+		t.Fatal("provider header is empty")
+	}
+	audio, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if len(audio) <= 44 {
+		t.Fatalf("audio body too short: %d bytes", len(audio))
+	}
+}
+
+func TestCreateVoicePreviewEndpointRejectsInvalidRequests(t *testing.T) {
+	t.Parallel()
+
+	app := httpapi.NewRouter(newService(t))
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "empty text",
+			body: `{"text":"   "}`,
+			want: "text is required",
+		},
+		{
+			name: "unavailable engine",
+			body: `{"text":"Preview me.","ttsEngine":"missing-engine"}`,
+			want: "tts engine",
+		},
+	}
+
+	for _, item := range cases {
+		t.Run(item.name, func(t *testing.T) {
+			t.Parallel()
+			request, err := http.NewRequest(
+				http.MethodPost,
+				"/api/voice-previews",
+				bytes.NewBufferString(item.body),
+			)
+			if err != nil {
+				t.Fatalf("NewRequest returned error: %v", err)
+			}
+			request.Header.Set("Content-Type", "application/json")
+
+			response, err := app.Test(request)
+			if err != nil {
+				t.Fatalf("app.Test returned error: %v", err)
+			}
+			defer response.Body.Close()
+
+			if response.StatusCode != http.StatusBadRequest {
+				payload, _ := io.ReadAll(response.Body)
+				t.Fatalf("status = %d, want %d, body = %s", response.StatusCode, http.StatusBadRequest, payload)
+			}
+			payload, err := io.ReadAll(response.Body)
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			if !strings.Contains(string(payload), item.want) {
+				t.Fatalf("body = %s, want %q", payload, item.want)
+			}
+		})
+	}
+}
+
+func TestCreateVoicePreviewEndpointSurfacesMissingProfileArtifact(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			JobDataDir:                         t.TempDir(),
+			ProjectDataDir:                     t.TempDir(),
+			VoiceProfileDir:                    t.TempDir(),
+			VoiceProfileReferenceMinSeconds:    20,
+			VoiceProfileReferenceTargetSeconds: 45,
+			VoiceProfileReferenceMaxSeconds:    60,
+			VoiceProfileDenoiseProvider:        "none",
+		},
+	)
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfile(context.Background(), "Preview profile", "en", sourcePath, "source.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+	}
+	app := httpapi.NewRouter(service)
+	body := bytes.NewBufferString(
+		`{"text":"Preview me.","voiceProfileId":"` +
+			profile.ID +
+			`","ttsEngine":"kokoro-embed","pipelineOptions":{"voiceClone":true}}`,
+	)
+	request, err := http.NewRequest(http.MethodPost, "/api/voice-previews", body)
+	if err != nil {
+		t.Fatalf("NewRequest returned error: %v", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusBadRequest {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("status = %d, want %d, body = %s", response.StatusCode, http.StatusBadRequest, payload)
+	}
+	payload, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if !strings.Contains(string(payload), pipeline.ErrProfileArtifactMissing.Error()) {
+		t.Fatalf("body = %s, want missing artifact error", payload)
+	}
+}
+
 func TestProjectEndpointsCreateRenameAndListJobs(t *testing.T) {
 	t.Parallel()
 
@@ -564,6 +785,116 @@ func TestProjectEndpointsCreateRenameAndListJobs(t *testing.T) {
 	}
 }
 
+func TestAssetEndpointsRenameAndDelete(t *testing.T) {
+	t.Parallel()
+
+	service, _, _ := newServiceWithContentIRDirs(t)
+	app := httpapi.NewRouter(service)
+	prepared, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "asset.md",
+		Text:       "# Asset\n\nPrepared source asset.",
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	epubPath := writeRouterTestEPUB(t)
+	info, err := os.Stat(epubPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), "default", epubPath, "asset.epub", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+	sourcePath := writeToneWAV(t, 25_000, 9000)
+	profile, err := service.CreateVoiceProfile(context.Background(), "Original voice", "en", sourcePath, "source.wav", 0)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+	}
+
+	renamedPrepared := patchJSON[pipeline.PreparedSource](
+		t,
+		app,
+		"/api/source-preps/"+prepared.ID,
+		`{"name":"Renamed prepared"}`,
+	)
+	if renamedPrepared.Title != "Renamed prepared" {
+		t.Fatalf("renamed prepared title = %q", renamedPrepared.Title)
+	}
+	renamedBook := patchJSON[pipeline.BookSource](
+		t,
+		app,
+		"/api/book-sources/"+book.ID,
+		`{"name":"Renamed book"}`,
+	)
+	if renamedBook.Title != "Renamed book" {
+		t.Fatalf("renamed book title = %q", renamedBook.Title)
+	}
+	renamedProfile := patchJSON[pipeline.VoiceProfile](
+		t,
+		app,
+		"/api/voice-profiles/"+profile.ID,
+		`{"name":"Renamed voice"}`,
+	)
+	if renamedProfile.Name != "Renamed voice" {
+		t.Fatalf("renamed profile name = %q", renamedProfile.Name)
+	}
+
+	deleteAsset(t, app, "/api/source-preps/"+prepared.ID)
+	deleteAsset(t, app, "/api/book-sources/"+book.ID)
+	deleteAsset(t, app, "/api/voice-profiles/"+profile.ID)
+	if _, err := service.GetPreparedSource(prepared.ID); !errors.Is(err, pipeline.ErrPreparedSourceNotFound) {
+		t.Fatalf("GetPreparedSource deleted error = %v, want not found", err)
+	}
+	if _, err := service.GetBookSource(book.ID); !errors.Is(err, pipeline.ErrBookSourceNotFound) {
+		t.Fatalf("GetBookSource deleted error = %v, want not found", err)
+	}
+	if _, err := service.GetVoiceProfile(profile.ID); !errors.Is(err, pipeline.ErrProfileNotFound) {
+		t.Fatalf("GetVoiceProfile deleted error = %v, want not found", err)
+	}
+}
+
+func patchJSON[T any](t *testing.T, app *fiber.App, path string, body string) T {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodPatch, path, bytes.NewBufferString(body))
+	if err != nil {
+		t.Fatalf("NewRequest(%s) returned error: %v", path, err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test(%s) returned error: %v", path, err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("%s status = %d, want %d, body = %s", path, response.StatusCode, http.StatusOK, payload)
+	}
+	var value T
+	if err := json.NewDecoder(response.Body).Decode(&value); err != nil {
+		t.Fatalf("decode %s response: %v", path, err)
+	}
+	return value
+}
+
+func deleteAsset(t *testing.T, app *fiber.App, path string) {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodDelete, path, nil)
+	if err != nil {
+		t.Fatalf("NewRequest(%s) returned error: %v", path, err)
+	}
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test(%s) returned error: %v", path, err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("%s status = %d, want %d, body = %s", path, response.StatusCode, http.StatusNoContent, payload)
+	}
+}
+
 func TestContentIREndpoint(t *testing.T) {
 	t.Parallel()
 
@@ -705,6 +1036,55 @@ func TestPreparedSourceMultipartMarkdownParseMode(t *testing.T) {
 	}
 }
 
+func TestPreparedSourceReadinessConfirmationEndpoint(t *testing.T) {
+	t.Parallel()
+
+	service, _, _ := newServiceWithContentIRDirs(t)
+	app := httpapi.NewRouter(service)
+	source, err := service.CreatePreparedSource(t.Context(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindText,
+		SourceName: "endpoint.txt",
+		Text:       "Endpoint readiness confirmation text.",
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	if source.SourceReadiness == nil || source.SourceReadiness.State != pipeline.SourceReadinessStateNeedsMetadata {
+		t.Fatalf("initial readiness = %#v, want needsMetadata", source.SourceReadiness)
+	}
+
+	request, err := http.NewRequest(
+		http.MethodPost,
+		"/api/source-preps/"+source.ID+"/readiness/confirm",
+		bytes.NewBufferString(`{"title":"Endpoint source","sourceType":"document","language":"en-US","structureChoice":"full","structureLabel":"1 spoken block","speechPolicyProfile":"Enterprise"}`),
+	)
+	if err != nil {
+		t.Fatalf("NewRequest returned error: %v", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(response.Body)
+		t.Fatalf("status = %d, want %d, body = %s", response.StatusCode, http.StatusOK, payload)
+	}
+	var confirmed pipeline.PreparedSource
+	if err := json.NewDecoder(response.Body).Decode(&confirmed); err != nil {
+		t.Fatalf("Decode returned error: %v", err)
+	}
+	if confirmed.SourceReadiness == nil || confirmed.SourceReadiness.State != pipeline.SourceReadinessStateReady {
+		t.Fatalf("confirmed readiness = %#v, want ready", confirmed.SourceReadiness)
+	}
+	if confirmed.SourceReadiness.Title != "Endpoint source" ||
+		confirmed.SourceReadiness.Language != "en-US" ||
+		confirmed.SourceReadiness.SourceType != "document" {
+		t.Fatalf("confirmed readiness facts = %#v, want confirmed metadata", confirmed.SourceReadiness)
+	}
+}
+
 func TestVoiceProfileTranscriptRefreshEndpoints(t *testing.T) {
 	t.Parallel()
 
@@ -793,291 +1173,106 @@ func TestVoiceProfileTranscriptRefreshEndpoints(t *testing.T) {
 	}
 }
 
-func newService(t *testing.T) *pipeline.Service {
-	t.Helper()
+func TestVoiceProfileSourceUploadRequiresValidProvenance(t *testing.T) {
+	t.Parallel()
 
-	return pipeline.NewService(
-		agents.NewVoiceOptimizationAgent(),
-		agents.NewMockTTSAgent(),
-		agents.NewMockVoiceCheckerAgent(),
-		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
-	)
-}
-
-func newServiceWithContentIRDirs(t *testing.T) (*pipeline.Service, string, string) {
-	t.Helper()
-	sourcePrepDir := t.TempDir()
-	bookSourceDir := t.TempDir()
 	service := pipeline.NewService(
 		agents.NewVoiceOptimizationAgent(),
 		agents.NewMockTTSAgent(),
 		agents.NewMockVoiceCheckerAgent(),
 		pipeline.Options{
-			MaxRetries:         3,
-			JobDataDir:         t.TempDir(),
-			ProjectDataDir:     t.TempDir(),
-			BookSourceDir:      bookSourceDir,
-			SourcePrepDir:      sourcePrepDir,
-			ProgressDataDir:    t.TempDir(),
-			PlaybackSessionDir: t.TempDir(),
-		},
-	)
-	return service, sourcePrepDir, bookSourceDir
-}
-
-func newTimedOutVoiceProfileArtifactService(
-	t *testing.T,
-	defaultTimeoutSeconds int,
-) (*pipeline.Service, pipeline.VoiceProfile) {
-	t.Helper()
-
-	upstreamDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(upstreamDir, "optimize_style.py"), []byte("# test\n"), 0o644); err != nil {
-		t.Fatalf("write fake optimizer: %v", err)
-	}
-	artifactScript := filepath.Join(t.TempDir(), "profile_embed_artifact.py")
-	if err := os.WriteFile(
-		artifactScript,
-		[]byte("import time\nwhile True:\n    time.sleep(1)\n"),
-		0o755,
-	); err != nil {
-		t.Fatalf("write artifact script: %v", err)
-	}
-	service := pipeline.NewService(
-		agents.NewVoiceOptimizationAgent(),
-		agents.NewMockTTSAgent(),
-		agents.NewMockVoiceCheckerAgent(),
-		pipeline.Options{
-			MaxRetries:                         3,
-			JobDataDir:                         t.TempDir(),
-			ProjectDataDir:                     t.TempDir(),
-			VoiceProfileDir:                    t.TempDir(),
-			VoiceProfileReferenceMinSeconds:    20,
-			VoiceProfileReferenceTargetSeconds: 45,
-			VoiceProfileReferenceMaxSeconds:    60,
-			VoiceProfileDenoiseProvider:        "none",
-			VoiceProfileArtifactTimeoutSeconds: defaultTimeoutSeconds,
-			VoiceProfileArtifactPythonPath:     "python3",
-			VoiceProfileArtifactScriptPath:     artifactScript,
-			ResearchModules: []pipeline.ResearchModuleConfig{
-				{
-					ID:        pipeline.ResearchModuleKokoroEmbed,
-					Label:     "Kokoro Embed",
-					RepoURL:   "https://example.invalid/kokoro.embed.git",
-					Ref:       "main",
-					LocalPath: upstreamDir,
-					EngineID:  pipeline.TTSEngineKokoroEmbed,
-				},
+			JobDataDir:            t.TempDir(),
+			ProjectDataDir:        t.TempDir(),
+			VoiceProfileDir:       t.TempDir(),
+			VoiceProfileSourceDir: t.TempDir(),
+			VoiceProfileSourceAnalyzer: routerProfileSourceAnalyzer{
+				result: pipeline.VoiceProfileSourceAnalysisResult{},
 			},
+			VoiceProfileDenoiseProvider:  "none",
+			VoiceProfileDiarizationToken: "test-token",
 		},
 	)
-	t.Setenv("VOICE_EMBED_FAKE_ARTIFACT", "1")
-	sourcePath := writeToneWAV(t, 25_000, 9000)
-	profile, err := service.CreateVoiceProfile(context.Background(), "Test", "en", sourcePath, "source.wav", 0)
+	app := httpapi.NewRouter(service)
+	sourcePath := writeToneWAV(t, 1000, 9000)
+
+	missingRequest := newVoiceProfileSourceUploadRequest(t, sourcePath, "")
+	missingResponse, err := app.Test(missingRequest)
 	if err != nil {
-		t.Fatalf("CreateVoiceProfile returned error: %v", err)
+		t.Fatalf("app.Test missing provenance returned error: %v", err)
 	}
-	return service, profile
+	defer missingResponse.Body.Close()
+	if missingResponse.StatusCode != http.StatusBadRequest {
+		payload, _ := io.ReadAll(missingResponse.Body)
+		t.Fatalf("missing provenance status = %d, want %d, body = %s", missingResponse.StatusCode, http.StatusBadRequest, payload)
+	}
+
+	malformedRequest := newVoiceProfileSourceUploadRequest(t, sourcePath, "{")
+	malformedResponse, err := app.Test(malformedRequest)
+	if err != nil {
+		t.Fatalf("app.Test malformed provenance returned error: %v", err)
+	}
+	defer malformedResponse.Body.Close()
+	if malformedResponse.StatusCode != http.StatusBadRequest {
+		payload, _ := io.ReadAll(malformedResponse.Body)
+		t.Fatalf("malformed provenance status = %d, want %d, body = %s", malformedResponse.StatusCode, http.StatusBadRequest, payload)
+	}
 }
 
-func getContentIRDocument(
+func newVoiceProfileSourceUploadRequest(
 	t *testing.T,
-	app *fiber.App,
-	id string,
-	status int,
-) contentir.Document {
-	t.Helper()
-	request, err := http.NewRequest(http.MethodGet, "/api/content-ir/"+id, nil)
-	if err != nil {
-		t.Fatalf("NewRequest(content-ir) returned error: %v", err)
-	}
-	response, err := app.Test(request)
-	if err != nil {
-		t.Fatalf("app.Test(content-ir) returned error: %v", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != status {
-		payload, _ := io.ReadAll(response.Body)
-		t.Fatalf("content-ir status = %d, want %d, body = %s", response.StatusCode, status, payload)
-	}
-	if status != http.StatusOK {
-		return contentir.Document{}
-	}
-	var document contentir.Document
-	if err := json.NewDecoder(response.Body).Decode(&document); err != nil {
-		t.Fatalf("decode content IR: %v", err)
-	}
-	return document
-}
-
-func getCredentialStatus(t *testing.T, app *fiber.App) pipeline.VoiceProfileCredentialStatus {
-	t.Helper()
-	request, err := http.NewRequest(http.MethodGet, "/api/voice-profile-credentials", nil)
-	if err != nil {
-		t.Fatalf("NewRequest(credentials) returned error: %v", err)
-	}
-	response, err := app.Test(request)
-	if err != nil {
-		t.Fatalf("app.Test(credentials) returned error: %v", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		payload, _ := io.ReadAll(response.Body)
-		t.Fatalf("credentials status = %d, want %d, body = %s", response.StatusCode, http.StatusOK, payload)
-	}
-	var status pipeline.VoiceProfileCredentialStatus
-	if err := json.NewDecoder(response.Body).Decode(&status); err != nil {
-		t.Fatalf("decode credentials: %v", err)
-	}
-	return status
-}
-
-func writeRouterTestEPUB(t *testing.T) string {
-	t.Helper()
-	outputPath := filepath.Join(t.TempDir(), "endpoint.epub")
-	file, err := os.Create(outputPath)
-	if err != nil {
-		t.Fatalf("Create EPUB returned error: %v", err)
-	}
-	zipWriter := zip.NewWriter(file)
-	files := map[string]string{
-		"META-INF/container.xml": `<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OPS/package.opf"/></rootfiles></container>`,
-		"OPS/package.opf":        `<package xmlns:dc="http://purl.org/dc/elements/1.1/"><metadata><dc:title>Endpoint Book</dc:title></metadata><manifest><item id="c1" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c1"/></spine></package>`,
-		"OPS/chapter.xhtml":      `<html><body><h1>Endpoint</h1><p>Book content IR endpoint.</p></body></html>`,
-	}
-	for path, body := range files {
-		writer, createErr := zipWriter.Create(path)
-		if createErr != nil {
-			t.Fatalf("Create zip file returned error: %v", createErr)
-		}
-		if _, writeErr := writer.Write([]byte(body)); writeErr != nil {
-			t.Fatalf("Write zip file returned error: %v", writeErr)
-		}
-	}
-	if err := zipWriter.Close(); err != nil {
-		t.Fatalf("Close zip writer returned error: %v", err)
-	}
-	if err := file.Close(); err != nil {
-		t.Fatalf("Close EPUB returned error: %v", err)
-	}
-	return outputPath
-}
-
-func hasAdapterCapability(capabilities []pipeline.AdapterCapability, adapterID string) bool {
-	for _, capability := range capabilities {
-		if capability.AdapterID == adapterID {
-			return true
-		}
-	}
-	return false
-}
-
-type routerProfileSourceAnalyzer struct {
-	result pipeline.VoiceProfileSourceAnalysisResult
-	err    error
-}
-
-func (analyzer routerProfileSourceAnalyzer) AnalyzeVoiceProfileSource(
-	_ context.Context,
-	_ pipeline.VoiceProfileSourceAnalysisRequest,
-) (pipeline.VoiceProfileSourceAnalysisResult, error) {
-	if analyzer.err != nil {
-		return pipeline.VoiceProfileSourceAnalysisResult{}, analyzer.err
-	}
-	return analyzer.result, nil
-}
-
-type routerTranscriptChecker struct {
-	transcript string
-	provider   string
-}
-
-func (checker routerTranscriptChecker) Check(
-	_ context.Context,
-	expectedText string,
-	_ []byte,
-) (agents.VoiceCheckResult, error) {
-	transcript := checker.transcript
-	if transcript == "" {
-		transcript = expectedText
-	}
-	return agents.VoiceCheckResult{
-		Complete:    true,
-		Transcript:  transcript,
-		NeedsResume: false,
-		Reason:      "router transcript",
-		Provider:    checker.provider,
-		Similarity:  0.9,
-	}, nil
-}
-
-func waitForRouterProfileSource(
-	t *testing.T,
-	service *pipeline.Service,
-	id string,
-	status pipeline.VoiceProfileSourceStatus,
-) pipeline.VoiceProfileSource {
-	t.Helper()
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		source, err := service.GetVoiceProfileSource(id)
-		if err != nil {
-			t.Fatalf("GetVoiceProfileSource returned error: %v", err)
-		}
-		if source.Status == status {
-			return source
-		}
-		if source.Status == pipeline.VoiceProfileSourceStatusFailed && status != source.Status {
-			t.Fatalf("source failed unexpectedly: %s", source.Error)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	source, err := service.GetVoiceProfileSource(id)
-	if err != nil {
-		t.Fatalf("GetVoiceProfileSource returned error: %v", err)
-	}
-	t.Fatalf("timed out waiting for source status %q, got %q (%s)", status, source.Status, source.Error)
-	return pipeline.VoiceProfileSource{}
-}
-
-func waitForJob(t *testing.T, service *pipeline.Service, id string, status pipeline.JobStatus) {
+	sourcePath string,
+	provenanceJSON string,
+) *http.Request {
 	t.Helper()
 
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		job, err := service.GetJob(id)
-		if err != nil {
-			t.Fatalf("GetJob returned error: %v", err)
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if provenanceJSON != "" {
+		if err := writer.WriteField("provenance", provenanceJSON); err != nil {
+			t.Fatalf("WriteField provenance returned error: %v", err)
 		}
-		if job.Status == status {
-			return
-		}
-		if job.Status == pipeline.JobStatusFailed {
-			t.Fatalf("job failed: %s", job.Error)
-		}
-		time.Sleep(10 * time.Millisecond)
 	}
-
-	job, _ := service.GetJob(id)
-	t.Fatalf("job status = %q, want %q", job.Status, status)
+	part, err := writer.CreateFormFile("file", filepath.Base(sourcePath))
+	if err != nil {
+		t.Fatalf("CreateFormFile returned error: %v", err)
+	}
+	data, err := os.ReadFile(sourcePath)
+	if err != nil {
+		t.Fatalf("ReadFile returned error: %v", err)
+	}
+	if _, err := part.Write(data); err != nil {
+		t.Fatalf("Write file returned error: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("Close writer returned error: %v", err)
+	}
+	request, err := http.NewRequest(http.MethodPost, "/api/voice-profile-sources", &body)
+	if err != nil {
+		t.Fatalf("NewRequest returned error: %v", err)
+	}
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	return request
 }
 
-func writeToneWAV(t *testing.T, durationMS int, amplitude int16) string {
+type httpBlockingOptimizer struct {
+	started chan struct{}
+}
+
+func (optimizer *httpBlockingOptimizer) Optimize(ctx context.Context, _ string) (string, error) {
+	select {
+	case optimizer.started <- struct{}{}:
+	default:
+	}
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
+func waitForHTTPOptimizerSignal(t *testing.T, signal <-chan struct{}) {
 	t.Helper()
 
-	spec := audio.WAVSpec{SampleRate: 24000, ChannelCount: 1, BitsPerSample: 16}
-	sampleCount := spec.SampleRate * durationMS / 1000
-	data := make([]byte, sampleCount*2)
-	for sampleIndex := 0; sampleIndex < sampleCount; sampleIndex += 1 {
-		value := amplitude
-		if sampleIndex%48 >= 24 {
-			value = -amplitude
-		}
-		binary.LittleEndian.PutUint16(data[sampleIndex*2:sampleIndex*2+2], uint16(value))
+	select {
+	case <-signal:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for active optimizer")
 	}
-	path := filepath.Join(t.TempDir(), "source.wav")
-	if err := os.WriteFile(path, audio.BuildPCM16WAV(data, spec), 0o644); err != nil {
-		t.Fatalf("write tone wav: %v", err)
-	}
-	return path
 }

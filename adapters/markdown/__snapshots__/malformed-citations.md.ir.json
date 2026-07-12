@@ -1,0 +1,940 @@
+{
+  "adapterVersion": "markdown-adapter-v2",
+  "blocks": [
+    {
+      "confidence": 0.98,
+      "endOffset": 33,
+      "id": "markdown-heading-malformed-citationsmdheadingmalformed-citation-placeholders-malformed-citation-placeholders-05309667ce44",
+      "index": 1,
+      "kind": "heading",
+      "label": "Malformed Citation Placeholders",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/0",
+        "columnEnd": 34,
+        "columnStart": 1,
+        "lineEnd": 1,
+        "lineStart": 1,
+        "sourceSlice": "# Malformed Citation Placeholders",
+        "fingerprint": "80a819c271ae6fd97c8f85ca03c9e658",
+        "identityAnchor": "malformed-citations.md|heading|Malformed Citation Placeholders|# Malformed Citation Placeholders",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:0"
+      },
+      "speakMode": "speak",
+      "spokenText": "Malformed Citation Placeholders",
+      "startOffset": 0,
+      "text": "# Malformed Citation Placeholders",
+      "warnings": [],
+      "orderKey": "000000001024"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 88,
+      "id": "markdown-body-malformed-citationsmdbodymalformed-citation-placeholdersthis-sentence-kept-a-placeholder-cite-after-export-048b488f6eb7",
+      "index": 2,
+      "kind": "body",
+      "label": "This sentence kept a placeholder after export.",
+      "language": "",
+      "metadata": {
+        "inlineArtifacts": [
+          {
+            "endOffset": 74,
+            "identifier": "",
+            "kind": "citation",
+            "markerType": "malformed_citation_placeholder",
+            "raw": "[cite]",
+            "speechText": "Citation placeholder.",
+            "startOffset": 68,
+            "url": "",
+            "visualLabel": "cite"
+          }
+        ],
+        "astPath": "/children/1",
+        "columnEnd": 54,
+        "columnStart": 1,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "sourceSlice": "This sentence kept a placeholder [cite] after export.",
+        "fingerprint": "596dd8b9886230549f97965c0d3d3540",
+        "identityAnchor": "malformed-citations.md|body|Malformed Citation Placeholders|This sentence kept a placeholder [cite] after export.",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:35"
+      },
+      "speakMode": "speak",
+      "spokenText": "This sentence kept a placeholder after export.",
+      "startOffset": 35,
+      "text": "This sentence kept a placeholder [cite] after export.",
+      "warnings": ["malformed_citation_placeholder", "citation_removed"],
+      "orderKey": "000000036865"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 74,
+      "id": "markdown-citation-malformed-citationsmdcitationmalformed-citation-placeholderscite-d284bc00b187",
+      "index": 3,
+      "kind": "citation",
+      "label": "Citation",
+      "language": "",
+      "metadata": {
+        "endOffset": 74,
+        "identifier": "",
+        "kind": "citation",
+        "markerType": "malformed_citation_placeholder",
+        "raw": "[cite]",
+        "speechText": "Citation placeholder.",
+        "startOffset": 68,
+        "url": "",
+        "visualLabel": "cite",
+        "astPath": "/children/1/inline-artifact/0",
+        "columnEnd": 40,
+        "columnStart": 34,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "sourceSlice": "[cite]",
+        "fingerprint": "717c3dbde9d40a8d4c0558947e122756",
+        "identityAnchor": "malformed-citations.md|citation|Malformed Citation Placeholders|[cite]",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:68"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 68,
+      "text": "[cite]",
+      "warnings": ["inline_artifact", "malformed_citation_placeholder", "citation_policy"],
+      "orderKey": "000000070658"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 170,
+      "id": "markdown-body-malformed-citationsmdbodymalformed-citation-placeholdersanother-paragraph-has-citation-pending-source-and-a-raw-turn2search3-locator-64f3fa3b9c61",
+      "index": 4,
+      "kind": "body",
+      "label": "Another paragraph has and a raw locator.",
+      "language": "",
+      "metadata": {
+        "inlineArtifacts": [
+          {
+            "endOffset": 138,
+            "identifier": "",
+            "kind": "citation",
+            "markerType": "malformed_citation_placeholder",
+            "raw": "[citation: pending source]",
+            "speechText": "Citation placeholder.",
+            "startOffset": 112,
+            "url": "",
+            "visualLabel": "cite"
+          },
+          {
+            "endOffset": 161,
+            "identifier": "",
+            "kind": "artifact_token",
+            "markerType": "raw_locator_token",
+            "raw": "turn2search3",
+            "speechText": "Citation locator.",
+            "startOffset": 149,
+            "url": "",
+            "visualLabel": "token"
+          }
+        ],
+        "astPath": "/children/2",
+        "columnEnd": 81,
+        "columnStart": 1,
+        "lineEnd": 5,
+        "lineStart": 5,
+        "sourceSlice": "Another paragraph has [citation: pending source] and a raw turn2search3 locator.",
+        "fingerprint": "0f4eba45a6ec43e270bb456d398cba98",
+        "identityAnchor": "malformed-citations.md|body|Malformed Citation Placeholders|Another paragraph has [citation: pending source] and a raw turn2search3 locator.",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:90"
+      },
+      "speakMode": "speak",
+      "spokenText": "Another paragraph has and a raw locator.",
+      "startOffset": 90,
+      "text": "Another paragraph has [citation: pending source] and a raw turn2search3 locator.",
+      "warnings": ["malformed_citation_placeholder", "artifact_token_removed", "citation_removed"],
+      "orderKey": "000000093187"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 138,
+      "id": "markdown-citation-malformed-citationsmdcitationmalformed-citation-placeholderscitation-pending-source-21cae40becac",
+      "index": 5,
+      "kind": "citation",
+      "label": "Citation",
+      "language": "",
+      "metadata": {
+        "endOffset": 138,
+        "identifier": "",
+        "kind": "citation",
+        "markerType": "malformed_citation_placeholder",
+        "raw": "[citation: pending source]",
+        "speechText": "Citation placeholder.",
+        "startOffset": 112,
+        "url": "",
+        "visualLabel": "cite",
+        "astPath": "/children/2/inline-artifact/0",
+        "columnEnd": 49,
+        "columnStart": 23,
+        "lineEnd": 5,
+        "lineStart": 5,
+        "sourceSlice": "[citation: pending source]",
+        "fingerprint": "6e9ea53edfc08afec1eb6320904d1f14",
+        "identityAnchor": "malformed-citations.md|citation|Malformed Citation Placeholders|[citation: pending source]",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:112"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 112,
+      "text": "[citation: pending source]",
+      "warnings": ["inline_artifact", "malformed_citation_placeholder", "citation_policy"],
+      "orderKey": "000000115716"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 161,
+      "id": "markdown-artifact-token-malformed-citationsmdartifact-tokenmalformed-citation-placeholdersturn2search3-3bd307aea46c",
+      "index": 6,
+      "kind": "artifact_token",
+      "label": "Artifact token",
+      "language": "",
+      "metadata": {
+        "endOffset": 161,
+        "identifier": "",
+        "kind": "artifact_token",
+        "markerType": "raw_locator_token",
+        "raw": "turn2search3",
+        "speechText": "Citation locator.",
+        "startOffset": 149,
+        "url": "",
+        "visualLabel": "token",
+        "astPath": "/children/2/inline-artifact/1",
+        "columnEnd": 72,
+        "columnStart": 60,
+        "lineEnd": 5,
+        "lineStart": 5,
+        "sourceSlice": "turn2search3",
+        "fingerprint": "9ebe66164fe18450e98b992e1adf406a",
+        "identityAnchor": "malformed-citations.md|artifact_token|Malformed Citation Placeholders|turn2search3",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:149"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 149,
+      "text": "turn2search3",
+      "warnings": ["inline_artifact", "artifact_token_removed", "artifact_token_policy"],
+      "orderKey": "000000153605"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 180,
+      "id": "markdown-citation-malformed-citationsmdcitationmalformed-citation-placeholderssource-03cc6144b2e2",
+      "index": 7,
+      "kind": "citation",
+      "label": "Citation",
+      "language": "",
+      "metadata": {
+        "inlineArtifacts": [
+          {
+            "endOffset": 180,
+            "identifier": "",
+            "kind": "citation",
+            "markerType": "malformed_citation_placeholder",
+            "raw": "[source]",
+            "speechText": "Citation placeholder.",
+            "startOffset": 172,
+            "url": "",
+            "visualLabel": "cite"
+          }
+        ],
+        "astPath": "/children/3",
+        "columnEnd": 9,
+        "columnStart": 1,
+        "lineEnd": 7,
+        "lineStart": 7,
+        "sourceSlice": "[source]",
+        "fingerprint": "9b3a7439e53835fa9a6d8231c932c65b",
+        "identityAnchor": "malformed-citations.md|citation|Malformed Citation Placeholders|[source]",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:172"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 172,
+      "text": "[source]",
+      "warnings": ["citation_skipped", "malformed_citation_placeholder", "citation_removed"],
+      "orderKey": "000000177158"
+    }
+  ],
+  "document": {
+    "adapterVersion": "markdown-adapter-v2",
+    "generatedAt": "1970-01-01T00:00:00.000Z",
+    "id": "malformed-citations",
+    "metadata": {
+      "capabilities": {
+        "commonmark": true,
+        "directives": true,
+        "frontmatter": true,
+        "gfm": true,
+        "mdx": true,
+        "mystSafeSubset": true
+      },
+      "frontmatter": []
+    },
+    "nodes": [
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "# Malformed Citation Placeholders",
+        "kind": "heading",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/0",
+          "columnEnd": 34,
+          "columnStart": 1,
+          "lineEnd": 1,
+          "lineStart": 1,
+          "sourceSlice": "# Malformed Citation Placeholders",
+          "fingerprint": "80a819c271ae6fd97c8f85ca03c9e658",
+          "identityAnchor": "malformed-citations.md|heading|Malformed Citation Placeholders|# Malformed Citation Placeholders",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:0"
+        },
+        "nodeId": "markdown-heading-malformed-citationsmdheadingmalformed-citation-placeholders-malformed-citation-placeholders-05309667ce44",
+        "normalisedText": "# Malformed Citation Placeholders",
+        "orderKey": "000000001024",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/0",
+              "columnEnd": 34,
+              "columnStart": 1,
+              "lineEnd": 1,
+              "lineStart": 1,
+              "path": "malformed-citations.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 33,
+            "start": 0
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "malformed-citations"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "heading",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "Malformed Citation Placeholders",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "This sentence kept a placeholder [cite] after export.",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "inlineArtifacts": [
+            {
+              "endOffset": 74,
+              "identifier": "",
+              "kind": "citation",
+              "markerType": "malformed_citation_placeholder",
+              "raw": "[cite]",
+              "speechText": "Citation placeholder.",
+              "startOffset": 68,
+              "url": "",
+              "visualLabel": "cite"
+            }
+          ],
+          "astPath": "/children/1",
+          "columnEnd": 54,
+          "columnStart": 1,
+          "lineEnd": 3,
+          "lineStart": 3,
+          "sourceSlice": "This sentence kept a placeholder [cite] after export.",
+          "fingerprint": "596dd8b9886230549f97965c0d3d3540",
+          "identityAnchor": "malformed-citations.md|body|Malformed Citation Placeholders|This sentence kept a placeholder [cite] after export.",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:35"
+        },
+        "nodeId": "markdown-body-malformed-citationsmdbodymalformed-citation-placeholdersthis-sentence-kept-a-placeholder-cite-after-export-048b488f6eb7",
+        "normalisedText": "This sentence kept a placeholder [cite] after export.",
+        "orderKey": "000000036865",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/1",
+              "columnEnd": 54,
+              "columnStart": 1,
+              "lineEnd": 3,
+              "lineStart": 3,
+              "path": "malformed-citations.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 88,
+            "start": 35
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "malformed-citations"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "This sentence kept a placeholder after export.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["malformed_citation_placeholder", "citation_removed"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "[cite]",
+        "kind": "citation",
+        "lang": "und",
+        "metadata": {
+          "endOffset": 74,
+          "identifier": "",
+          "kind": "citation",
+          "markerType": "malformed_citation_placeholder",
+          "raw": "[cite]",
+          "speechText": "Citation placeholder.",
+          "startOffset": 68,
+          "url": "",
+          "visualLabel": "cite",
+          "astPath": "/children/1/inline-artifact/0",
+          "columnEnd": 40,
+          "columnStart": 34,
+          "lineEnd": 3,
+          "lineStart": 3,
+          "sourceSlice": "[cite]",
+          "fingerprint": "717c3dbde9d40a8d4c0558947e122756",
+          "identityAnchor": "malformed-citations.md|citation|Malformed Citation Placeholders|[cite]",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:68"
+        },
+        "nodeId": "markdown-citation-malformed-citationsmdcitationmalformed-citation-placeholderscite-d284bc00b187",
+        "normalisedText": "[cite]",
+        "orderKey": "000000070658",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/1/inline-artifact/0",
+              "columnEnd": 40,
+              "columnStart": 34,
+              "lineEnd": 3,
+              "lineStart": 3,
+              "path": "malformed-citations.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 74,
+            "start": 68
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "malformed-citations"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "citation",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["inline_artifact", "malformed_citation_placeholder", "citation_policy"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "Another paragraph has [citation: pending source] and a raw turn2search3 locator.",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "inlineArtifacts": [
+            {
+              "endOffset": 138,
+              "identifier": "",
+              "kind": "citation",
+              "markerType": "malformed_citation_placeholder",
+              "raw": "[citation: pending source]",
+              "speechText": "Citation placeholder.",
+              "startOffset": 112,
+              "url": "",
+              "visualLabel": "cite"
+            },
+            {
+              "endOffset": 161,
+              "identifier": "",
+              "kind": "artifact_token",
+              "markerType": "raw_locator_token",
+              "raw": "turn2search3",
+              "speechText": "Citation locator.",
+              "startOffset": 149,
+              "url": "",
+              "visualLabel": "token"
+            }
+          ],
+          "astPath": "/children/2",
+          "columnEnd": 81,
+          "columnStart": 1,
+          "lineEnd": 5,
+          "lineStart": 5,
+          "sourceSlice": "Another paragraph has [citation: pending source] and a raw turn2search3 locator.",
+          "fingerprint": "0f4eba45a6ec43e270bb456d398cba98",
+          "identityAnchor": "malformed-citations.md|body|Malformed Citation Placeholders|Another paragraph has [citation: pending source] and a raw turn2search3 locator.",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:90"
+        },
+        "nodeId": "markdown-body-malformed-citationsmdbodymalformed-citation-placeholdersanother-paragraph-has-citation-pending-source-and-a-raw-turn2search3-locator-64f3fa3b9c61",
+        "normalisedText": "Another paragraph has [citation: pending source] and a raw turn2search3 locator.",
+        "orderKey": "000000093187",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/2",
+              "columnEnd": 81,
+              "columnStart": 1,
+              "lineEnd": 5,
+              "lineStart": 5,
+              "path": "malformed-citations.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 170,
+            "start": 90
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "malformed-citations"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "Another paragraph has and a raw locator.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["malformed_citation_placeholder", "artifact_token_removed", "citation_removed"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "[citation: pending source]",
+        "kind": "citation",
+        "lang": "und",
+        "metadata": {
+          "endOffset": 138,
+          "identifier": "",
+          "kind": "citation",
+          "markerType": "malformed_citation_placeholder",
+          "raw": "[citation: pending source]",
+          "speechText": "Citation placeholder.",
+          "startOffset": 112,
+          "url": "",
+          "visualLabel": "cite",
+          "astPath": "/children/2/inline-artifact/0",
+          "columnEnd": 49,
+          "columnStart": 23,
+          "lineEnd": 5,
+          "lineStart": 5,
+          "sourceSlice": "[citation: pending source]",
+          "fingerprint": "6e9ea53edfc08afec1eb6320904d1f14",
+          "identityAnchor": "malformed-citations.md|citation|Malformed Citation Placeholders|[citation: pending source]",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:112"
+        },
+        "nodeId": "markdown-citation-malformed-citationsmdcitationmalformed-citation-placeholderscitation-pending-source-21cae40becac",
+        "normalisedText": "[citation: pending source]",
+        "orderKey": "000000115716",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/2/inline-artifact/0",
+              "columnEnd": 49,
+              "columnStart": 23,
+              "lineEnd": 5,
+              "lineStart": 5,
+              "path": "malformed-citations.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 138,
+            "start": 112
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "malformed-citations"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "citation",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["inline_artifact", "malformed_citation_placeholder", "citation_policy"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "turn2search3",
+        "kind": "artifact_token",
+        "lang": "und",
+        "metadata": {
+          "endOffset": 161,
+          "identifier": "",
+          "kind": "artifact_token",
+          "markerType": "raw_locator_token",
+          "raw": "turn2search3",
+          "speechText": "Citation locator.",
+          "startOffset": 149,
+          "url": "",
+          "visualLabel": "token",
+          "astPath": "/children/2/inline-artifact/1",
+          "columnEnd": 72,
+          "columnStart": 60,
+          "lineEnd": 5,
+          "lineStart": 5,
+          "sourceSlice": "turn2search3",
+          "fingerprint": "9ebe66164fe18450e98b992e1adf406a",
+          "identityAnchor": "malformed-citations.md|artifact_token|Malformed Citation Placeholders|turn2search3",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:149"
+        },
+        "nodeId": "markdown-artifact-token-malformed-citationsmdartifact-tokenmalformed-citation-placeholdersturn2search3-3bd307aea46c",
+        "normalisedText": "turn2search3",
+        "orderKey": "000000153605",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/2/inline-artifact/1",
+              "columnEnd": 72,
+              "columnStart": 60,
+              "lineEnd": 5,
+              "lineStart": 5,
+              "path": "malformed-citations.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 161,
+            "start": 149
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "malformed-citations"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "artifact_token",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["inline_artifact", "artifact_token_removed", "artifact_token_policy"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "[source]",
+        "kind": "citation",
+        "lang": "und",
+        "metadata": {
+          "inlineArtifacts": [
+            {
+              "endOffset": 180,
+              "identifier": "",
+              "kind": "citation",
+              "markerType": "malformed_citation_placeholder",
+              "raw": "[source]",
+              "speechText": "Citation placeholder.",
+              "startOffset": 172,
+              "url": "",
+              "visualLabel": "cite"
+            }
+          ],
+          "astPath": "/children/3",
+          "columnEnd": 9,
+          "columnStart": 1,
+          "lineEnd": 7,
+          "lineStart": 7,
+          "sourceSlice": "[source]",
+          "fingerprint": "9b3a7439e53835fa9a6d8231c932c65b",
+          "identityAnchor": "malformed-citations.md|citation|Malformed Citation Placeholders|[source]",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:172"
+        },
+        "nodeId": "markdown-citation-malformed-citationsmdcitationmalformed-citation-placeholderssource-03cc6144b2e2",
+        "normalisedText": "[source]",
+        "orderKey": "000000177158",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/3",
+              "columnEnd": 9,
+              "columnStart": 1,
+              "lineEnd": 7,
+              "lineStart": 7,
+              "path": "malformed-citations.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 180,
+            "start": 172
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "malformed-citations"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "citation",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["citation_skipped", "malformed_citation_placeholder", "citation_removed"]
+      }
+    ],
+    "projectId": "",
+    "schemaVersion": "content-ir.v1",
+    "sourceId": "malformed-citations",
+    "sourceName": "malformed-citations.md",
+    "sourceType": "preparedSource"
+  },
+  "metadata": {
+    "capabilities": {
+      "commonmark": true,
+      "directives": true,
+      "frontmatter": true,
+      "gfm": true,
+      "mdx": true,
+      "mystSafeSubset": true
+    },
+    "frontmatter": []
+  },
+  "parseMode": "strict",
+  "skippedItems": [
+    {
+      "id": "markdown-citation-malformed-citationsmdcitationmalformed-citation-placeholderscite-d284bc00b187",
+      "kind": "citation",
+      "offset": 68,
+      "reason": "citation marker kept out of spoken playback",
+      "text": "[cite]"
+    },
+    {
+      "id": "markdown-citation-malformed-citationsmdcitationmalformed-citation-placeholderscitation-pending-source-21cae40becac",
+      "kind": "citation",
+      "offset": 112,
+      "reason": "citation marker kept out of spoken playback",
+      "text": "[citation: pending source]"
+    },
+    {
+      "id": "markdown-artifact-token-malformed-citationsmdartifact-tokenmalformed-citation-placeholdersturn2search3-3bd307aea46c",
+      "kind": "artifact_token",
+      "offset": 149,
+      "reason": "raw artifact token kept out of spoken playback",
+      "text": "turn2search3"
+    },
+    {
+      "id": "markdown-citation-malformed-citationsmdcitationmalformed-citation-placeholderssource-03cc6144b2e2",
+      "kind": "citation",
+      "offset": 172,
+      "reason": "citation marker kept out of spoken playback",
+      "text": "[source]"
+    }
+  ],
+  "title": "Malformed Citation Placeholders",
+  "warnings": []
+}

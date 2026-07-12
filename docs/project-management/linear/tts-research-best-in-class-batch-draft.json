@@ -1,0 +1,2392 @@
+{
+  "schemaVersion": "tts-research.linear-batch.v1",
+  "status": "candidate_pending_chatgpt_v8_recheck",
+  "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+  "teamId": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+  "activeCap": 20,
+  "proposedCount": 20,
+  "requiredPeerMarker": "AGREED TTS BEST-IN-CLASS ARCHITECTURE BATCH",
+  "progressiveProductSpine": "Create/open project → acquire the first readable source prefix → read immediately → synthesize the first narratable prefix on lean CPU → progressively replace partial/degraded state with verified audio and alignment; full extraction, audition, optional capability activation, and full-job completion never block an already available earlier stage.",
+  "creationGates": [
+    "Fresh project-scoped Linear API capacity snapshot shows zero active unarchived issues, no next page, and twenty available slots.",
+    "`pnpm validate:flows`, canonical Linear packet parity, relevant tests, formatting, lint, typecheck, `git diff --check`, and full `pnpm check` pass on current bytes.",
+    "A tracked-source-only archive containing exact artifacts is attached to the correct TTS-Research ChatGPT project conversation.",
+    "ChatGPT returns the exact agreement marker as the first line of its final assistant message.",
+    "The PO rechecks capacity immediately before mutation and creates only the strict eligible prefix."
+  ],
+  "capacitySnapshot": {
+    "observedAt": "2026-07-10T07:12:26.438544+02:00",
+    "verificationMode": "Linear GraphQL project-scoped issues(includeArchived:false), paginated",
+    "activeUnarchivedBefore": 0,
+    "newIssuesCreatedNow": 0,
+    "activeUnarchivedAfter": 0,
+    "cap": 20,
+    "compliant": true,
+    "hasNextPage": false,
+    "repoArtifact": "docs/project-management/linear/tts-research-capacity-snapshot-20260710T071226+0200.json",
+    "requiresParentFreshApiVerificationBeforeCreation": true
+  },
+  "creationPlan": {
+    "requiresApprovalMarker": "AGREED TTS BEST-IN-CLASS ARCHITECTURE BATCH",
+    "authorizationGates": {
+      "freshCapacityCheckPassed": false,
+      "repositoryValidationPassed": false,
+      "trackedReviewArchiveAttached": false,
+      "approvalMarkerReceived": false,
+      "immediatePreMutationCapacityRecheckPassed": false
+    },
+    "eligiblePrefix": [
+      "BIC-01",
+      "BIC-02",
+      "BIC-03",
+      "BIC-04",
+      "BIC-05",
+      "BIC-06",
+      "BIC-07",
+      "BIC-08",
+      "BIC-09",
+      "BIC-10",
+      "BIC-11",
+      "BIC-12",
+      "BIC-13",
+      "BIC-14",
+      "BIC-15",
+      "BIC-16",
+      "BIC-17",
+      "BIC-18",
+      "BIC-19",
+      "BIC-20"
+    ],
+    "order": "Create BIC-01 through BIC-20 in localId order, then add dependency relations from canonical JSON; do not create a parent issue."
+  },
+  "completedFirstBatchPolicy": {
+    "rules": [
+      "Completed/archived QQP behavior is characterized evidence, not a blank slate.",
+      "Each BIC issue declares extends, documents-existing, supersedes, or no-overlap links with rationale.",
+      "No completed issue is reopened merely to host new scope.",
+      "A superseding change must preserve old fixtures or explicitly replace them with stronger evidence."
+    ],
+    "archiveArtifacts": [
+      "docs/project-management/linear/tts-research-existing-issues-20260710T071540+0200.json",
+      "docs/project-management/linear/tts-research-completed-archive-20260709T214157+0200.json"
+    ]
+  },
+  "thresholdCatalog": {
+    "flowRegistry": {
+      "expectedPrimaryFlowCount": 39,
+      "expectedDirectHttpRouteCount": 123,
+      "maxUnownedRoutes": 0,
+      "maxDuplicateRouteOwners": 0,
+      "maxGenericFlowLabels": 0,
+      "maxUnknownStateSymbols": 0,
+      "maxFullFlowStructuralSignatureInstances": 3,
+      "expectedTransitionCount": 677,
+      "maxUnsupportedCoveredTransitionClaims": 0,
+      "maxUnclassifiedTransitionEvidence": 0
+    },
+    "externalWork": {
+      "maxUnboundedSubprocesses": 0,
+      "maxUnboundedHttpRequests": 0,
+      "maxOrphanProcesses": 0,
+      "maxUnboundedOutputStreams": 0
+    },
+    "evidence": {
+      "maxMissingRequiredArtifacts": 0,
+      "maxUnresolvedBlockingFindings": 0
+    }
+  },
+  "existingIssueReconciliation": {
+    "sourceArtifact": "docs/project-management/linear/tts-research-existing-issues-20260710T071540+0200.json",
+    "mappings": [
+      {
+        "localId": "BIC-01",
+        "links": [
+          {
+            "identifier": "QQP-441",
+            "relationship": "extends",
+            "rationale": "Preserves the completed first-batch active-processing behavior while making local HTTP availability deterministic."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-02",
+        "links": [
+          {
+            "identifier": "QQP-424",
+            "relationship": "extends",
+            "rationale": "Extends startup interruption marking to every external-work seam."
+          },
+          {
+            "identifier": "QQP-435",
+            "relationship": "extends",
+            "rationale": "Generalizes completed retry/interruption semantics beyond artifacts."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-03",
+        "links": [
+          {
+            "identifier": "QQP-423",
+            "relationship": "documents-existing",
+            "rationale": "Formalizes the completed source/manifest/artifact contract pack into governed route/state ownership."
+          },
+          {
+            "identifier": "QQP-425",
+            "relationship": "extends",
+            "rationale": "Connects completed manifest snapshots to explicit state-symbol evidence."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-04",
+        "links": [
+          {
+            "identifier": "QQP-438",
+            "relationship": "extends",
+            "rationale": "Preserves completed reader shell vocabulary while governing global shell/navigation states."
+          },
+          {
+            "identifier": "QQP-543",
+            "relationship": "extends",
+            "rationale": "Preserves resolved action-audit behavior and prevents duplicate command surfaces."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-05",
+        "links": [
+          {
+            "identifier": "QQP-4",
+            "relationship": "extends",
+            "rationale": "Preserves Quick Narrate URL intent under explicit trust and egress boundaries."
+          },
+          {
+            "identifier": "QQP-424",
+            "relationship": "extends",
+            "rationale": "Preserves durable source lifecycle and interruption marking."
+          },
+          {
+            "identifier": "QQP-428",
+            "relationship": "extends",
+            "rationale": "Preserves incremental HTML/EPUB extraction proof."
+          },
+          {
+            "identifier": "QQP-437",
+            "relationship": "extends",
+            "rationale": "Preserves Quick Listen promotion crosswalk semantics."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-06",
+        "links": [
+          {
+            "identifier": "QQP-425",
+            "relationship": "extends",
+            "rationale": "Preserves manifest snapshot storage API."
+          },
+          {
+            "identifier": "QQP-429",
+            "relationship": "extends",
+            "rationale": "Preserves source/manifest event stream."
+          },
+          {
+            "identifier": "QQP-431",
+            "relationship": "extends",
+            "rationale": "Preserves incremental first-prefix speech planning."
+          },
+          {
+            "identifier": "QQP-433",
+            "relationship": "extends",
+            "rationale": "Preserves sync fidelity modes as downstream consumers."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-07",
+        "links": [
+          {
+            "identifier": "QQP-441",
+            "relationship": "no-overlap",
+            "rationale": "Adds explicit voice/capability lifecycle governance without changing the completed first-batch reader behavior."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-08",
+        "links": [
+          {
+            "identifier": "QQP-432",
+            "relationship": "extends",
+            "rationale": "Preserves partial audio artifact states and replacement semantics."
+          },
+          {
+            "identifier": "QQP-435",
+            "relationship": "extends",
+            "rationale": "Preserves retry/interrupted artifact semantics."
+          },
+          {
+            "identifier": "QQP-424",
+            "relationship": "extends",
+            "rationale": "Preserves startup interruption marking."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-09",
+        "links": [
+          {
+            "identifier": "QQP-434",
+            "relationship": "extends",
+            "rationale": "Preserves manifest-aware progress/resume."
+          },
+          {
+            "identifier": "QQP-438",
+            "relationship": "extends",
+            "rationale": "Preserves reader shell vocabulary."
+          },
+          {
+            "identifier": "QQP-439",
+            "relationship": "extends",
+            "rationale": "Preserves transport state machine."
+          },
+          {
+            "identifier": "QQP-440",
+            "relationship": "extends",
+            "rationale": "Preserves reader windowing/highlight scheduling."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-10",
+        "links": [
+          {
+            "identifier": "QQP-436",
+            "relationship": "extends",
+            "rationale": "Preserves minimal repair overlay and manifest supersession across bundle portability."
+          },
+          {
+            "identifier": "QQP-543",
+            "relationship": "documents-existing",
+            "rationale": "Keeps final action-audit behavior while separating destructive settings actions."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-11",
+        "links": [
+          {
+            "identifier": "QQP-543",
+            "relationship": "extends",
+            "rationale": "Preserves completed action-audit behavior through shell extraction."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-12",
+        "links": [
+          {
+            "identifier": "QQP-423",
+            "relationship": "extends",
+            "rationale": "Preserves completed source/manifest contract pack."
+          },
+          {
+            "identifier": "QQP-430",
+            "relationship": "extends",
+            "rationale": "Preserves frontend source/manifest store."
+          },
+          {
+            "identifier": "QQP-431",
+            "relationship": "extends",
+            "rationale": "Preserves first-prefix segmentation."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-13",
+        "links": [
+          {
+            "identifier": "QQP-542",
+            "relationship": "extends",
+            "rationale": "Keeps completed compact-control budget behavior while removing monolithic composition."
+          },
+          {
+            "identifier": "QQP-543",
+            "relationship": "extends",
+            "rationale": "Preserves completed UI action audit."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-14",
+        "links": [
+          {
+            "identifier": "QQP-437",
+            "relationship": "extends",
+            "rationale": "Preserves Quick Listen promotion crosswalk."
+          },
+          {
+            "identifier": "QQP-441",
+            "relationship": "extends",
+            "rationale": "Preserves completed first-batch active-processing evidence."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-15",
+        "links": [
+          {
+            "identifier": "QQP-432",
+            "relationship": "extends",
+            "rationale": "Preserves partial artifact states."
+          },
+          {
+            "identifier": "QQP-435",
+            "relationship": "extends",
+            "rationale": "Preserves retry/interruption semantics."
+          },
+          {
+            "identifier": "QQP-441",
+            "relationship": "no-overlap",
+            "rationale": "Adds voice/job workflow UX without changing completed reader evidence."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-16",
+        "links": [
+          {
+            "identifier": "QQP-438",
+            "relationship": "extends",
+            "rationale": "Preserves reader shell vocabulary."
+          },
+          {
+            "identifier": "QQP-439",
+            "relationship": "extends",
+            "rationale": "Preserves reader transport state machine."
+          },
+          {
+            "identifier": "QQP-440",
+            "relationship": "extends",
+            "rationale": "Preserves windowing/highlight scheduling."
+          },
+          {
+            "identifier": "QQP-542",
+            "relationship": "extends",
+            "rationale": "Preserves compact phone control budget."
+          },
+          {
+            "identifier": "QQP-543",
+            "relationship": "extends",
+            "rationale": "Preserves final UI action audit."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-17",
+        "links": [
+          {
+            "identifier": "QQP-542",
+            "relationship": "extends",
+            "rationale": "Preserves compact phone control budget for Theatre."
+          },
+          {
+            "identifier": "QQP-543",
+            "relationship": "extends",
+            "rationale": "Preserves completed UI action parity."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-18",
+        "links": [
+          {
+            "identifier": "QQP-441",
+            "relationship": "extends",
+            "rationale": "Adds reproducible runtime budgets to completed first-batch evidence."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-19",
+        "links": [
+          {
+            "identifier": "QQP-441",
+            "relationship": "extends",
+            "rationale": "Generalizes completed canonical fixture evidence."
+          },
+          {
+            "identifier": "QQP-542",
+            "relationship": "extends",
+            "rationale": "Preserves compact surface budget."
+          },
+          {
+            "identifier": "QQP-543",
+            "relationship": "extends",
+            "rationale": "Preserves final UI action audit evidence."
+          }
+        ]
+      },
+      {
+        "localId": "BIC-20",
+        "links": [
+          {
+            "identifier": "QQP-423",
+            "relationship": "documents-existing",
+            "rationale": "Reconciles completed architecture contracts."
+          },
+          {
+            "identifier": "QQP-441",
+            "relationship": "extends",
+            "rationale": "Extends completed first-batch evidence to the full batch."
+          },
+          {
+            "identifier": "QQP-543",
+            "relationship": "extends",
+            "rationale": "Preserves the completed final UI action audit."
+          }
+        ]
+      }
+    ]
+  },
+  "issues": [
+    {
+      "localId": "BIC-01",
+      "title": "Exact-command lean CPU startup and HTTP readiness",
+      "kind": "implementation",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "runtime-platform",
+      "dependencies": [],
+      "families": ["runtime", "startup"],
+      "flowIds": ["APP-BOOT-001"],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Make `API_PORT=8087 PORT=5174 mise start -- pnpm start:local` reach both HTTP endpoints without implicit dependency installation, model download, provider call, GPU/CUDA use, or eager model import.",
+        "Record cold-post-edit and warm p50/p95/max over at least ten measured runs after one discarded warmup.",
+        "Prove project create/delete over the configured origin and complete descendant process-tree shutdown.",
+        "Close every APP-BOOT-001 planned transition-evidence entry with transition-specific executable FLOW_ASSERT assertions on final issue bytes.",
+        "Use the `runtime-reference-cpu` machine class, one discarded warmup, ten measured runs, p50/p95/max/CV, zero failures, and raw/summary/run-manifest artifacts bound to exact post-change source hash, command, environment, and cache/build state.",
+        "`mise exec -- pnpm bench:startup` owns and reproducibly produces the declared startup raw, summary, and run-manifest evidence with one discarded warmup and at least ten measured cold/warm runs."
+      ],
+      "inScope": [
+        "Exact local-start command, environment resolution, readiness probes, process-tree cleanup, and lean CPU defaults.",
+        "Create the minimal deterministic `bench:startup` harness and package script that produce the declared raw, summary, and run-manifest artifacts."
+      ],
+      "outOfScope": ["General subprocess inventory, UI redesign, synthesis quality tuning."],
+      "routePatterns": [],
+      "stateSymbols": [],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-441",
+          "relationship": "extends",
+          "rationale": "Preserves the completed first-batch active-processing behavior while making local HTTP availability deterministic."
+        }
+      ],
+      "verificationCommands": [
+        "API_PORT=8087 PORT=5174 mise start -- pnpm start:local",
+        "mise exec -- pnpm test:scripts",
+        "mise exec -- pnpm bench:startup",
+        "mise exec -- pnpm check"
+      ],
+      "artifactPaths": [
+        "output/bic/bic-01/evidence.json",
+        "docs/reviews/bic-01-chatgpt-peer.md",
+        "output/bic/bic-01/startup-runtime.raw.json",
+        "output/bic/bic-01/startup-runtime.summary.json",
+        "output/bic/bic-01/startup-runtime.run-manifest.json"
+      ],
+      "thresholds": [
+        "benches.startup.maxWarmApiHttpReadyP95Ms",
+        "benches.startup.maxWarmFrontendHttpReadyP95Ms",
+        "benches.startup.maxColdPostEditLocalHttpReadyP95Ms",
+        "benches.startup.maxStartupEgressRequests",
+        "benches.startup.maxEagerModelImports",
+        "benches.startup.maxEagerModelDownloads",
+        "benches.startup.maxImplicitDependencyInstalls",
+        "benches.startup.maxProcessTreeShutdownMs",
+        "packet.measurementContracts.runtimeStartup.discardedWarmupRuns",
+        "packet.measurementContracts.runtimeStartup.measuredRuns",
+        "packet.measurementContracts.runtimeStartup.maxCoefficientOfVariation",
+        "packet.measurementContracts.runtimeStartup.maxFailures"
+      ],
+      "negativeTests": [
+        "Run with network denied and empty model caches; startup must fail actionably or become HTTP-ready without egress.",
+        "Occupy port 8087 and prove no silent port substitution."
+      ],
+      "rollbackExpectations": [
+        "Revert startup-path changes while preserving the committed custom-port resolver and CPU default.",
+        "Rollback removes the startup benchmark harness and package script together; BIC-01 must not rely on downstream BIC-18 infrastructure."
+      ],
+      "requiredPOChecks": [
+        "API and frontend HTTP readiness meet canonical startup thresholds.",
+        "Project CRUD succeeds through the configured 5174 origin to API 8087."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-02",
+      "title": "Bounded external work and cancellation audit",
+      "kind": "implementation",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "runtime-platform",
+      "dependencies": [],
+      "families": ["runtime", "boundaries"],
+      "flowIds": [],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Inventory every subprocess, HTTP request, clone/download, and installer reachable from startup, diagnostics, source intake, voice work, and jobs.",
+        "Require context deadlines, bounded output/body size, process-group cancellation, grace then kill, cleanup, and actionable error classification.",
+        "Add fail-closed tests for hanging children, redirect loops, oversized responses, partial downloads, and cancellation after commit."
+      ],
+      "inScope": ["Go/Node/shell external-work seams and their cancellation/cleanup contracts."],
+      "outOfScope": ["Provider quality, UI layout, ordinary in-process computation."],
+      "routePatterns": [],
+      "stateSymbols": [],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-424",
+          "relationship": "extends",
+          "rationale": "Extends startup interruption marking to every external-work seam."
+        },
+        {
+          "identifier": "QQP-435",
+          "relationship": "extends",
+          "rationale": "Generalizes completed retry/interruption semantics beyond artifacts."
+        }
+      ],
+      "verificationCommands": [
+        "mise exec -- go -C backend test ./... -timeout=180s",
+        "node --test scripts/*.test.mjs",
+        "mise exec -- pnpm check"
+      ],
+      "artifactPaths": ["output/bic/bic-02/evidence.json", "docs/reviews/bic-02-chatgpt-peer.md"],
+      "thresholds": [
+        "packet.externalWork.maxUnboundedSubprocesses",
+        "packet.externalWork.maxUnboundedHttpRequests",
+        "packet.externalWork.maxOrphanProcesses",
+        "packet.externalWork.maxUnboundedOutputStreams"
+      ],
+      "negativeTests": [
+        "A child that ignores TERM is killed after grace and leaves no descendant.",
+        "A redirect chain and oversized response fail before commit with no partial artifact."
+      ],
+      "rollbackExpectations": [
+        "Revert per-seam wrappers only if the previous behavior remains explicitly disabled and documented unsafe."
+      ],
+      "requiredPOChecks": [
+        "Every classified external-work site has a deadline, cancellation owner, and cleanup test.",
+        "The static inventory has zero unexplained plain subprocess or HTTP sites."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-03",
+      "title": "Fail-closed flow-registry infrastructure and deterministic coverage reporting",
+      "kind": "architecture",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "runtime-platform",
+      "dependencies": [],
+      "families": ["architecture", "governance"],
+      "flowIds": [],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Validate the registry schema, stable owner/authority/state/branch enums, generator/parser parity, and deterministic coverage-report mechanics with adversarial fixtures.",
+        "Discover and classify current route registrations, implementation state symbols, rendered documents, and executable evidence references; fail on unclassified, duplicate, missing, stale, or unrelated inputs.",
+        "Provide infrastructure for BIC-04 through BIC-10 to author and close domain-specific contracts; do not certify their final domain semantics in this issue.",
+        "Require exact transition IDs, machine-readable FLOW_ASSERT markers for covered claims, and owner-bound planned evidence for every uncovered transition."
+      ],
+      "inScope": [
+        "Registry schema and stable enums; deterministic Mermaid/README/report generation and exact parity; Go route discovery; implementation-symbol resolution; executable evidence references; normalized-template detection; adversarial validator fixtures."
+      ],
+      "outOfScope": [
+        "Final application-shell, project, source, manifest, voice, synthesis, playback, Reader, portability, settings, and diagnostics domain semantics; those are owned by BIC-04 through BIC-10.",
+        "Startup behavior and product UI implementation."
+      ],
+      "routePatterns": [],
+      "stateSymbols": [],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-423",
+          "relationship": "documents-existing",
+          "rationale": "Formalizes the completed source/manifest/artifact contract pack into governed route/state ownership."
+        },
+        {
+          "identifier": "QQP-425",
+          "relationship": "extends",
+          "rationale": "Connects completed manifest snapshots to explicit state-symbol evidence."
+        }
+      ],
+      "verificationCommands": [
+        "mise exec -- pnpm validate:flows",
+        "node --test scripts/validate-flow-registry.test.mjs",
+        "mise exec -- pnpm check"
+      ],
+      "artifactPaths": ["output/bic/bic-03/evidence.json", "docs/reviews/bic-03-chatgpt-peer.md"],
+      "thresholds": [
+        "packet.flowRegistry.expectedPrimaryFlowCount",
+        "packet.flowRegistry.expectedDirectHttpRouteCount",
+        "packet.flowRegistry.maxUnownedRoutes",
+        "packet.flowRegistry.maxDuplicateRouteOwners",
+        "packet.flowRegistry.maxGenericFlowLabels",
+        "packet.flowRegistry.maxFullFlowStructuralSignatureInstances",
+        "packet.flowRegistry.expectedTransitionCount",
+        "packet.flowRegistry.maxUnsupportedCoveredTransitionClaims",
+        "packet.flowRegistry.maxUnclassifiedTransitionEvidence"
+      ],
+      "negativeTests": [
+        "Inject an unowned route, duplicate owner, generic diagram label, and unknown state symbol; each must fail.",
+        "Remove a recovery or cancellation branch; validation must fail."
+      ],
+      "rollbackExpectations": [
+        "Revert registry/validator together to the last matching generated report; never retain a stale report."
+      ],
+      "requiredPOChecks": [
+        "Adversarial fixtures prove missing/edited rendered diagrams, variable/helper routes, duplicate/missing symbols, unrelated evidence, and normalized universal templates fail closed.",
+        "Generated README, Mermaid documents, manifest, and coverage report are byte-parity checked from one canonical source.",
+        "BIC-04 through BIC-10 retain explicit ownership of their domain flow contracts and integrated semantic closure remains pending until those issues complete."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-04",
+      "title": "Application shell, navigation, command, and project contracts",
+      "kind": "architecture",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "experience",
+      "dependencies": ["BIC-03"],
+      "families": ["application", "project"],
+      "flowIds": [
+        "APP-FIRST-RUN-001",
+        "APP-NAV-001",
+        "APP-COMMAND-001",
+        "PRJ-LIFE-001",
+        "PRJ-DELETE-001"
+      ],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Make first-run, navigation, command parity, project CRUD, and destructive deletion state/commit/recovery contracts domain-specific.",
+        "Map frontend action handlers and project API routes to one primary flow each.",
+        "Define focus restoration, preserved-data recovery copy, and explicit restore path for destructive actions.",
+        "On this issue’s final bytes, validate the owned domain contracts as semantically specific and merge them into the integrated 39-flow/123-route registry without normalized universal-template reuse.",
+        "Close every `plannedEvidence` branch owned by this issue with a named executable case on final issue bytes; `pnpm validate:flows` must report no stale names, unclassified branches, route drift, state-symbol drift, or generated-document drift."
+      ],
+      "inScope": ["APP/PRJ flow contracts, route/state/test evidence, and interaction hierarchy."],
+      "outOfScope": ["Startup mechanics, source extraction, reader runtime."],
+      "routePatterns": [
+        "DELETE /api/projects/:id",
+        "GET /api/projects",
+        "GET /api/projects/:id/storage",
+        "PATCH /api/projects/:id",
+        "POST /api/projects"
+      ],
+      "stateSymbols": [
+        "frontend/src/AppShell.tsx#StudioMode",
+        "frontend/src/activityFooter.ts#ActivityFooterMode",
+        "frontend/src/features/accessibility/liveStatus.tsx#LiveStatusSyncState",
+        "frontend/src/features/command-palette/commandPaletteHelpers.ts#CommandMetadataState",
+        "frontend/src/features/command-palette/commandPaletteHelpers.ts#CommandWayfindingState",
+        "frontend/src/features/context-panel/contextPanelModel.ts#ContextPanelDisplayState",
+        "frontend/src/features/context-panel/contextPanelModel.ts#ContextPanelFocusMode",
+        "frontend/src/features/help/model.ts#HelpSourceMode",
+        "frontend/src/features/layout/overlayManager.ts#WorkspaceOverlayState",
+        "frontend/src/features/shortcuts/shortcutRegistry.ts#ShortcutAvailabilityState",
+        "frontend/src/features/workspace/disclosure.ts#DisclosurePanelState",
+        "frontend/src/features/workspace/disclosure.ts#DisclosureStatus",
+        "frontend/src/features/workspace/model.ts#WorkspaceLayoutMode",
+        "frontend/src/features/workspace/model.ts#WorkspaceRailMode",
+        "frontend/src/features/workspace/stageActions.ts#WorkspaceStageReadinessState",
+        "frontend/src/features/workspace/stageActions.ts#WorkspaceStageStatus",
+        "frontend/src/projectState.ts#ProjectWorkspaceState"
+      ],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-438",
+          "relationship": "extends",
+          "rationale": "Preserves completed reader shell vocabulary while governing global shell/navigation states."
+        },
+        {
+          "identifier": "QQP-543",
+          "relationship": "extends",
+          "rationale": "Preserves resolved action-audit behavior and prevents duplicate command surfaces."
+        }
+      ],
+      "verificationCommands": ["mise exec -- pnpm validate:flows", "mise exec -- pnpm check"],
+      "artifactPaths": [
+        "output/bic/bic-04/evidence.json",
+        "docs/reviews/bic-04-chatgpt-peer.md",
+        "docs/flows/manifest.json",
+        "docs/flows/coverage-report.json"
+      ],
+      "thresholds": [
+        "packet.flowRegistry.maxUnownedRoutes",
+        "benches.uxEvidence.minTouchTargetWidthPx",
+        "benches.uxEvidence.maxDuplicateVisibleActionLabelsPerSurface"
+      ],
+      "negativeTests": [
+        "Cancel project creation before and after commit and verify phase-specific behavior.",
+        "Invoke every command by keyboard and visible action and compare the authoritative handler."
+      ],
+      "rollbackExpectations": [
+        "Revert contract and evidence updates together without changing completed project persistence behavior."
+      ],
+      "requiredPOChecks": [
+        "Each APP/PRJ route and state symbol maps to one contract and focused test.",
+        "Destructive actions expose preserved data, consequence, and next safe action."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-05",
+      "title": "Source intake, URL trust, temporary lifecycle, and promotion contracts",
+      "kind": "architecture",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "source-data",
+      "dependencies": ["BIC-03"],
+      "families": ["source", "ingestion"],
+      "flowIds": [
+        "SRC-DURABLE-001",
+        "SRC-URL-001",
+        "SRC-TEMP-001",
+        "SRC-PROMOTE-001",
+        "SRC-REVIEW-001"
+      ],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Govern durable intake, URL egress/trust, temporary Quick Listen, promotion, readiness review, commit points, idempotency, and cleanup.",
+        "Preserve progressive first-narratable-prefix behavior and explicit post-commit cancellation.",
+        "Map all source and temporary-source routes to exact flow ownership.",
+        "On this issue’s final bytes, validate the owned domain contracts as semantically specific and merge them into the integrated 39-flow/123-route registry without normalized universal-template reuse.",
+        "Close every `plannedEvidence` branch owned by this issue with a named executable case on final issue bytes; `pnpm validate:flows` must report no stale names, unclassified branches, route drift, state-symbol drift, or generated-document drift."
+      ],
+      "inScope": ["Source intake/promotion state machines and their security/recovery evidence."],
+      "outOfScope": ["Manifest event replay, speech-plan generation, reader layout."],
+      "routePatterns": [
+        "DELETE /api/book-sources/:id",
+        "DELETE /api/source-preps/:id",
+        "DELETE /api/temporary-sources/:id",
+        "GET /api/book-sources/:id",
+        "GET /api/book-sources/:id/scope",
+        "GET /api/content-ir/:id",
+        "GET /api/projects/:id/book-sources",
+        "GET /api/projects/:id/source-preps",
+        "GET /api/source-preps/:id",
+        "GET /api/source-preps/:id/blocks/:blockId",
+        "GET /api/temporary-sources",
+        "GET /api/temporary-sources/:id",
+        "GET /api/temporary-sources/jobs",
+        "GET /api/temporary-sources/storage/summary",
+        "PATCH /api/book-sources/:id",
+        "PATCH /api/source-preps/:id",
+        "PATCH /api/temporary-sources/:id/readiness/confirm",
+        "POST /api/book-sources/:id/readiness/confirm",
+        "POST /api/projects/:id/book-sources",
+        "POST /api/projects/:id/source-preps",
+        "POST /api/source-preps/:id/readiness/confirm",
+        "POST /api/source-preps/:id/transcript",
+        "POST /api/temporary-sources",
+        "POST /api/temporary-sources/:id/cleanup",
+        "POST /api/temporary-sources/:id/promote",
+        "POST /api/temporary-sources/:id/reopen",
+        "POST /api/temporary-sources/cleanup-expired",
+        "POST /api/temporary-sources/clear"
+      ],
+      "stateSymbols": [
+        "backend/internal/pipeline/models.go#BookSourceStatus",
+        "backend/internal/pipeline/models.go#PreparedSourceStatus",
+        "backend/internal/pipeline/models.go#SourceReadinessState",
+        "backend/internal/pipeline/models.go#TemporarySourceLifecycleState",
+        "backend/internal/pipeline/models.go#TemporarySourcePromotionStatus",
+        "frontend/src/MarkdownRenderer.tsx#MarkdownWordCueState",
+        "frontend/src/features/intake/intakeWizardModel.ts#IntakeReadinessState",
+        "frontend/src/features/intake/sourceTypeModel.ts#IntakeSourceMode",
+        "frontend/src/features/preview/previewReadiness.ts#PreviewReadinessRowStatus",
+        "frontend/src/features/quick-listen/QuickListenPanel.tsx#QuickListenMode",
+        "frontend/src/features/review/model.ts#ReviewMode",
+        "frontend/src/features/revision/revisionFilters.ts#RevisionFilterState",
+        "frontend/src/features/revision/revisionFilters.ts#RevisionSessionState",
+        "frontend/src/features/revision/revisionFilters.ts#RevisionStatus",
+        "frontend/src/features/settings/model.ts#TemporaryWebExtractionMode",
+        "frontend/src/features/source-lifecycle/sourceLifecycleCore.ts#SOURCE_LIFECYCLE_STATES",
+        "frontend/src/features/source-lifecycle/sourceLifecycleCore.ts#SourceExtractionState",
+        "frontend/src/features/source-lifecycle/sourceLifecycleCore.ts#SourceLifecycleState",
+        "frontend/src/features/source-lifecycle/sourceLifecycleCore.ts#SourceNarrationState",
+        "frontend/src/features/source-lifecycle/sourceSelectors.ts#SourceLifecycleRouteState",
+        "frontend/src/features/ui-audit/temporarySurfaceBudget.ts#TemporaryComplexityState",
+        "frontend/src/features/voices/temporaryVoiceModel.ts#TemporaryVoiceState",
+        "frontend/src/features/workspace/stageActions.ts#WorkspaceReviewState",
+        "frontend/src/types.ts#BookSourceStatus",
+        "frontend/src/types.ts#MarkdownParseMode",
+        "frontend/src/types.ts#PreparedSourceStatus",
+        "frontend/src/types.ts#SourceReadinessState",
+        "frontend/src/types.ts#TemporarySourceLifecycleState",
+        "frontend/src/types.ts#TemporarySourcePromotionStatus"
+      ],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-4",
+          "relationship": "extends",
+          "rationale": "Preserves Quick Narrate URL intent under explicit trust and egress boundaries."
+        },
+        {
+          "identifier": "QQP-424",
+          "relationship": "extends",
+          "rationale": "Preserves durable source lifecycle and interruption marking."
+        },
+        {
+          "identifier": "QQP-428",
+          "relationship": "extends",
+          "rationale": "Preserves incremental HTML/EPUB extraction proof."
+        },
+        {
+          "identifier": "QQP-437",
+          "relationship": "extends",
+          "rationale": "Preserves Quick Listen promotion crosswalk semantics."
+        }
+      ],
+      "verificationCommands": ["mise exec -- pnpm validate:flows", "mise exec -- pnpm check"],
+      "artifactPaths": [
+        "output/bic/bic-05/evidence.json",
+        "docs/reviews/bic-05-chatgpt-peer.md",
+        "docs/flows/manifest.json",
+        "docs/flows/coverage-report.json"
+      ],
+      "thresholds": [
+        "packet.flowRegistry.maxUnownedRoutes",
+        "benches.startup.maxStartupEgressRequests",
+        "benches.localOperations.maxProjectCrudP95Ms"
+      ],
+      "negativeTests": [
+        "Reject redirect-to-private-address and oversized URL bodies without a committed source.",
+        "Repeat promotion with the same identity and prove one durable source/crosswalk."
+      ],
+      "rollbackExpectations": [
+        "Disable only the affected intake mode while preserving existing durable sources and completed QQP behavior."
+      ],
+      "requiredPOChecks": [
+        "All intake/promotion routes have exact owners and phase-correct cancellation tests.",
+        "Progressive source availability never waits for full-document extraction."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-06",
+      "title": "Source manifest, speech plan, policy, and lexicon contracts",
+      "kind": "architecture",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "speech-audio",
+      "dependencies": ["BIC-03", "BIC-05"],
+      "families": ["source", "speech-plan"],
+      "flowIds": ["SRC-MANIFEST-001", "POLICY-RESOLVE-001", "SPEECH-PLAN-001", "LEXICON-001"],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Govern authoritative manifest snapshots/event replay, policy precedence, incremental speech-plan versioning, and lexicon CRUD/import/export.",
+        "Make source revision, policy hash, lexicon revision, and segment identity explicit retry/idempotency keys.",
+        "Preserve partial availability while stale plans/artifacts are invalidated deterministically.",
+        "On this issue’s final bytes, validate the owned domain contracts as semantically specific and merge them into the integrated 39-flow/123-route registry without normalized universal-template reuse.",
+        "Close every `plannedEvidence` branch owned by this issue with a named executable case on final issue bytes; `pnpm validate:flows` must report no stale names, unclassified branches, route drift, state-symbol drift, or generated-document drift."
+      ],
+      "inScope": ["Manifest/policy/plan/lexicon contracts and focused route/state evidence."],
+      "outOfScope": ["Audio synthesis execution, reader visuals, capability download."],
+      "routePatterns": [
+        "DELETE /api/projects/:id/lexicon/entries/:entryId",
+        "DELETE /api/projects/:id/speech-policy/profiles/:profileId",
+        "DELETE /api/voice-profiles/:id/lexicon/entries/:entryId",
+        "GET /api/content-ir/:id/speech-plan",
+        "GET /api/policies/definition",
+        "GET /api/policies/profiles",
+        "GET /api/projects/:id/lexicon",
+        "GET /api/projects/:id/lexicon/export.pls",
+        "GET /api/projects/:id/speech-policy",
+        "GET /api/source-manifest/events",
+        "GET /api/source-manifest/events/stream",
+        "GET /api/source-manifest/snapshot",
+        "GET /api/voice-jobs/:id/speech-plan",
+        "GET /api/voice-profiles/:id/lexicon",
+        "GET /api/voice-profiles/:id/lexicon/export.pls",
+        "PATCH /api/book-sources/:id/speech-policy",
+        "PATCH /api/projects/:id/lexicon/entries/:entryId",
+        "PATCH /api/projects/:id/speech-policy",
+        "PATCH /api/projects/:id/speech-policy/profiles/:profileId",
+        "PATCH /api/source-preps/:id/speech-policy",
+        "PATCH /api/voice-profiles/:id/lexicon/entries/:entryId",
+        "POST /api/book-sources/:id/scope/speech-policy/preview",
+        "POST /api/content-ir/:id/speech-policy/preview",
+        "POST /api/math/preview",
+        "POST /api/projects/:id/lexicon",
+        "POST /api/projects/:id/lexicon/import",
+        "POST /api/projects/:id/speech-policy/profiles",
+        "POST /api/source-preps/:id/speech-policy/preview",
+        "POST /api/voice-profiles/:id/lexicon",
+        "POST /api/voice-profiles/:id/lexicon/import"
+      ],
+      "stateSymbols": [
+        "backend/internal/pipeline/manifest_snapshot.go#ManifestSnapshotState",
+        "backend/internal/policy/policy.go#AdmonitionMode",
+        "backend/internal/policy/policy.go#CaptionMode",
+        "backend/internal/policy/policy.go#CitationMode",
+        "backend/internal/policy/policy.go#CodeMode",
+        "backend/internal/policy/policy.go#FootnoteMode",
+        "backend/internal/policy/policy.go#ImageMode",
+        "backend/internal/policy/policy.go#ListMarkerMode",
+        "backend/internal/policy/policy.go#MathMode",
+        "backend/internal/policy/policy.go#Mode",
+        "backend/internal/policy/policy.go#QuoteMode",
+        "backend/internal/policy/policy.go#TableHeaderMode",
+        "backend/internal/policy/policy.go#TableMode",
+        "frontend/src/features/policy/model.ts#PolicyScopeState",
+        "frontend/src/features/source-manifest/sourceManifestStore.ts#SourceManifestStoreEntry",
+        "frontend/src/types/speechPolicyTypes.ts#SpeechPolicyAdmonitionMode",
+        "frontend/src/types/speechPolicyTypes.ts#SpeechPolicyCaptionMode",
+        "frontend/src/types/speechPolicyTypes.ts#SpeechPolicyCitationMode",
+        "frontend/src/types/speechPolicyTypes.ts#SpeechPolicyCodeMode",
+        "frontend/src/types/speechPolicyTypes.ts#SpeechPolicyFootnoteMode",
+        "frontend/src/types/speechPolicyTypes.ts#SpeechPolicyImageMode",
+        "frontend/src/types/speechPolicyTypes.ts#SpeechPolicyListMarkerMode",
+        "frontend/src/types/speechPolicyTypes.ts#SpeechPolicyMathMode",
+        "frontend/src/types/speechPolicyTypes.ts#SpeechPolicyMode",
+        "frontend/src/types/speechPolicyTypes.ts#SpeechPolicyQuoteMode",
+        "frontend/src/types/speechPolicyTypes.ts#SpeechPolicyTableHeaderMode",
+        "frontend/src/types/speechPolicyTypes.ts#SpeechPolicyTableMode"
+      ],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-425",
+          "relationship": "extends",
+          "rationale": "Preserves manifest snapshot storage API."
+        },
+        {
+          "identifier": "QQP-429",
+          "relationship": "extends",
+          "rationale": "Preserves source/manifest event stream."
+        },
+        {
+          "identifier": "QQP-431",
+          "relationship": "extends",
+          "rationale": "Preserves incremental first-prefix speech planning."
+        },
+        {
+          "identifier": "QQP-433",
+          "relationship": "extends",
+          "rationale": "Preserves sync fidelity modes as downstream consumers."
+        }
+      ],
+      "verificationCommands": ["mise exec -- pnpm validate:flows", "mise exec -- pnpm check"],
+      "artifactPaths": [
+        "output/bic/bic-06/evidence.json",
+        "docs/reviews/bic-06-chatgpt-peer.md",
+        "docs/flows/manifest.json",
+        "docs/flows/coverage-report.json"
+      ],
+      "thresholds": [
+        "packet.flowRegistry.maxUnknownStateSymbols",
+        "benches.markdown.maxTotalWarnings",
+        "benches.localOperations.maxProjectCrudP95Ms"
+      ],
+      "negativeTests": [
+        "Replay out-of-order manifest events and require authoritative snapshot recovery.",
+        "Import invalid PLS and prove no lexicon revision changes."
+      ],
+      "rollbackExpectations": [
+        "Revert contract/schema changes together while preserving completed snapshot and segmentation APIs."
+      ],
+      "requiredPOChecks": [
+        "State-symbol mappings include frontend and backend manifest/job types.",
+        "Policy/lexicon changes deterministically supersede stale plan versions."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-07",
+      "title": "Voice source, profile, target, capability, and preview contracts",
+      "kind": "architecture",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "speech-audio",
+      "dependencies": ["BIC-02", "BIC-03"],
+      "families": ["voice", "capability"],
+      "flowIds": [
+        "CAPABILITY-ACTIVATE-001",
+        "VOICE-SOURCE-001",
+        "VOICE-PROFILE-001",
+        "VOICE-TARGET-001",
+        "PREVIEW-001"
+      ],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Separate local CPU voice preview/profile flows from explicit capability/model activation.",
+        "Govern candidate analysis, profile readiness, target/artifact build, cancellation, credential references, and preview commit identities.",
+        "Require explicit user-triggered egress/download and zero implicit startup activation.",
+        "On this issue’s final bytes, validate the owned domain contracts as semantically specific and merge them into the integrated 39-flow/123-route registry without normalized universal-template reuse.",
+        "Close every `plannedEvidence` branch owned by this issue with a named executable case on final issue bytes; `pnpm validate:flows` must report no stale names, unclassified branches, route drift, state-symbol drift, or generated-document drift."
+      ],
+      "inScope": [
+        "Voice/capability contracts, route/state evidence, privacy and cancellation semantics."
+      ],
+      "outOfScope": ["Job orchestration, reader surfaces, startup dependency installation."],
+      "routePatterns": [
+        "DELETE /api/voice-profile-credentials/hugging-face-token",
+        "DELETE /api/voice-profiles/:id",
+        "GET /api/research-modules",
+        "GET /api/voice-profile-credentials",
+        "GET /api/voice-profile-sources/:id",
+        "GET /api/voice-profile-sources/:id/candidates/:candidateId/preview.wav",
+        "GET /api/voice-profiles",
+        "GET /api/voice-profiles/:id",
+        "GET /api/voices",
+        "GET /api/voices/:id/reference-audio",
+        "PATCH /api/voice-profiles/:id",
+        "POST /api/research-modules/:id/clone",
+        "POST /api/voice-previews",
+        "POST /api/voice-profile-sources",
+        "POST /api/voice-profile-sources/:id/cancel",
+        "POST /api/voice-profile-sources/:id/candidates/:candidateId/profiles",
+        "POST /api/voice-profile-sources/:id/candidates/:candidateId/transcript",
+        "POST /api/voice-profile-sources/:id/transcript",
+        "POST /api/voice-profiles",
+        "POST /api/voice-profiles/:id/artifacts/:moduleId",
+        "POST /api/voice-profiles/:id/artifacts/:moduleId/cancel",
+        "POST /api/voice-profiles/:id/targets/:targetId",
+        "POST /api/voice-profiles/:id/targets/:targetId/cancel",
+        "POST /api/voices",
+        "PUT /api/voice-profile-credentials/hugging-face-token"
+      ],
+      "stateSymbols": [
+        "backend/internal/pipeline/models_runtime.go#VoiceProfileCloneArtifactStatus",
+        "backend/internal/pipeline/models_runtime.go#VoiceProfileSourceStatus",
+        "backend/internal/pipeline/models_runtime.go#VoiceProfileStatus",
+        "backend/internal/pipeline/models_runtime.go#VoiceProfileTargetStatus",
+        "backend/internal/pipeline/profile_credentials.go#VoiceProfileCredentialStatus",
+        "frontend/src/appVoiceCloningHelpers.ts#ActivityStatus",
+        "frontend/src/features/health-report/model.ts#ProviderReadinessState",
+        "frontend/src/features/preview/PreviewReadinessPanels.tsx#PreviewVoiceAuditionState",
+        "frontend/src/features/preview/previewQueue.ts#PreviewQueueItemStatus",
+        "frontend/src/types.ts#VoiceProfileCloneArtifactStatus",
+        "frontend/src/types.ts#VoiceProfileCredentialStatus",
+        "frontend/src/types.ts#VoiceProfileSourceStatus",
+        "frontend/src/types.ts#VoiceProfileStatus",
+        "frontend/src/types.ts#VoiceProfileTargetStatus"
+      ],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-441",
+          "relationship": "no-overlap",
+          "rationale": "Adds explicit voice/capability lifecycle governance without changing the completed first-batch reader behavior."
+        }
+      ],
+      "verificationCommands": ["mise exec -- pnpm validate:flows", "mise exec -- pnpm check"],
+      "artifactPaths": [
+        "output/bic/bic-07/evidence.json",
+        "docs/reviews/bic-07-chatgpt-peer.md",
+        "docs/flows/manifest.json",
+        "docs/flows/coverage-report.json"
+      ],
+      "thresholds": [
+        "packet.externalWork.maxUnboundedSubprocesses",
+        "benches.startup.maxEagerModelDownloads",
+        "benches.lowResource.maxRequiredGpuCount",
+        "benches.interactionAcknowledgement.maxVisibleActionAcknowledgementP95Ms"
+      ],
+      "negativeTests": [
+        "Cancel source analysis and target build before/after commit with no orphan process or partial current pointer.",
+        "Run low-resource path with CUDA hidden and prove no GPU requirement."
+      ],
+      "rollbackExpectations": [
+        "Disable optional capability activation while preserving built-in lean CPU preview/profile behavior."
+      ],
+      "requiredPOChecks": [
+        "Every voice status symbol has one primary flow and both frontend/backend evidence.",
+        "Credential and model operations are explicit, bounded, and absent from default startup."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-08",
+      "title": "Job execution, events, artifacts, persistence, and interruption contracts",
+      "kind": "architecture",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "speech-audio",
+      "dependencies": ["BIC-02", "BIC-03", "BIC-06", "BIC-07"],
+      "families": ["jobs", "artifacts"],
+      "flowIds": [
+        "JOB-CREATE-001",
+        "JOB-RUN-001",
+        "JOB-EVENTS-001",
+        "PERSIST-RECOVER-001",
+        "ARTIFACT-001"
+      ],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Govern durable job request snapshots, segment-level commits, checker/retry phases, event recovery, current artifact pointers, restart interruption, and cancellation.",
+        "Preserve partial audio arrival and generation replacement semantics.",
+        "Make every retry identity and post-commit cancellation consequence explicit.",
+        "On this issue’s final bytes, validate the owned domain contracts as semantically specific and merge them into the integrated 39-flow/123-route registry without normalized universal-template reuse.",
+        "Close every `plannedEvidence` branch owned by this issue with a named executable case on final issue bytes; `pnpm validate:flows` must report no stale names, unclassified branches, route drift, state-symbol drift, or generated-document drift."
+      ],
+      "inScope": ["Job/artifact/persistence contracts and tests."],
+      "outOfScope": ["Source intake, reader layout, provider quality benchmarking."],
+      "routePatterns": [
+        "DELETE /api/voice-jobs/:id",
+        "GET /api/projects/:id/jobs",
+        "GET /api/temporary-sources/:id/artifacts",
+        "GET /api/voice-jobs/:id",
+        "GET /api/voice-jobs/:id/audio",
+        "GET /api/voice-jobs/:id/audio/partial",
+        "GET /api/voice-jobs/:id/audio/segment/:index",
+        "GET /api/voice-jobs/:id/events",
+        "POST /api/book-sources/:id/voice-jobs",
+        "POST /api/source-preps/:id/voice-jobs",
+        "POST /api/temporary-sources/:id/voice-jobs",
+        "POST /api/voice-jobs",
+        "POST /api/voice-jobs/:id/cancel",
+        "POST /api/voice-jobs/:id/retry"
+      ],
+      "stateSymbols": [
+        "backend/internal/pipeline/models.go#JobPipelinePhase",
+        "backend/internal/pipeline/models.go#JobStatus",
+        "backend/internal/pipeline/models.go#NarrationSpeakMode",
+        "backend/internal/pipeline/models.go#StageStatus",
+        "backend/internal/pipeline/models_runtime.go#AudioArtifactState",
+        "backend/internal/pipeline/models_runtime.go#RunMode",
+        "frontend/src/features/playback/generatedAudioLifecycle.ts#GeneratedAudioLifecycleState",
+        "frontend/src/features/source-lifecycle/sourceLifecycle.ts#ArtifactCompatibilityUiState",
+        "frontend/src/features/status-strip/model.ts#NarrationPipelineState",
+        "frontend/src/types.ts#JobStatus",
+        "frontend/src/types.ts#NarrationSpeakMode",
+        "frontend/src/types.ts#RunMode",
+        "frontend/src/types.ts#StageStatus"
+      ],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-432",
+          "relationship": "extends",
+          "rationale": "Preserves partial audio artifact states and replacement semantics."
+        },
+        {
+          "identifier": "QQP-435",
+          "relationship": "extends",
+          "rationale": "Preserves retry/interrupted artifact semantics."
+        },
+        {
+          "identifier": "QQP-424",
+          "relationship": "extends",
+          "rationale": "Preserves startup interruption marking."
+        }
+      ],
+      "verificationCommands": ["mise exec -- pnpm validate:flows", "mise exec -- pnpm check"],
+      "artifactPaths": [
+        "output/bic/bic-08/evidence.json",
+        "docs/reviews/bic-08-chatgpt-peer.md",
+        "docs/flows/manifest.json",
+        "docs/flows/coverage-report.json"
+      ],
+      "thresholds": [
+        "packet.externalWork.maxOrphanProcesses",
+        "benches.speechFluency.maxClippedStartCount",
+        "benches.speechFluency.maxSilentSegmentCount"
+      ],
+      "negativeTests": [
+        "Kill the API mid-segment and require interrupted state plus no partial current artifact.",
+        "Replay duplicate/out-of-order events and require snapshot convergence."
+      ],
+      "rollbackExpectations": [
+        "Revert orchestration changes only with a migration preserving current-generation pointers and completed artifacts."
+      ],
+      "requiredPOChecks": [
+        "Job, event, and artifact routes/states have exact owners and recovery tests.",
+        "No cancellation or restart leaves an orphan child or ambiguous current artifact."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-09",
+      "title": "Playback, sync fidelity, Reader, Cinema, progress, and repair contracts",
+      "kind": "architecture",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "experience",
+      "dependencies": ["BIC-03", "BIC-05", "BIC-06", "BIC-08"],
+      "families": ["reader", "playback"],
+      "flowIds": [
+        "PLAYBACK-001",
+        "SYNC-FIDELITY-001",
+        "CINEMA-001",
+        "READER-001",
+        "PROGRESS-001",
+        "REPAIR-001",
+        "TELEPROMPT-001",
+        "THEATRE-001"
+      ],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Govern partial playback, fidelity degradation, readable rendering/windowing, Cinema focus, durable progress/remap, and immutable repair invalidation.",
+        "Keep reading available while audio/alignment/full extraction are pending or degraded.",
+        "Map locator/progress/artifact generations across repair and resume.",
+        "On this issue’s final bytes, validate the owned domain contracts as semantically specific and merge them into the integrated 39-flow/123-route registry without normalized universal-template reuse.",
+        "Close every `plannedEvidence` branch owned by this issue with a named executable case on final issue bytes; `pnpm validate:flows` must report no stale names, unclassified branches, route drift, state-symbol drift, or generated-document drift."
+      ],
+      "inScope": ["Reader/playback/progress/repair state machines and evidence."],
+      "outOfScope": ["Teleprompt/Theatre layout, App extraction, synthesis provider internals."],
+      "routePatterns": [
+        "GET /api/projects/:id/progress",
+        "GET /api/voice-jobs/:id/highlight-map",
+        "GET /api/voice-jobs/:id/highlight-map-v2",
+        "GET /api/voice-jobs/:id/timing/alignment",
+        "GET /api/voice-jobs/:id/timing/fragments",
+        "GET /api/voice-jobs/:id/timing/tokens",
+        "PATCH /api/playback-sessions/:id/sync",
+        "PATCH /api/progress/:targetId",
+        "POST /api/playback-sessions",
+        "POST /api/playback-sessions/:id/close"
+      ],
+      "stateSymbols": [
+        "backend/internal/alignment/alignment_quality.go#AlignmentMode",
+        "backend/internal/pipeline/models.go#DurableProgressState",
+        "backend/internal/pipeline/models.go#PlaybackSessionStatus",
+        "backend/internal/pipeline/models_runtime.go#SyncFidelity",
+        "backend/internal/pipeline/source_lifecycle.go#SourceLifecycleWorkStatus",
+        "backend/internal/pipeline/source_lifecycle.go#SourceRevisionState",
+        "frontend/src/features/cinema/model.ts#CINEMA_PLAYBACK_STATES",
+        "frontend/src/features/cinema/model.ts#CINEMA_RENDERER_LIFECYCLE_STATES",
+        "frontend/src/features/cinema/model.ts#CinemaFocusMode",
+        "frontend/src/features/cinema/model.ts#CinemaLayoutState",
+        "frontend/src/features/cinema/model.ts#CinemaPlaybackState",
+        "frontend/src/features/cinema/model.ts#CinemaRendererLifecycleState",
+        "frontend/src/features/cinema/utils/cinemaTransportBarHelpers.ts#PLAYBACK_TRANSPORT_STATES",
+        "frontend/src/features/playback/audioGenerationPipeline.ts#AUDIO_GENERATION_PIPELINE_STATES",
+        "frontend/src/features/playback/audioGenerationPipeline.ts#AudioGenerationPipelineState",
+        "frontend/src/features/playback/generatedAudioLifecycle.ts#GENERATED_AUDIO_LIFECYCLE_STATES",
+        "frontend/src/features/playback/playbackState.ts#PlaybackAvailabilityState",
+        "frontend/src/features/playback/playbackSurfaceRules.ts#PlaybackSurfaceState",
+        "frontend/src/features/preferences/model.ts#UiMemoryCinemaState",
+        "frontend/src/features/readalong/HighlightRenderer.tsx#HighlightRendererWordState",
+        "frontend/src/features/readalong/ReadAlongWordScheduler.ts#ReadAlongDomHighlightState",
+        "frontend/src/features/readalong/alignmentStatus.ts#AlignmentStatus",
+        "frontend/src/features/readalong/highlightMapV2.ts#HighlightMapV2FallbackMode",
+        "frontend/src/features/readalong/highlightSemantics.ts#ReadAlongTimingState",
+        "frontend/src/features/readalong/highlightVisualModes.ts#ReadAlongHighlightVisualMode",
+        "frontend/src/features/readalong/readAlongInvariantHelpers.ts#ReadAlongInvariantStatus",
+        "frontend/src/features/readalong/readAlongMotionCursor.ts#ReadAlongMotionCursorState",
+        "frontend/src/features/readalong/readAlongState.ts#ReadAlongRuntimeState",
+        "frontend/src/features/readalong/readAlongState.ts#ReadAlongVisualMode",
+        "frontend/src/features/readalong/timingArtifact.ts#TimingArtifactValidationStatus",
+        "frontend/src/features/readalong/timingLookup.ts#ReadAlongTimingLookupMode",
+        "frontend/src/features/reading-surface/ReadingFollowAlongRenderer.tsx#ReadingFollowAlongWordRenderState",
+        "frontend/src/features/reading-surface/followAlongModel.ts#ReadingFollowAlongMode",
+        "frontend/src/features/reading-surface/model.ts#READER_SHELL_STATES",
+        "frontend/src/features/reading-surface/model.ts#READER_TRANSPORT_STATES",
+        "frontend/src/features/reading-surface/model.ts#ReaderShellState",
+        "frontend/src/features/reading-surface/model.ts#ReaderTransportState",
+        "frontend/src/features/teleprompt/telepromptCueTimeline.ts#TelepromptCueSyncMode",
+        "frontend/src/features/teleprompt/telepromptCueTimeline.ts#TelepromptCueSyncState",
+        "frontend/src/features/teleprompt/telepromptStudioModel.ts#TelepromptWorkMode",
+        "frontend/src/features/teleprompt/telepromptTheatreSettings.ts#TelepromptTheatreScrollMode",
+        "frontend/src/features/teleprompt/telepromptTheatreState.ts#TelepromptTheatreMode",
+        "frontend/src/features/teleprompt/telepromptTheatreState.ts#TelepromptTheatreViewMode",
+        "frontend/src/features/theatre/model.ts#THEATRE_AVAILABILITY_STATES",
+        "frontend/src/features/theatre/model.ts#TheatreAvailabilityState",
+        "frontend/src/features/theatre/model.ts#TheatreRendererLifecycleState",
+        "frontend/src/features/theatre/model.ts#TheatreRuntimeMode",
+        "frontend/src/features/theatre/model.ts#TheatreRuntimeShellState",
+        "frontend/src/teleprompter.ts#TeleprompterWordState",
+        "frontend/src/types.ts#AlignmentMode"
+      ],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-434",
+          "relationship": "extends",
+          "rationale": "Preserves manifest-aware progress/resume."
+        },
+        {
+          "identifier": "QQP-438",
+          "relationship": "extends",
+          "rationale": "Preserves reader shell vocabulary."
+        },
+        {
+          "identifier": "QQP-439",
+          "relationship": "extends",
+          "rationale": "Preserves transport state machine."
+        },
+        {
+          "identifier": "QQP-440",
+          "relationship": "extends",
+          "rationale": "Preserves reader windowing/highlight scheduling."
+        }
+      ],
+      "verificationCommands": ["mise exec -- pnpm validate:flows", "mise exec -- pnpm check"],
+      "artifactPaths": [
+        "output/bic/bic-09/evidence.json",
+        "docs/reviews/bic-09-chatgpt-peer.md",
+        "docs/flows/manifest.json",
+        "docs/flows/coverage-report.json"
+      ],
+      "thresholds": [
+        "benches.readAlongSync.maxP95WordDriftMs",
+        "benches.readAlongSync.maxWrongWordCount",
+        "benches.readAlongRuntime.maxLongTaskCount",
+        "benches.readerTiming.maxReaderResumeMs"
+      ],
+      "negativeTests": [
+        "Remove timing data and require readable audio-only/source-only degradation.",
+        "Repair a source after progress is saved and prove deterministic remap or explicit recovery."
+      ],
+      "rollbackExpectations": [
+        "Roll back visual/runtime changes while preserving completed locator, progress, and artifact schemas."
+      ],
+      "requiredPOChecks": [
+        "Reading never blocks on full extraction, audition, or complete audio.",
+        "Fidelity degradation and progress remap are visible, recoverable, and test-backed."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-10",
+      "title": "Bundle portability, UI memory, settings, and diagnostics contracts",
+      "kind": "architecture",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "project-data",
+      "dependencies": ["BIC-02", "BIC-03", "BIC-04"],
+      "families": ["portability", "settings"],
+      "flowIds": [
+        "EXPORT-BUNDLE-001",
+        "IMPORT-BUNDLE-001",
+        "UI-MEMORY-001",
+        "SETTINGS-001",
+        "SETTINGS-IMPORT-RESET-001",
+        "DIAGNOSTICS-001"
+      ],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Govern atomic export/import, preview/restore, UI memory migration/pruning, settings persistence/reset, and redacted passive diagnostics.",
+        "Separate ordinary preferences from destructive replacement and explicit capability activation.",
+        "Require bounded/redacted diagnostics with no secret values or eager model imports.",
+        "On this issue’s final bytes, validate the owned domain contracts as semantically specific and merge them into the integrated 39-flow/123-route registry without normalized universal-template reuse.",
+        "Close every `plannedEvidence` branch owned by this issue with a named executable case on final issue bytes; `pnpm validate:flows` must report no stale names, unclassified branches, route drift, state-symbol drift, or generated-document drift."
+      ],
+      "inScope": ["Portability/settings/diagnostics contracts and evidence."],
+      "outOfScope": ["Source extraction, voice work, reader visual redesign."],
+      "routePatterns": [
+        "GET /api/adapters/capabilities",
+        "GET /api/adapters/diagnostics",
+        "GET /api/book-cinema/diagnostics",
+        "GET /api/health",
+        "GET /api/projects/:id/bundle",
+        "GET /api/projects/:id/bundle/summary",
+        "GET /api/system-metrics",
+        "GET /api/tts-engines",
+        "GET /api/voice-profile-sources/diagnostics",
+        "POST /api/project-bundles/import",
+        "POST /api/project-bundles/preview"
+      ],
+      "stateSymbols": [
+        "backend/internal/pipeline/models.go#BundleImportMode",
+        "backend/internal/pipeline/models.go#PDFTableMode",
+        "backend/internal/pipeline/models_runtime.go#PerformanceMode",
+        "frontend/src/BundlePanels.tsx#BundlePanelMode",
+        "frontend/src/features/operational-status/operationalStatus.ts#OperationalStatusCondition",
+        "frontend/src/features/performance/index.ts#FrontendDegradedState",
+        "frontend/src/features/preferences/model.ts#UiMemoryState",
+        "frontend/src/runConfig.ts#KokoroRenderMode",
+        "frontend/src/types.ts#BundleImportMode",
+        "frontend/src/types.ts#PDFTableMode",
+        "frontend/src/types.ts#PerformanceMode"
+      ],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-436",
+          "relationship": "extends",
+          "rationale": "Preserves minimal repair overlay and manifest supersession across bundle portability."
+        },
+        {
+          "identifier": "QQP-543",
+          "relationship": "documents-existing",
+          "rationale": "Keeps final action-audit behavior while separating destructive settings actions."
+        }
+      ],
+      "verificationCommands": ["mise exec -- pnpm validate:flows", "mise exec -- pnpm check"],
+      "artifactPaths": [
+        "output/bic/bic-10/evidence.json",
+        "docs/reviews/bic-10-chatgpt-peer.md",
+        "docs/flows/manifest.json",
+        "docs/flows/coverage-report.json"
+      ],
+      "thresholds": [
+        "packet.externalWork.maxUnboundedSubprocesses",
+        "benches.localOperations.maxProjectCrudP95Ms",
+        "benches.startup.maxEagerModelImports"
+      ],
+      "negativeTests": [
+        "Import corrupt/traversal bundle and prove zero visible project mutation.",
+        "Run diagnostics with hanging probe and secret-like values; require timeout and redaction."
+      ],
+      "rollbackExpectations": [
+        "Retain last valid settings/project snapshot and disable only the failing import/diagnostic path."
+      ],
+      "requiredPOChecks": [
+        "Bundle/settings operations have atomic commit and rollback evidence.",
+        "Diagnostics are passive, bounded, and secret-redacted."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-11",
+      "title": "App.tsx extraction phase 1: shell and shared state",
+      "kind": "implementation",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "experience",
+      "dependencies": ["BIC-04", "BIC-18", "BIC-19"],
+      "families": ["frontend", "maintainability"],
+      "flowIds": [],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Extract shell, navigation, command dispatch, and shared state seams without changing behavior.",
+        "Reduce App.tsx to at most 14,000 lines and keep every replacement module at or below 3,000 lines.",
+        "Preserve action parity, focus behavior, and all existing tests/evidence.",
+        "On final issue bytes, rerun both canonical frontend-performance gates; bind raw and summarized artifacts to the exact source hash and report zero measured failures, timeouts, missing marks, missing viewports/states, occlusions, and overflows.",
+        "Use the declared frontend reference and low-resource Chromium machine classes, one discarded warmup, ten measured runs, p50/p95/max/CV, zero failures, and raw/summary/run-manifest artifacts bound to exact post-change source hash, command, environment, browser, viewport, and cache/build state."
+      ],
+      "inScope": ["Shell/shared-state extraction and characterization tests."],
+      "outOfScope": ["Workflow orchestration extraction, visual redesign, backend changes."],
+      "routePatterns": [],
+      "stateSymbols": [],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-543",
+          "relationship": "extends",
+          "rationale": "Preserves completed action-audit behavior through shell extraction."
+        }
+      ],
+      "verificationCommands": [
+        "mise exec -- pnpm validate:flows",
+        "mise exec -- pnpm check",
+        "mise exec -- pnpm bench:frontend-performance",
+        "mise exec -- pnpm validate:local:frontend-performance"
+      ],
+      "artifactPaths": [
+        "output/bic/bic-11/evidence.json",
+        "docs/reviews/bic-11-chatgpt-peer.md",
+        "output/bic/bic-11/frontend-performance-post-change.json",
+        "output/bic/bic-11/frontend-performance-post-change.raw.json",
+        "output/bic/bic-11/frontend-performance.run-manifest.json"
+      ],
+      "thresholds": [
+        "benches.maintainability.maxAppTsxLinesAfterShellSharedStateExtraction",
+        "benches.maintainability.maxReplacementModuleLines",
+        "benches.frontendBundle.maxInitialJsGzipBytes",
+        "benches.measurementProtocol.minMeasuredRuns",
+        "benches.frontendBundle.maxInitialJsRawBytes",
+        "benches.frontendBundle.maxInitialCssGzipBytes",
+        "benches.interactionAcknowledgement.maxVisibleActionAcknowledgementP95Ms",
+        "benches.readAlongRuntime.maxLongTaskCount",
+        "benches.lowResource.browserCpuThrottleRate",
+        "benches.uxEvidence.viewportWidthsPx",
+        "packet.measurementContracts.frontend.discardedWarmupRuns",
+        "packet.measurementContracts.frontend.measuredRuns",
+        "packet.measurementContracts.frontend.maxCoefficientOfVariation",
+        "packet.measurementContracts.frontend.maxFailures"
+      ],
+      "negativeTests": [
+        "Compare keyboard and visible actions before/after extraction.",
+        "Fail if any replacement module exceeds the canonical line budget.",
+        "Alter the source hash, remove one raw sample/state/viewport, or inject one measured failure after the baseline; post-change performance validation must fail."
+      ],
+      "rollbackExpectations": [
+        "Revert moved seams as one commit without changing public component/store contracts."
+      ],
+      "requiredPOChecks": [
+        "Visual behavior is unchanged at all four evidence widths.",
+        "Line/module budgets and focused characterization tests pass.",
+        "Post-change frontend raw and summary artifacts match the exact issue source hash, resolve every listed threshold, and contain zero measured failures."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-12",
+      "title": "App.tsx extraction phase 2: workflow orchestration",
+      "kind": "implementation",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "experience",
+      "dependencies": ["BIC-11", "BIC-05", "BIC-06", "BIC-18", "BIC-19"],
+      "families": ["frontend", "workflows"],
+      "flowIds": [],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Extract source, manifest, speech-plan, and progressive-availability orchestration into cohesive feature modules.",
+        "Reduce App.tsx to at most 7,000 lines with no replacement module above 3,000 lines.",
+        "Preserve completed source/manifest behavior and first-narratable-prefix availability.",
+        "On final issue bytes, rerun both canonical frontend-performance gates; bind raw and summarized artifacts to the exact source hash and report zero measured failures, timeouts, missing marks, missing viewports/states, occlusions, and overflows.",
+        "Use the declared frontend reference and low-resource Chromium machine classes, one discarded warmup, ten measured runs, p50/p95/max/CV, zero failures, and raw/summary/run-manifest artifacts bound to exact post-change source hash, command, environment, browser, viewport, and cache/build state."
+      ],
+      "inScope": ["Source/workflow orchestration extraction and characterization tests."],
+      "outOfScope": ["Reader/Cinema visuals, Teleprompt/Theatre visuals, backend API redesign."],
+      "routePatterns": [],
+      "stateSymbols": [],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-423",
+          "relationship": "extends",
+          "rationale": "Preserves completed source/manifest contract pack."
+        },
+        {
+          "identifier": "QQP-430",
+          "relationship": "extends",
+          "rationale": "Preserves frontend source/manifest store."
+        },
+        {
+          "identifier": "QQP-431",
+          "relationship": "extends",
+          "rationale": "Preserves first-prefix segmentation."
+        }
+      ],
+      "verificationCommands": [
+        "mise exec -- pnpm validate:flows",
+        "mise exec -- pnpm check",
+        "mise exec -- pnpm bench:frontend-performance",
+        "mise exec -- pnpm validate:local:frontend-performance"
+      ],
+      "artifactPaths": [
+        "output/bic/bic-12/evidence.json",
+        "docs/reviews/bic-12-chatgpt-peer.md",
+        "output/bic/bic-12/frontend-performance-post-change.json",
+        "output/bic/bic-12/frontend-performance-post-change.raw.json",
+        "output/bic/bic-12/frontend-performance.run-manifest.json"
+      ],
+      "thresholds": [
+        "benches.maintainability.maxAppTsxLinesAfterWorkflowOrchestrationExtraction",
+        "benches.maintainability.maxReplacementModuleLines",
+        "benches.readerTiming.maxSourceSwitchMs",
+        "benches.measurementProtocol.minMeasuredRuns",
+        "benches.frontendBundle.maxInitialJsRawBytes",
+        "benches.frontendBundle.maxInitialJsGzipBytes",
+        "benches.frontendBundle.maxInitialCssGzipBytes",
+        "benches.interactionAcknowledgement.maxVisibleActionAcknowledgementP95Ms",
+        "benches.readAlongRuntime.maxLongTaskCount",
+        "benches.lowResource.browserCpuThrottleRate",
+        "benches.uxEvidence.viewportWidthsPx",
+        "packet.measurementContracts.frontend.discardedWarmupRuns",
+        "packet.measurementContracts.frontend.measuredRuns",
+        "packet.measurementContracts.frontend.maxCoefficientOfVariation",
+        "packet.measurementContracts.frontend.maxFailures"
+      ],
+      "negativeTests": [
+        "Disconnect/replay manifest events during extraction and require snapshot convergence.",
+        "Verify pending full extraction never disables available reading/prefix synthesis.",
+        "Alter the source hash, remove one raw sample/state/viewport, or inject one measured failure after the baseline; post-change performance validation must fail."
+      ],
+      "rollbackExpectations": [
+        "Revert feature seam by seam while preserving exported types and store contracts."
+      ],
+      "requiredPOChecks": [
+        "Workflow state has one owner and no duplicated App-local mirror.",
+        "Line/module/performance budgets pass without behavior drift.",
+        "Post-change frontend raw and summary artifacts match the exact issue source hash, resolve every listed threshold, and contain zero measured failures."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-13",
+      "title": "App.tsx extraction phase 3: route composition only",
+      "kind": "implementation",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "experience",
+      "dependencies": ["BIC-12", "BIC-07", "BIC-08", "BIC-09", "BIC-10", "BIC-18", "BIC-19"],
+      "families": ["frontend", "composition"],
+      "flowIds": [],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Move remaining feature orchestration behind typed route/surface boundaries.",
+        "Reduce App.tsx below 2,000 lines and keep all replacement modules at or below 3,000 lines.",
+        "Leave App.tsx responsible only for providers, route/surface composition, and top-level error boundaries.",
+        "On final issue bytes, rerun both canonical frontend-performance gates; bind raw and summarized artifacts to the exact source hash and report zero measured failures, timeouts, missing marks, missing viewports/states, occlusions, and overflows.",
+        "Use the declared frontend reference and low-resource Chromium machine classes, one discarded warmup, ten measured runs, p50/p95/max/CV, zero failures, and raw/summary/run-manifest artifacts bound to exact post-change source hash, command, environment, browser, viewport, and cache/build state."
+      ],
+      "inScope": [
+        "Final composition extraction, API cleanup, dead-state removal, characterization evidence."
+      ],
+      "outOfScope": ["New visual features, backend behavior, performance-threshold relaxation."],
+      "routePatterns": [],
+      "stateSymbols": [],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-542",
+          "relationship": "extends",
+          "rationale": "Keeps completed compact-control budget behavior while removing monolithic composition."
+        },
+        {
+          "identifier": "QQP-543",
+          "relationship": "extends",
+          "rationale": "Preserves completed UI action audit."
+        }
+      ],
+      "verificationCommands": [
+        "mise exec -- pnpm validate:flows",
+        "mise exec -- pnpm check",
+        "mise exec -- pnpm bench:frontend-performance",
+        "mise exec -- pnpm validate:local:frontend-performance"
+      ],
+      "artifactPaths": [
+        "output/bic/bic-13/evidence.json",
+        "docs/reviews/bic-13-chatgpt-peer.md",
+        "output/bic/bic-13/frontend-performance-post-change.json",
+        "output/bic/bic-13/frontend-performance-post-change.raw.json",
+        "output/bic/bic-13/frontend-performance.run-manifest.json"
+      ],
+      "thresholds": [
+        "benches.maintainability.maxFinalAppTsxLinesExclusive",
+        "benches.maintainability.maxReplacementModuleLines",
+        "benches.frontendBundle.maxInitialJsRawBytes",
+        "benches.measurementProtocol.minMeasuredRuns",
+        "benches.frontendBundle.maxInitialJsGzipBytes",
+        "benches.frontendBundle.maxInitialCssGzipBytes",
+        "benches.interactionAcknowledgement.maxVisibleActionAcknowledgementP95Ms",
+        "benches.readAlongRuntime.maxLongTaskCount",
+        "benches.lowResource.browserCpuThrottleRate",
+        "benches.uxEvidence.viewportWidthsPx",
+        "packet.measurementContracts.frontend.discardedWarmupRuns",
+        "packet.measurementContracts.frontend.measuredRuns",
+        "packet.measurementContracts.frontend.maxCoefficientOfVariation",
+        "packet.measurementContracts.frontend.maxFailures"
+      ],
+      "negativeTests": [
+        "Fail on duplicate authoritative state across App and feature stores.",
+        "Exercise every top-level surface/error boundary after extraction.",
+        "Alter the source hash, remove one raw sample/state/viewport, or inject one measured failure after the baseline; post-change performance validation must fail."
+      ],
+      "rollbackExpectations": [
+        "Revert the final composition seam while preserving phase-1/2 modules and public contracts."
+      ],
+      "requiredPOChecks": [
+        "App.tsx is below the exclusive final limit with no oversized replacement module.",
+        "All route/surface characterization and bundle gates pass.",
+        "Post-change frontend raw and summary artifacts match the exact issue source hash, resolve every listed threshold, and contain zero measured failures."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-14",
+      "title": "Progressive project and source journey UX",
+      "kind": "implementation",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "experience",
+      "dependencies": ["BIC-12", "BIC-05", "BIC-06", "BIC-18", "BIC-19"],
+      "families": ["ux", "source"],
+      "flowIds": [],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Implement one dominant next action across empty, importing, partial, ready, degraded, failed, and offline project/source states.",
+        "Expose progressive reading and first-prefix synthesis as soon as available.",
+        "Use recovery copy that states what happened, preserved data, duplicate cost/egress risk, and next safe action.",
+        "On final issue bytes, rerun both canonical frontend-performance gates; bind raw and summarized artifacts to the exact source hash and report zero measured failures, timeouts, missing marks, missing viewports/states, occlusions, and overflows.",
+        "Use the declared frontend reference and low-resource Chromium machine classes, one discarded warmup, ten measured runs, p50/p95/max/CV, zero failures, and raw/summary/run-manifest artifacts bound to exact post-change source hash, command, environment, browser, viewport, and cache/build state."
+      ],
+      "inScope": ["Project/source surfaces and their state-by-viewport evidence."],
+      "outOfScope": ["Reader/Cinema runtime, voice profile editor, backend extraction algorithms."],
+      "routePatterns": [],
+      "stateSymbols": [],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-437",
+          "relationship": "extends",
+          "rationale": "Preserves Quick Listen promotion crosswalk."
+        },
+        {
+          "identifier": "QQP-441",
+          "relationship": "extends",
+          "rationale": "Preserves completed first-batch active-processing evidence."
+        }
+      ],
+      "verificationCommands": [
+        "mise exec -- pnpm validate:flows",
+        "mise exec -- pnpm check",
+        "mise exec -- pnpm bench:frontend-performance",
+        "mise exec -- pnpm validate:local:frontend-performance"
+      ],
+      "artifactPaths": [
+        "output/bic/bic-14/evidence.json",
+        "docs/reviews/bic-14-chatgpt-peer.md",
+        "output/bic/bic-14/frontend-performance-post-change.json",
+        "output/bic/bic-14/frontend-performance-post-change.raw.json",
+        "output/bic/bic-14/frontend-performance.run-manifest.json"
+      ],
+      "thresholds": [
+        "benches.uxEvidence.viewportWidthsPx",
+        "benches.uxEvidence.maxDominantTasksPerSurface",
+        "benches.uxEvidence.maxHorizontalOverflowPx",
+        "benches.interactionAcknowledgement.maxVisibleActionAcknowledgementP95Ms",
+        "benches.measurementProtocol.minMeasuredRuns",
+        "benches.frontendBundle.maxInitialJsRawBytes",
+        "benches.frontendBundle.maxInitialJsGzipBytes",
+        "benches.frontendBundle.maxInitialCssGzipBytes",
+        "benches.readAlongRuntime.maxLongTaskCount",
+        "benches.lowResource.browserCpuThrottleRate",
+        "packet.measurementContracts.frontend.discardedWarmupRuns",
+        "packet.measurementContracts.frontend.measuredRuns",
+        "packet.measurementContracts.frontend.maxCoefficientOfVariation",
+        "packet.measurementContracts.frontend.maxFailures"
+      ],
+      "negativeTests": [
+        "Capture no-project/offline/degraded/failure states at 390, 1100, 1440, and 1920.",
+        "Verify retry copy before operations that may duplicate cost or egress.",
+        "Alter the source hash, remove one raw sample/state/viewport, or inject one measured failure after the baseline; post-change performance validation must fail."
+      ],
+      "rollbackExpectations": [
+        "Feature-flag the new presentation while retaining existing state stores and actions."
+      ],
+      "requiredPOChecks": [
+        "Every required state/viewport has fresh evidence and one dominant task.",
+        "Progressive availability is measurable and never gated by full completion.",
+        "Post-change frontend raw and summary artifacts match the exact issue source hash, resolve every listed threshold, and contain zero measured failures."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-15",
+      "title": "Voice and narration workflow UX",
+      "kind": "implementation",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "experience",
+      "dependencies": ["BIC-13", "BIC-07", "BIC-08", "BIC-18", "BIC-19"],
+      "families": ["ux", "voice-jobs"],
+      "flowIds": [],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Present voice source/profile/target readiness and narration job progress as clear progressive states without exposing provider jargon by default.",
+        "Separate lean CPU preview from explicit optional capability activation.",
+        "Expose cancel/retry consequences and partial playable audio without blocking on full job completion.",
+        "On final issue bytes, rerun both canonical frontend-performance gates; bind raw and summarized artifacts to the exact source hash and report zero measured failures, timeouts, missing marks, missing viewports/states, occlusions, and overflows.",
+        "Use the declared frontend reference and low-resource Chromium machine classes, one discarded warmup, ten measured runs, p50/p95/max/CV, zero failures, and raw/summary/run-manifest artifacts bound to exact post-change source hash, command, environment, browser, viewport, and cache/build state."
+      ],
+      "inScope": ["Voice and job surfaces, recovery copy, responsive evidence, and accessibility."],
+      "outOfScope": [
+        "Reader/Cinema layout, capability installer internals, provider quality research."
+      ],
+      "routePatterns": [],
+      "stateSymbols": [],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-432",
+          "relationship": "extends",
+          "rationale": "Preserves partial artifact states."
+        },
+        {
+          "identifier": "QQP-435",
+          "relationship": "extends",
+          "rationale": "Preserves retry/interruption semantics."
+        },
+        {
+          "identifier": "QQP-441",
+          "relationship": "no-overlap",
+          "rationale": "Adds voice/job workflow UX without changing completed reader evidence."
+        }
+      ],
+      "verificationCommands": [
+        "mise exec -- pnpm validate:flows",
+        "mise exec -- pnpm check",
+        "mise exec -- pnpm bench:frontend-performance",
+        "mise exec -- pnpm validate:local:frontend-performance"
+      ],
+      "artifactPaths": [
+        "output/bic/bic-15/evidence.json",
+        "docs/reviews/bic-15-chatgpt-peer.md",
+        "output/bic/bic-15/frontend-performance-post-change.json",
+        "output/bic/bic-15/frontend-performance-post-change.raw.json",
+        "output/bic/bic-15/frontend-performance.run-manifest.json"
+      ],
+      "thresholds": [
+        "benches.uxEvidence.viewportWidthsPx",
+        "benches.uxEvidence.minTouchTargetHeightPx",
+        "benches.interactionAcknowledgement.maxVisibleActionAcknowledgementP95Ms",
+        "benches.startup.maxEagerProviderCalls",
+        "benches.measurementProtocol.minMeasuredRuns",
+        "benches.frontendBundle.maxInitialJsRawBytes",
+        "benches.frontendBundle.maxInitialJsGzipBytes",
+        "benches.frontendBundle.maxInitialCssGzipBytes",
+        "benches.readAlongRuntime.maxLongTaskCount",
+        "benches.lowResource.browserCpuThrottleRate",
+        "packet.measurementContracts.frontend.discardedWarmupRuns",
+        "packet.measurementContracts.frontend.measuredRuns",
+        "packet.measurementContracts.frontend.maxCoefficientOfVariation",
+        "packet.measurementContracts.frontend.maxFailures"
+      ],
+      "negativeTests": [
+        "Capture missing capability, canceled, partial, interrupted, and failed-check states.",
+        "Run with no GPU/CUDA and prove the primary workflow remains available.",
+        "Alter the source hash, remove one raw sample/state/viewport, or inject one measured failure after the baseline; post-change performance validation must fail."
+      ],
+      "rollbackExpectations": [
+        "Feature-flag presentation changes and retain current job/profile APIs and partial artifacts."
+      ],
+      "requiredPOChecks": [
+        "Every voice/job state has one status, next safe action, and accessible announcement.",
+        "Lean CPU path is primary; optional capabilities never block ordinary use.",
+        "Post-change frontend raw and summary artifacts match the exact issue source hash, resolve every listed threshold, and contain zero measured failures."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-16",
+      "title": "Reader and Cinema responsive UX",
+      "kind": "implementation",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "experience",
+      "dependencies": ["BIC-13", "BIC-09", "BIC-18", "BIC-19"],
+      "families": ["ux", "reader-cinema"],
+      "flowIds": [],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Polish Reader and Cinema as one readable, progressive, distraction-minimal journey across four evidence widths.",
+        "Preserve partial playback, degraded fidelity, progress/remap, keyboard/touch parity, focus restoration, and non-occluding controls.",
+        "Keep one dominant task and place secondary controls in a sheet below 1024px.",
+        "On final issue bytes, rerun both canonical frontend-performance gates; bind raw and summarized artifacts to the exact source hash and report zero measured failures, timeouts, missing marks, missing viewports/states, occlusions, and overflows.",
+        "Use the declared frontend reference and low-resource Chromium machine classes, one discarded warmup, ten measured runs, p50/p95/max/CV, zero failures, and raw/summary/run-manifest artifacts bound to exact post-change source hash, command, environment, browser, viewport, and cache/build state."
+      ],
+      "inScope": [
+        "Reader/Cinema visual hierarchy, interaction, responsive/accessibility evidence."
+      ],
+      "outOfScope": ["Teleprompt/Theatre, source import layout, backend alignment algorithms."],
+      "routePatterns": [],
+      "stateSymbols": [],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-438",
+          "relationship": "extends",
+          "rationale": "Preserves reader shell vocabulary."
+        },
+        {
+          "identifier": "QQP-439",
+          "relationship": "extends",
+          "rationale": "Preserves reader transport state machine."
+        },
+        {
+          "identifier": "QQP-440",
+          "relationship": "extends",
+          "rationale": "Preserves windowing/highlight scheduling."
+        },
+        {
+          "identifier": "QQP-542",
+          "relationship": "extends",
+          "rationale": "Preserves compact phone control budget."
+        },
+        {
+          "identifier": "QQP-543",
+          "relationship": "extends",
+          "rationale": "Preserves final UI action audit."
+        }
+      ],
+      "verificationCommands": [
+        "mise exec -- pnpm validate:flows",
+        "mise exec -- pnpm check",
+        "mise exec -- pnpm bench:frontend-performance",
+        "mise exec -- pnpm validate:local:frontend-performance"
+      ],
+      "artifactPaths": [
+        "output/bic/bic-16/evidence.json",
+        "docs/reviews/bic-16-chatgpt-peer.md",
+        "output/bic/bic-16/frontend-performance-post-change.json",
+        "output/bic/bic-16/frontend-performance-post-change.raw.json",
+        "output/bic/bic-16/frontend-performance.run-manifest.json"
+      ],
+      "thresholds": [
+        "benches.uxEvidence.viewportWidthsPx",
+        "benches.uxEvidence.sheetRequiredBelowWidthPx",
+        "benches.uxEvidence.maxControlContentOcclusions",
+        "benches.interactionAcknowledgement.maxPlaybackTransportAcknowledgementP95Ms",
+        "benches.readAlongRuntime.maxLongTaskCount",
+        "benches.measurementProtocol.minMeasuredRuns",
+        "benches.frontendBundle.maxInitialJsRawBytes",
+        "benches.frontendBundle.maxInitialJsGzipBytes",
+        "benches.frontendBundle.maxInitialCssGzipBytes",
+        "benches.interactionAcknowledgement.maxVisibleActionAcknowledgementP95Ms",
+        "benches.lowResource.browserCpuThrottleRate",
+        "packet.measurementContracts.frontend.discardedWarmupRuns",
+        "packet.measurementContracts.frontend.measuredRuns",
+        "packet.measurementContracts.frontend.maxCoefficientOfVariation",
+        "packet.measurementContracts.frontend.maxFailures"
+      ],
+      "negativeTests": [
+        "Capture long title, dense controls, partial audio, degraded sync, offline, and repaired-source resume at all widths.",
+        "Run 60-second playback and require zero long tasks/stale highlights.",
+        "Alter the source hash, remove one raw sample/state/viewport, or inject one measured failure after the baseline; post-change performance validation must fail."
+      ],
+      "rollbackExpectations": [
+        "Feature-flag visual composition while preserving transport/progress stores and completed state contracts."
+      ],
+      "requiredPOChecks": [
+        "Fresh visual evidence passes hierarchy, reflow, touch, focus, live-region, and no-occlusion checks.",
+        "Playback acknowledgement and long-task budgets pass.",
+        "Post-change frontend raw and summary artifacts match the exact issue source hash, resolve every listed threshold, and contain zero measured failures."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-17",
+      "title": "Teleprompt and Theatre responsive UX",
+      "kind": "implementation",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "experience",
+      "dependencies": ["BIC-13", "BIC-04", "BIC-09", "BIC-18", "BIC-19"],
+      "families": ["ux", "teleprompt-theatre"],
+      "flowIds": [],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Polish rehearsal Teleprompt and fullscreen Theatre as a separate operator/presenter journey.",
+        "Define cue control, entry/exit, focus restoration, reduced motion, long-content reflow, and safe return context.",
+        "Keep controls discoverable but non-occluding at all evidence widths.",
+        "On final issue bytes, rerun both canonical frontend-performance gates; bind raw and summarized artifacts to the exact source hash and report zero measured failures, timeouts, missing marks, missing viewports/states, occlusions, and overflows.",
+        "Use the declared frontend reference and low-resource Chromium machine classes, one discarded warmup, ten measured runs, p50/p95/max/CV, zero failures, and raw/summary/run-manifest artifacts bound to exact post-change source hash, command, environment, browser, viewport, and cache/build state."
+      ],
+      "inScope": [
+        "Teleprompt/Theatre visual hierarchy, interaction, responsive/accessibility evidence."
+      ],
+      "outOfScope": ["Reader/Cinema, source import, backend synthesis."],
+      "routePatterns": [],
+      "stateSymbols": [],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-542",
+          "relationship": "extends",
+          "rationale": "Preserves compact phone control budget for Theatre."
+        },
+        {
+          "identifier": "QQP-543",
+          "relationship": "extends",
+          "rationale": "Preserves completed UI action parity."
+        }
+      ],
+      "verificationCommands": [
+        "mise exec -- pnpm validate:flows",
+        "mise exec -- pnpm check",
+        "mise exec -- pnpm bench:frontend-performance",
+        "mise exec -- pnpm validate:local:frontend-performance"
+      ],
+      "artifactPaths": [
+        "output/bic/bic-17/evidence.json",
+        "docs/reviews/bic-17-chatgpt-peer.md",
+        "output/bic/bic-17/frontend-performance-post-change.json",
+        "output/bic/bic-17/frontend-performance-post-change.raw.json",
+        "output/bic/bic-17/frontend-performance.run-manifest.json"
+      ],
+      "thresholds": [
+        "benches.uxEvidence.viewportWidthsPx",
+        "benches.uxEvidence.maxControlContentOcclusions",
+        "benches.readerTiming.maxTelepromptCueSwitchMs",
+        "benches.interactionAcknowledgement.maxVisibleActionAcknowledgementP95Ms",
+        "benches.measurementProtocol.minMeasuredRuns",
+        "benches.frontendBundle.maxInitialJsRawBytes",
+        "benches.frontendBundle.maxInitialJsGzipBytes",
+        "benches.frontendBundle.maxInitialCssGzipBytes",
+        "benches.readAlongRuntime.maxLongTaskCount",
+        "benches.lowResource.browserCpuThrottleRate",
+        "packet.measurementContracts.frontend.discardedWarmupRuns",
+        "packet.measurementContracts.frontend.measuredRuns",
+        "packet.measurementContracts.frontend.maxCoefficientOfVariation",
+        "packet.measurementContracts.frontend.maxFailures"
+      ],
+      "negativeTests": [
+        "Capture fullscreen denied, reduced-motion, long cue, offline, and return-from-Theatre states at all widths.",
+        "Verify Escape/back/close restore the exact invoking context and focus.",
+        "Alter the source hash, remove one raw sample/state/viewport, or inject one measured failure after the baseline; post-change performance validation must fail."
+      ],
+      "rollbackExpectations": [
+        "Feature-flag runtime presentation and retain current cue/return state model."
+      ],
+      "requiredPOChecks": [
+        "Teleprompt/Theatre evidence is independent from Reader/Cinema evidence.",
+        "Cue switching and action acknowledgement meet canonical thresholds.",
+        "Post-change frontend raw and summary artifacts match the exact issue source hash, resolve every listed threshold, and contain zero measured failures."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-18",
+      "title": "Runtime startup and resource performance gate",
+      "kind": "evidence",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "runtime-platform",
+      "dependencies": ["BIC-01", "BIC-02"],
+      "families": ["performance", "runtime"],
+      "flowIds": [],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Create reproducible runtime measurement harnesses using the canonical reference-machine protocol, one discarded warmup, at least ten runs, p50/p95/max, cache/build state, and full descendant accounting.",
+        "Gate HTTP readiness, project CRUD, idle CPU/RSS, no startup egress/import/download/provider/install, and process-tree shutdown.",
+        "Publish raw and summarized evidence without secret/model payloads.",
+        "Use the `runtime-reference-cpu` machine class, one discarded warmup, ten measured runs, p50/p95/max/CV, zero failures, and raw/summary/run-manifest artifacts bound to exact post-change source hash, command, environment, and cache/build state."
+      ],
+      "inScope": [
+        "Runtime/startup measurement harnesses and reports.",
+        "Reuse and extend the BIC-01 startup harness for runtime resource/process-tree measurements; do not redefine startup evidence ownership."
+      ],
+      "outOfScope": [
+        "Frontend interaction/bundle metrics, product feature work, threshold relaxation."
+      ],
+      "routePatterns": [],
+      "stateSymbols": [],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-441",
+          "relationship": "extends",
+          "rationale": "Adds reproducible runtime budgets to completed first-batch evidence."
+        }
+      ],
+      "verificationCommands": [
+        "mise exec -- pnpm bench:startup",
+        "mise exec -- pnpm bench:runtime-resources",
+        "mise exec -- pnpm check"
+      ],
+      "artifactPaths": [
+        "output/bic/bic-18/evidence.json",
+        "docs/reviews/bic-18-chatgpt-peer.md",
+        "output/bic/bic-18/runtime-performance.raw.json",
+        "output/bic/bic-18/runtime-performance.summary.json",
+        "output/bic/bic-18/runtime-performance.run-manifest.json"
+      ],
+      "thresholds": [
+        "benches.measurementProtocol.minMeasuredRuns",
+        "benches.startup.maxWarmApiHttpReadyP95Ms",
+        "benches.startup.maxColdPostEditLocalHttpReadyP95Ms",
+        "benches.runtimeResources.maxApiProcessTreeIdleCpuPercent",
+        "benches.runtimeResources.maxApiProcessTreeIdleRssMiB",
+        "benches.localOperations.maxProjectCrudP95Ms",
+        "packet.measurementContracts.runtimeStartup.discardedWarmupRuns",
+        "packet.measurementContracts.runtimeStartup.measuredRuns",
+        "packet.measurementContracts.runtimeStartup.maxCoefficientOfVariation",
+        "packet.measurementContracts.runtimeStartup.maxFailures"
+      ],
+      "negativeTests": [
+        "Inject failed run, timeout, and orphan descendant; each counts as failure rather than disappearing from statistics.",
+        "Hide GPU/CUDA and deny network for the low-resource class."
+      ],
+      "rollbackExpectations": [
+        "Remove only the new gate wiring if flaky while retaining raw harness and evidence for diagnosis."
+      ],
+      "requiredPOChecks": [
+        "Runtime evidence is reproducible on the declared modest CPU/no-GPU-required class.",
+        "Every budget key resolves from `benches/thresholds.json`; no prose-only number exists."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-19",
+      "title": "Frontend performance, accessibility, and visual evidence gate",
+      "kind": "evidence",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "experience",
+      "dependencies": ["BIC-03"],
+      "families": ["performance", "frontend"],
+      "flowIds": [],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Create reproducible frontend harnesses for bundle, interaction acknowledgement/state-commit/completion marks, route/surface timing, long tasks, CPU-throttled low-resource class, accessibility, and surface-state-viewport evidence.",
+        "Use canonical thresholds only and fail on missing states/viewports, occlusion, overflow, duplicate dominant actions, or unmeasured failures.",
+        "Establish baseline evidence before BIC-11 through BIC-17 product changes.",
+        "Use the declared frontend reference and low-resource Chromium machine classes, one discarded warmup, ten measured runs, p50/p95/max/CV, zero failures, and raw/summary/run-manifest artifacts bound to exact post-change source hash, command, environment, browser, viewport, and cache/build state."
+      ],
+      "inScope": ["Frontend performance/accessibility/visual harnesses and baseline reports."],
+      "outOfScope": ["Runtime process budgets, product implementation, threshold relaxation."],
+      "routePatterns": [],
+      "stateSymbols": [],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-441",
+          "relationship": "extends",
+          "rationale": "Generalizes completed canonical fixture evidence."
+        },
+        {
+          "identifier": "QQP-542",
+          "relationship": "extends",
+          "rationale": "Preserves compact surface budget."
+        },
+        {
+          "identifier": "QQP-543",
+          "relationship": "extends",
+          "rationale": "Preserves final UI action audit evidence."
+        }
+      ],
+      "verificationCommands": [
+        "mise exec -- pnpm bench:frontend-performance",
+        "mise exec -- pnpm validate:local:frontend-performance",
+        "mise exec -- pnpm check"
+      ],
+      "artifactPaths": [
+        "output/bic/bic-19/evidence.json",
+        "docs/reviews/bic-19-chatgpt-peer.md",
+        "output/bic/bic-19/frontend-performance.raw.json",
+        "output/bic/bic-19/frontend-performance.summary.json",
+        "output/bic/bic-19/frontend-performance.run-manifest.json"
+      ],
+      "thresholds": [
+        "benches.measurementProtocol.minMeasuredRuns",
+        "benches.frontendBundle.maxInitialJsGzipBytes",
+        "benches.uxEvidence.viewportWidthsPx",
+        "benches.interactionAcknowledgement.maxVisibleActionAcknowledgementP95Ms",
+        "benches.readAlongRuntime.maxLongTaskCount",
+        "benches.lowResource.browserCpuThrottleRate",
+        "packet.measurementContracts.frontend.discardedWarmupRuns",
+        "packet.measurementContracts.frontend.measuredRuns",
+        "packet.measurementContracts.frontend.maxCoefficientOfVariation",
+        "packet.measurementContracts.frontend.maxFailures"
+      ],
+      "negativeTests": [
+        "Omit one required state/viewport and require gate failure.",
+        "Add a long task, overflow, occlusion, or duplicate dominant action and require failure."
+      ],
+      "rollbackExpectations": [
+        "Keep raw harness/evidence but disable only unstable CI enforcement pending a bounded repair issue."
+      ],
+      "requiredPOChecks": [
+        "Baseline artifacts exist before any App extraction or UX issue closes.",
+        "Acknowledgement, authoritative state commit, and operation completion are measured separately."
+      ],
+      "linear": null
+    },
+    {
+      "localId": "BIC-20",
+      "title": "Final evidence-only best-in-class closeout",
+      "kind": "evidence",
+      "status": "candidate_pending_chatgpt_v8_recheck",
+      "creationDisposition": "create_after_chatgpt_agreement",
+      "primaryOwnerSurface": "runtime-platform",
+      "dependencies": [
+        "BIC-01",
+        "BIC-02",
+        "BIC-03",
+        "BIC-04",
+        "BIC-05",
+        "BIC-06",
+        "BIC-07",
+        "BIC-08",
+        "BIC-09",
+        "BIC-10",
+        "BIC-11",
+        "BIC-12",
+        "BIC-13",
+        "BIC-14",
+        "BIC-15",
+        "BIC-16",
+        "BIC-17",
+        "BIC-18",
+        "BIC-19"
+      ],
+      "families": ["evidence", "closeout"],
+      "flowIds": [],
+      "completedFirstBatchBehavior": "Preserve all characterized completed QQP behavior unless an explicit reconciliation link says supersedes; changes require fresh characterization evidence.",
+      "acceptanceCriteria": [
+        "Collect exact-hash source, flow, performance, UX, accessibility, security, and ChatGPT peer evidence for all completed issues.",
+        "Verify canonical JSON/Markdown parity, 39-flow/123-route coverage, threshold resolution, 20/20 issue reconciliation, clean worktree, full repository gate, and remote branch state.",
+        "Publish only evidence and residual non-blocking risks; any defect returns to the owning issue.",
+        "On final batch bytes, rerun all BIC-18 runtime and BIC-19 frontend gates; bind raw and summarized artifacts to the exact final source hash and require zero measured failures before evidence-only closeout.",
+        "Use the `runtime-reference-cpu` machine class, one discarded warmup, ten measured runs, p50/p95/max/CV, zero failures, and raw/summary/run-manifest artifacts bound to exact post-change source hash, command, environment, and cache/build state.",
+        "Use the declared frontend reference and low-resource Chromium machine classes, one discarded warmup, ten measured runs, p50/p95/max/CV, zero failures, and raw/summary/run-manifest artifacts bound to exact post-change source hash, command, environment, browser, viewport, and cache/build state.",
+        "Rerun both measurement contracts on exact final batch bytes; stale baseline or prior-issue artifacts are prohibited even when their source hash once matched."
+      ],
+      "inScope": [
+        "Evidence collation, deterministic archives, peer verdicts, PO checks, and closeout report only."
+      ],
+      "outOfScope": [
+        "Product changes, threshold changes, behavioral corrections, opportunistic cleanup."
+      ],
+      "routePatterns": [],
+      "stateSymbols": [],
+      "existingIssueLinks": [
+        {
+          "identifier": "QQP-423",
+          "relationship": "documents-existing",
+          "rationale": "Reconciles completed architecture contracts."
+        },
+        {
+          "identifier": "QQP-441",
+          "relationship": "extends",
+          "rationale": "Extends completed first-batch evidence to the full batch."
+        },
+        {
+          "identifier": "QQP-543",
+          "relationship": "extends",
+          "rationale": "Preserves the completed final UI action audit."
+        }
+      ],
+      "verificationCommands": [
+        "mise exec -- pnpm validate:flows",
+        "node scripts/validate-linear-batch.mjs",
+        "mise exec -- pnpm check",
+        "git diff --check",
+        "mise exec -- pnpm bench:startup",
+        "mise exec -- pnpm bench:runtime-resources",
+        "mise exec -- pnpm bench:frontend-performance",
+        "mise exec -- pnpm validate:local:frontend-performance",
+        "test -z \"$(git status --porcelain=v1 --untracked-files=all)\"",
+        "git fetch --prune",
+        "git rev-parse --verify '@{upstream}' >/dev/null",
+        "test \"$(git rev-parse HEAD)\" = \"$(git rev-parse '@{upstream}')\""
+      ],
+      "artifactPaths": [
+        "output/bic/bic-20/evidence.json",
+        "docs/reviews/bic-20-chatgpt-peer.md",
+        "output/bic/bic-20/runtime-performance-final.json",
+        "output/bic/bic-20/runtime-performance-final.raw.json",
+        "output/bic/bic-20/frontend-performance-final.json",
+        "output/bic/bic-20/frontend-performance-final.raw.json",
+        "output/bic/bic-20/exact-source-hash.txt",
+        "output/bic/bic-20/runtime-performance-final.run-manifest.json",
+        "output/bic/bic-20/frontend-performance-final.run-manifest.json"
+      ],
+      "thresholds": [
+        "packet.evidence.maxMissingRequiredArtifacts",
+        "packet.evidence.maxUnresolvedBlockingFindings",
+        "packet.flowRegistry.maxUnownedRoutes",
+        "benches.uxEvidence.maxControlContentOcclusions",
+        "benches.measurementProtocol.minMeasuredRuns",
+        "benches.startup.maxWarmApiHttpReadyP95Ms",
+        "benches.startup.maxWarmFrontendHttpReadyP95Ms",
+        "benches.startup.maxColdPostEditLocalHttpReadyP95Ms",
+        "benches.startup.maxStartupEgressRequests",
+        "benches.startup.maxEagerModelImports",
+        "benches.startup.maxEagerModelDownloads",
+        "benches.startup.maxEagerProviderCalls",
+        "benches.startup.maxImplicitDependencyInstalls",
+        "benches.startup.maxProcessTreeShutdownMs",
+        "benches.runtimeResources.maxApiProcessTreeIdleCpuPercent",
+        "benches.runtimeResources.maxFrontendProcessTreeIdleCpuPercent",
+        "benches.runtimeResources.maxApiProcessTreeIdleRssMiB",
+        "benches.runtimeResources.maxFrontendProcessTreeIdleRssMiB",
+        "benches.localOperations.maxProjectCrudP95Ms",
+        "benches.frontendBundle.maxInitialJsRawBytes",
+        "benches.frontendBundle.maxInitialJsGzipBytes",
+        "benches.frontendBundle.maxInitialCssGzipBytes",
+        "benches.interactionAcknowledgement.maxVisibleActionAcknowledgementP95Ms",
+        "benches.readAlongRuntime.maxLongTaskCount",
+        "benches.lowResource.browserCpuThrottleRate",
+        "benches.uxEvidence.viewportWidthsPx",
+        "packet.measurementContracts.runtimeStartup.discardedWarmupRuns",
+        "packet.measurementContracts.runtimeStartup.measuredRuns",
+        "packet.measurementContracts.runtimeStartup.maxCoefficientOfVariation",
+        "packet.measurementContracts.runtimeStartup.maxFailures",
+        "packet.measurementContracts.frontend.discardedWarmupRuns",
+        "packet.measurementContracts.frontend.measuredRuns",
+        "packet.measurementContracts.frontend.maxCoefficientOfVariation",
+        "packet.measurementContracts.frontend.maxFailures"
+      ],
+      "negativeTests": [
+        "Remove or alter one required artifact and require closeout failure.",
+        "Reproduce stale findings against current hashes before accepting any waiver.",
+        "Change final source bytes, remove one raw runtime/frontend sample or required state/viewport, or inject one measured failure after upstream acceptance; final closeout must fail without reopening the owning issue.",
+        "A dirty tracked file must make final closeout fail.",
+        "An untracked file must make final closeout fail.",
+        "A branch with no upstream must make final closeout fail.",
+        "A local branch ahead of its upstream must make final closeout fail.",
+        "A local branch behind its upstream must make final closeout fail."
+      ],
+      "rollbackExpectations": [
+        "Withdraw the closeout artifact and reopen the owning issue; do not alter product bytes here."
+      ],
+      "requiredPOChecks": [
+        "Every child issue has fresh exact-hash evidence and an advisory ChatGPT peer artifact.",
+        "No product or threshold byte changes occur in this issue.",
+        "Final runtime and frontend raw/summary artifacts match one exact source hash, resolve all BIC-18/BIC-19 thresholds, and contain zero failures."
+      ],
+      "linear": null
+    }
+  ],
+  "ownershipContract": {
+    "fields": ["flowIds", "routePatterns", "stateSymbols"],
+    "meaning": "Exclusive implementation ownership only; impact/reference scope belongs in inScope, acceptanceCriteria, artifactPaths, and verificationCommands.",
+    "rules": [
+      "Every canonical flow has exactly one issue owner.",
+      "Every canonical route has exactly one issue owner.",
+      "Every discovered state symbol has exactly one issue owner.",
+      "Empty ownership arrays are valid for infrastructure, measurement, integration, and evidence-only issues."
+    ]
+  },
+  "measurementContracts": {
+    "machineClasses": [
+      {
+        "id": "runtime-reference-cpu",
+        "osClass": "linux-or-wsl2-x86_64",
+        "minLogicalCpu": 4,
+        "minMemoryMiB": 8192,
+        "gpuAllowed": false,
+        "browser": null
+      },
+      {
+        "id": "frontend-reference-chromium",
+        "osClass": "linux-or-wsl2-x86_64",
+        "minLogicalCpu": 4,
+        "minMemoryMiB": 8192,
+        "gpuAllowed": false,
+        "browser": "chromium",
+        "cpuThrottleRate": 1
+      },
+      {
+        "id": "frontend-low-resource-chromium",
+        "osClass": "linux-or-wsl2-x86_64",
+        "minLogicalCpu": 2,
+        "minMemoryMiB": 4096,
+        "gpuAllowed": false,
+        "browser": "chromium",
+        "cpuThrottleRate": 4
+      }
+    ],
+    "runtimeStartup": {
+      "machineClassIds": ["runtime-reference-cpu"],
+      "discardedWarmupRuns": 1,
+      "measuredRuns": 10,
+      "statistics": ["p50", "p95", "max", "coefficientOfVariation"],
+      "maxCoefficientOfVariation": 0.25,
+      "maxFailures": 0,
+      "cacheBuildStates": ["cold-post-edit-clean-build", "warm-cache-no-rebuild"],
+      "requiredBindings": [
+        "exactSourceHash",
+        "machineClassId",
+        "command",
+        "environment",
+        "cacheBuildState",
+        "startedAt",
+        "finishedAt"
+      ],
+      "requiredArtifacts": ["rawSamples", "summary", "runManifest"]
+    },
+    "frontend": {
+      "machineClassIds": ["frontend-reference-chromium", "frontend-low-resource-chromium"],
+      "discardedWarmupRuns": 1,
+      "measuredRuns": 10,
+      "statistics": ["p50", "p95", "max", "coefficientOfVariation"],
+      "maxCoefficientOfVariation": 0.25,
+      "maxFailures": 0,
+      "cacheBuildStates": ["cold-production-build", "warm-static-assets"],
+      "requiredBindings": [
+        "exactSourceHash",
+        "machineClassId",
+        "command",
+        "environment",
+        "cacheBuildState",
+        "browserVersion",
+        "viewport",
+        "startedAt",
+        "finishedAt"
+      ],
+      "requiredArtifacts": ["rawSamples", "summary", "runManifest"]
+    },
+    "freshness": {
+      "postChangeIssueBytesRequired": true,
+      "finalBatchBytesRequired": true,
+      "staleArtifactReuseAllowed": false
+    }
+  }
+}

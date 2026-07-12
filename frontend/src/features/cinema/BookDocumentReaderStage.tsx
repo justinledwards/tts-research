@@ -1,13 +1,27 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { ReaderCanvasFrame } from "../../components/reader/ReaderCanvasFrame";
+import { Button } from "../../design";
 import { MarkdownRenderer } from "../../MarkdownRenderer";
-import { bookScopeLabel, bookSourceName, type BookCinemaTextSize } from "../../bookCinemaModel";
+import { bookScopeLabel, bookSourceName, type BookCinemaTextSize } from "../book-cinema/model";
 import {
   READER_LINE_SPACING_CLASS,
   READER_MEASURE_CLASS,
   READER_TEXT_SCALE_CLASS,
+  readerDataAttributes,
   readerScrollBehavior,
   type ReaderAccessibilitySettings,
 } from "../reader-accessibility";
+import { readingSurfaceClassName, readingSurfaceDataAttributes } from "../reading-surface";
+import {
+  readAlongAnchorForBlock,
+  readAlongAnchorForWord,
+  readAlongShouldHighlightBlock,
+  readAlongShouldHighlightWord,
+  scrollReadAlongAnchor,
+  type ReadAlongHighlightStyle,
+  type ReadAlongHighlightVisualMode,
+  type ReadAlongScrollFollow,
+} from "../readalong";
 import type {
   BookScope,
   BookSource,
@@ -24,7 +38,14 @@ export function BookDocumentReaderStage({
   scopedText,
   scopeContent,
   accessibilitySettings,
+  canvasFirst = false,
+  highlightStyle,
   pointerLabel,
+  phraseWordEnd,
+  phraseWordStart,
+  readAlongVisualMode = "word",
+  scrollFollow,
+  theatreActive = false,
   onAccessibilitySettingsChange,
 }: Readonly<{
   activeWordIndex: number;
@@ -34,7 +55,14 @@ export function BookDocumentReaderStage({
   scopedText: string;
   scopeContent: BookSourceScopeContent | null;
   accessibilitySettings: ReaderAccessibilitySettings;
+  canvasFirst?: boolean;
+  highlightStyle: ReadAlongHighlightStyle;
   pointerLabel: string | null;
+  phraseWordEnd?: number;
+  phraseWordStart?: number;
+  readAlongVisualMode?: ReadAlongHighlightVisualMode;
+  scrollFollow: ReadAlongScrollFollow;
+  theatreActive?: boolean;
   onAccessibilitySettingsChange: (settings: ReaderAccessibilitySettings) => void;
 }>) {
   const readerRef = useRef<HTMLDivElement | null>(null);
@@ -45,15 +73,50 @@ export function BookDocumentReaderStage({
     READER_LINE_SPACING_CLASS[accessibilitySettings.lineSpacing]
   }`;
   const scrollBehavior = readerScrollBehavior(accessibilitySettings);
+  const canHighlightWord = readAlongShouldHighlightWord(readAlongVisualMode);
+  const hasPhraseRange = phraseWordStart !== undefined && phraseWordEnd !== undefined;
+  const canHighlightBlock =
+    readAlongShouldHighlightBlock(readAlongVisualMode) ||
+    readAlongVisualMode === "phrase" ||
+    hasPhraseRange;
 
   useEffect(() => {
     if (activeWordIndex < 0) {
       return;
     }
-    readerRef.current
-      ?.querySelector(".markdown-cinema-word-active, .markdown-cinema-block-active")
-      ?.scrollIntoView({ block: "center", inline: "nearest", behavior: scrollBehavior });
-  }, [activeWordIndex, scrollBehavior]);
+    const anchor =
+      activeSpan && canHighlightWord
+        ? readAlongAnchorForWord({
+            fallbackTextQuote: activeSpan.text,
+            nodeId: activeBlock?.id,
+            sourceId: book.id,
+            tokenOffset: highlight.wordOffset,
+            wordIndex: activeWordIndex,
+          })
+        : readAlongAnchorForBlock({
+            fallbackTextQuote: activeBlock?.text ?? activeBlock?.spokenText,
+            nodeId: activeBlock?.id,
+            sourceId: book.id,
+          });
+    scrollReadAlongAnchor(readerRef.current, anchor, {
+      autoFollow: true,
+      fallbackSelectors: [".markdown-cinema-word-active", ".markdown-cinema-block-active"],
+      mode: readAlongVisualMode,
+      scrollFollow,
+      settings: accessibilitySettings,
+      surface: "document",
+    });
+  }, [
+    accessibilitySettings,
+    activeBlock,
+    activeSpan,
+    activeWordIndex,
+    book.id,
+    canHighlightWord,
+    highlight.wordOffset,
+    readAlongVisualMode,
+    scrollFollow,
+  ]);
 
   useEffect(() => {
     const label = pointerLabel?.trim();
@@ -67,51 +130,82 @@ export function BookDocumentReaderStage({
   }, [pointerLabel, scrollBehavior]);
 
   return (
-    <section className="min-h-0 min-w-0 overflow-hidden">
-      <div
-        className={`mx-auto flex h-full ${READER_MEASURE_CLASS[accessibilitySettings.measure]} flex-col overflow-hidden rounded-md border bg-[var(--vs-raised)] shadow-sm vs-border max-lg:max-w-none max-lg:border-0 max-lg:shadow-none`}
-      >
-        <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
-          <BookDocumentHeading book={book} scope={scope} />
-          <div className="flex items-center gap-1">
-            <BookDocumentTextButton
-              label="Decrease text size"
-              onClick={() => {
-                onAccessibilitySettingsChange({
-                  ...accessibilitySettings,
-                  textScale: decreaseBookTextSize(accessibilitySettings.textScale),
-                });
-              }}
-            >
-              A-
-            </BookDocumentTextButton>
-            <BookDocumentTextButton
-              label="Increase text size"
-              onClick={() => {
-                onAccessibilitySettingsChange({
-                  ...accessibilitySettings,
-                  textScale: increaseBookTextSize(accessibilitySettings.textScale),
-                });
-              }}
-            >
-              A+
-            </BookDocumentTextButton>
+    <ReaderCanvasFrame
+      canvasFirst={canvasFirst}
+      contentClassName="min-h-0 flex-1 overflow-y-auto px-8 py-8 sm:px-12 lg:px-10 xl:px-12"
+      contentDataAttributes={{
+        ...readerDataAttributes(accessibilitySettings),
+        ...readingSurfaceDataAttributes({ kind: "spoken" }),
+        "data-readalong-highlight-style": highlightStyle,
+        "data-readalong-scroll-follow": scrollFollow,
+      }}
+      contentRef={readerRef}
+      frameMode="reading"
+      measureClassName={READER_MEASURE_CLASS[accessibilitySettings.measure]}
+      toolbar={
+        theatreActive ? null : (
+          <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 vs-border">
+            <BookDocumentHeading book={book} scope={scope} />
+            <div className="flex items-center gap-1">
+              <BookDocumentTextButton
+                label="Decrease text size"
+                onClick={() => {
+                  onAccessibilitySettingsChange({
+                    ...accessibilitySettings,
+                    textScale: decreaseBookTextSize(accessibilitySettings.textScale),
+                  });
+                }}
+              >
+                A-
+              </BookDocumentTextButton>
+              <BookDocumentTextButton
+                label="Increase text size"
+                onClick={() => {
+                  onAccessibilitySettingsChange({
+                    ...accessibilitySettings,
+                    textScale: increaseBookTextSize(accessibilitySettings.textScale),
+                  });
+                }}
+              >
+                A+
+              </BookDocumentTextButton>
+            </div>
           </div>
-        </div>
-        <div
-          className="min-h-0 flex-1 overflow-y-auto px-8 py-8 sm:px-12 lg:px-10 xl:px-12"
-          ref={readerRef}
-        >
-          <MarkdownRenderer
-            blockHighlight={highlight.blockHighlight}
-            className={`markdown-cinema prose-markdown ${textClass} text-[var(--vs-text)]`}
-            wordHighlight={highlight.wordHighlight}
-          >
-            {scopedText}
-          </MarkdownRenderer>
-        </div>
-      </div>
-    </section>
+        )
+      }
+    >
+      <MarkdownRenderer
+        artifactRendering="document-cinema"
+        blockHighlight={
+          canHighlightBlock && highlight.blockHighlight
+            ? {
+                ...highlight.blockHighlight,
+                cueRole: "current",
+                nodeId: activeBlock?.id,
+                sourceId: book.id,
+                timingState: "trusted",
+              }
+            : undefined
+        }
+        className={`markdown-cinema prose-markdown readalong-markdown-renderer mx-auto ${readingSurfaceClassName(
+          "spoken",
+        )} ${textClass} text-[var(--vs-text)]`}
+        wordHighlight={
+          canHighlightWord && highlight.wordHighlight
+            ? {
+                ...highlight.wordHighlight,
+                activeWordIndex,
+                cueRole: "current",
+                nodeId: activeBlock?.id,
+                sourceId: book.id,
+                timingState: "trusted",
+              }
+            : undefined
+        }
+      >
+        {scopedText}
+      </MarkdownRenderer>
+    </ReaderCanvasFrame>
   );
 }
 
@@ -135,14 +229,15 @@ function BookDocumentTextButton({
   onClick,
 }: Readonly<{ children: ReactNode; label: string; onClick: () => void }>) {
   return (
-    <button
+    <Button
       aria-label={label}
-      className="grid h-9 w-10 place-items-center rounded-md text-lg font-medium transition hover:bg-[var(--vs-surface)]"
+      className="grid place-items-center text-lg font-medium"
       onClick={onClick}
-      type="button"
+      size="icon"
+      variant="ghost"
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -154,32 +249,38 @@ function bookCinemaActiveBlock(
     return null;
   }
   if (!activeSpan) {
-    return blocks.find((block) => block.speakMode !== "skip") ?? blocks[0];
+    return blocks.find((block) => bookDocumentBlockIsSpeakable(block)) ?? blocks[0];
   }
   return (
     blocks.find(
       (block) =>
         activeSpan.startOffset >= block.startOffset && activeSpan.startOffset <= block.endOffset,
     ) ??
-    blocks.find((block) => block.speakMode !== "skip") ??
+    blocks.find((block) => bookDocumentBlockIsSpeakable(block)) ??
     blocks[0]
   );
+}
+
+function bookDocumentBlockIsSpeakable(block: NarrationBlock): boolean {
+  const speakMode = block.speakMode.trim().toLowerCase();
+  const policyMode = block.speechPolicy.mode.trim().toLowerCase();
+  return speakMode !== "skip" && policyMode !== "skip" && policyMode !== "ondemand";
 }
 
 function bookMarkdownHighlight(
   activeBlock: NarrationBlock | null,
   activeSpan: BookSourceWordSpan | null,
   spans: BookSourceWordSpan[],
-) {
+): BookMarkdownHighlight {
   if (!activeBlock) {
-    return { blockHighlight: undefined, wordHighlight: undefined };
+    return { blockHighlight: undefined, wordHighlight: undefined, wordOffset: undefined };
   }
   const blockHighlight = {
     blockEndOffset: activeBlock.endOffset,
     blockStartOffset: activeBlock.startOffset,
   };
   if (!activeSpan) {
-    return { blockHighlight, wordHighlight: undefined };
+    return { blockHighlight, wordHighlight: undefined, wordOffset: undefined };
   }
   const activeWordOffset = spans.filter(
     (span) =>
@@ -189,12 +290,30 @@ function bookMarkdownHighlight(
   ).length;
   return {
     blockHighlight,
+    wordOffset: activeWordOffset,
     wordHighlight: {
       activeWordOffset,
       blockEndOffset: activeBlock.endOffset,
       blockStartOffset: activeBlock.startOffset,
     },
   };
+}
+
+interface BookMarkdownHighlight {
+  blockHighlight:
+    | {
+        blockEndOffset: number;
+        blockStartOffset: number;
+      }
+    | undefined;
+  wordHighlight:
+    | {
+        activeWordOffset: number;
+        blockEndOffset: number;
+        blockStartOffset: number;
+      }
+    | undefined;
+  wordOffset: number | undefined;
 }
 
 function decreaseBookTextSize(size: BookCinemaTextSize): BookCinemaTextSize {

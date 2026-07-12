@@ -1,0 +1,137 @@
+import { StatusChip, type StatusChipTone } from "../../design";
+import {
+  generatedAudioStateLabel,
+  sourceAdapterLabel,
+  sourceKindLabel,
+  sourceLifecycleDescriptor,
+  sourcePolicyScopeLabel,
+  sourceReadinessDetail,
+  sourceReadinessLabel,
+  sourceReadinessTone,
+  type SourceLifecycleEnvelope,
+} from "./sourceLifecycle";
+import type { ReactNode } from "react";
+
+export interface SourceLifecycleCardProps {
+  actions?: ReactNode;
+  ariaLabel?: string;
+  as?: "article" | "div";
+  children?: ReactNode;
+  className?: string;
+  density?: "comfortable" | "compact";
+  envelope: SourceLifecycleEnvelope;
+  selected?: boolean;
+  testId?: string;
+}
+
+export function SourceLifecycleCard({
+  actions,
+  ariaLabel,
+  as = "article",
+  children,
+  className = "",
+  density = "comfortable",
+  envelope,
+  selected = false,
+  testId,
+}: Readonly<SourceLifecycleCardProps>) {
+  const Component = as;
+  const descriptor = sourceLifecycleDescriptor(envelope.canonicalState);
+  const isCompact = density === "compact";
+  return (
+    <Component
+      aria-label={ariaLabel}
+      className={`grid gap-3 rounded-md border ${
+        selected
+          ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
+          : "vs-border vs-surface"
+      } ${isCompact ? "p-3" : "p-4"} ${className}`}
+      data-generated-audio-state={envelope.generatedAudioState}
+      data-policy-scope={envelope.policyScope}
+      data-selected-scope={envelope.selectedScope}
+      data-source-lifecycle-state={envelope.canonicalState}
+      data-testid={testId}
+    >
+      <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h4
+              className={`min-w-0 truncate font-semibold ${isCompact ? "text-sm" : "text-base"}`}
+              title={envelope.title}
+            >
+              {envelope.title}
+            </h4>
+            <StatusChip tone={sourceLifecycleTone(sourceReadinessTone(envelope.sourceReadiness))}>
+              {sourceReadinessLabel(envelope.sourceReadiness)}
+            </StatusChip>
+            <StatusChip tone={sourceLifecycleTone(descriptor.tone)}>{descriptor.label}</StatusChip>
+            <StatusChip tone={audioTone(envelope.generatedAudioState)}>
+              {generatedAudioStateLabel(envelope.generatedAudioState)}
+            </StatusChip>
+            <StatusChip tone={envelope.policyScope === "source" ? "pinned" : "metadata"}>
+              {sourcePolicyScopeLabel(envelope.policyScope)}
+            </StatusChip>
+            {selected ? <StatusChip tone="selected">Active source</StatusChip> : null}
+          </div>
+          <p className="vs-muted mt-1 text-xs leading-5">
+            {sourceKindLabel(envelope.sourceKind)} · {sourceAdapterLabel(envelope.adapterKind)} ·{" "}
+            {envelope.selectedScope}
+          </p>
+          <p className="vs-muted mt-1 text-xs leading-5">
+            {sourceReadinessDetail(envelope.sourceReadiness)} {descriptor.detail}
+          </p>
+          {envelope.sourceReadiness.failureStage ? (
+            <p className="mt-2 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] px-3 py-2 text-xs leading-5 text-[var(--vs-status-danger)]">
+              Failure stage: {envelope.sourceReadiness.failureStage}.{" "}
+              {envelope.sourceReadiness.retryAction
+                ? `Recovery: ${envelope.sourceReadiness.retryAction}.`
+                : null}
+            </p>
+          ) : null}
+        </div>
+        {actions ? <div className="flex flex-wrap gap-2 sm:justify-end">{actions}</div> : null}
+      </div>
+      {children}
+    </Component>
+  );
+}
+
+function sourceLifecycleTone(tone: SourceLifecycleEnvelopeTone): StatusChipTone {
+  if (tone === "pinned") {
+    return "pinned";
+  }
+  if (tone === "accent") {
+    return "selected";
+  }
+  if (tone === "danger") {
+    return "danger";
+  }
+  if (tone === "info") {
+    return "info";
+  }
+  if (tone === "success") {
+    return "success";
+  }
+  if (tone === "warning") {
+    return "warning";
+  }
+  return "metadata";
+}
+
+function audioTone(state: SourceLifecycleEnvelope["generatedAudioState"]): StatusChipTone {
+  if (state === "failed" || state === "degraded") {
+    return "danger";
+  }
+  if (state === "stale") {
+    return "warning";
+  }
+  if (state === "queued" || state === "generating") {
+    return "info";
+  }
+  if (state === "ready") {
+    return "success";
+  }
+  return "metadata";
+}
+
+type SourceLifecycleEnvelopeTone = ReturnType<typeof sourceLifecycleDescriptor>["tone"];

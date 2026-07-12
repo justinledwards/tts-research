@@ -56,6 +56,134 @@ func TestPersistArtifactsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestBuildV2SuppressesWordEntriesForHeuristicFallback(t *testing.T) {
+	request := fixtureRequest(alignment.TimingConfidence{
+		Overall: 0.6,
+		Segment: 0.7,
+		Token:   0.55,
+	}, alignment.DriftStats{})
+	report := alignment.AlignmentReportForTiming(
+		alignment.NormalizedTiming{Fragments: request.Fragments, Tokens: request.Tokens},
+		alignment.AlignmentModeHeuristicFallback,
+		[]string{"heuristic fallback"},
+		nil,
+	)
+	highlight := BuildV2(BuildV2Request{
+		JobID:        request.JobID,
+		BookSourceID: request.BookSourceID,
+		ScopeKey:     request.ScopeKey,
+		SpeechPlanID: request.JobID,
+		WordSpans:    request.WordSpans,
+		Fragments:    request.Fragments,
+		Tokens:       request.Tokens,
+		GeneratedAt:  request.GeneratedAt,
+		Quality:      report,
+	})
+	if highlight.SchemaVersion != SchemaVersionV2 {
+		t.Fatalf("schemaVersion = %q, want %q", highlight.SchemaVersion, SchemaVersionV2)
+	}
+	if highlight.Summary.WordCount != 0 || highlight.Summary.PrimaryLevel != "phrase" {
+		t.Fatalf("v2 summary = %+v, want phrase-only heuristic output", highlight.Summary)
+	}
+	if highlight.Summary.FallbackMode != "block-only" && highlight.Summary.FallbackMode != "word-to-phrase" {
+		t.Fatalf("fallback mode = %q, want explicit degraded fallback", highlight.Summary.FallbackMode)
+	}
+}
+
+func TestBuildV2CarriesSourceWordReadingPositions(t *testing.T) {
+	request := fixtureRequest(alignment.TimingConfidence{
+		Overall: 0.95,
+		Segment: 0.95,
+		Token:   0.95,
+	}, alignment.DriftStats{})
+	request.Fragments.Source = alignment.TimingSourceNative
+	request.Tokens.Source = alignment.TimingSourceNative
+	report := alignment.AlignmentReportForTiming(
+		alignment.NormalizedTiming{Fragments: request.Fragments, Tokens: request.Tokens},
+		alignment.AlignmentModeProviderOnly,
+		nil,
+		nil,
+	)
+	highlight := BuildV2(BuildV2Request{
+		JobID:        request.JobID,
+		BookSourceID: request.BookSourceID,
+		ScopeKey:     request.ScopeKey,
+		SpeechPlanID: request.JobID,
+		WordSpans:    request.WordSpans,
+		Fragments:    request.Fragments,
+		Tokens:       request.Tokens,
+		GeneratedAt:  request.GeneratedAt,
+		Quality:      report,
+	})
+	if highlight.Summary.WordCount != 2 {
+		t.Fatalf("word count = %d, want 2", highlight.Summary.WordCount)
+	}
+	var world HighlightMapV2Entry
+	for _, entry := range highlight.Entries {
+		if entry.Level == "word" && entry.SpokenText == "world" {
+			world = entry
+			break
+		}
+	}
+	if world.ReadingPosition.ActiveWordIndex != 11 {
+		t.Fatalf("world active word index = %d, want 11", world.ReadingPosition.ActiveWordIndex)
+	}
+	if world.ReadingPosition.TextQuote != "world" {
+		t.Fatalf("world text quote = %q, want world", world.ReadingPosition.TextQuote)
+	}
+	if world.SourceWordIndex == nil || *world.SourceWordIndex != 11 {
+		t.Fatalf("world source word index = %#v, want 11", world.SourceWordIndex)
+	}
+	if world.SourceWordID != "book-1:chapter:1:word:11" {
+		t.Fatalf("world source word id = %q, want canonical source identity", world.SourceWordID)
+	}
+	if world.SpokenTokenID != "job-1:token:1" {
+		t.Fatalf("world spoken token id = %q, want speech token identity", world.SpokenTokenID)
+	}
+}
+
+func TestBuildV2PreservesSourceAndSpokenWordTextSeparately(t *testing.T) {
+	request := fixtureRequest(alignment.TimingConfidence{
+		Overall: 0.95,
+		Segment: 0.95,
+		Token:   0.95,
+	}, alignment.DriftStats{})
+	request.WordSpans[0].Text = "source-word"
+	request.Tokens.Tokens[0].Text = "spoken-word"
+	request.Fragments.Source = alignment.TimingSourceNative
+	request.Tokens.Source = alignment.TimingSourceNative
+	report := alignment.AlignmentReportForTiming(
+		alignment.NormalizedTiming{Fragments: request.Fragments, Tokens: request.Tokens},
+		alignment.AlignmentModeProviderOnly,
+		nil,
+		nil,
+	)
+	highlight := BuildV2(BuildV2Request{
+		JobID:        request.JobID,
+		BookSourceID: request.BookSourceID,
+		ScopeKey:     request.ScopeKey,
+		SpeechPlanID: request.JobID,
+		WordSpans:    request.WordSpans,
+		Fragments:    request.Fragments,
+		Tokens:       request.Tokens,
+		GeneratedAt:  request.GeneratedAt,
+		Quality:      report,
+	})
+	var entry HighlightMapV2Entry
+	for _, candidate := range highlight.Entries {
+		if candidate.Level == "word" && candidate.SourceWordIndex != nil && *candidate.SourceWordIndex == 10 {
+			entry = candidate
+			break
+		}
+	}
+	if entry.TextQuote != "source-word" || entry.SpokenText != "spoken-word" {
+		t.Fatalf("entry text quote/spoken = %q/%q, want source-word/spoken-word", entry.TextQuote, entry.SpokenText)
+	}
+	if entry.Traceability == nil || entry.Traceability.SourceTextMatch != "source-word" || entry.Traceability.SpokenTextMatch != "spoken-word" {
+		t.Fatalf("traceability = %#v, want source/spoken text split", entry.Traceability)
+	}
+}
+
 func fixtureRequest(confidence alignment.TimingConfidence, drift alignment.DriftStats) BuildRequest {
 	generatedAt := time.Unix(0, 0).UTC()
 	fragments := []alignment.FragmentTiming{{

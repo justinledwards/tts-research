@@ -1,0 +1,34 @@
+export { CommandPalette } from "./CommandPalette";
+export {
+  buildCinemaAdvancedCommandMetadata,
+  buildCinemaFocusCommandMetadata,
+  buildHelpCommandMetadata,
+  buildSettingsCommandMetadata,
+  buildWorkspaceCommandMetadata,
+  type CinemaAdvancedCommandTarget,
+  type CinemaFocusCommandTarget,
+  type HelpCommandTarget,
+  type SettingsCommandTarget,
+  type WorkspaceCommandTarget,
+} from "./commands";
+export {
+  CloseIcon,
+  CommandIcon,
+  ExitIcon,
+  HelpIcon,
+  SettingsIcon,
+  SurfaceActionButton,
+} from "./SurfaceActions";
+export {
+  commandDisabled,
+  commandDisabledReason,
+  isCommandPaletteShortcut,
+  normalizeCommandText,
+  scoreCommandEntry,
+  searchCommandEntries,
+  shouldIgnoreCommandShortcutTarget,
+  type CommandActionContext,
+  type CommandEntry,
+  type CommandMetadata,
+  type CommandSection,
+} from "./model";

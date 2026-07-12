@@ -331,8 +331,13 @@ setup_alignment() {
       run_with_mise uv venv --python "${ALIGNMENT_AENEAS_PYTHON_VERSION:-3.11}" "$ALIGNMENT_AENEAS_VENV"
     fi
     if ! "$ALIGNMENT_AENEAS_VENV/bin/python" -c "import aeneas" >/dev/null 2>&1; then
+      echo "Installing Aeneas build prerequisites into isolated environment..."
+      run_with_mise uv pip install --python "$ALIGNMENT_AENEAS_VENV/bin/python" --reinstall "setuptools<60" "wheel<0.42" "numpy<1.24"
       echo "Installing Aeneas into isolated environment..."
-      run_with_mise uv pip install --python "$ALIGNMENT_AENEAS_VENV/bin/python" aeneas
+      if ! run_with_mise uv pip install --python "$ALIGNMENT_AENEAS_VENV/bin/python" --no-build-isolation aeneas; then
+        echo "Skipping Aeneas install: native build dependencies are missing."
+        echo "Install libespeak-dev/espeak development headers, then rerun pnpm setup:alignment."
+      fi
     fi
     echo "Aeneas Python: $ALIGNMENT_AENEAS_VENV/bin/python"
   else

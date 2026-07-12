@@ -29,7 +29,7 @@ export function ContentIRDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-[60] bg-zinc-950/30" role="presentation">
+    <div className="fixed inset-0 z-[60] bg-[var(--vs-surface-overlay)]" role="presentation">
       <aside
         aria-label="Content structure"
         aria-modal="true"
@@ -100,7 +100,7 @@ function ContentIRDocumentView({ document }: Readonly<{ document: ContentIRDocum
 
       <div className="sticky top-0 z-10 grid gap-3 border-b bg-[var(--vs-raised)] pb-4 vs-border lg:grid-cols-[minmax(0,1fr)_10rem_10rem_auto] lg:items-center">
         <input
-          className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-sm outline-none focus:border-orange-300 vs-border"
+          className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-sm outline-none focus:border-[var(--vs-selected-border)] vs-border"
           onChange={(event) => {
             setQuery(event.currentTarget.value);
           }}
@@ -109,7 +109,7 @@ function ContentIRDocumentView({ document }: Readonly<{ document: ContentIRDocum
           value={query}
         />
         <select
-          className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-2 text-sm outline-none focus:border-orange-300 vs-border"
+          className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-2 text-sm outline-none focus:border-[var(--vs-selected-border)] vs-border"
           onChange={(event) => {
             setKindFilter(event.currentTarget.value);
           }}
@@ -123,7 +123,7 @@ function ContentIRDocumentView({ document }: Readonly<{ document: ContentIRDocum
           ))}
         </select>
         <select
-          className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-2 text-sm outline-none focus:border-orange-300 vs-border"
+          className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-2 text-sm outline-none focus:border-[var(--vs-selected-border)] vs-border"
           onChange={(event) => {
             setModeFilter(event.currentTarget.value);
           }}
@@ -207,7 +207,7 @@ function ContentIRNodeCard({ node }: Readonly<{ node: ContentIRNode }>) {
         <div className="flex flex-wrap gap-2">
           {node.warnings.map((warning) => (
             <span
-              className="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700"
+              className="rounded-full bg-[var(--vs-status-warning-bg)] px-2 py-1 text-xs font-semibold text-[var(--vs-status-warning)]"
               key={warning}
             >
               {warning}
@@ -216,7 +216,7 @@ function ContentIRNodeCard({ node }: Readonly<{ node: ContentIRNode }>) {
         </div>
       ) : null}
       {policy.explanation ? (
-        <p className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
+        <p className="rounded-md border border-[var(--vs-status-info-border)] bg-[var(--vs-status-info-bg)] px-3 py-2 text-xs leading-5 text-[var(--vs-status-info)]">
           {policy.explanation}
         </p>
       ) : null}
@@ -280,7 +280,7 @@ function ContentIRLanguageBadge({ node }: Readonly<{ node: ContentIRNode }>) {
     return null;
   }
   return (
-    <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+    <span className="rounded border border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)] px-2 py-1 text-xs font-semibold text-[var(--vs-status-success)]">
       {spanCount > 1 ? `${lang} · ${spanCount.toLocaleString()} spans` : lang}
     </span>
   );
@@ -295,8 +295,8 @@ function ContentIRSpeechDifference({ node }: Readonly<{ node: ContentIRNode }>) 
     return null;
   }
   return (
-    <div className="grid gap-1 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
-      <span className="font-semibold text-blue-900">Spoken as</span>
+    <div className="grid gap-1 rounded-md border border-[var(--vs-status-info-border)] bg-[var(--vs-status-info-bg)] px-3 py-2 text-xs leading-5 text-[var(--vs-status-info)]">
+      <span className="font-semibold text-[var(--vs-status-info)]">Spoken as</span>
       <span className="max-h-12 overflow-hidden break-words">{speech}</span>
     </div>
   );
@@ -339,7 +339,9 @@ function DrawerMessage({
   tone = "neutral",
 }: Readonly<{ children: string; tone?: "neutral" | "error" }>) {
   const className =
-    tone === "error" ? "border-red-200 bg-red-50 text-red-700" : "vs-border bg-[var(--vs-surface)]";
+    tone === "error"
+      ? "border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]"
+      : "vs-border bg-[var(--vs-surface)]";
   return <p className={`rounded-md border p-4 text-sm ${className}`}>{children}</p>;
 }
 

@@ -1,0 +1,244 @@
+{
+  "schemaVersion": "golden-minute-timing.v1",
+  "sampleId": "golden-minute-readalong",
+  "timingSource": "local-mock-baseline",
+  "totalDurationMs": 65000,
+  "segmentBoundaries": [
+    { "segmentId": "gm-h1", "startMs": 0, "endMs": 2000 },
+    { "segmentId": "gm-p1", "startMs": 2000, "endMs": 11000 },
+    { "segmentId": "gm-p2", "startMs": 11000, "endMs": 19500 },
+    { "segmentId": "gm-p3", "startMs": 19500, "endMs": 28000 },
+    { "segmentId": "gm-p4", "startMs": 28000, "endMs": 41000 },
+    { "segmentId": "gm-p5", "startMs": 41000, "endMs": 43000 },
+    { "segmentId": "gm-p6", "startMs": 43000, "endMs": 51500 },
+    { "segmentId": "gm-p7", "startMs": 51500, "endMs": 65000 }
+  ],
+  "phraseTimings": [
+    {
+      "id": "gm-h1-phrase-1",
+      "segmentId": "gm-h1",
+      "startMs": 0,
+      "endMs": 2000,
+      "text": "Golden Minute Calibration"
+    },
+    {
+      "id": "gm-p1-phrase-1",
+      "segmentId": "gm-p1",
+      "startMs": 2000,
+      "endMs": 5600,
+      "text": "Doctor Mira Chen unlocked the studio at seven oh five"
+    },
+    {
+      "id": "gm-p1-phrase-2",
+      "segmentId": "gm-p1",
+      "startMs": 5600,
+      "endMs": 11000,
+      "text": "placed a brass bookmark on paragraph three, and said, Start with the listener, then chase the waveform"
+    },
+    {
+      "id": "gm-p2-phrase-1",
+      "segmentId": "gm-p2",
+      "startMs": 11000,
+      "endMs": 15300,
+      "text": "The first source block names the route through Review and Preview"
+    },
+    {
+      "id": "gm-p2-phrase-2",
+      "segmentId": "gm-p2",
+      "startMs": 15300,
+      "endMs": 19500,
+      "text": "mock audio, Cinema, and Teleprompt Theatre"
+    },
+    {
+      "id": "gm-p3-phrase-1",
+      "segmentId": "gm-p3",
+      "startMs": 19500,
+      "endMs": 23800,
+      "text": "Before playback begins, she taps the source locator"
+    },
+    {
+      "id": "gm-p3-phrase-2",
+      "segmentId": "gm-p3",
+      "startMs": 23800,
+      "endMs": 28000,
+      "text": "waits for a breath, and checks that citation stays silent"
+    },
+    {
+      "id": "gm-p4-phrase-1",
+      "segmentId": "gm-p4",
+      "startMs": 28000,
+      "endMs": 34500,
+      "text": "Because the sample moves from a heading into measured paragraphs"
+    },
+    {
+      "id": "gm-p4-phrase-2",
+      "segmentId": "gm-p4",
+      "startMs": 34500,
+      "endMs": 41000,
+      "text": "it can expose drift that tiny fixtures usually miss"
+    },
+    {
+      "id": "gm-p5-phrase-1",
+      "segmentId": "gm-p5",
+      "startMs": 41000,
+      "endMs": 43000,
+      "text": "Then listen"
+    },
+    {
+      "id": "gm-p6-phrase-1",
+      "segmentId": "gm-p6",
+      "startMs": 43000,
+      "endMs": 47400,
+      "text": "After the pause, the voice should resume gently"
+    },
+    {
+      "id": "gm-p6-phrase-2",
+      "segmentId": "gm-p6",
+      "startMs": 47400,
+      "endMs": 51500,
+      "text": "keep the highlighted word in the visible reading lane"
+    },
+    {
+      "id": "gm-p7-phrase-1",
+      "segmentId": "gm-p7",
+      "startMs": 51500,
+      "endMs": 57400,
+      "text": "At forty seven seconds, the player seeks ahead"
+    },
+    {
+      "id": "gm-p7-phrase-2",
+      "segmentId": "gm-p7",
+      "startMs": 57400,
+      "endMs": 65000,
+      "text": "the last theatre cue says, let the final word land"
+    }
+  ],
+  "wordTimings": [
+    { "segmentId": "gm-h1", "localWordIndex": 0, "startMs": 0, "endMs": 666, "text": "Golden" },
+    { "segmentId": "gm-p1", "localWordIndex": 0, "startMs": 2000, "endMs": 2391, "text": "Doctor" },
+    {
+      "segmentId": "gm-p2",
+      "localWordIndex": 8,
+      "startMs": 14091,
+      "endMs": 14477,
+      "text": "Review,"
+    },
+    {
+      "segmentId": "gm-p3",
+      "localWordIndex": 10,
+      "startMs": 23215,
+      "endMs": 23565,
+      "text": "resume"
+    },
+    {
+      "segmentId": "gm-p4",
+      "localWordIndex": 29,
+      "startMs": 38773,
+      "endMs": 39148,
+      "text": "tiny"
+    },
+    {
+      "segmentId": "gm-p5",
+      "localWordIndex": 1,
+      "startMs": 42000,
+      "endMs": 43000,
+      "text": "listen."
+    },
+    {
+      "segmentId": "gm-p6",
+      "localWordIndex": 8,
+      "startMs": 46400,
+      "endMs": 46825,
+      "text": "segment"
+    },
+    { "segmentId": "gm-p7", "localWordIndex": 1, "startMs": 52343, "endMs": 52765, "text": "forty" }
+  ],
+  "observations": [
+    {
+      "id": "heading-open",
+      "segmentId": "gm-h1",
+      "audioTimeMs": 650,
+      "localWordIndex": 0,
+      "observedHighlightTimeMs": 700,
+      "expectedState": "synced-word"
+    },
+    {
+      "id": "paragraph-one-bookmark",
+      "segmentId": "gm-p1",
+      "audioTimeMs": 6200,
+      "localWordIndex": 12,
+      "observedHighlightTimeMs": 6260,
+      "expectedState": "synced-word"
+    },
+    {
+      "id": "preview-handoff",
+      "segmentId": "gm-p2",
+      "audioTimeMs": 14100,
+      "localWordIndex": 8,
+      "observedHighlightTimeMs": 14170,
+      "expectedState": "synced-word"
+    },
+    {
+      "id": "citation-policy",
+      "segmentId": "gm-p3",
+      "audioTimeMs": 26000,
+      "localWordIndex": 19,
+      "observedHighlightTimeMs": 26080,
+      "expectedState": "synced-word"
+    },
+    {
+      "id": "long-sentence-tail",
+      "segmentId": "gm-p4",
+      "audioTimeMs": 39000,
+      "localWordIndex": 29,
+      "observedHighlightTimeMs": 39080,
+      "expectedState": "synced-word"
+    },
+    {
+      "id": "short-sentence",
+      "segmentId": "gm-p5",
+      "audioTimeMs": 42100,
+      "localWordIndex": 1,
+      "observedHighlightTimeMs": 42150,
+      "expectedState": "synced-word"
+    },
+    {
+      "id": "segment-boundary-resume",
+      "segmentId": "gm-p6",
+      "audioTimeMs": 46800,
+      "localWordIndex": 11,
+      "observedHighlightTimeMs": 46880,
+      "expectedState": "synced-word"
+    },
+    {
+      "id": "seek-resume-target",
+      "segmentId": "gm-p7",
+      "audioTimeMs": 52500,
+      "localWordIndex": 2,
+      "observedHighlightTimeMs": 52580,
+      "expectedState": "synced-word"
+    }
+  ],
+  "segmentTransitions": [
+    {
+      "fromSegmentId": "gm-p3",
+      "toSegmentId": "gm-p4",
+      "boundaryMs": 28000,
+      "expectedMaxGapMs": 900
+    },
+    {
+      "fromSegmentId": "gm-p5",
+      "toSegmentId": "gm-p6",
+      "boundaryMs": 43000,
+      "expectedMaxGapMs": 900
+    }
+  ],
+  "bookmarkResumeTarget": {
+    "id": "golden-minute-resume-anchor",
+    "sourceLocator": "golden-minute://resume-anchor",
+    "segmentId": "gm-p7",
+    "currentTimeSec": 47,
+    "localWordIndex": 0,
+    "expectedActiveText": "At forty seven seconds"
+  }
+}

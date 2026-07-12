@@ -4,7 +4,7 @@
     {
       "confidence": 0.98,
       "endOffset": 12,
-      "id": "block-0001",
+      "id": "markdown-heading-directivesmdheadingdirectives-directives-202a90b160e6",
       "index": 1,
       "kind": "heading",
       "label": "Directives",
@@ -15,18 +15,23 @@
         "columnStart": 1,
         "lineEnd": 1,
         "lineStart": 1,
-        "sourceSlice": "# Directives"
+        "sourceSlice": "# Directives",
+        "fingerprint": "0d725e771a828befe928b8fc3d6e797b",
+        "identityAnchor": "directives.md|heading|Directives|# Directives",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:0"
       },
       "speakMode": "speak",
       "spokenText": "Directives",
       "startOffset": 0,
       "text": "# Directives",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000001024"
     },
     {
       "confidence": 0.98,
       "endOffset": 76,
-      "id": "block-0002",
+      "id": "markdown-admonition-directivesmdadmonitiondirectivesnotelaunch-launch-notes-should-sound-like-a-callout-ab5c8ca1e8e5",
       "index": 2,
       "kind": "admonition",
       "label": "Note",
@@ -42,18 +47,23 @@
         "columnStart": 1,
         "lineEnd": 5,
         "lineStart": 3,
-        "sourceSlice": ":::note{#launch}\nLaunch notes should sound like a callout.\n:::"
+        "sourceSlice": ":::note{#launch}\nLaunch notes should sound like a callout.\n:::",
+        "fingerprint": "096326fb55e638d60347b9b7cf920bff",
+        "identityAnchor": "directives.md|admonition|Directives|:::note{#launch} Launch notes should sound like a callout. :::",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:14"
       },
       "speakMode": "speak",
       "spokenText": "Launch notes should sound like a callout.",
       "startOffset": 14,
       "text": ":::note{#launch}\nLaunch notes should sound like a callout.\n:::",
-      "warnings": ["admonition_directive"]
+      "warnings": ["admonition_directive"],
+      "orderKey": "000000015361"
     },
     {
       "confidence": 0.72,
       "endOffset": 114,
-      "id": "block-0003",
+      "id": "markdown-directive-directivesmddirectivedirectivesunknown-widgetmodeinteractive-565a3c280086",
       "index": 3,
       "kind": "directive",
       "label": "Unknown Widget",
@@ -69,21 +79,26 @@
         "columnStart": 1,
         "lineEnd": 7,
         "lineStart": 7,
-        "sourceSlice": "::unknown-widget{mode=\"interactive\"}"
+        "sourceSlice": "::unknown-widget{mode=\"interactive\"}",
+        "fingerprint": "837c0d21ad4778469d0c35cb214fcea2",
+        "identityAnchor": "directives.md|directive|Directives|::unknown-widget{mode=\"interactive\"}",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:78"
       },
       "speakMode": "skip",
       "spokenText": "",
       "startOffset": 78,
       "text": "::unknown-widget{mode=\"interactive\"}",
-      "warnings": ["directive_fallback"]
+      "warnings": ["directive_fallback"],
+      "orderKey": "000000080898"
     },
     {
       "confidence": 0.98,
       "endOffset": 163,
-      "id": "block-0004",
+      "id": "markdown-body-directivesmdbodydirectivesthis-custom-directive-should-remain-explicit-972fae943e5f",
       "index": 4,
       "kind": "body",
-      "label": "This custom directive should remain explicit. ::",
+      "label": "This custom directive should remain explicit.::",
       "language": "",
       "metadata": {
         "astPath": "/children/3",
@@ -91,13 +106,18 @@
         "columnStart": 1,
         "lineEnd": 9,
         "lineStart": 8,
-        "sourceSlice": "This custom directive should remain explicit.\n::"
+        "sourceSlice": "This custom directive should remain explicit.\n::",
+        "fingerprint": "90b5d2e050dac7867ee29b9067de2d4c",
+        "identityAnchor": "directives.md|body|Directives|This custom directive should remain explicit. ::",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:115"
       },
       "speakMode": "speak",
-      "spokenText": "This custom directive should remain explicit. ::",
+      "spokenText": "This custom directive should remain explicit.::",
       "startOffset": 115,
       "text": "This custom directive should remain explicit.\n::",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000118787"
     }
   ],
   "document": {
@@ -129,11 +149,15 @@
           "columnStart": 1,
           "lineEnd": 1,
           "lineStart": 1,
-          "sourceSlice": "# Directives"
+          "sourceSlice": "# Directives",
+          "fingerprint": "0d725e771a828befe928b8fc3d6e797b",
+          "identityAnchor": "directives.md|heading|Directives|# Directives",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:0"
         },
-        "nodeId": "block-0001",
+        "nodeId": "markdown-heading-directivesmdheadingdirectives-directives-202a90b160e6",
         "normalisedText": "# Directives",
-        "orderKey": "00000001",
+        "orderKey": "000000001024",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -151,6 +175,13 @@
           "offsets": {
             "end": 12,
             "start": 0
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "directives"
         },
@@ -198,11 +229,15 @@
           "columnStart": 1,
           "lineEnd": 5,
           "lineStart": 3,
-          "sourceSlice": ":::note{#launch}\nLaunch notes should sound like a callout.\n:::"
+          "sourceSlice": ":::note{#launch}\nLaunch notes should sound like a callout.\n:::",
+          "fingerprint": "096326fb55e638d60347b9b7cf920bff",
+          "identityAnchor": "directives.md|admonition|Directives|:::note{#launch} Launch notes should sound like a callout. :::",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:14"
         },
-        "nodeId": "block-0002",
+        "nodeId": "markdown-admonition-directivesmdadmonitiondirectivesnotelaunch-launch-notes-should-sound-like-a-callout-ab5c8ca1e8e5",
         "normalisedText": ":::note{#launch} Launch notes should sound like a callout. :::",
-        "orderKey": "00000002",
+        "orderKey": "000000015361",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -220,6 +255,13 @@
           "offsets": {
             "end": 76,
             "start": 14
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "directives"
         },
@@ -267,11 +309,15 @@
           "columnStart": 1,
           "lineEnd": 7,
           "lineStart": 7,
-          "sourceSlice": "::unknown-widget{mode=\"interactive\"}"
+          "sourceSlice": "::unknown-widget{mode=\"interactive\"}",
+          "fingerprint": "837c0d21ad4778469d0c35cb214fcea2",
+          "identityAnchor": "directives.md|directive|Directives|::unknown-widget{mode=\"interactive\"}",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:78"
         },
-        "nodeId": "block-0003",
+        "nodeId": "markdown-directive-directivesmddirectivedirectivesunknown-widgetmodeinteractive-565a3c280086",
         "normalisedText": "::unknown-widget{mode=\"interactive\"}",
-        "orderKey": "00000003",
+        "orderKey": "000000080898",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -289,6 +335,13 @@
           "offsets": {
             "end": 114,
             "start": 78
+          },
+          "extraction": {
+            "confidence": 0.72,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "directives"
         },
@@ -331,11 +384,15 @@
           "columnStart": 1,
           "lineEnd": 9,
           "lineStart": 8,
-          "sourceSlice": "This custom directive should remain explicit.\n::"
+          "sourceSlice": "This custom directive should remain explicit.\n::",
+          "fingerprint": "90b5d2e050dac7867ee29b9067de2d4c",
+          "identityAnchor": "directives.md|body|Directives|This custom directive should remain explicit. ::",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:115"
         },
-        "nodeId": "block-0004",
+        "nodeId": "markdown-body-directivesmdbodydirectivesthis-custom-directive-should-remain-explicit-972fae943e5f",
         "normalisedText": "This custom directive should remain explicit. ::",
-        "orderKey": "00000004",
+        "orderKey": "000000118787",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -353,6 +410,13 @@
           "offsets": {
             "end": 163,
             "start": 115
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "directives"
         },
@@ -375,7 +439,7 @@
             "profile": "Enterprise"
           }
         },
-        "speechText": "This custom directive should remain explicit. ::",
+        "speechText": "This custom directive should remain explicit.::",
         "ui": {
           "highlightUnitHint": "node",
           "progressionHint": "linear"
@@ -403,7 +467,7 @@
   "parseMode": "strict",
   "skippedItems": [
     {
-      "id": "block-0003",
+      "id": "markdown-directive-directivesmddirectivedirectivesunknown-widgetmodeinteractive-565a3c280086",
       "kind": "directive",
       "offset": 78,
       "reason": "unsupported directive kept as safe fallback",

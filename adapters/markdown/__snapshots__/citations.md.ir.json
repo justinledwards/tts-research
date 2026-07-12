@@ -4,7 +4,7 @@
     {
       "confidence": 0.98,
       "endOffset": 11,
-      "id": "block-0001",
+      "id": "markdown-heading-citationsmdheadingcitations-citations-b38a72290cab",
       "index": 1,
       "kind": "heading",
       "label": "Citations",
@@ -15,57 +15,134 @@
         "columnStart": 1,
         "lineEnd": 1,
         "lineStart": 1,
-        "sourceSlice": "# Citations"
+        "sourceSlice": "# Citations",
+        "fingerprint": "c241cb2fcb0eb81ad1bd3ce6bb54d9c0",
+        "identityAnchor": "citations.md|heading|Citations|# Citations",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:0"
       },
       "speakMode": "speak",
       "spokenText": "Citations",
       "startOffset": 0,
       "text": "# Citations",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000001024"
     },
     {
       "confidence": 0.98,
       "endOffset": 75,
-      "id": "block-0002",
+      "id": "markdown-body-citationsmdbodycitationsthe-corporate-moat-remains-useful-citeturn40search10-ccae6a6ef79f",
       "index": 2,
       "kind": "body",
       "label": "The corporate moat remains useful.",
       "language": "",
       "metadata": {
+        "inlineArtifacts": [
+          {
+            "endOffset": 75,
+            "identifier": "",
+            "kind": "citation",
+            "markerType": "chatgpt_glyph_citation",
+            "raw": "citeturn40search10",
+            "speechText": "Citation marker.",
+            "startOffset": 48,
+            "url": "",
+            "visualLabel": "cite"
+          }
+        ],
         "astPath": "/children/1",
         "columnEnd": 57,
         "columnStart": 1,
         "lineEnd": 3,
         "lineStart": 3,
-        "sourceSlice": "The corporate moat remains useful. citeturn40search10"
+        "sourceSlice": "The corporate moat remains useful. citeturn40search10",
+        "fingerprint": "f6c4812804a4887038292dcf76f8e735",
+        "identityAnchor": "citations.md|body|Citations|The corporate moat remains useful. citeturn40search10",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:13"
       },
       "speakMode": "speak",
       "spokenText": "The corporate moat remains useful.",
       "startOffset": 13,
       "text": "The corporate moat remains useful. citeturn40search10",
-      "warnings": ["citation_removed"]
+      "warnings": ["citation_removed"],
+      "orderKey": "000000014337"
     },
     {
       "confidence": 0.98,
-      "endOffset": 102,
-      "id": "block-0003",
+      "endOffset": 75,
+      "id": "markdown-citation-citationsmdcitationcitationsciteturn40search10-4644c9d6fae8",
       "index": 3,
       "kind": "citation",
       "label": "Citation",
       "language": "",
       "metadata": {
+        "endOffset": 75,
+        "identifier": "",
+        "kind": "citation",
+        "markerType": "chatgpt_glyph_citation",
+        "raw": "citeturn40search10",
+        "speechText": "Citation marker.",
+        "startOffset": 48,
+        "url": "",
+        "visualLabel": "cite",
+        "astPath": "/children/1/inline-artifact/0",
+        "columnEnd": 57,
+        "columnStart": 36,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "sourceSlice": "citeturn40search10",
+        "fingerprint": "2e2c87b2b40e0bd058b9c52983488877",
+        "identityAnchor": "citations.md|citation|Citations|citeturn40search10",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:48"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 48,
+      "text": "citeturn40search10",
+      "warnings": ["inline_artifact", "citation_removed", "citation_policy"],
+      "orderKey": "000000050178"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 102,
+      "id": "markdown-citation-citationsmdcitationcitationsciteturn1search0-2adbc59052ed",
+      "index": 4,
+      "kind": "citation",
+      "label": "Citation",
+      "language": "",
+      "metadata": {
+        "inlineArtifacts": [
+          {
+            "endOffset": 102,
+            "identifier": "",
+            "kind": "citation",
+            "markerType": "chatgpt_glyph_citation",
+            "raw": "citeturn1search0",
+            "speechText": "Citation marker.",
+            "startOffset": 77,
+            "url": "",
+            "visualLabel": "cite"
+          }
+        ],
         "astPath": "/children/2",
         "columnEnd": 20,
         "columnStart": 1,
         "lineEnd": 5,
         "lineStart": 5,
-        "sourceSlice": "citeturn1search0"
+        "sourceSlice": "citeturn1search0",
+        "fingerprint": "8a6c17ff4ec96219273fc93132d6a386",
+        "identityAnchor": "citations.md|citation|Citations|citeturn1search0",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:77"
       },
       "speakMode": "skip",
       "spokenText": "",
       "startOffset": 77,
       "text": "citeturn1search0",
-      "warnings": ["citation_skipped"]
+      "warnings": ["citation_skipped", "citation_removed"],
+      "orderKey": "000000079875"
     }
   ],
   "document": {
@@ -97,11 +174,15 @@
           "columnStart": 1,
           "lineEnd": 1,
           "lineStart": 1,
-          "sourceSlice": "# Citations"
+          "sourceSlice": "# Citations",
+          "fingerprint": "c241cb2fcb0eb81ad1bd3ce6bb54d9c0",
+          "identityAnchor": "citations.md|heading|Citations|# Citations",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:0"
         },
-        "nodeId": "block-0001",
+        "nodeId": "markdown-heading-citationsmdheadingcitations-citations-b38a72290cab",
         "normalisedText": "# Citations",
-        "orderKey": "00000001",
+        "orderKey": "000000001024",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -119,6 +200,13 @@
           "offsets": {
             "end": 11,
             "start": 0
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "citations"
         },
@@ -156,16 +244,33 @@
         "kind": "body",
         "lang": "und",
         "metadata": {
+          "inlineArtifacts": [
+            {
+              "endOffset": 75,
+              "identifier": "",
+              "kind": "citation",
+              "markerType": "chatgpt_glyph_citation",
+              "raw": "citeturn40search10",
+              "speechText": "Citation marker.",
+              "startOffset": 48,
+              "url": "",
+              "visualLabel": "cite"
+            }
+          ],
           "astPath": "/children/1",
           "columnEnd": 57,
           "columnStart": 1,
           "lineEnd": 3,
           "lineStart": 3,
-          "sourceSlice": "The corporate moat remains useful. citeturn40search10"
+          "sourceSlice": "The corporate moat remains useful. citeturn40search10",
+          "fingerprint": "f6c4812804a4887038292dcf76f8e735",
+          "identityAnchor": "citations.md|body|Citations|The corporate moat remains useful. citeturn40search10",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:13"
         },
-        "nodeId": "block-0002",
+        "nodeId": "markdown-body-citationsmdbodycitationsthe-corporate-moat-remains-useful-citeturn40search10-ccae6a6ef79f",
         "normalisedText": "The corporate moat remains useful. citeturn40search10",
-        "orderKey": "00000002",
+        "orderKey": "000000014337",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -183,6 +288,13 @@
           "offsets": {
             "end": 75,
             "start": 13
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "citations"
         },
@@ -216,37 +328,57 @@
         "adapterVersion": "markdown-adapter-v2",
         "confidence": 0.98,
         "dir": "ltr",
-        "displayText": "citeturn1search0",
+        "displayText": "citeturn40search10",
         "kind": "citation",
         "lang": "und",
         "metadata": {
-          "astPath": "/children/2",
-          "columnEnd": 20,
-          "columnStart": 1,
-          "lineEnd": 5,
-          "lineStart": 5,
-          "sourceSlice": "citeturn1search0"
+          "endOffset": 75,
+          "identifier": "",
+          "kind": "citation",
+          "markerType": "chatgpt_glyph_citation",
+          "raw": "citeturn40search10",
+          "speechText": "Citation marker.",
+          "startOffset": 48,
+          "url": "",
+          "visualLabel": "cite",
+          "astPath": "/children/1/inline-artifact/0",
+          "columnEnd": 57,
+          "columnStart": 36,
+          "lineEnd": 3,
+          "lineStart": 3,
+          "sourceSlice": "citeturn40search10",
+          "fingerprint": "2e2c87b2b40e0bd058b9c52983488877",
+          "identityAnchor": "citations.md|citation|Citations|citeturn40search10",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:48"
         },
-        "nodeId": "block-0003",
-        "normalisedText": "citeturn1search0",
-        "orderKey": "00000003",
+        "nodeId": "markdown-citation-citationsmdcitationcitationsciteturn40search10-4644c9d6fae8",
+        "normalisedText": "citeturn40search10",
+        "orderKey": "000000050178",
         "parentId": "",
         "provenance": {
           "format": "markdown",
           "locator": {
             "markdown": {
-              "astPath": "/children/2",
-              "columnEnd": 20,
-              "columnStart": 1,
-              "lineEnd": 5,
-              "lineStart": 5,
+              "astPath": "/children/1/inline-artifact/0",
+              "columnEnd": 57,
+              "columnStart": 36,
+              "lineEnd": 3,
+              "lineStart": 3,
               "path": "citations.md"
             },
             "type": "markdown"
           },
           "offsets": {
-            "end": 102,
-            "start": 77
+            "end": 75,
+            "start": 48
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "citations"
         },
@@ -274,7 +406,95 @@
           "highlightUnitHint": "node",
           "progressionHint": "linear"
         },
-        "warnings": ["citation_skipped"]
+        "warnings": ["inline_artifact", "citation_removed", "citation_policy"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "citeturn1search0",
+        "kind": "citation",
+        "lang": "und",
+        "metadata": {
+          "inlineArtifacts": [
+            {
+              "endOffset": 102,
+              "identifier": "",
+              "kind": "citation",
+              "markerType": "chatgpt_glyph_citation",
+              "raw": "citeturn1search0",
+              "speechText": "Citation marker.",
+              "startOffset": 77,
+              "url": "",
+              "visualLabel": "cite"
+            }
+          ],
+          "astPath": "/children/2",
+          "columnEnd": 20,
+          "columnStart": 1,
+          "lineEnd": 5,
+          "lineStart": 5,
+          "sourceSlice": "citeturn1search0",
+          "fingerprint": "8a6c17ff4ec96219273fc93132d6a386",
+          "identityAnchor": "citations.md|citation|Citations|citeturn1search0",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:77"
+        },
+        "nodeId": "markdown-citation-citationsmdcitationcitationsciteturn1search0-2adbc59052ed",
+        "normalisedText": "citeturn1search0",
+        "orderKey": "000000079875",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/2",
+              "columnEnd": 20,
+              "columnStart": 1,
+              "lineEnd": 5,
+              "lineStart": 5,
+              "path": "citations.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 102,
+            "start": 77
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "citations"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "citation",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["citation_skipped", "citation_removed"]
       }
     ],
     "projectId": "",
@@ -297,10 +517,17 @@
   "parseMode": "strict",
   "skippedItems": [
     {
-      "id": "block-0003",
+      "id": "markdown-citation-citationsmdcitationcitationsciteturn40search10-4644c9d6fae8",
+      "kind": "citation",
+      "offset": 48,
+      "reason": "citation marker kept out of spoken playback",
+      "text": "citeturn40search10"
+    },
+    {
+      "id": "markdown-citation-citationsmdcitationcitationsciteturn1search0-2adbc59052ed",
       "kind": "citation",
       "offset": 77,
-      "reason": "skipped by markdown adapter",
+      "reason": "citation marker kept out of spoken playback",
       "text": "citeturn1search0"
     }
   ],

@@ -1,34 +1,34 @@
 import { toString as mdastToString } from "mdast-util-to-string";
 import { parse as parseToml } from "smol-toml";
 import { parse as parseYaml } from "yaml";
-
-const ADMONITION_NAMES = new Set([
-  "admonition",
-  "attention",
-  "caution",
-  "danger",
-  "error",
-  "hint",
-  "important",
-  "note",
-  "seealso",
-  "tip",
-  "todo",
-  "warning",
-]);
-
-const EMBEDDED_TYPES = new Set([
-  "html",
-  "mdxFlowExpression",
-  "mdxJsxFlowElement",
-  "mdxJsxTextElement",
-  "mdxTextExpression",
-  "mdxjsEsm",
-]);
-
-const CITATION_GLYPH_PATTERN = /\uE200cite[^\uE201]*\uE201/g;
-const TURN_CITATION_PATTERN = /\bturn\d+(?:search|view|news|fetch)\d+\b/g;
-const MYST_ROLE_PATTERN = /\{([A-Za-z][\w-]*)\}`([^`]+)`/g;
+import {
+  ADMONITION_NAMES,
+  EMBEDDED_TYPES,
+  POLICY_INLINE_ARTIFACT_KINDS,
+  artifactMetadata,
+  buildByteOffsetMap,
+  cleanSpeechText,
+  containsCitationMarkup,
+  deepResearchReferencesMarker,
+  findInlineArtifacts,
+  findMystRoles,
+  firstTitle,
+  firstWords,
+  inlineArtifactWarnings,
+  inlineSpeechText,
+  inlineText,
+  isReferenceLikeNode,
+  isReferenceSectionLabel,
+  labelForDirective,
+  labelForEmbedded,
+  parseCallout,
+  parseMystDirectiveLanguage,
+  shouldSkipCitationBlock,
+  standaloneReferenceOnlyNode,
+  spanForNode,
+  sourceSlice,
+  uniqueStrings,
+} from "./transformHelpers.js";
 
 export function transformMarkdownAst(tree, source, options = {}) {
   const byteMap = buildByteOffsetMap(source);
@@ -46,6 +46,7 @@ export function transformMarkdownAst(tree, source, options = {}) {
       frontmatter: [],
     },
     nodes: [],
+    referenceSection: null,
     source,
     warnings: [...(options.parseWarnings ?? [])],
   };
@@ -60,11 +61,54 @@ export function transformMarkdownAst(tree, source, options = {}) {
 
 function transformChildren(children, path, parentId, context) {
   for (const [index, child] of children.entries()) {
+    const marker = deepResearchReferencesMarker(child);
+    if (marker === "end") {
+      transformNode(child, `${path}/${index}`, parentId, context);
+      context.referenceSection = null;
+      continue;
+    }
+    if (shouldCloseImplicitReferenceSection(child, context)) {
+      context.referenceSection = null;
+    }
     transformNode(child, `${path}/${index}`, parentId, context);
+    if (marker === "start") {
+      context.referenceSection = {
+        label: "deep-research-references",
+        mode: "marker",
+      };
+    }
   }
 }
 
+function shouldCloseImplicitReferenceSection(node, context) {
+  if (context.referenceSection?.mode !== "implicit") {
+    return false;
+  }
+  if (deepResearchReferencesMarker(node) === "start" || node.type === "html") {
+    return false;
+  }
+  return !isReferenceSectionLabel(node) && !isReferenceLikeNode(node, context);
+}
+
 function transformNode(node, astPath, parentId, context) {
+  if (isReferenceSectionLabel(node)) {
+    const label = inlineText(node);
+    context.referenceSection = {
+      label,
+      mode: context.referenceSection?.mode === "marker" ? "marker" : "implicit",
+    };
+    pushReferenceSectionNode(node, astPath, parentId, context, {
+      label,
+      metadata: {
+        referenceSectionHeading: true,
+      },
+    });
+    return;
+  }
+  if (context.referenceSection && node.type !== "html") {
+    pushReferenceSectionNode(node, astPath, parentId, context);
+    return;
+  }
   switch (node.type) {
     case "yaml":
     case "toml":
@@ -118,17 +162,37 @@ function transformNode(node, astPath, parentId, context) {
         warnings: ["image_policy"],
       });
       return;
-    case "thematicBreak":
     case "definition":
+      pushSemanticNode(node, astPath, parentId, context, {
+        kind: "reference",
+        label: "Reference",
+        metadata: {
+          identifier: node.identifier ?? "",
+          url: node.url ?? "",
+        },
+        speakMode: "skip",
+        speechText: "",
+        warnings: ["reference_on_demand"],
+      });
+      return;
     case "footnoteDefinition":
       pushSemanticNode(node, astPath, parentId, context, {
-        kind: "citation",
-        label: "Citation",
+        kind: "footnote",
+        label: "Footnote",
         metadata: {
           identifier: node.identifier ?? "",
         },
         speechText: cleanSpeechText(mdastToString(node)),
-        warnings: ["citation_skipped"],
+        warnings: ["footnote_policy"],
+      });
+      return;
+    case "thematicBreak":
+      pushSemanticNode(node, astPath, parentId, context, {
+        kind: "embedded",
+        label: "Thematic break",
+        speakMode: "skip",
+        speechText: "",
+        warnings: ["markdown_thematic_break"],
       });
       return;
     case "containerDirective":
@@ -156,6 +220,27 @@ function transformNode(node, astPath, parentId, context) {
         warnings: ["markdown_unknown_node"],
       });
   }
+}
+
+function pushReferenceSectionNode(node, astPath, parentId, context, fields = {}) {
+  const section = context.referenceSection ?? { label: "", mode: "implicit" };
+  pushSemanticNode(node, astPath, parentId, context, {
+    kind: "reference",
+    label: fields.label ?? "Reference section",
+    metadata: {
+      referenceSection: true,
+      referenceSectionLabel: section.label,
+      referenceSectionMode: section.mode,
+      ...(fields.metadata ?? {}),
+    },
+    speakMode: "skip",
+    speechText: "",
+    warnings: uniqueStrings([
+      "reference_section",
+      "reference_on_demand",
+      ...(fields.warnings ?? []),
+    ]),
+  });
 }
 
 function pushFrontmatter(node, astPath, parentId, context) {
@@ -192,27 +277,69 @@ function pushParagraph(node, astPath, parentId, context) {
     .map((child, index) => ({ child, index }))
     .filter(({ child }) => EMBEDDED_TYPES.has(child.type));
   const mystRoles = findMystRoles(node, context);
+  const inlineArtifacts = findInlineArtifacts(node, context);
   const warnings = [];
   if (embeddedChildren.length > 0 || mystRoles.length > 0) {
     warnings.push("embedded_fallback");
   }
   const speechText = cleanSpeechText(inlineSpeechText(node));
   const raw = sourceSlice(node, context);
+  const standaloneReference = standaloneReferenceOnlyNode(node, context, inlineArtifacts);
+  if (standaloneReference) {
+    pushSemanticNode(node, astPath, parentId, context, {
+      kind: standaloneReference.kind,
+      label: standaloneReference.label,
+      metadata:
+        inlineArtifacts.length > 0
+          ? {
+              inlineArtifacts: inlineArtifacts.map((artifact) => artifactMetadata(artifact)),
+            }
+          : {},
+      speakMode: "skip",
+      speechText: "",
+      warnings: inlineArtifactWarnings(
+        inlineArtifacts,
+        raw,
+        "",
+        uniqueStrings([...warnings, ...standaloneReference.warnings]),
+      ),
+    });
+    return;
+  }
+  const emitsSyntheticArtifacts =
+    inlineArtifacts.length > 0 && speechText !== "" && !shouldSkipCitationBlock(raw);
   if (speechText !== "") {
     pushSemanticNode(node, astPath, parentId, context, {
       kind: shouldSkipCitationBlock(raw) ? "citation" : "body",
       label: firstWords(speechText, 8),
+      metadata:
+        inlineArtifacts.length > 0
+          ? {
+              inlineArtifacts: inlineArtifacts.map((artifact) => artifactMetadata(artifact)),
+            }
+          : {},
       speechText,
-      warnings: citationWarnings(raw, speechText, warnings),
+      warnings: inlineArtifactWarnings(inlineArtifacts, raw, speechText, warnings),
     });
-  } else if (containsCitationMarkup(raw)) {
+  } else if (inlineArtifacts.length > 0 || containsCitationMarkup(raw)) {
     pushSemanticNode(node, astPath, parentId, context, {
       kind: "citation",
       label: "Citation",
+      metadata:
+        inlineArtifacts.length > 0
+          ? {
+              inlineArtifacts: inlineArtifacts.map((artifact) => artifactMetadata(artifact)),
+            }
+          : {},
       speakMode: "skip",
       speechText: "",
-      warnings: ["citation_skipped"],
+      warnings: inlineArtifactWarnings(inlineArtifacts, raw, speechText, ["citation_skipped"]),
     });
+  }
+  for (const artifact of emitsSyntheticArtifacts ? inlineArtifacts : []) {
+    if (POLICY_INLINE_ARTIFACT_KINDS.has(artifact.kind)) {
+      pushSyntheticInlineArtifact(artifact, astPath, parentId, context);
+    }
   }
   for (const { child, index } of embeddedChildren) {
     pushEmbedded(child, `${astPath}/children/${index}`, parentId, context, {
@@ -250,7 +377,25 @@ function pushBlockquote(node, astPath, parentId, context) {
 
 function pushList(node, astPath, parentId, context) {
   for (const [index, child] of (node.children ?? []).entries()) {
-    const speechText = cleanSpeechText(mdastToString(child));
+    const inlineArtifacts = findInlineArtifacts(child, context);
+    const standaloneReference = standaloneReferenceOnlyNode(child, context, inlineArtifacts);
+    if (standaloneReference) {
+      const raw = sourceSlice(child, context);
+      pushSemanticNode(child, `${astPath}/children/${index}`, parentId, context, {
+        kind: standaloneReference.kind,
+        label: standaloneReference.label,
+        metadata: {
+          checked: child.checked ?? null,
+          inlineArtifacts: inlineArtifacts.map((artifact) => artifactMetadata(artifact)),
+          listOrdered: Boolean(node.ordered),
+        },
+        speakMode: "skip",
+        speechText: "",
+        warnings: inlineArtifactWarnings(inlineArtifacts, raw, "", standaloneReference.warnings),
+      });
+      continue;
+    }
+    const speechText = cleanSpeechText(inlineSpeechText(child));
     if (speechText === "") {
       continue;
     }
@@ -352,6 +497,29 @@ function pushSyntheticEmbedded(role, astPath, parentId, context) {
   });
 }
 
+function pushSyntheticInlineArtifact(artifact, astPath, parentId, context) {
+  context.nodes.push({
+    astPath: `${astPath}/inline-artifact/${artifact.index}`,
+    columnEnd: artifact.columnEnd,
+    columnStart: artifact.columnStart,
+    displayText: artifact.raw,
+    endOffset: artifact.endOffset,
+    kind: artifact.kind,
+    label: artifact.label,
+    language: "",
+    lineEnd: artifact.lineEnd,
+    lineStart: artifact.lineStart,
+    metadata: artifactMetadata(artifact),
+    parentId,
+    role: artifact.kind,
+    sourceSlice: artifact.raw,
+    speakMode: "skip",
+    speechText: "",
+    startOffset: artifact.startOffset,
+    warnings: uniqueStrings(["inline_artifact", artifact.warning, `${artifact.kind}_policy`]),
+  });
+}
+
 function pushSemanticNode(node, astPath, parentId, context, fields) {
   const span = spanForNode(node, context);
   const displayText = sourceSlice(node, context);
@@ -386,197 +554,4 @@ function tableMetadata(node) {
     headers: rows[0] ?? [],
     rows: rows.slice(1),
   };
-}
-
-function spanForNode(node, context) {
-  const position = node.position ?? {};
-  const start = position.start ?? {};
-  const end = position.end ?? {};
-  const startCodeOffset = start.offset ?? 0;
-  const endCodeOffset = end.offset ?? startCodeOffset;
-  return {
-    columnEnd: end.column ?? 0,
-    columnStart: start.column ?? 0,
-    endOffset: byteOffsetAt(context.byteMap, endCodeOffset),
-    lineEnd: end.line ?? 0,
-    lineStart: start.line ?? 0,
-    startOffset: byteOffsetAt(context.byteMap, startCodeOffset),
-  };
-}
-
-function sourceSlice(node, context) {
-  const startOffset = node.position?.start?.offset ?? 0;
-  const endOffset = node.position?.end?.offset ?? startOffset;
-  return context.source.slice(startOffset, endOffset);
-}
-
-function inlineText(node) {
-  return cleanSpeechText(mdastToString(node));
-}
-
-function inlineSpeechText(node) {
-  return (node.children ?? [])
-    .map((child) => inlineChildSpeech(child))
-    .filter(Boolean)
-    .join(" ");
-}
-
-function inlineChildSpeech(node) {
-  if (EMBEDDED_TYPES.has(node.type)) {
-    return "";
-  }
-  switch (node.type) {
-    case "break":
-    case "html":
-      return " ";
-    case "image":
-      return node.alt ?? "";
-    case "inlineCode":
-    case "text":
-      return node.value ?? "";
-    default:
-      if (Array.isArray(node.children)) {
-        return node.children.map((child) => inlineChildSpeech(child)).join(" ");
-      }
-      return node.value ?? "";
-  }
-}
-
-function cleanSpeechText(value) {
-  let clean = String(value)
-    .replaceAll(CITATION_GLYPH_PATTERN, " ")
-    .replaceAll(TURN_CITATION_PATTERN, " ")
-    .replaceAll(MYST_ROLE_PATTERN, "$2")
-    .replaceAll("**", "")
-    .replaceAll("__", "")
-    .replaceAll("~~", "")
-    .replaceAll("•", "");
-  clean = clean.trim().replaceAll(/^[\s>*_.-]+|[\s`*_>-]+$/g, "");
-  return clean.split(/\s+/).filter(Boolean).join(" ");
-}
-
-function citationWarnings(raw, speechText, warnings) {
-  const output = [...warnings];
-  if (containsCitationMarkup(raw)) {
-    output.push(shouldSkipCitationBlock(speechText) ? "citation_skipped" : "citation_removed");
-  }
-  return uniqueStrings(output);
-}
-
-function containsCitationMarkup(value) {
-  return (
-    /\uE200cite[^\uE201]*\uE201/.test(value) ||
-    /\bturn\d+(?:search|view|news|fetch)\d+\b/.test(value)
-  );
-}
-
-function shouldSkipCitationBlock(value) {
-  const trimmed = String(value).trim();
-  if (trimmed === "") {
-    return false;
-  }
-  const citationStripped = trimmed
-    .replaceAll(CITATION_GLYPH_PATTERN, "")
-    .replaceAll(TURN_CITATION_PATTERN, "");
-  return citationStripped.replaceAll(/[\s[\]().,;:|]/g, "") === "";
-}
-
-function parseCallout(raw) {
-  const lines = raw.split("\n").map((line) => line.replaceAll(/^>\s?/g, ""));
-  const match = /^\[!([A-Za-z]+)]\s*(.*)$/.exec(lines[0]?.trim() ?? "");
-  if (!match) {
-    return null;
-  }
-  const kind = match[1].toLowerCase();
-  const title = match[2]?.trim();
-  return {
-    body: [title, ...lines.slice(1)].filter(Boolean).join("\n"),
-    kind,
-    label: title || labelForDirective(kind),
-  };
-}
-
-function parseMystDirectiveLanguage(language) {
-  const match = /^\{([A-Za-z][\w-]*)}\s*(.*)$/.exec(language.trim());
-  if (!match) {
-    return null;
-  }
-  return {
-    arguments: match[2]?.trim() ?? "",
-    name: match[1].toLowerCase(),
-  };
-}
-
-function findMystRoles(node, context) {
-  const raw = sourceSlice(node, context);
-  const span = spanForNode(node, context);
-  const roles = [];
-  MYST_ROLE_PATTERN.lastIndex = 0;
-  let match = MYST_ROLE_PATTERN.exec(raw);
-  while (match) {
-    roles.push({
-      columnEnd: span.columnStart + match.index + match[0].length,
-      columnStart: span.columnStart + match.index,
-      endOffset: span.startOffset + Buffer.byteLength(raw.slice(0, match.index + match[0].length)),
-      index: roles.length,
-      name: match[1],
-      raw: match[0],
-      startOffset: span.startOffset + Buffer.byteLength(raw.slice(0, match.index)),
-      text: match[2],
-    });
-    match = MYST_ROLE_PATTERN.exec(raw);
-  }
-  return roles;
-}
-
-function labelForDirective(name, fallback = "") {
-  const label = String(fallback ?? "").trim();
-  if (label !== "") {
-    return label;
-  }
-  return name
-    .split(/[-_]/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function labelForEmbedded(name, family) {
-  return `${family.toUpperCase()} embedded ${name}`;
-}
-
-function firstTitle(nodes) {
-  return (
-    nodes.find((node) => node.kind === "heading" || node.kind === "subheading")?.speechText ?? ""
-  );
-}
-
-function firstWords(value, count) {
-  return value.split(/\s+/).filter(Boolean).slice(0, count).join(" ");
-}
-
-function uniqueStrings(values) {
-  return [...new Set(values.filter(Boolean))];
-}
-
-function buildByteOffsetMap(source) {
-  const map = new Array(source.length + 1).fill(0);
-  let byteOffset = 0;
-  let codeOffset = 0;
-  for (const char of source) {
-    map[codeOffset] = byteOffset;
-    byteOffset += Buffer.byteLength(char, "utf8");
-    codeOffset += char.length;
-    map[codeOffset] = byteOffset;
-  }
-  for (let index = 1; index < map.length; index += 1) {
-    if (map[index] === 0 && index !== 0) {
-      map[index] = map[index - 1];
-    }
-  }
-  return map;
-}
-
-function byteOffsetAt(map, codeOffset) {
-  return map[Math.max(0, Math.min(codeOffset, map.length - 1))] ?? 0;
 }

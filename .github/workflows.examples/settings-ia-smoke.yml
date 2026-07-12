@@ -1,0 +1,20 @@
+# Disabled example only.
+# To enable later, copy this file into .github/workflows/ after the team agrees
+# which settings IA checks should become hosted gates.
+
+name: Settings IA Smoke Example
+
+on:
+  workflow_dispatch:
+
+jobs:
+  settings-ia-smoke:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: mise install
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm e2e:settings-ia
+      - run: echo "Review the generated Settings, Context Guide, and project-library screenshots before enabling this as a gate."

@@ -9,7 +9,7 @@
   "generatedAt": "2026-05-16T12:00:00Z",
   "nodes": [
     {
-      "nodeId": "epub-0001",
+      "nodeId": "epub-chapter-one",
       "parentId": "",
       "orderKey": "00000001",
       "kind": "chapter",

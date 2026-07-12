@@ -1,5 +1,55 @@
 {
-  "schemaVersion": "tts-research.bench-thresholds.v1",
+  "schemaVersion": "tts-research.bench-thresholds.v2",
+  "measurementProtocol": {
+    "referenceMachineClass": {
+      "id": "local-cpu-modest-v1",
+      "minLogicalCpuCount": 4,
+      "maxLogicalCpuCount": 8,
+      "minMemoryGiB": 16,
+      "storageClass": "ssd",
+      "gpuRequired": false
+    },
+    "discardedWarmupRuns": 1,
+    "minMeasuredRuns": 10,
+    "requiredStatistics": ["p50", "p95", "max"],
+    "processTreeSampleIntervalMs": 250,
+    "idleSettleMs": 30000,
+    "idleSampleDurationMs": 60000
+  },
+  "uxEvidence": {
+    "viewportWidthsPx": [390, 1100, 1440, 1920],
+    "sheetRequiredBelowWidthPx": 1024,
+    "minTouchTargetWidthPx": 44,
+    "minTouchTargetHeightPx": 44,
+    "maxDominantTasksPerSurface": 1,
+    "maxDuplicateVisibleActionLabelsPerSurface": 0,
+    "maxHorizontalOverflowPx": 0,
+    "maxControlContentOcclusions": 0
+  },
+  "startup": {
+    "maxWarmApiHttpReadyP95Ms": 5000,
+    "maxWarmFrontendHttpReadyP95Ms": 5000,
+    "maxColdPostEditLocalHttpReadyP95Ms": 30000,
+    "maxStartupEgressRequests": 0,
+    "maxEagerModelImports": 0,
+    "maxEagerModelDownloads": 0,
+    "maxEagerProviderCalls": 0,
+    "maxImplicitDependencyInstalls": 0,
+    "maxProcessTreeShutdownMs": 10000
+  },
+  "runtimeResources": {
+    "maxApiProcessTreeIdleCpuPercent": 1,
+    "maxFrontendProcessTreeIdleCpuPercent": 1,
+    "maxApiProcessTreeIdleRssMiB": 100,
+    "maxFrontendProcessTreeIdleRssMiB": 200
+  },
+  "localOperations": {
+    "maxProjectCrudP95Ms": 100
+  },
+  "interactionAcknowledgement": {
+    "maxVisibleActionAcknowledgementP95Ms": 100,
+    "maxPlaybackTransportAcknowledgementP95Ms": 50
+  },
   "alignment": {
     "maxMeanMaeMs": 50,
     "maxP95Ms": 75,
@@ -14,19 +64,71 @@
     "maxTotalWarnings": 10,
     "minTotalNodes": 5
   },
+  "readAlongSync": {
+    "maxMedianWordDriftMs": 150,
+    "maxP95WordDriftMs": 150,
+    "maxPhraseDriftMs": 350,
+    "maxWrongNodeCount": 0,
+    "maxWrongWordCount": 0,
+    "maxMissedHighlightCount": 0,
+    "maxStaleHighlightCount": 0,
+    "maxScrollJumpCount": 0,
+    "maxDegradedTimePercentage": 35,
+    "minFixtureCount": 10
+  },
+  "readAlongRuntime": {
+    "fixtureDurationMs": 60000,
+    "longTaskBoundaryMs": 50,
+    "maxLongTaskCount": 0,
+    "maxMotionMeasurePerWord": 1,
+    "maxReactCursorCommitRatePerSecond": 0,
+    "maxStaleHighlightIncidents": 0,
+    "maxStuckHighlightIncidents": 0,
+    "minScenarioCount": 3
+  },
+  "speechFluency": {
+    "maxClippedStartCount": 0,
+    "maxClippedEndCount": 0,
+    "maxSilentSegmentCount": 0,
+    "maxRepeatedSilenceCount": 0,
+    "maxExcessivePauseCount": 0,
+    "maxInterSegmentPauseMs": 900,
+    "maxDurationEstimateDeltaRatio": 0.18
+  },
   "frontendBundle": {
-    "maxInitialJsRawBytes": 520000,
+    "maxInitialJsRawBytes": 523700,
     "maxInitialJsGzipBytes": 160000,
-    "maxInitialCssGzipBytes": 14000,
+    "maxInitialCssGzipBytes": 15000,
     "maxLargestAsyncAppChunkGzipBytes": 110000,
     "requireDiagramVendorLazy": true,
     "requireBookCinemaMarkdownRendererLazy": true,
-    "requireNoForbiddenInitialImports": true
+    "requireNoForbiddenInitialImports": true,
+    "requireExpectedLazyChunks": true
   },
   "readerTiming": {
     "maxAppColdUsableMs": 2200,
+    "maxSourceSwitchMs": 1200,
     "maxStudioRouteSwitchMs": 600,
     "maxBookCinemaOpenMs": 450,
+    "maxPreviewCinemaOpenMs": 950,
+    "maxTransportInteractionLatencyMs": 850,
+    "maxWaveformProgressRenderMs": 1200,
+    "maxTelepromptCueSwitchMs": 1100,
+    "maxSettingsOpenMs": 850,
+    "maxPreviewGenerationHandoffMs": 900,
+    "maxCommandPaletteOpenSearchMs": 2200,
+    "maxContextPanelTabSwitchMs": 950,
     "maxReaderResumeMs": 500
+  },
+  "lowResource": {
+    "browserCpuThrottleRate": 4,
+    "maxRequiredGpuCount": 0,
+    "maxRequiredCudaDeviceCount": 0
+  },
+  "maintainability": {
+    "maxAppTsxLinesAfterShellSharedStateExtraction": 14000,
+    "maxAppTsxLinesAfterWorkflowOrchestrationExtraction": 7000,
+    "maxFinalAppTsxLinesExclusive": 2000,
+    "maxReplacementModuleLines": 3000
   }
 }

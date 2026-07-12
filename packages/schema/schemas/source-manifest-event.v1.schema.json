@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tts-research.local/schemas/source-manifest-event.v1.schema.json",
+  "title": "SourceManifestEvent v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "sourceId",
+    "sequence",
+    "occurredAt",
+    "eventType",
+    "snapshotAvailable",
+    "subject"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "source-manifest-event.v1"
+    },
+    "eventId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "eventType": {
+      "enum": [
+        "source_revision_created",
+        "extraction_revision_updated",
+        "reading_unit_manifest_written",
+        "readalong_manifest_written",
+        "audio_artifact_updated",
+        "progress_updated",
+        "repair_overlay_created",
+        "promotion_crosswalk_created",
+        "artifact_interrupted_retriable"
+      ]
+    },
+    "snapshotAvailable": {
+      "type": "boolean"
+    },
+    "cursor": {
+      "type": "string",
+      "minLength": 1
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sourceRevisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "extractionRevisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readingUnitManifestId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readalongManifestId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "audioArtifactId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "progressId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repairOverlayId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "promotionCrosswalkId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "string"
+        }
+      }
+    },
+    "snapshotManifestId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

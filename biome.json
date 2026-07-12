@@ -3,6 +3,9 @@
   "files": {
     "includes": [
       "**",
+      "!.agents",
+      "!.codex",
+      "!.learnings-skillpack.json",
       "!.venv",
       "!.venv-*",
       "!backend/.venv",
@@ -13,6 +16,7 @@
       "!backend/data",
       "!backend/model",
       "!backend/model-cache",
+      "!backend/output",
       "!backend/voice",
       "!.playwright-cli",
       "!.playwright-mcp",

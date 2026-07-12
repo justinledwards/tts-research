@@ -1,0 +1,791 @@
+{
+  "adapterVersion": "markdown-adapter-v2",
+  "blocks": [
+    {
+      "confidence": 0.98,
+      "endOffset": 21,
+      "id": "markdown-heading-ai-export-citationsmdheadingai-export-citations-ai-export-citations-59c356a2f88e",
+      "index": 1,
+      "kind": "heading",
+      "label": "AI Export Citations",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/0",
+        "columnEnd": 22,
+        "columnStart": 1,
+        "lineEnd": 1,
+        "lineStart": 1,
+        "sourceSlice": "# AI Export Citations",
+        "fingerprint": "10770298600994cb48e15584395922c1",
+        "identityAnchor": "ai-export-citations.md|heading|AI Export Citations|# AI Export Citations",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:0"
+      },
+      "speakMode": "speak",
+      "spokenText": "AI Export Citations",
+      "startOffset": 0,
+      "text": "# AI Export Citations",
+      "warnings": [],
+      "orderKey": "000000001024"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 86,
+      "id": "markdown-body-ai-export-citationsmdbodyai-export-citationsthe-literature-review-summary-is-stable-citeturn40search10-54e81f40e646",
+      "index": 2,
+      "kind": "body",
+      "label": "The literature review summary is stable.",
+      "language": "",
+      "metadata": {
+        "inlineArtifacts": [
+          {
+            "endOffset": 85,
+            "identifier": "",
+            "kind": "citation",
+            "markerType": "chatgpt_bracket_citation",
+            "raw": "[cite][turn40search10]",
+            "speechText": "Citation marker.",
+            "startOffset": 63,
+            "url": "",
+            "visualLabel": "cite"
+          }
+        ],
+        "astPath": "/children/1",
+        "columnEnd": 64,
+        "columnStart": 1,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "sourceSlice": "The literature review summary is stable [cite][turn40search10].",
+        "fingerprint": "e11e24a3bf7fe748adeb7415bb6f61ce",
+        "identityAnchor": "ai-export-citations.md|body|AI Export Citations|The literature review summary is stable [cite][turn40search10].",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:23"
+      },
+      "speakMode": "speak",
+      "spokenText": "The literature review summary is stable.",
+      "startOffset": 23,
+      "text": "The literature review summary is stable [cite][turn40search10].",
+      "warnings": ["citation_removed"],
+      "orderKey": "000000024577"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 85,
+      "id": "markdown-citation-ai-export-citationsmdcitationai-export-citationsciteturn40search10-025aa628b613",
+      "index": 3,
+      "kind": "citation",
+      "label": "Citation",
+      "language": "",
+      "metadata": {
+        "endOffset": 85,
+        "identifier": "",
+        "kind": "citation",
+        "markerType": "chatgpt_bracket_citation",
+        "raw": "[cite][turn40search10]",
+        "speechText": "Citation marker.",
+        "startOffset": 63,
+        "url": "",
+        "visualLabel": "cite",
+        "astPath": "/children/1/inline-artifact/0",
+        "columnEnd": 63,
+        "columnStart": 41,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "sourceSlice": "[cite][turn40search10]",
+        "fingerprint": "eb11014b2d22883723dd1cfd919a636e",
+        "identityAnchor": "ai-export-citations.md|citation|AI Export Citations|[cite][turn40search10]",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:63"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 63,
+      "text": "[cite][turn40search10]",
+      "warnings": ["inline_artifact", "citation_removed", "citation_policy"],
+      "orderKey": "000000065538"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 108,
+      "id": "markdown-citation-ai-export-citationsmdcitationai-export-citationsciteturn1search0-d18f7c614cc2",
+      "index": 4,
+      "kind": "citation",
+      "label": "Citation",
+      "language": "",
+      "metadata": {
+        "inlineArtifacts": [
+          {
+            "endOffset": 108,
+            "identifier": "",
+            "kind": "citation",
+            "markerType": "chatgpt_bracket_citation",
+            "raw": "[cite][turn1search0]",
+            "speechText": "Citation marker.",
+            "startOffset": 88,
+            "url": "",
+            "visualLabel": "cite"
+          }
+        ],
+        "astPath": "/children/2",
+        "columnEnd": 21,
+        "columnStart": 1,
+        "lineEnd": 5,
+        "lineStart": 5,
+        "sourceSlice": "[cite][turn1search0]",
+        "fingerprint": "8b047b7389c97856efff2d5207a17636",
+        "identityAnchor": "ai-export-citations.md|citation|AI Export Citations|[cite][turn1search0]",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:88"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 88,
+      "text": "[cite][turn1search0]",
+      "warnings": ["citation_skipped", "citation_removed"],
+      "orderKey": "000000091139"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 188,
+      "id": "markdown-body-ai-export-citationsmdbodyai-export-citationsthe-source-bundle-also-carried-contentreferenceoaicite3index3-metadata-12ffec77d863",
+      "index": 5,
+      "kind": "body",
+      "label": "The source bundle also carried metadata.",
+      "language": "",
+      "metadata": {
+        "inlineArtifacts": [
+          {
+            "endOffset": 178,
+            "identifier": "",
+            "kind": "artifact_token",
+            "markerType": "content_reference",
+            "raw": ":contentReference[oaicite:3]{index=3}",
+            "speechText": "Artifact reference.",
+            "startOffset": 141,
+            "url": "",
+            "visualLabel": "token"
+          }
+        ],
+        "astPath": "/children/3",
+        "columnEnd": 79,
+        "columnStart": 1,
+        "lineEnd": 7,
+        "lineStart": 7,
+        "sourceSlice": "The source bundle also carried :contentReference[oaicite:3]{index=3} metadata.",
+        "fingerprint": "ad1ce6082df01e85b874099454d659fb",
+        "identityAnchor": "ai-export-citations.md|body|AI Export Citations|The source bundle also carried :contentReference[oaicite:3]{index=3} metadata.",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:110"
+      },
+      "speakMode": "speak",
+      "spokenText": "The source bundle also carried metadata.",
+      "startOffset": 110,
+      "text": "The source bundle also carried :contentReference[oaicite:3]{index=3} metadata.",
+      "warnings": ["artifact_token_removed"],
+      "orderKey": "000000113668"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 178,
+      "id": "markdown-artifact-token-ai-export-citationsmdartifact-tokenai-export-citationscontentreferenceoaicite3index3-aebf2f437dae",
+      "index": 6,
+      "kind": "artifact_token",
+      "label": "Artifact token",
+      "language": "",
+      "metadata": {
+        "endOffset": 178,
+        "identifier": "",
+        "kind": "artifact_token",
+        "markerType": "content_reference",
+        "raw": ":contentReference[oaicite:3]{index=3}",
+        "speechText": "Artifact reference.",
+        "startOffset": 141,
+        "url": "",
+        "visualLabel": "token",
+        "astPath": "/children/3/inline-artifact/0",
+        "columnEnd": 69,
+        "columnStart": 32,
+        "lineEnd": 7,
+        "lineStart": 7,
+        "sourceSlice": ":contentReference[oaicite:3]{index=3}",
+        "fingerprint": "728a5be1fcce4277c59ef0aaa375bc07",
+        "identityAnchor": "ai-export-citations.md|artifact_token|AI Export Citations|:contentReference[oaicite:3]{index=3}",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:141"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 141,
+      "text": ":contentReference[oaicite:3]{index=3}",
+      "warnings": ["inline_artifact", "artifact_token_removed", "artifact_token_policy"],
+      "orderKey": "000000145413"
+    }
+  ],
+  "document": {
+    "adapterVersion": "markdown-adapter-v2",
+    "generatedAt": "1970-01-01T00:00:00.000Z",
+    "id": "ai-export-citations",
+    "metadata": {
+      "capabilities": {
+        "commonmark": true,
+        "directives": true,
+        "frontmatter": true,
+        "gfm": true,
+        "mdx": true,
+        "mystSafeSubset": true
+      },
+      "frontmatter": []
+    },
+    "nodes": [
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "# AI Export Citations",
+        "kind": "heading",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/0",
+          "columnEnd": 22,
+          "columnStart": 1,
+          "lineEnd": 1,
+          "lineStart": 1,
+          "sourceSlice": "# AI Export Citations",
+          "fingerprint": "10770298600994cb48e15584395922c1",
+          "identityAnchor": "ai-export-citations.md|heading|AI Export Citations|# AI Export Citations",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:0"
+        },
+        "nodeId": "markdown-heading-ai-export-citationsmdheadingai-export-citations-ai-export-citations-59c356a2f88e",
+        "normalisedText": "# AI Export Citations",
+        "orderKey": "000000001024",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/0",
+              "columnEnd": 22,
+              "columnStart": 1,
+              "lineEnd": 1,
+              "lineStart": 1,
+              "path": "ai-export-citations.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 21,
+            "start": 0
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "ai-export-citations"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "heading",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "AI Export Citations",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "The literature review summary is stable [cite][turn40search10].",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "inlineArtifacts": [
+            {
+              "endOffset": 85,
+              "identifier": "",
+              "kind": "citation",
+              "markerType": "chatgpt_bracket_citation",
+              "raw": "[cite][turn40search10]",
+              "speechText": "Citation marker.",
+              "startOffset": 63,
+              "url": "",
+              "visualLabel": "cite"
+            }
+          ],
+          "astPath": "/children/1",
+          "columnEnd": 64,
+          "columnStart": 1,
+          "lineEnd": 3,
+          "lineStart": 3,
+          "sourceSlice": "The literature review summary is stable [cite][turn40search10].",
+          "fingerprint": "e11e24a3bf7fe748adeb7415bb6f61ce",
+          "identityAnchor": "ai-export-citations.md|body|AI Export Citations|The literature review summary is stable [cite][turn40search10].",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:23"
+        },
+        "nodeId": "markdown-body-ai-export-citationsmdbodyai-export-citationsthe-literature-review-summary-is-stable-citeturn40search10-54e81f40e646",
+        "normalisedText": "The literature review summary is stable [cite][turn40search10].",
+        "orderKey": "000000024577",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/1",
+              "columnEnd": 64,
+              "columnStart": 1,
+              "lineEnd": 3,
+              "lineStart": 3,
+              "path": "ai-export-citations.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 86,
+            "start": 23
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "ai-export-citations"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "The literature review summary is stable.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["citation_removed"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "[cite][turn40search10]",
+        "kind": "citation",
+        "lang": "und",
+        "metadata": {
+          "endOffset": 85,
+          "identifier": "",
+          "kind": "citation",
+          "markerType": "chatgpt_bracket_citation",
+          "raw": "[cite][turn40search10]",
+          "speechText": "Citation marker.",
+          "startOffset": 63,
+          "url": "",
+          "visualLabel": "cite",
+          "astPath": "/children/1/inline-artifact/0",
+          "columnEnd": 63,
+          "columnStart": 41,
+          "lineEnd": 3,
+          "lineStart": 3,
+          "sourceSlice": "[cite][turn40search10]",
+          "fingerprint": "eb11014b2d22883723dd1cfd919a636e",
+          "identityAnchor": "ai-export-citations.md|citation|AI Export Citations|[cite][turn40search10]",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:63"
+        },
+        "nodeId": "markdown-citation-ai-export-citationsmdcitationai-export-citationsciteturn40search10-025aa628b613",
+        "normalisedText": "[cite][turn40search10]",
+        "orderKey": "000000065538",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/1/inline-artifact/0",
+              "columnEnd": 63,
+              "columnStart": 41,
+              "lineEnd": 3,
+              "lineStart": 3,
+              "path": "ai-export-citations.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 85,
+            "start": 63
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "ai-export-citations"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "citation",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["inline_artifact", "citation_removed", "citation_policy"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "[cite][turn1search0]",
+        "kind": "citation",
+        "lang": "und",
+        "metadata": {
+          "inlineArtifacts": [
+            {
+              "endOffset": 108,
+              "identifier": "",
+              "kind": "citation",
+              "markerType": "chatgpt_bracket_citation",
+              "raw": "[cite][turn1search0]",
+              "speechText": "Citation marker.",
+              "startOffset": 88,
+              "url": "",
+              "visualLabel": "cite"
+            }
+          ],
+          "astPath": "/children/2",
+          "columnEnd": 21,
+          "columnStart": 1,
+          "lineEnd": 5,
+          "lineStart": 5,
+          "sourceSlice": "[cite][turn1search0]",
+          "fingerprint": "8b047b7389c97856efff2d5207a17636",
+          "identityAnchor": "ai-export-citations.md|citation|AI Export Citations|[cite][turn1search0]",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:88"
+        },
+        "nodeId": "markdown-citation-ai-export-citationsmdcitationai-export-citationsciteturn1search0-d18f7c614cc2",
+        "normalisedText": "[cite][turn1search0]",
+        "orderKey": "000000091139",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/2",
+              "columnEnd": 21,
+              "columnStart": 1,
+              "lineEnd": 5,
+              "lineStart": 5,
+              "path": "ai-export-citations.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 108,
+            "start": 88
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "ai-export-citations"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "citation",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["citation_skipped", "citation_removed"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "The source bundle also carried :contentReference[oaicite:3]{index=3} metadata.",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "inlineArtifacts": [
+            {
+              "endOffset": 178,
+              "identifier": "",
+              "kind": "artifact_token",
+              "markerType": "content_reference",
+              "raw": ":contentReference[oaicite:3]{index=3}",
+              "speechText": "Artifact reference.",
+              "startOffset": 141,
+              "url": "",
+              "visualLabel": "token"
+            }
+          ],
+          "astPath": "/children/3",
+          "columnEnd": 79,
+          "columnStart": 1,
+          "lineEnd": 7,
+          "lineStart": 7,
+          "sourceSlice": "The source bundle also carried :contentReference[oaicite:3]{index=3} metadata.",
+          "fingerprint": "ad1ce6082df01e85b874099454d659fb",
+          "identityAnchor": "ai-export-citations.md|body|AI Export Citations|The source bundle also carried :contentReference[oaicite:3]{index=3} metadata.",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:110"
+        },
+        "nodeId": "markdown-body-ai-export-citationsmdbodyai-export-citationsthe-source-bundle-also-carried-contentreferenceoaicite3index3-metadata-12ffec77d863",
+        "normalisedText": "The source bundle also carried :contentReference[oaicite:3]{index=3} metadata.",
+        "orderKey": "000000113668",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/3",
+              "columnEnd": 79,
+              "columnStart": 1,
+              "lineEnd": 7,
+              "lineStart": 7,
+              "path": "ai-export-citations.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 188,
+            "start": 110
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "ai-export-citations"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "The source bundle also carried metadata.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["artifact_token_removed"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": ":contentReference[oaicite:3]{index=3}",
+        "kind": "artifact_token",
+        "lang": "und",
+        "metadata": {
+          "endOffset": 178,
+          "identifier": "",
+          "kind": "artifact_token",
+          "markerType": "content_reference",
+          "raw": ":contentReference[oaicite:3]{index=3}",
+          "speechText": "Artifact reference.",
+          "startOffset": 141,
+          "url": "",
+          "visualLabel": "token",
+          "astPath": "/children/3/inline-artifact/0",
+          "columnEnd": 69,
+          "columnStart": 32,
+          "lineEnd": 7,
+          "lineStart": 7,
+          "sourceSlice": ":contentReference[oaicite:3]{index=3}",
+          "fingerprint": "728a5be1fcce4277c59ef0aaa375bc07",
+          "identityAnchor": "ai-export-citations.md|artifact_token|AI Export Citations|:contentReference[oaicite:3]{index=3}",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:141"
+        },
+        "nodeId": "markdown-artifact-token-ai-export-citationsmdartifact-tokenai-export-citationscontentreferenceoaicite3index3-aebf2f437dae",
+        "normalisedText": ":contentReference[oaicite:3]{index=3}",
+        "orderKey": "000000145413",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/3/inline-artifact/0",
+              "columnEnd": 69,
+              "columnStart": 32,
+              "lineEnd": 7,
+              "lineStart": 7,
+              "path": "ai-export-citations.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 178,
+            "start": 141
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "ai-export-citations"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "artifact_token",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["inline_artifact", "artifact_token_removed", "artifact_token_policy"]
+      }
+    ],
+    "projectId": "",
+    "schemaVersion": "content-ir.v1",
+    "sourceId": "ai-export-citations",
+    "sourceName": "ai-export-citations.md",
+    "sourceType": "preparedSource"
+  },
+  "metadata": {
+    "capabilities": {
+      "commonmark": true,
+      "directives": true,
+      "frontmatter": true,
+      "gfm": true,
+      "mdx": true,
+      "mystSafeSubset": true
+    },
+    "frontmatter": []
+  },
+  "parseMode": "strict",
+  "skippedItems": [
+    {
+      "id": "markdown-citation-ai-export-citationsmdcitationai-export-citationsciteturn40search10-025aa628b613",
+      "kind": "citation",
+      "offset": 63,
+      "reason": "citation marker kept out of spoken playback",
+      "text": "[cite][turn40search10]"
+    },
+    {
+      "id": "markdown-citation-ai-export-citationsmdcitationai-export-citationsciteturn1search0-d18f7c614cc2",
+      "kind": "citation",
+      "offset": 88,
+      "reason": "citation marker kept out of spoken playback",
+      "text": "[cite][turn1search0]"
+    },
+    {
+      "id": "markdown-artifact-token-ai-export-citationsmdartifact-tokenai-export-citationscontentreferenceoaicite3index3-aebf2f437dae",
+      "kind": "artifact_token",
+      "offset": 141,
+      "reason": "raw artifact token kept out of spoken playback",
+      "text": ":contentReference[oaicite:3]{index=3}"
+    }
+  ],
+  "title": "AI Export Citations",
+  "warnings": []
+}

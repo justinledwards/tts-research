@@ -1,75 +1,83 @@
+import { Button, SegmentedControl, StatusChip, cx } from "./design";
+import { CommandIcon, SettingsIcon } from "./features/navigation/SurfaceActions";
+import {
+  WORKSPACE_LAYOUT_MODES,
+  WORKSPACE_LAYOUT_SLOT_DENSITIES,
+  WORKSPACE_LAYOUT_SLOTS,
+  workspaceLayoutModeMeta,
+  workspaceLayoutSlotDensityMeta,
+  workspaceLayoutSlotMeta,
+  type WorkspaceCustomLayout,
+  type WorkspaceLayoutMode,
+  type WorkspaceLayoutSlot,
+  type WorkspaceLayoutSlotDensity,
+} from "./features/workspace/model";
+import {
+  WORKSPACE_DISCLOSURE_PANEL_IDS,
+  workspaceDisclosurePanelMeta,
+  type WorkspaceDisclosurePanelId,
+  type WorkspaceDisclosurePins,
+} from "./features/workspace/disclosure";
 import type { RunConfiguration } from "./runConfig";
 import { describePerformanceMode } from "./runConfig";
-import type { VoiceJob, VoiceProject } from "./types";
 
-export type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
 export type StudioMode = "narration" | "voiceCloning";
 
+export interface ShellWorkContext {
+  readonly chapterName: string;
+  readonly projectName: string;
+  readonly workspaceLabel: string;
+}
+
 export function TopProductBar({
-  activeJobId,
-  activeProjectId,
-  canSubmit,
-  isProcessing,
-  jobName,
-  job,
-  projectJobs,
-  projectName,
-  projects,
-  requestState,
+  commandPaletteShortcutLabel,
   runConfiguration,
+  settingsShortcutLabel,
   studioMode,
-  onCancel,
-  onExportOpen,
-  onHelpOpen,
-  onImportOpen,
-  onJobSelect,
-  onProjectSelect,
+  workContext,
+  workspaceCustomLayout,
+  workspaceDisclosurePins,
+  workspaceLayoutMode,
+  onCommandPaletteOpen,
   onSettingsOpen,
   onStudioModeChange,
-  onSubmit,
-  onWorkspaceOpen,
+  onWorkspaceCustomLayoutChange,
+  onWorkspaceDisclosurePinChange,
+  onWorkspaceLayoutModeChange,
+  onCommandCenterOpen,
+  quickListenEnabled = true,
+  onQuickListenOpen,
 }: Readonly<{
-  activeJobId: string | null;
-  activeProjectId: string;
-  canSubmit: boolean;
-  isProcessing: boolean;
-  jobName: string;
-  job: VoiceJob | null;
-  projectJobs: VoiceJob[];
-  projectName: string;
-  projects: VoiceProject[];
-  requestState: RequestState;
+  commandPaletteShortcutLabel: string;
   runConfiguration: RunConfiguration;
+  settingsShortcutLabel: string;
   studioMode: StudioMode;
-  onCancel: () => void;
-  onExportOpen: () => void;
-  onHelpOpen: () => void;
-  onImportOpen: () => void;
-  onJobSelect: (jobId: string) => void;
-  onProjectSelect: (projectId: string) => void;
+  workContext: ShellWorkContext;
+  workspaceCustomLayout: WorkspaceCustomLayout;
+  workspaceDisclosurePins: WorkspaceDisclosurePins;
+  workspaceLayoutMode: WorkspaceLayoutMode;
+  onCommandPaletteOpen: () => void;
   onSettingsOpen: () => void;
   onStudioModeChange: (mode: StudioMode) => void;
-  onSubmit: () => void;
-  onWorkspaceOpen: () => void;
+  onWorkspaceCustomLayoutChange: (layout: WorkspaceCustomLayout) => void;
+  onWorkspaceDisclosurePinChange: (panelId: WorkspaceDisclosurePanelId, pinned: boolean) => void;
+  onWorkspaceLayoutModeChange: (mode: WorkspaceLayoutMode) => void;
+  onCommandCenterOpen: () => void;
+  quickListenEnabled?: boolean;
+  onQuickListenOpen: () => void;
 }>) {
-  const visibleJobs =
-    job && !projectJobs.some((projectJob) => projectJob.id === job.id)
-      ? [job, ...projectJobs]
-      : projectJobs;
-  const selectedJobId = job?.id ?? "";
-  const primaryButtonLabel = isProcessing ? "Cancel Job" : "Create & Listen";
-
   return (
-    <header className="vs-raised grid min-h-[64px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-3 lg:grid-cols-[minmax(205px,auto)_minmax(330px,0.9fr)_auto] lg:px-4">
+    <header className="vs-app-shell grid min-h-[58px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b px-3 lg:gap-3 lg:px-4">
       <div className="flex min-w-0 items-center gap-2.5">
-        <button
-          aria-label="Open workspace"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-transparent transition hover:border-[var(--vs-border)] hover:bg-[var(--vs-surface)]"
-          onClick={onWorkspaceOpen}
-          type="button"
+        <Button
+          aria-label="Open Command Center"
+          data-testid="ui-action-workspace-open-menu"
+          onClick={onCommandCenterOpen}
+          size="icon"
+          variant="ghost"
         >
           <MenuIcon />
-        </button>
+        </Button>
         <div className="min-w-0 md:shrink-0">
           <h1 className="truncate text-sm font-semibold tracking-normal sm:text-xl md:whitespace-nowrap">
             Voice Studio
@@ -78,173 +86,403 @@ export function TopProductBar({
             Reading studio · {describePerformanceMode(runConfiguration.performanceMode)}
           </p>
         </div>
-        <button
-          className="hidden h-10 shrink-0 grid-cols-[auto_auto] items-center gap-2 rounded-md border px-3 text-left text-xs font-semibold transition hover:border-orange-200 hover:bg-orange-50 vs-raised xl:grid"
-          onClick={onWorkspaceOpen}
-          type="button"
-        >
-          <span>Workspace</span>
-          <span className="rounded-full border px-2 py-0.5 text-[0.65rem] capitalize vs-border vs-muted">
-            {requestState}
-          </span>
-        </button>
       </div>
-      <div className="hidden min-w-0 items-center gap-2 overflow-hidden rounded-lg border px-2 py-1.5 vs-surface lg:flex">
-        <label className="grid min-w-0 flex-1 gap-0.5">
-          <span className="vs-muted px-1 text-[0.64rem] font-semibold uppercase tracking-[0.18em]">
-            Project
-          </span>
-          <select
-            aria-label="Select project"
-            className="min-w-0 truncate rounded-md border-0 bg-transparent px-1 py-0.5 text-sm font-semibold outline-none"
-            onChange={(event) => {
-              onProjectSelect(event.currentTarget.value);
-            }}
-            value={activeProjectId}
+      <TopProductBarContextSummary
+        context={workContext}
+        onOpenCommandCenter={onCommandCenterOpen}
+      />
+      <nav
+        aria-label="Primary workspace actions"
+        className="hidden min-w-0 items-center justify-end gap-1 md:flex"
+      >
+        <SegmentedControl
+          ariaLabel="Studio mode"
+          className="min-w-[210px]"
+          options={[
+            { label: "Narration", testId: "ui-action-studio-mode-narration", value: "narration" },
+            {
+              label: "Voice Cloning",
+              testId: "ui-action-studio-mode-voice-cloning",
+              value: "voiceCloning",
+            },
+          ]}
+          value={studioMode}
+          onChange={onStudioModeChange}
+        />
+        <WorkspaceLayoutControl
+          compact
+          customLayout={workspaceCustomLayout}
+          disclosurePins={workspaceDisclosurePins}
+          layoutMode={workspaceLayoutMode}
+          onCustomLayoutChange={onWorkspaceCustomLayoutChange}
+          onDisclosurePinChange={onWorkspaceDisclosurePinChange}
+          onLayoutModeChange={onWorkspaceLayoutModeChange}
+        />
+        {quickListenEnabled ? (
+          <Button
+            aria-label="Open Quick Listen"
+            className="gap-2 px-3"
+            data-command-id="quick-listen:open"
+            data-testid="ui-action-quick-listen-open"
+            data-ui-action-owner="quick-listen"
+            onClick={onQuickListenOpen}
+            size="md"
+            title="Quick Listen"
+            variant="primary"
           >
-            {projects.length > 0 ? (
-              projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))
-            ) : (
-              <option value={activeProjectId}>{projectName}</option>
-            )}
-          </select>
-        </label>
-        <label className="grid min-w-0 flex-1 gap-0.5 border-l pl-3 vs-border">
-          <span className="vs-muted px-1 text-[0.64rem] font-semibold uppercase tracking-[0.18em]">
-            Chapter
-          </span>
-          <select
-            aria-label="Select chapter"
-            className="min-w-0 truncate rounded-md border-0 bg-transparent px-1 py-0.5 text-sm font-semibold outline-none"
-            disabled={visibleJobs.length === 0}
-            onChange={(event) => {
-              onJobSelect(event.currentTarget.value);
-            }}
-            value={selectedJobId}
-          >
-            {visibleJobs.length > 0 ? (
-              visibleJobs.map((item, index) => (
-                <option key={item.id} value={item.id}>
-                  {`Chapter ${String(index + 1)} · ${chapterLabel(item)}`}
-                </option>
-              ))
-            ) : (
-              <option value="">Draft chapter · {jobName}</option>
-            )}
-          </select>
-        </label>
-      </div>
-      <div className="hidden min-w-0 items-center justify-end gap-1.5 md:flex">
-        <div className="grid min-w-[210px] grid-cols-2 rounded-md border p-1 text-xs font-semibold shadow-sm vs-border vs-surface">
-          {(
-            [
-              ["narration", "Narration"],
-              ["voiceCloning", "Voice Cloning"],
-            ] as const
-          ).map(([mode, label]) => (
-            <button
-              className={`h-8 whitespace-nowrap rounded px-3 transition ${
-                studioMode === mode
-                  ? "bg-orange-500 text-white shadow-sm"
-                  : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
-              }`}
-              key={mode}
-              onClick={() => {
-                onStudioModeChange(mode);
-              }}
-              type="button"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <button
-          aria-label="Open help"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border text-sm font-semibold shadow-sm transition hover:border-orange-200 hover:bg-orange-50 vs-raised"
-          onClick={onHelpOpen}
-          title="Open help"
-          type="button"
+            <ListenIcon />
+            <span className="hidden xl:inline">Quick Listen</span>
+          </Button>
+        ) : null}
+        <Button
+          aria-label="Open command palette"
+          className="gap-2 px-3"
+          data-command-id="command.palette"
+          data-shortcut-command-id="command.palette"
+          data-testid="ui-action-command-palette-open"
+          data-ui-action-owner="command-palette"
+          onClick={() => {
+            onCommandPaletteOpen();
+          }}
+          size="md"
+          title={`Actions (${commandPaletteShortcutLabel})`}
+          variant="secondary"
         >
-          <HelpIcon />
-        </button>
-        <button
+          <CommandIcon />
+          <span className="hidden xl:inline">Actions</span>
+        </Button>
+        <Button
           aria-label="Open settings"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border text-sm font-semibold shadow-sm transition hover:border-orange-200 hover:bg-orange-50 vs-raised"
+          data-command-id="settings:open"
+          data-shortcut-command-id="settings.open"
+          data-testid="ui-action-settings-open"
+          data-ui-action-owner="settings"
           onClick={onSettingsOpen}
-          title="Settings"
-          type="button"
+          size="icon"
+          title={`Settings (${settingsShortcutLabel})`}
+          variant="secondary"
         >
           <SettingsIcon />
-        </button>
-        <div className="hidden h-10 shrink-0 overflow-hidden rounded-md border text-sm font-semibold shadow-sm vs-raised xl:inline-flex">
-          <button
-            className="px-3 transition hover:bg-orange-50"
-            onClick={onImportOpen}
-            type="button"
-          >
-            Import
-          </button>
-          <button
-            className="border-l border-zinc-200 px-3 transition hover:bg-orange-50"
-            onClick={onExportOpen}
-            type="button"
-          >
-            Export
-          </button>
-        </div>
-        {isProcessing ? (
-          <button
-            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 shadow-sm transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!activeJobId}
-            onClick={onCancel}
-            type="button"
-          >
-            <StopIcon />
-            Cancel Job
-          </button>
-        ) : (
-          <button
-            className="inline-flex h-10 shrink-0 items-center whitespace-nowrap rounded-md px-3 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 transition disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:shadow-none vs-accent-bg hover:brightness-95"
-            disabled={!canSubmit}
-            onClick={onSubmit}
-            type="button"
-          >
-            {primaryButtonLabel}
-          </button>
-        )}
-      </div>
-      <div className="flex items-center gap-1.5 md:hidden">
-        <button
-          className="grid h-10 place-items-center rounded-md border px-2 text-xs font-semibold text-orange-600 vs-border vs-raised"
+        </Button>
+      </nav>
+      <nav aria-label="Primary workspace actions" className="flex items-center gap-1.5 md:hidden">
+        <Button
+          className="px-2 text-[var(--vs-action-primary)]"
           onClick={() => {
             onStudioModeChange(studioMode === "narration" ? "voiceCloning" : "narration");
           }}
-          type="button"
+          size="sm"
+          variant="secondary"
         >
           {studioMode === "narration" ? "Narration" : "Cloning"}
-        </button>
-        <button
+        </Button>
+        <WorkspaceLayoutControl
+          compact
+          customLayout={workspaceCustomLayout}
+          disclosurePins={workspaceDisclosurePins}
+          layoutMode={workspaceLayoutMode}
+          onCustomLayoutChange={onWorkspaceCustomLayoutChange}
+          onDisclosurePinChange={onWorkspaceDisclosurePinChange}
+          onLayoutModeChange={onWorkspaceLayoutModeChange}
+        />
+        {quickListenEnabled ? (
+          <Button
+            aria-label="Open Quick Listen"
+            className="text-[var(--vs-action-primary)]"
+            data-command-id="quick-listen:open"
+            data-testid="ui-action-quick-listen-open"
+            data-ui-action-owner="quick-listen"
+            onClick={onQuickListenOpen}
+            size="icon"
+            title="Quick Listen"
+            variant="secondary"
+          >
+            <ListenIcon />
+          </Button>
+        ) : null}
+        <Button
+          aria-label="Open command palette"
+          className="text-[var(--vs-action-primary)]"
+          data-command-id="command.palette"
+          data-shortcut-command-id="command.palette"
+          data-testid="ui-action-command-palette-open"
+          data-ui-action-owner="command-palette"
+          onClick={() => {
+            onCommandPaletteOpen();
+          }}
+          size="icon"
+          title={`Actions (${commandPaletteShortcutLabel})`}
+          variant="secondary"
+        >
+          <CommandIcon />
+        </Button>
+        <Button
           aria-label="Open settings"
-          className="grid h-10 w-10 place-items-center rounded-md border text-orange-600 vs-border vs-raised"
+          className="text-[var(--vs-action-primary)]"
+          data-command-id="settings:open"
+          data-shortcut-command-id="settings.open"
+          data-testid="ui-action-settings-open"
+          data-ui-action-owner="settings"
           onClick={onSettingsOpen}
-          type="button"
+          size="icon"
+          title={`Settings (${settingsShortcutLabel})`}
+          variant="secondary"
         >
           <SettingsIcon />
-        </button>
-        <button
-          className="inline-flex h-10 items-center rounded-md bg-orange-500 px-3 text-xs font-semibold text-white disabled:bg-zinc-300"
-          disabled={!canSubmit || isProcessing}
-          onClick={onSubmit}
-          type="button"
-        >
-          Run
-        </button>
-      </div>
+        </Button>
+      </nav>
     </header>
+  );
+}
+
+export function WorkspaceLayoutControl({
+  compact = false,
+  customLayout,
+  disclosurePins,
+  layoutMode,
+  onCustomLayoutChange,
+  onDisclosurePinChange,
+  onLayoutModeChange,
+}: Readonly<{
+  compact?: boolean;
+  customLayout: WorkspaceCustomLayout;
+  disclosurePins: WorkspaceDisclosurePins;
+  layoutMode: WorkspaceLayoutMode;
+  onCustomLayoutChange: (layout: WorkspaceCustomLayout) => void;
+  onDisclosurePinChange: (panelId: WorkspaceDisclosurePanelId, pinned: boolean) => void;
+  onLayoutModeChange: (mode: WorkspaceLayoutMode) => void;
+}>) {
+  const activeMeta = workspaceLayoutModeMeta(layoutMode);
+  return (
+    <details
+      className={cx("group relative", compact ? "" : "hidden lg:block")}
+      data-testid="ui-action-workspace-layout-menu"
+    >
+      <summary
+        aria-label={`Workspace layout: ${activeMeta.label}`}
+        className={cx(
+          "flex min-h-10 cursor-pointer list-none items-center justify-center rounded-md border px-3 text-sm font-semibold shadow-sm transition hover:bg-[var(--vs-surface)] vs-work-surface [&::-webkit-details-marker]:hidden",
+          compact ? "min-w-11 px-2 text-[var(--vs-action-primary)]" : "min-w-36 gap-2",
+        )}
+      >
+        <span>Layout</span>
+        {compact ? null : (
+          <StatusChip className="rounded-full py-0.5 text-[0.65rem]" tone="metadata">
+            {activeMeta.label}
+          </StatusChip>
+        )}
+      </summary>
+      <div
+        className={cx(
+          "absolute right-0 z-50 mt-2 grid w-[min(22rem,calc(100vw-1rem))] gap-3 rounded-lg border p-3 text-sm shadow-xl vs-work-surface",
+          compact ? "-right-20" : "",
+        )}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          {WORKSPACE_LAYOUT_MODES.map((mode) => {
+            const meta = workspaceLayoutModeMeta(mode);
+            return (
+              <Button
+                align="start"
+                aria-label={`${meta.label} workspace layout`}
+                className="min-w-0 flex-col gap-1 px-3 py-2"
+                data-testid={`ui-action-workspace-layout-${mode}`}
+                key={mode}
+                onClick={(event) => {
+                  onLayoutModeChange(mode);
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                }}
+                selected={layoutMode === mode}
+                size="sm"
+                variant={layoutMode === mode ? "pinned" : "secondary"}
+              >
+                <span className="truncate text-sm font-semibold">{meta.label}</span>
+                <span className="line-clamp-2 text-left text-xs vs-muted">{meta.description}</span>
+              </Button>
+            );
+          })}
+        </div>
+        <div className="grid gap-2 border-t pt-3 vs-border">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+              Custom layout
+            </p>
+            <p className="mt-1 text-xs vs-muted">
+              Set panel density here without adding controls to every panel.
+            </p>
+          </div>
+          {WORKSPACE_LAYOUT_SLOTS.map((slot) => (
+            <WorkspaceLayoutSlotControl
+              density={customLayout[slot]}
+              key={slot}
+              slot={slot}
+              onDensityChange={(density) => {
+                onCustomLayoutChange({
+                  ...customLayout,
+                  [slot]: density,
+                });
+              }}
+            />
+          ))}
+        </div>
+        <div className="grid gap-2 border-t pt-3 vs-border">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+              Advanced pins
+            </p>
+            <p className="mt-1 text-xs vs-muted">
+              Keep frequently used advanced systems expanded when they are available.
+            </p>
+          </div>
+          {WORKSPACE_DISCLOSURE_PANEL_IDS.map((panelId) => (
+            <WorkspaceDisclosurePinControl
+              key={panelId}
+              panelId={panelId}
+              pinned={disclosurePins[panelId]}
+              onPinnedChange={(pinned) => {
+                onDisclosurePinChange(panelId, pinned);
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function WorkspaceLayoutSlotControl({
+  density,
+  slot,
+  onDensityChange,
+}: Readonly<{
+  density: WorkspaceLayoutSlotDensity;
+  slot: WorkspaceLayoutSlot;
+  onDensityChange: (density: WorkspaceLayoutSlotDensity) => void;
+}>) {
+  const slotMeta = workspaceLayoutSlotMeta(slot);
+  return (
+    <div className="grid gap-1">
+      <p className="truncate text-xs font-semibold" title={slotMeta.description}>
+        {slotMeta.label}
+      </p>
+      <div className="grid grid-cols-3 gap-1">
+        {WORKSPACE_LAYOUT_SLOT_DENSITIES.map((item) => {
+          const meta = workspaceLayoutSlotDensityMeta(item);
+          const label = workspaceLayoutDensityLabel(slot, item);
+          return (
+            <Button
+              aria-label={`${slotMeta.label} ${label}`}
+              className="min-w-0 px-2 text-xs"
+              data-testid={`ui-action-workspace-layout-custom-${slot}-${item}`}
+              key={item}
+              onClick={() => {
+                onDensityChange(item);
+              }}
+              selected={density === item}
+              size="sm"
+              title={workspaceLayoutDensityDescription(slot, item, meta.description)}
+              variant={density === item ? "pinned" : "secondary"}
+            >
+              {label}
+            </Button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function workspaceLayoutDensityLabel(
+  slot: WorkspaceLayoutSlot,
+  density: WorkspaceLayoutSlotDensity,
+): string {
+  if (slot === "systemStatus" && density === "hidden") {
+    return "Essential";
+  }
+  if (slot === "systemStatus" && density === "summary") {
+    return "Compact";
+  }
+  if (slot === "systemStatus" && density === "pinned") {
+    return "Expanded";
+  }
+  return workspaceLayoutSlotDensityMeta(density).label;
+}
+
+function workspaceLayoutDensityDescription(
+  slot: WorkspaceLayoutSlot,
+  density: WorkspaceLayoutSlotDensity,
+  fallback: string,
+): string {
+  if (slot !== "systemStatus") {
+    return fallback;
+  }
+  if (density === "hidden") {
+    return "Keep the essential status strip only.";
+  }
+  if (density === "summary") {
+    return "Show the compact production status strip.";
+  }
+  return "Show expanded status and diagnostics entry points.";
+}
+
+function WorkspaceDisclosurePinControl({
+  panelId,
+  pinned,
+  onPinnedChange,
+}: Readonly<{
+  panelId: WorkspaceDisclosurePanelId;
+  pinned: boolean;
+  onPinnedChange: (pinned: boolean) => void;
+}>) {
+  const meta = workspaceDisclosurePanelMeta(panelId);
+  return (
+    <Button
+      align="start"
+      aria-pressed={pinned}
+      className="min-w-0 justify-between gap-2 px-3 py-2"
+      data-testid={`ui-action-workspace-disclosure-pin-${panelId}`}
+      onClick={() => {
+        onPinnedChange(!pinned);
+      }}
+      selected={pinned}
+      size="sm"
+      title={meta.detail}
+      variant={pinned ? "pinned" : "secondary"}
+    >
+      <span className="min-w-0 truncate text-left text-xs font-semibold">{meta.label}</span>
+      <span className="shrink-0 text-[0.65rem]">{pinned ? "Pinned" : "Auto"}</span>
+    </Button>
+  );
+}
+
+function TopProductBarContextSummary({
+  context,
+  onOpenCommandCenter,
+}: Readonly<{
+  context: ShellWorkContext;
+  onOpenCommandCenter: () => void;
+}>) {
+  return (
+    <button
+      className="hidden min-w-0 items-center gap-2 overflow-hidden rounded-lg border px-3 py-2 text-left transition hover:bg-[var(--vs-surface-muted)] vs-metadata-surface lg:flex"
+      data-testid="ui-action-shell-context-summary"
+      onClick={onOpenCommandCenter}
+      title={`${context.workspaceLabel} · ${context.projectName} · ${context.chapterName}`}
+      type="button"
+    >
+      <span className="vs-muted shrink-0 text-[0.64rem] font-semibold uppercase tracking-[0.16em]">
+        Work
+      </span>
+      <span className="min-w-0 truncate text-sm font-semibold">{context.workspaceLabel}</span>
+      <span aria-hidden="true" className="vs-muted shrink-0 text-xs">
+        /
+      </span>
+      <span className="min-w-0 truncate text-sm font-semibold">{context.projectName}</span>
+      <span aria-hidden="true" className="vs-muted shrink-0 text-xs">
+        /
+      </span>
+      <span className="min-w-0 truncate text-sm font-semibold">{context.chapterName}</span>
+    </button>
   );
 }
 
@@ -261,59 +499,23 @@ function MenuIcon() {
   );
 }
 
-function HelpIcon() {
+function ListenIcon({ className = "h-4 w-4" }: Readonly<{ className?: string }>) {
   return (
-    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
       <path
-        d="M9.5 9a2.7 2.7 0 1 1 4.7 1.8c-.9.8-2.2 1.5-2.2 3.2"
+        d="M5 14v-2a7 7 0 0 1 14 0v2"
         stroke="currentColor"
         strokeLinecap="round"
         strokeWidth="1.8"
       />
-      <path d="M12 17.2v.1" stroke="currentColor" strokeLinecap="round" strokeWidth="2.4" />
-      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.6" />
-    </svg>
-  );
-}
-
-function SettingsIcon() {
-  return (
-    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
       <path
-        d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-      />
-      <path
-        d="m19 13.5.1-1.5-.1-1.5 2-1.5-2-3.4-2.5 1a7.5 7.5 0 0 0-2.6-1.5L13.5 2h-4l-.4 2.6A7.5 7.5 0 0 0 6.5 6.1L4 5.1 2 8.5l2 1.5-.1 1.5L4 13l-2 1.5 2 3.4 2.5-1a7.5 7.5 0 0 0 2.6 1.5l.4 2.6h4l.4-2.6a7.5 7.5 0 0 0 2.6-1.5l2.5 1 2-3.4-2-1.5Z"
+        d="M5 14h2.5a1.5 1.5 0 0 1 1.5 1.5v2A1.5 1.5 0 0 1 7.5 19H6a2 2 0 0 1-2-2v-1a2 2 0 0 1 1-2ZM19 14h-2.5a1.5 1.5 0 0 0-1.5 1.5v2a1.5 1.5 0 0 0 1.5 1.5H18a2 2 0 0 0 2-2v-1a2 2 0 0 0-1-2Z"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="1.4"
+        strokeWidth="1.6"
       />
+      <path d="M11 10v4l3-2-3-2Z" fill="currentColor" />
     </svg>
   );
-}
-
-function StopIcon() {
-  return (
-    <svg aria-hidden="true" className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 16 16">
-      <rect height="9" rx="1.5" width="9" x="3.5" y="3.5" />
-    </svg>
-  );
-}
-
-function chapterLabel(job: VoiceJob): string {
-  const text = job.inputText.trim();
-  let voice = "Default voice";
-  if (job.voice.length > 0) {
-    voice = job.voice;
-  }
-  if (job.voiceProfileName && job.voiceProfileName.length > 0) {
-    voice = job.voiceProfileName;
-  }
-  if (text.length > 0) {
-    return `${text.slice(0, 64)}${text.length > 64 ? "..." : ""}`;
-  }
-  return voice;
 }

@@ -1,121 +1,539 @@
 import {
-  Suspense,
+  type CSSProperties,
+  type Dispatch,
   lazy,
+  memo,
+  type ReactNode,
+  type SetStateAction,
+  Suspense,
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
-  type ReactNode,
+  useTransition,
 } from "react";
-import { type RequestState, type StudioMode, TopProductBar } from "./AppShell";
-import type { BundlePanelMode } from "./BundlePanels";
+import { type StudioMode, TopProductBar } from "./AppShell";
+import type { ActivityFooterMode } from "./activityFooter";
 import {
+  ApiRequestError,
   apiBaseUrl,
   audioSource,
+  buildVoiceProfileArtifact,
   cancelVoiceJob,
   cancelVoiceProfileSource,
   cancelVoiceProfileTarget,
+  cleanupTemporarySource,
+  clearExpiredTemporarySources,
   clearHuggingFaceToken,
+  clearTemporarySources,
   cloneResearchModule,
   closePlaybackSession,
+  confirmBookSourceReadiness,
+  confirmPreparedSourceReadiness,
+  confirmTemporarySourceReadiness,
   createBookNarrationJob,
   createBookSource,
   createBookSourceFromUrl,
-  createProject,
   createCustomSpeechPolicyProfile,
   createPreparedSource,
   createPreparedSourceJob,
+  createProject,
+  createTemporarySource,
+  createTemporarySourceJob,
   createVoiceJob,
+  createVoicePreview,
   createVoiceProfileFromCandidate,
   createVoiceProfileSource,
-  deleteProject,
+  deleteBookSource,
   deleteCustomSpeechPolicyProfile,
+  deletePreparedSource,
+  deleteProject,
+  deleteVoiceJob,
   deleteVoiceProfile,
-  getBookCinemaDiagnostics,
+  getAdapterDiagnostics,
+  getBookSource,
   getBookSourceScope,
   getContentIR,
   getHighlightMap,
+  getHighlightMapV2,
   getPreparedSource,
   getProjectSpeechPolicy,
   getProjectStorageSummary,
   getSpeechPolicyDefinition,
   getSystemMetrics,
+  getTemporarySource,
+  getTemporaryStorageUsageSummary,
   getVoiceJob,
-  buildVoiceProfileArtifact,
   getVoiceProfileCredentials,
   getVoiceProfileSource,
   getVoiceProfileSourceDiagnostics,
   isApiNotFoundError,
-  listPreparedSources,
   listProjectBookSources,
-  listProjectProgress,
-  listSpeechPolicyProfiles,
-  listTTSEngines,
   listProjectJobs,
+  listProjectProgress,
   listProjects,
   listResearchModules,
+  listSpeechPolicyProfiles,
+  listTemporarySourceJobs,
+  listTemporarySources,
+  listTTSEngines,
   listVoiceProfiles,
   previewBookSourceScopeSpeechPolicy,
-  previewPreparedSourceSpeechPolicy,
   previewContentIRSpeechPolicy,
+  previewPreparedSourceSpeechPolicy,
+  promoteTemporarySource,
   queueVoiceProfileTarget,
   refreshVoiceProfileCandidateTranscript,
   refreshVoiceProfileSourceTranscript,
+  renameBookSource,
+  renamePreparedSource,
   renameProject,
+  renameVoiceProfile,
+  reopenTemporarySource,
+  retryVoiceJob,
   saveHuggingFaceToken,
   startPlaybackSession,
   subscribeToVoiceJob,
   syncPlaybackSession,
   updateBookSourceSpeechPolicy,
-  updateProjectSpeechPolicy,
   updateCustomSpeechPolicyProfile,
   updatePlaybackProgress,
   updatePreparedSourceSpeechPolicy,
+  updateProjectSpeechPolicy,
+  type VoicePreviewAudio,
 } from "./api";
-import { formatDuration } from "./format";
 import {
-  DEFAULT_READER_ACCESSIBILITY_SETTINGS,
-  READER_ACCESSIBILITY_STORAGE_KEY,
-  normalizeReaderAccessibilitySettings,
-  type ReaderAccessibilitySettings,
-  bookSourceName,
+  activeWordIndexForProgress,
+  estimateFirstAudioETA,
+  formatBytes,
+  formatLikenessBadge,
+  formatLikenessLabel,
+  formatPace,
+  formatPercentage,
+  formatSegment,
+  formatSimilarity,
+  likenessBadgeClass,
+  parseBookCinemaHash,
+  playbackProgressFromReadingPosition,
+  progressTargetIdForBookScope,
+  progressTargetIdForJob,
+  replaceBookCinemaHash,
+  scopeFromBookScopeKey,
+  shortIdentifier,
+} from "./appHelpers";
+import {
+  type ActivityStatus,
+  isVoiceProfileSourceActive,
+  profileHasActiveTarget,
+  profileHasReadyCloneTarget,
+  profileHasTargetAttention,
+  resolveVoiceCloningActivity,
+  type VoiceCloningActivitySummary,
+  voiceCloningProgressRatio,
+} from "./appVoiceCloningHelpers";
+import { useAudioWaveformBars } from "./audioWaveform";
+import type {
+  BundleOperationActivity,
+  BundleOperationReport,
+  BundlePanelMode,
+} from "./BundlePanels";
+import type { ContentIRDocument } from "./content-ir";
+import {
+  Button,
+  type ButtonVariant,
+  compactHitTargetClassName,
+  cx,
+  minInteractiveSize,
+  Panel,
+  StatusChip,
+  type StatusChipTone,
+} from "./design";
+import { liveStatusMessages, useLiveStatus } from "./features/accessibility";
+import {
   bookScopeKey,
   bookScopeText,
+  bookSourceName,
+  DEFAULT_READER_ACCESSIBILITY_SETTINGS,
   normalizeBookScopeForBook,
+  normalizeReaderAccessibilitySettings,
+  READER_ACCESSIBILITY_STORAGE_KEY,
+  type ReaderAccessibilitySettings,
   resolveBookActiveWordIndex,
   resolveDefaultBookScope,
-} from "./bookCinemaModel";
+} from "./features/book-cinema/model";
+import type { CinemaFocusMode, CinemaSurfaceKind } from "./features/cinema";
+import {
+  preparedSourceCinemaActionLabel,
+  preparedSourceCinemaJobMatchesSource,
+  preparedSourceCinemaKind,
+} from "./features/cinema/preparedSourceModel";
+import type { CommandPaletteView } from "./features/command-palette/CommandPalette";
+import {
+  buildCommandEntries,
+  buildCommandPaletteHandlers,
+  type CommandBookmarkData,
+  type CommandMetadataState,
+  type CommandRecentData,
+  type CommandWayfindingState,
+  loadCommandMetadata,
+} from "./features/command-palette/commandPaletteHelpers";
+import type { CommandEntry } from "./features/command-palette/commandRegistry";
+import type {
+  ContextPanelDisplayState,
+  InspectorFact,
+  InspectorNote,
+  WorkspaceContextInspectorProps,
+  WorkspaceInspectorContextTargets,
+  WorkspaceInspectorCueDetail,
+  WorkspaceInspectorJobDetail,
+  WorkspaceInspectorTarget,
+  WorkspaceInspectorTemporaryModel,
+} from "./features/context-panel";
+import type { DemoProject } from "./features/demo";
+import { demoVoiceLabel, demoVoices } from "./features/demo/demoVoices";
+import {
+  quickListenDisabledReason,
+  studioFeatureFlags,
+  temporaryCinemaDisabledReason,
+  temporaryPromotionDisabledReason,
+} from "./features/featureFlags";
+import type { HeaderContextSummaryProps } from "./features/header";
+import {
+  orderedKokoroVoicepacksForLanguage,
+  voiceProfileMatchesLanguage,
+} from "./features/i18n/languageVoiceMapping";
+import type { IntakePreparationTarget } from "./features/intake";
+import {
+  overlayDataAttributes,
+  RailMiniStack,
+  railColumnWidth,
+  workspaceOverlayState,
+} from "./features/layout";
+import type {
+  CinemaAdvancedCommandTarget,
+  HelpCommandTarget,
+  SettingsCommandTarget,
+} from "./features/navigation/commands";
+import {
+  LazyPanelFallback,
+  recordColdUsableMetric,
+  recordFrontendDegradedState,
+  useDelayedBusy,
+  useInteractionTiming,
+} from "./features/performance";
+import { formatPlaybackClock, playbackTimeLabels } from "./features/playback";
+import {
+  type AudioGenerationPipelineModel,
+  isAudioGenerationWorking,
+  resolveAudioGenerationPipelineModel,
+} from "./features/playback/audioGenerationPipeline";
+import {
+  audioReviewWarningCount,
+  audioReviewWarningReasons,
+  audioReviewWarningSummary,
+  audioReviewWarningTotal,
+} from "./features/playback/audioReviewWarnings";
+import {
+  canQueueGeneratedAudioPlayback,
+  type GeneratedAudioLifecycleState,
+  generatedAudioLifecycleFromJob,
+  generatedAudioLifecycleLabel,
+} from "./features/playback/generatedAudioLifecycle";
+import {
+  LocalizedPlaybackToolbar,
+  type LocalizedPlaybackToolbarModel,
+} from "./features/playback/LocalizedPlaybackToolbar";
+import {
+  playbackActionAriaLabel,
+  playbackActionDataAttributes,
+  playbackActionDisabledReason,
+} from "./features/playback/playbackActionRules";
+import {
+  previewPlayerVariantForSurface,
+  shouldShowGlobalPreviewPlayer,
+} from "./features/playback/playbackSurfaceRules";
+import {
+  type CreateAndListenScope,
+  createAndListenAriaLabel,
+  workspacePlaybackActionDataAttributes,
+} from "./features/playback/workspacePlaybackActions";
+import { sessionSpeechPolicyRequest } from "./features/policy/model";
+import {
+  loadUiMemory,
+  rememberCinemaFocusState,
+  rememberReviewPane,
+  rememberTelepromptReturnStage,
+  rememberTelepromptTheatreSettings,
+  rememberWorkspaceCustomLayout,
+  rememberWorkspaceDisclosurePin,
+  rememberWorkspaceLayoutMode,
+  resetUiMemory,
+  resetWorkspaceUiMemory,
+  resolveCinemaFocusState,
+  resolveReviewPane,
+  resolveTelepromptTheatreSettings,
+  resolveWorkspaceCustomLayout,
+  resolveWorkspaceDisclosurePins,
+  resolveWorkspaceLayoutMode,
+  saveUiMemory,
+  type UiMemoryCinemaState,
+  type UiMemoryPreferenceId,
+  type UiMemoryState,
+  updateUiMemoryPreference,
+} from "./features/preferences";
+import {
+  PREVIEW_AUDITION_NOT_FOUND_MESSAGE,
+  PreviewConfirmationStrip,
+  PreviewGeneratedAudioPanel,
+  PreviewReadinessChecklist,
+  type PreviewTemporaryVoiceOption,
+  VoiceAuditionPanel,
+} from "./features/preview/PreviewReadinessPanels";
+import { resolvePreviewAudioCurrentness } from "./features/preview/previewAudioCurrentness";
+import {
+  type PreviewReadinessModel,
+  type PreviewReadinessRow,
+  resolvePreviewReadinessModel,
+} from "./features/preview/previewReadiness";
+import {
+  providerCapabilityGate,
+  resolveProviderRuntimeCapabilities,
+} from "./features/provider-capabilities";
+import { providerRuntimeLeavesLocalBoundary } from "./features/provider-capabilities/providerCapabilityLite";
+import type { QuickListenMode } from "./features/quick-listen";
+import {
+  temporarySessionPrefersBookCinema,
+  temporarySessionToBookSource,
+  temporarySessionToPreparedSource,
+} from "./features/quick-listen";
+import {
+  clearReadAlongMotionCursor,
+  clearStoredReadAlongPreferences,
+  DEFAULT_READ_ALONG_PREFERENCES,
+  effectiveReadAlongPreferences,
+  type HighlightMapV2,
+  loadReadAlongPreferences,
+  markReadAlongPerformance,
+  type ReadAlongCueRole,
+  type ReadAlongPreferences,
+  type ReadAlongWordRole,
+  readAlongPreferenceDataAttributes,
+  registerReadAlongAudioElement,
+  saveReadAlongPreferences,
+  updateReadAlongMotionCursor,
+} from "./features/readalong";
+import { nextReaderPlaybackRate } from "./features/reader-accessibility";
+import { ReadingFollowAlongRenderer } from "./features/reading-surface";
+import {
+  buildTemporaryReviewStateAdapter,
+  normalizeReviewMode,
+  normalizeReviewPane,
+  type ReviewMode,
+  type ReviewOpenFocusRequest,
+  type ReviewPane,
+  selectReviewBlockId,
+  type TemporaryReviewStateAdapter,
+} from "./features/review/model";
+import {
+  applyRevisionSessionState,
+  buildCanonicalPreviewSpeechPlan,
+  type CanonicalPreviewSpeechPlan,
+  canonicalPreviewSpeechPlanHasBlocks,
+  composeReviewedSpeechText,
+  deriveRevisionBlockStatus,
+  normalizeRevisionPolicyNoteType,
+  REVISION_STATUS_LABELS,
+  type RevisionBlock,
+  type RevisionHistoryEntry,
+  type RevisionStatus,
+  type RevisionTabId,
+  revisionBlockIsSpeakable,
+  revisionTextIsStandaloneArtifactToken,
+  revisionTextLooksLikeReferenceCueLeak,
+  stripRevisionTrailingReferenceNumberText,
+  summarizeRevisionHealth,
+} from "./features/revision";
+import {
+  type AssetNarrationGenerationOptions,
+  type SubmissionDependencies,
+  submitBookNarrationJob as submitBookNarrationJobFromFeature,
+  submitPreparedSourceJob as submitPreparedSourceJobFromFeature,
+  submitVoiceJob as submitVoiceJobFromFeature,
+} from "./features/revision/assetGenerationSubmission";
+import { RunPlannerSummaryPanel } from "./features/run-config/RunPlannerSummaryPanel";
+import {
+  buildRunPlannerSummary,
+  compareRunPlannerSummaries,
+  runConfigurationFromVoiceJob,
+} from "./features/run-config/runConfigSteps";
+import {
+  DEFAULT_TEMPORARY_SOURCE_BEHAVIOR,
+  type TemporarySourceBehaviorSettings,
+} from "./features/settings/model";
+import {
+  loadShortcutPreferences,
+  type ResolvedShortcutCommand,
+  resetShortcutPreferences,
+  resolveGlobalShortcutCommand,
+  resolveShortcutCommandBinding,
+  type ShortcutCommandId,
+  type ShortcutPreferences,
+  saveShortcutPreferences,
+  shortcutLabelForCommand,
+  shouldIgnoreGlobalShortcutTarget,
+  shouldIgnoreNarrationShortcutEvent,
+} from "./features/shortcuts/shortcutRuntime";
+import type {
+  SourceLifecycleEnvelope,
+  SourceLifecycleSurface,
+} from "./features/source-lifecycle/sourceLifecycleCore";
+import {
+  type NarrationStatusChip,
+  NarrationStatusStrip,
+  resolveNarrationStatusModel,
+} from "./features/status-strip";
+import {
+  normalizeTelepromptTheatreSettings,
+  type TelepromptTheatreSettings,
+} from "./features/teleprompt/telepromptTheatreSettings";
+import {
+  TEMPORARY_SOURCE_COPY,
+  temporarySourceFailureCopy,
+} from "./features/temporary-source-copy";
+import type { UiMemoryImportApplyResult } from "./features/ui-memory/UiMemoryPreferences";
+import type { UiMemoryResetScope } from "./features/ui-memory/uiMemoryModel";
+import {
+  confirmTemporaryVoiceCloneConsent,
+  defaultTemporaryVoiceSelection,
+  effectiveTemporaryVoiceSelection,
+  loadTemporaryVoiceState,
+  providerTemporaryVoiceSelection,
+  recordTemporaryVoiceAudition,
+  savedProfileTemporaryVoiceSelection,
+  saveTemporaryVoiceState,
+  selectTemporaryVoiceForSource,
+  type TemporaryVoiceSelection,
+  type TemporaryVoiceState,
+} from "./features/voices";
+import {
+  DEFAULT_WORKSPACE_DISCLOSURE_PINS,
+  resolveWorkspaceDisclosure,
+  type WorkspaceDisclosureModel,
+  type WorkspaceDisclosurePanelId,
+  type WorkspaceDisclosurePins,
+  workspaceDisclosureRails,
+} from "./features/workspace/disclosure";
+import {
+  createWorkspaceContext,
+  DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
+  defaultWorkspaceLayoutMode,
+  WORKSPACE_STAGES,
+  type WorkspaceContext,
+  type WorkspaceCustomLayout,
+  type WorkspaceLayoutMode,
+  type WorkspaceLayoutSlotDensity,
+  type WorkspaceSourceType,
+  type WorkspaceStage,
+  withWorkspaceActiveBlock,
+  withWorkspaceSource,
+  withWorkspaceSpeechPolicyProfile,
+  withWorkspaceVoiceProfile,
+  workspaceLayoutRails,
+  workspaceResolvedLayout,
+  workspaceStageMeta,
+  workspaceStageShowsGlobalChrome,
+} from "./features/workspace/model";
+import {
+  resolveWorkspaceStageStatus,
+  transitionWorkspaceContextForStageAction,
+  type WorkspaceStageActionId,
+  type WorkspaceStageStatus,
+  workspaceStageActionLabel,
+  workspaceStageActionTestId,
+  workspaceStageNavigationAction,
+} from "./features/workspace/stageActions";
+import { formatDuration } from "./format";
+import {
+  readingPositionForHighlightCue,
+  resolveHighlightCue,
+  secondsForReadingPosition,
+} from "./highlightMap";
+import { findKokoroVoicepack, kokoroVoicepackDetail, kokoroVoicepackLabel } from "./kokoroVoices";
+import type {
+  MarkdownBlockHighlight,
+  MarkdownWordAnchors,
+  MarkdownWordCueState,
+} from "./MarkdownRenderer";
+import {
+  markdownBlockText,
+  type PreparedSourceActiveWord,
+  resolvePreparedSourceActiveWord,
+} from "./markdownCinema";
 import { looksLikeMermaidDiagram } from "./markdownModel";
 import {
-  KOKORO_VOICEPACKS,
-  findKokoroVoicepack,
-  kokoroVoicepackDetail,
-  kokoroVoicepackLabel,
-} from "./kokoroVoices";
+  humanizeProfileTargetProblem,
+  isVoiceProfileTargetReadyForEngine,
+  voiceProfileTargetReadinessText,
+} from "./profileTargets";
+import {
+  ACTIVE_PROJECT_ID_STORAGE_KEY,
+  clearProjectWorkspaceState,
+  migrateLegacyWorkspaceState,
+  saveProjectWorkspaceState,
+} from "./projectState";
+import {
+  authoritativePreparedProgress,
+  authoritativeResumePlan,
+  projectIdFromSearch,
+  projectLoaderResponseIsCurrent,
+  projectReaderWorkspaceIntent,
+  ReaderWorkspaceClient,
+  type ReaderWorkspaceNomination,
+  ReaderWorkspacePersistenceScheduler,
+  ReaderWorkspaceRestorationCoordinator,
+  type ReaderWorkspaceView,
+  readerWorkspaceBaselineResponseIsCurrent,
+  readerWorkspaceBlockNavigationPosition,
+  readerWorkspaceNominationFromBaseline,
+  readerWorkspacePersistenceDecision,
+  readerWorkspaceSuccessfulAckNeedsNavigationRestoration,
+  readerWorkspaceSuccessfulAckNeedsRestoration,
+  resolveAuthoritativePreparedBlockId,
+  resolveAuthoritativeReaderSource,
+  serverWorkspaceOwnsNavigation,
+  validateAuthoritativeVoiceJob,
+  visibleAuthoritativePreparedProgress,
+} from "./readerWorkspace";
 import {
   applyKokoroRenderMode,
+  applySpeechPolicyToCreateVoiceJobRequest,
   buildCreateVoiceJobRequest,
   createRunConfiguration,
   getRunModePreset,
   isKokoroRenderEngine,
   KOKORO_RENDER_MODE_OPTIONS,
+  type KokoroRenderMode,
   kokoroEngineFamilyValue,
   kokoroRenderModeForConfiguration,
   normalizeRunConfiguration,
   RUN_CONFIG_STORAGE_KEY,
-  type KokoroRenderMode,
   type RunConfiguration,
 } from "./runConfig";
 import {
-  ACTIVE_PROJECT_ID_STORAGE_KEY,
-  clearProjectWorkspaceState,
-  loadProjectWorkspaceState,
-  migrateLegacyWorkspaceState,
-  saveProjectWorkspaceState,
-} from "./projectState";
-import { calculateArrivalThroughput, formatBufferHealth } from "./studioMetrics";
+  clearSpeechPolicyOverrides,
+  compactSpeechPolicyOverrides,
+  DEFAULT_SPEECH_POLICY_DEFINITION,
+  DEFAULT_SPEECH_POLICY_PROFILE,
+  hasSpeechPolicyOverrides,
+  loadSpeechPolicyOverrides,
+  normalizeSpeechPolicyProfile,
+  SPEECH_POLICY_PROFILE_OPTIONS,
+  saveSpeechPolicyOverrides,
+  speechPolicyProfileDisplayName,
+  speechPolicyProfileLabel,
+} from "./speechPolicy";
 import {
   SUPERTONIC_LANGUAGE_CODES,
   SUPERTONIC_LANGUAGE_OPTIONS,
@@ -123,36 +541,29 @@ import {
   supertonicLanguageLabel,
 } from "./supertonic";
 import {
-  DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS,
-  TELEPROMPTER_SETTINGS_STORAGE_KEY,
   buildTeleprompterCue,
+  DEFAULT_TELEPROMPTER_HIGHLIGHT_SETTINGS,
   normalizeTeleprompterHighlightSettings,
+  pickTeleprompterWordIndex,
+  TELEPROMPTER_SETTINGS_STORAGE_KEY,
   type TeleprompterCue,
   type TeleprompterHighlightSettings,
 } from "./teleprompter";
-
 import {
-  readingPositionForHighlightCue,
-  resolveHighlightCue,
-  secondsForReadingPosition,
-  type HighlightCue,
-} from "./highlightMap";
-import { THEME_STORAGE_KEY, VOICE_STUDIO_THEMES, normalizeThemeName } from "./theme";
-import {
-  ACTIVITY_FOOTER_MODE_STORAGE_KEY,
-  defaultActivityFooterMode,
-  nextActivityFooterMode,
-  normalizeActivityFooterMode,
-  type ActivityFooterMode,
-} from "./activityFooter";
+  DEFAULT_THEME_NAME,
+  normalizeThemeName,
+  THEME_STORAGE_KEY,
+  VOICE_STUDIO_THEMES,
+} from "./theme";
 import type {
-  BookSource,
-  BookCinemaDiagnostics,
+  AdapterDiagnostics,
   BookScope,
+  BookSource,
   BookSourceImportOptions,
   BookSourceScopeContent,
   CreateVoiceJobRequest,
   CreateVoiceProfileFromCandidateRequest,
+  CreateVoiceProfileSourceRequest,
   CustomSpeechPolicyProfile,
   HighlightMap,
   MarkdownParseMode,
@@ -161,65 +572,36 @@ import type {
   PlaybackSession,
   PreparedSource,
   ProjectBundleImportResult,
-  ReadingPosition,
   ProjectStorageSummary,
+  ReadingPosition,
   ResearchModuleDiagnostics,
+  RunMode,
+  SourceReadiness,
+  SourceReadinessConfirmationRequest,
+  SourceSpeechPolicyUpdateRequest,
   SpeechPolicyDefinition,
   SpeechPolicyOverrides,
   SpeechPolicyProfile,
   SpeechPolicySettings,
-  SourceSpeechPolicyUpdateRequest,
   StageStatus,
   SystemMetrics,
+  TemporarySourcePromotionKeep,
+  TemporarySourceSession,
+  TemporaryStorageUsageSummary,
   ThemeName,
   TTSEngineDiagnostics,
   VoiceJob,
   VoiceProfile,
-  VoiceProfileCredentialStatus,
   VoiceProfileCandidate,
+  VoiceProfileCredentialStatus,
   VoiceProfileSource,
   VoiceProfileSourceDiagnostics,
   VoiceProject,
 } from "./types";
-import {
-  BUILT_IN_SPEECH_POLICY_SETTINGS,
-  DEFAULT_SPEECH_POLICY_DEFINITION,
-  DEFAULT_SPEECH_POLICY_PROFILE,
-  SPEECH_POLICY_PROFILE_OPTIONS,
-  applySpeechPolicyOverridesToSettings,
-  clearSpeechPolicyOverrides,
-  compactSpeechPolicyOverrides,
-  hasSpeechPolicyOverrides,
-  loadSpeechPolicyOverrides,
-  normalizeSpeechPolicyProfile,
-  resolveSpeechPolicySettings,
-  saveSpeechPolicyOverrides,
-  speechPolicyProfileDisplayName,
-  speechPolicyProfileLabel,
-} from "./speechPolicy";
-import type { ContentIRDocument } from "./content-ir";
-import { markdownBlockText, resolvePreparedSourceActiveWord } from "./markdownCinema";
-import { sessionSpeechPolicyRequest } from "./features/policy";
-import {
-  preparedSourceCinemaActionLabel,
-  preparedSourceCinemaKind,
-  preparedSourceCinemaJobMatchesSource,
-} from "./preparedSourceCinema";
-import {
-  humanizeProfileTargetProblem,
-  isVoiceProfileTargetReadyForEngine,
-  voiceProfileTargetForEngine,
-  voiceProfileTargetReadinessText,
-} from "./profileTargets";
-import {
-  endFrontendSpan,
-  recordColdUsableMetric,
-  recordFrontendDegradedState,
-  startFrontendSpan,
-  useDelayedBusy,
-} from "./features/performance";
-import { buildVoiceLibraryViewModel, type VoiceLibraryEntry } from "./voiceStudioViewModels";
-import { buildWaveformBarsFromAudioBuffers, waveformProgressIndex } from "./waveform";
+import type { CommandCenterSectionId } from "./WorkspaceDrawerHelpers";
+
+type RequestState = "idle" | "running" | "complete" | "cancelled" | "error";
+type TemporaryQuickListenDestination = "review" | "preview" | "cinema";
 
 type VoiceProfileArtifactBuildAction = (
   profileId: string,
@@ -242,51 +624,84 @@ const ARTIFACT_BUILD_TIMEOUT_ERROR = "Timeout must be blank or a positive intege
 const DEFAULT_PROJECT_NAME = "The Future of Clean Energy";
 const KOKORO_VOICE_STORAGE_KEY = "tts-kokoro-voice-id";
 const RESEARCH_MODULE_PROMPT_HIDDEN_KEY = "tts-research-module-prompt-hidden";
-const LEFT_RAIL_MODE_STORAGE_KEY = "tts-left-rail-mode";
-const RIGHT_RAIL_MODE_STORAGE_KEY = "tts-right-rail-mode";
 const DEFAULT_KOKORO_VOICE_ID = "af_heart";
-const VOICE_PROFILE_RECENT_STORAGE_KEY = "tts-recent-voice-profile-ids";
-const VOICE_PROFILE_PINNED_STORAGE_KEY = "tts-pinned-voice-profile-ids";
 const PROFILE_ARTIFACT_MODULE_ORDER = ["kokoro-embed", "supertonic-embed"] as const;
-const SOURCE_TEXT_FILE_ACCEPT =
-  ".txt,.md,.markdown,.text,.log,.csv,.json,.html,.htm,.pdf,.epub,.docx,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip,image/png,image/jpeg,image/tiff,image/webp";
-const SOURCE_TEXT_FILE_EXTENSIONS = new Set([
-  "txt",
-  "md",
-  "markdown",
-  "text",
-  "log",
-  "csv",
-  "json",
-  "html",
-  "htm",
-]);
+const WAVEFORM_DISPLAY_BAR_COUNT = 76;
+
+function waveformProgressIndex(progress: number, barCount: number): number {
+  if (barCount <= 0 || !Number.isFinite(progress)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(barCount, Math.round(Math.max(0, Math.min(1, progress)) * barCount)));
+}
+
+async function buildWaveformBarsFromAudioBuffersLazy(
+  buffers: readonly AudioBuffer[],
+  count = WAVEFORM_DISPLAY_BAR_COUNT,
+): Promise<number[]> {
+  const { buildWaveformBarsFromAudioBuffers } = await import("./waveform");
+  return buildWaveformBarsFromAudioBuffers(buffers, count);
+}
 
 const BundleFlowPanel = lazy(() =>
   import("./BundlePanels").then((module) => ({ default: module.BundleFlowPanel })),
 );
-const BookCinemaPanel = lazy(() =>
-  import("./BookCinemaPanel").then((module) => ({ default: module.BookCinemaPanel })),
-);
 const BookCinemaOverlay = lazy(() =>
-  import("./BookCinemaPanel").then((module) => ({ default: module.BookCinemaOverlay })),
+  import("./features/book-cinema/BookCinemaPanel").then((module) => ({
+    default: module.BookCinemaOverlay,
+  })),
 );
 const ContentIRDrawer = lazy(() =>
   import("./ContentIrDrawer").then((module) => ({ default: module.ContentIRDrawer })),
 );
-const PreparedSourceCinemaOverlay = lazy(() =>
-  import("./PreparedSourceCinema").then((module) => ({
-    default: module.PreparedSourceCinemaOverlay,
+const DocumentCinemaOverlay = lazy(() =>
+  import("./features/document-cinema/DocumentCinemaOverlay").then((module) => ({
+    default: module.DocumentCinemaOverlay,
+  })),
+);
+const WebsiteCinemaOverlay = lazy(() =>
+  import("./features/website-cinema/WebsiteCinemaOverlay").then((module) => ({
+    default: module.WebsiteCinemaOverlay,
+  })),
+);
+const CommandPalette = lazy(() =>
+  import("./features/command-palette/CommandPalette").then((module) => ({
+    default: module.CommandPalette,
   })),
 );
 const HelpPanel = lazy(() =>
-  import("./ProductPanels").then((module) => ({ default: module.HelpPanel })),
+  import("./features/help").then((module) => ({ default: module.HelpPanel })),
 );
 const SettingsPanel = lazy(() =>
-  import("./ProductPanels").then((module) => ({ default: module.SettingsPanel })),
+  import("./features/settings").then((module) => ({ default: module.SettingsPanel })),
 );
-const PronunciationPanel = lazy(() =>
-  import("./PronunciationPanel").then((module) => ({ default: module.PronunciationPanel })),
+const LazyIntakeWizard = lazy(() =>
+  import("./features/intake").then((module) => ({ default: module.IntakeWizard })),
+);
+const LazyQuickListenPanel = lazy(() =>
+  import("./features/quick-listen").then((module) => ({ default: module.QuickListenPanel })),
+);
+const LazyTelepromptStudio = lazy(() =>
+  import("./features/teleprompt").then((module) => ({ default: module.TelepromptStudio })),
+);
+const LazyGlobalPreviewPlayer = lazy(() =>
+  import("./features/preview").then((module) => ({ default: module.GlobalPreviewPlayer })),
+);
+const LazyDemoMode = lazy(() =>
+  import("./features/demo").then((module) => ({ default: module.DemoMode })),
+);
+const LazyHeaderContextSummary = lazy(() =>
+  import("./features/header").then((module) => ({ default: module.HeaderContextSummary })),
+);
+const LazyRevisionPanel = lazy(() =>
+  import("./features/revision").then((module) => ({
+    default: module.RevisionPanel,
+  })),
+);
+const LazyWorkspaceContextInspector = lazy(() =>
+  import("./features/context-panel").then((module) => ({
+    default: module.WorkspaceContextInspector,
+  })),
 );
 const VoiceSourceAnalysisPanel = lazy(() =>
   import("./VoiceSourceAnalysisPanel").then((module) => ({
@@ -296,6 +711,9 @@ const VoiceSourceAnalysisPanel = lazy(() =>
 const WorkspaceDrawer = lazy(() =>
   import("./WorkspaceDrawer").then((module) => ({ default: module.WorkspaceDrawer })),
 );
+const VoiceProfileDashboard = lazy(() =>
+  import("./features/voices").then((module) => ({ default: module.VoiceProfileDashboard })),
+);
 const MarkdownRenderer = lazy(() =>
   import("./MarkdownRenderer").then((module) => ({ default: module.MarkdownRenderer })),
 );
@@ -303,18 +721,44 @@ const MermaidDiagram = lazy(() =>
   import("./MarkdownRenderer").then((module) => ({ default: module.MermaidDiagram })),
 );
 
-function LazySurfaceFallback({ label = "Loading..." }: Readonly<{ label?: string }>) {
-  useEffect(() => {
-    recordFrontendDegradedState("lazy-panel-loading", "lazy-surface", { label });
-  }, [label]);
+function clearStoredTelepromptReturnMemory(): void {
+  void import("./features/teleprompt/telepromptReturnMemory").then((module) => {
+    module.clearTelepromptReturnMemory();
+  });
+}
 
+export {
+  resolveVoiceCloneCompletionReference,
+  resolveVoiceCloningActivity,
+  resolveVoiceCloningActivityNow,
+} from "./appVoiceCloningHelpers";
+
+function LazySurfaceFallback({
+  detail,
+  label = "Loading...",
+  minHeightClassName,
+  surface,
+}: Readonly<{
+  detail?: string;
+  label?: string;
+  minHeightClassName?: string;
+  surface?: string;
+}>) {
   return (
-    <div
-      aria-busy="true"
-      className="min-h-24 rounded-md border border-dashed p-4 text-sm font-semibold vs-border vs-muted"
-    >
-      {label}
-    </div>
+    <LazyPanelFallback
+      detail={detail}
+      label={label}
+      minHeightClassName={minHeightClassName}
+      surface={surface}
+    />
+  );
+}
+
+function HeaderContextSummary(props: Readonly<HeaderContextSummaryProps>) {
+  return (
+    <Suspense fallback={null}>
+      <LazyHeaderContextSummary {...props} />
+    </Suspense>
   );
 }
 
@@ -342,44 +786,10 @@ function useArtifactBuildTimeoutState(): ArtifactBuildTimeoutState {
   };
 }
 
-interface PipelineStepState {
-  optimization: StageStatus;
-  synthesis: StageStatus;
-  checker: StageStatus;
-}
-
-interface ActivePipelineFlags {
-  optimizing: boolean;
-  synthesizing: boolean;
-  checking: boolean;
-}
-
-interface ActivityStageSummary {
-  detail?: string;
-  label: string;
-  status: StageStatus;
-}
-
-type ActivityStatus = "idle" | "running" | "attention" | "complete" | "cancelled";
-
-interface VoiceCloningActivitySummary {
-  activeProfile: VoiceProfile | null;
-  actionLabel: string;
-  candidateDetail: string;
-  detail: string;
-  elapsed: string;
-  eta: string;
-  lastUpdate: string;
-  message: string;
-  sourceDetail: string;
-  stages: ActivityStageSummary[];
-  status: ActivityStatus;
-  statusLabel: string;
-}
-
 interface PlaybackController {
   isAvailable: boolean;
   isPlaying: boolean;
+  isSeeking: boolean;
   playbackRate: number;
   play: () => Promise<void> | void;
   pause: () => void;
@@ -395,12 +805,39 @@ interface WritableRef<T> {
 
 type CinemaTextSize = "compact" | "comfortable" | "large" | "giant" | "massive";
 type PreparedSourceBlock = NonNullable<PreparedSource["blocks"]>[number];
-type ContentMode = "sourceIntake" | "review";
 type SourceMode = "text" | "book" | "fileUrl";
+
+function workspaceSourceType(sourceMode: SourceMode): WorkspaceSourceType {
+  if (sourceMode === "book") {
+    return "book";
+  }
+  if (sourceMode === "fileUrl") {
+    return "prepared";
+  }
+  return "draft";
+}
+
+function canRetryVoiceJob(candidate: VoiceJob | null): candidate is VoiceJob {
+  return Boolean(
+    candidate?.id &&
+      (candidate.status === "failed" || candidate.status === "cancelled") &&
+      candidate.retriable !== false &&
+      candidate.terminalReason !== "configuration_failed",
+  );
+}
+
+function isSameCinemaFocusState(left: UiMemoryCinemaState, right: UiMemoryCinemaState): boolean {
+  return (
+    left.activePanelId === right.activePanelId &&
+    left.mode === right.mode &&
+    left.pinnedPanelId === right.pinnedPanelId
+  );
+}
 
 const DISABLED_PLAYBACK_CONTROLLER: PlaybackController = {
   isAvailable: false,
   isPlaying: false,
+  isSeeking: false,
   playbackRate: 1,
   play: () => Promise.resolve(),
   pause: () => false,
@@ -410,26 +847,185 @@ const DISABLED_PLAYBACK_CONTROLLER: PlaybackController = {
   seekTo: undefined,
 };
 
-function createPipelineBase(job?: VoiceJob): PipelineStepState {
-  if (!job) {
-    return {
-      optimization: "waiting",
-      synthesis: "waiting",
-      checker: "waiting",
-    };
+function applyAuthoritativeFollowPreference(
+  current: ReadAlongPreferences,
+  followPreference: boolean | null,
+): ReadAlongPreferences {
+  if (followPreference === null) return current;
+  let scrollFollow = current.scrollFollow;
+  if (!followPreference) {
+    scrollFollow = "off";
+  } else if (scrollFollow === "off") {
+    scrollFollow = "gentle";
   }
-
   return {
-    optimization: job.stages.optimization,
-    synthesis: job.stages.synthesis,
-    checker: job.stages.checker,
+    ...current,
+    scrollFollow,
   };
+}
+
+function formatPlaybackClockSeconds(value: number): string {
+  return formatPlaybackClock(value);
+}
+
+function playbackDurationSec(job: VoiceJob | null): number {
+  return Math.max(0, (job?.durationMs ?? 0) / 1000);
+}
+
+function playbackProgressRatioForJob(cursorSec: number, job: VoiceJob | null): number {
+  const durationSec = playbackDurationSec(job);
+  if (durationSec <= 0) {
+    return 0;
+  }
+  return Math.max(0, Math.min(1, cursorSec / durationSec));
+}
+
+function playbackSeekSecondsForRevisionBlock(
+  blocks: readonly RevisionBlock[],
+  blockId: string | null,
+  job: VoiceJob | null,
+): number | null {
+  if (!blockId || !job?.audioSegmentDurationsMs?.length) {
+    return null;
+  }
+  let segmentIndex = 0;
+  let cursorMs = 0;
+  for (const block of blocks) {
+    if (block.id === blockId) {
+      return revisionBlockIsSpeakable(block) ? cursorMs / 1000 : null;
+    }
+    if (!revisionBlockIsSpeakable(block)) {
+      continue;
+    }
+    const segmentCount = Math.max(1, block.segmentCount);
+    for (let offset = 0; offset < segmentCount; offset += 1) {
+      const durationMs = job.audioSegmentDurationsMs[segmentIndex + offset];
+      if (!Number.isFinite(durationMs)) {
+        return null;
+      }
+      cursorMs += Math.max(0, durationMs);
+    }
+    segmentIndex += segmentCount;
+  }
+  return null;
+}
+
+function seekPlaybackToSeconds(
+  playbackControls: PlaybackController,
+  targetSec: number,
+  currentCursorSec: number,
+): void {
+  if (playbackControls.seekTo) {
+    playbackControls.seekTo(targetSec);
+    return;
+  }
+  playbackControls.skipBy?.(targetSec - currentCursorSec);
+}
+
+function playbackSpeedDisabledReason(playbackControls: PlaybackController): string | undefined {
+  return playbackControls.setPlaybackRate
+    ? undefined
+    : "Playback speed is available after generated audio is loaded.";
+}
+
+function clickUiActionOnNextFrame(testId: string): void {
+  globalThis.requestAnimationFrame(() => {
+    document.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)?.click();
+  });
+}
+
+function focusRevisionInlineEditor(): void {
+  globalThis.requestAnimationFrame(() => {
+    document
+      .querySelector<HTMLTextAreaElement>('[data-testid="revision-inline-edit-textarea"]')
+      ?.focus();
+  });
+}
+
+type LocalizedReviewPreviewShortcut =
+  | "jumpToAudio"
+  | "nextBlock"
+  | "nextIssue"
+  | "playPause"
+  | "previousBlock"
+  | "restart"
+  | "speedDown"
+  | "speedUp";
+
+function resolveLocalizedReviewPreviewShortcut(
+  event: KeyboardEvent,
+  shortcutPreferences: ShortcutPreferences,
+): LocalizedReviewPreviewShortcut | null {
+  if (shouldIgnoreLocalizedPlaybackShortcutEvent(event)) {
+    return null;
+  }
+  return localizedReviewPreviewShortcutForCommand(
+    resolveShortcutCommandBinding(event, shortcutPreferences, "review") ??
+      resolveShortcutCommandBinding(event, shortcutPreferences, "reader"),
+  );
+}
+
+function shouldIgnoreLocalizedPlaybackShortcutEvent(event: KeyboardEvent): boolean {
+  return shouldIgnoreNarrationShortcutEvent(event);
+}
+
+function localizedReviewPreviewShortcutForCommand(
+  resolved: ResolvedShortcutCommand | null,
+): LocalizedReviewPreviewShortcut | null {
+  if (!resolved) {
+    return null;
+  }
+  switch (resolved.commandId) {
+    case "playback.jumpToAudio":
+    case "review.jumpToAudio": {
+      return "jumpToAudio";
+    }
+    case "playback.nextBlock":
+    case "review.nextBlock": {
+      return "nextBlock";
+    }
+    case "review.nextIssue": {
+      return "nextIssue";
+    }
+    case "playback.previousBlock":
+    case "review.previousBlock": {
+      return "previousBlock";
+    }
+    case "playback.restart": {
+      return "restart";
+    }
+    case "playback.speed": {
+      return resolved.bindingId === "right-bracket" ? "speedUp" : "speedDown";
+    }
+    case "playback.toggle": {
+      return "playPause";
+    }
+    default: {
+      return null;
+    }
+  }
+}
+
+function selectNextReviewIssueBlockId(
+  blocks: readonly RevisionBlock[],
+  activeBlockId: string | null,
+): string | null {
+  const issueBlocks = blocks.filter((block) => block.needsAttention);
+  if (issueBlocks.length === 0) {
+    return null;
+  }
+  const selectedBlockId = selectReviewBlockId(blocks, activeBlockId);
+  const selectedIndex = blocks.findIndex((block) => block.id === selectedBlockId);
+  const nextIssue =
+    issueBlocks.find((block) => blocks.findIndex((item) => item.id === block.id) > selectedIndex) ??
+    issueBlocks[0];
+  return nextIssue.id;
 }
 
 function resolveRunLocale(config: RunConfiguration): string {
   const lang = config.ttsEngine === "supertonic-3" ? config.engineOptions.lang : undefined;
-  if (lang === "sv") {
-    return "sv-SE";
+  if (lang && lang !== "na") {
+    return lang;
   }
   return "en-GB";
 }
@@ -473,729 +1069,6 @@ function normalizeSupertonicLanguage(value: string | undefined): string | null {
   return SUPERTONIC_LANGUAGE_CODES.has(normalized) ? normalized : null;
 }
 
-function isTerminalJob(job: VoiceJob): boolean {
-  return job.status === "completed" || job.status === "failed" || job.status === "cancelled";
-}
-
-function getActivePipelineFlags(job: VoiceJob): ActivePipelineFlags {
-  const activeStage = job.progress.activeStage.toLowerCase();
-  return {
-    optimizing: activeStage.includes("optim") || job.status === "optimizing",
-    synthesizing: activeStage.includes("synth") || job.status === "synthesizing",
-    checking:
-      activeStage.includes("check") ||
-      activeStage.includes("retry") ||
-      job.status === "checking" ||
-      job.status === "retrying",
-  };
-}
-
-function hasSegmentWorkInFlight(job: VoiceJob): boolean {
-  const total = job.progress.totalSegments ?? 0;
-  const current = job.progress.currentSegment ?? 0;
-  return total > 0 && current < total;
-}
-
-function markOptimizationStarted(pipeline: PipelineStepState): void {
-  if (pipeline.optimization !== "failed" && pipeline.optimization !== "done") {
-    pipeline.optimization = "running";
-  }
-}
-
-function markSynthesisRunning(pipeline: PipelineStepState): void {
-  if (pipeline.optimization !== "failed") {
-    pipeline.optimization = "done";
-  }
-  if (pipeline.synthesis !== "failed") {
-    pipeline.synthesis = "running";
-  }
-}
-
-function markCheckerRunning(pipeline: PipelineStepState): void {
-  markSynthesisRunning(pipeline);
-  if (pipeline.checker !== "failed") {
-    pipeline.checker = "running";
-  }
-}
-
-function resolveTTSPipelineState(job: VoiceJob | null): PipelineStepState {
-  if (!job) {
-    return createPipelineBase();
-  }
-
-  const pipeline = createPipelineBase(job);
-  if (isTerminalJob(job)) {
-    return pipeline;
-  }
-
-  const flags = getActivePipelineFlags(job);
-
-  if (flags.optimizing) {
-    if (pipeline.optimization !== "failed") {
-      pipeline.optimization = "running";
-    }
-    return pipeline;
-  }
-
-  markOptimizationStarted(pipeline);
-
-  if (flags.synthesizing) {
-    markSynthesisRunning(pipeline);
-    return pipeline;
-  }
-
-  if (flags.checking || hasSegmentWorkInFlight(job)) {
-    markCheckerRunning(pipeline);
-  }
-
-  return pipeline;
-}
-
-function isVoiceProfileSourceActive(source: VoiceProfileSource | null): boolean {
-  return Boolean(
-    source &&
-      source.status !== "ready" &&
-      source.status !== "failed" &&
-      source.status !== "cancelled",
-  );
-}
-
-function scopedProfileTargetIds(engineId: string): string[] | null {
-  const targetId = voiceProfileTargetForEngine(engineId);
-  return targetId ? [targetId] : null;
-}
-
-function targetIdMatchesScope(targetId: string, targetIds?: readonly string[] | null): boolean {
-  return !targetIds || targetIds.length === 0 || targetIds.includes(targetId);
-}
-
-function scopedCloneTargets(profile: VoiceProfile, targetIds?: readonly string[] | null) {
-  return Object.entries(profile.cloneTargets ?? {})
-    .filter(([targetId]) => targetIdMatchesScope(targetId, targetIds))
-    .map(([, target]) => target);
-}
-
-function scopedCloneArtifacts(profile: VoiceProfile, targetIds?: readonly string[] | null) {
-  return Object.entries(profile.cloneArtifacts ?? {})
-    .filter(([targetId]) => targetIdMatchesScope(targetId, targetIds))
-    .map(([, artifact]) => artifact);
-}
-
-function profileHasActiveTarget(
-  profile: VoiceProfile | null,
-  targetIds?: readonly string[] | null,
-): boolean {
-  if (!profile) {
-    return false;
-  }
-  return scopedCloneTargets(profile, targetIds).some((target) =>
-    ["queued", "building", "validating"].includes(target.status),
-  );
-}
-
-function profileHasTargetAttention(
-  profile: VoiceProfile | null,
-  targetIds?: readonly string[] | null,
-): boolean {
-  if (!profile) {
-    return false;
-  }
-  const targets = scopedCloneTargets(profile, targetIds);
-  const artifacts = scopedCloneArtifacts(profile, targetIds);
-  return (
-    targets.some(
-      (target) => target.status === "failed" || target.validation?.status === "failed",
-    ) || artifacts.some((artifact) => artifact.status === "failed")
-  );
-}
-
-function profileHasBlockingTargetAttention(
-  profile: VoiceProfile | null,
-  targetIds?: readonly string[] | null,
-): boolean {
-  if (!profile) {
-    return false;
-  }
-  const targets = scopedCloneTargets(profile, targetIds);
-  const artifacts = scopedCloneArtifacts(profile, targetIds);
-  return (
-    targets.some((target) => target.status === "failed") ||
-    artifacts.some((artifact) => artifact.status === "failed")
-  );
-}
-
-function profileHasTargetCancelled(
-  profile: VoiceProfile | null,
-  targetIds?: readonly string[] | null,
-): boolean {
-  if (!profile) {
-    return false;
-  }
-  const targets = scopedCloneTargets(profile, targetIds);
-  const artifacts = scopedCloneArtifacts(profile, targetIds);
-  return (
-    targets.some(
-      (target) => target.status === "cancelled" || target.validation?.status === "cancelled",
-    ) || artifacts.some((artifact) => artifact.status === "cancelled")
-  );
-}
-
-function profileHasReadyCloneTarget(
-  profile: VoiceProfile | null,
-  targetIds?: readonly string[] | null,
-): boolean {
-  if (!profile) {
-    return false;
-  }
-  const targets = scopedCloneTargets(profile, targetIds);
-  const artifacts = scopedCloneArtifacts(profile, targetIds);
-  return (
-    targets.some((target) => target.status === "ready") ||
-    artifacts.some((artifact) => artifact.status === "ready")
-  );
-}
-
-function resolveActiveCloneProfile(
-  selectedProfile: VoiceProfile | null,
-  profiles: VoiceProfile[],
-  engineId: string,
-): VoiceProfile | null {
-  if (selectedProfile) {
-    return selectedProfile;
-  }
-  const targetIds = scopedProfileTargetIds(engineId);
-  return (
-    profiles.find((profile) => profileHasActiveTarget(profile, targetIds)) ??
-    profiles.find((profile) => isVoiceProfileTargetReadyForEngine(profile, engineId)) ??
-    profiles.find((profile) => profileHasActiveTarget(profile)) ??
-    profiles.find((profile) => profileHasTargetAttention(profile, targetIds)) ??
-    profiles.find((profile) => profileHasTargetAttention(profile)) ??
-    null
-  );
-}
-
-function sourceStageStatus(source: VoiceProfileSource | null, stageName: string): StageStatus {
-  return source?.stages.find((stage) => stage.name === stageName)?.status ?? "waiting";
-}
-
-function resolveAnalyzeStageStatus(source: VoiceProfileSource | null): StageStatus {
-  if (!source) {
-    return "waiting";
-  }
-  if (source.status === "cancelled") {
-    return "failed";
-  }
-  if (source.status === "failed") {
-    return sourceStageStatus(source, "normalize") === "failed" ||
-      sourceStageStatus(source, "denoise") === "failed"
-      ? "failed"
-      : "done";
-  }
-  if (source.status === "queued" || source.status === "normalizing") {
-    return "running";
-  }
-  return "done";
-}
-
-function resolveDetectStageStatus(source: VoiceProfileSource | null): StageStatus {
-  if (!source) {
-    return "waiting";
-  }
-  if (source.status === "cancelled") {
-    return "failed";
-  }
-  if (source.status === "failed") {
-    return sourceStageStatus(source, "analyze") === "failed" ||
-      sourceStageStatus(source, "score") === "failed"
-      ? "failed"
-      : "waiting";
-  }
-  if (source.status === "analyzing" || source.status === "scoring") {
-    return "running";
-  }
-  return source.status === "ready" ? "done" : "waiting";
-}
-
-function resolveBuildStageStatus(
-  profile: VoiceProfile | null,
-  buildingArtifactKey: string | null,
-  targetIds?: readonly string[] | null,
-  engineId?: string,
-): StageStatus {
-  if (!profile) {
-    return buildingArtifactKey ? "running" : "waiting";
-  }
-  const targets = scopedCloneTargets(profile, targetIds);
-  const artifacts = scopedCloneArtifacts(profile, targetIds);
-  if (
-    buildingArtifactMatchesScope(profile.id, buildingArtifactKey, targetIds) ||
-    targets.some((target) => ["queued", "building"].includes(target.status)) ||
-    artifacts.some((artifact) => artifact.status === "building")
-  ) {
-    return "running";
-  }
-  const engineTargetReady = engineId
-    ? isVoiceProfileTargetReadyForEngine(profile, engineId)
-    : false;
-  if (profileHasReadyCloneTarget(profile, targetIds) || engineTargetReady) {
-    return "done";
-  }
-  if (
-    targets.some((target) => target.status === "failed") ||
-    artifacts.some((artifact) => artifact.status === "failed")
-  ) {
-    return "failed";
-  }
-  return profileHasTargetCancelled(profile, targetIds) ? "failed" : "waiting";
-}
-
-function buildingArtifactMatchesScope(
-  profileId: string,
-  buildingArtifactKey: string | null,
-  targetIds?: readonly string[] | null,
-): boolean {
-  if (!buildingArtifactKey?.startsWith(`${profileId}:`)) {
-    return false;
-  }
-  if (!targetIds || targetIds.length === 0) {
-    return true;
-  }
-  return targetIds.some((targetId) => buildingArtifactKey === `${profileId}:${targetId}`);
-}
-
-function resolveValidateStageStatus(
-  profile: VoiceProfile | null,
-  targetIds?: readonly string[] | null,
-  engineId?: string,
-): StageStatus {
-  if (!profile) {
-    return "waiting";
-  }
-  const targets = scopedCloneTargets(profile, targetIds);
-  if (
-    targets.some((target) => target.status === "ready") ||
-    (engineId ? isVoiceProfileTargetReadyForEngine(profile, engineId) : false)
-  ) {
-    return "done";
-  }
-  if (targets.some((target) => target.validation?.status === "failed")) {
-    return "failed";
-  }
-  if (targets.some((target) => target.validation?.status === "cancelled")) {
-    return "failed";
-  }
-  if (targets.some((target) => target.status === "validating")) {
-    return "running";
-  }
-  if (targets.some((target) => target.validation?.status === "ready")) {
-    return "done";
-  }
-  return "waiting";
-}
-
-function voiceCloningProgressRatio(stages: ActivityStageSummary[]): number {
-  if (stages.length === 0) {
-    return 0;
-  }
-  const doneCount = stages.filter((stage) => stage.status === "done").length;
-  const runningIndex = stages.findIndex((stage) => stage.status === "running");
-  const partial = runningIndex === -1 ? 0 : 0.55;
-  return Math.min(1, (doneCount + partial) / stages.length);
-}
-
-function latestTimestamp(...timestamps: (string | undefined)[]): string | undefined {
-  let latest: string | undefined;
-  for (const timestamp of timestamps) {
-    if (typeof timestamp !== "string" || timestamp.trim().length === 0) {
-      continue;
-    }
-    if (!latest || Date.parse(timestamp) > Date.parse(latest)) {
-      latest = timestamp;
-    }
-  }
-  return latest;
-}
-
-function latestProfileActivityTimestamp(
-  profile: VoiceProfile | null,
-  targetIds?: readonly string[] | null,
-): string | undefined {
-  if (!profile) {
-    return undefined;
-  }
-  const targetTimes = scopedCloneTargets(profile, targetIds).flatMap((target) => [
-    target.updatedAt,
-    target.validation?.measuredAt,
-  ]);
-  const artifactTimes = scopedCloneArtifacts(profile, targetIds).map(
-    (artifact) => artifact.updatedAt,
-  );
-  return latestTimestamp(profile.updatedAt, ...targetTimes, ...artifactTimes);
-}
-
-export function resolveVoiceCloneCompletionReference(
-  activeProfile: VoiceProfile | null,
-  profileSource: VoiceProfileSource | null,
-  targetIds: readonly string[] | null | undefined,
-): string | undefined {
-  const targets = activeProfile ? scopedCloneTargets(activeProfile, targetIds) : [];
-  const measuredAt = latestTimestamp(...targets.map((target) => target.validation?.measuredAt));
-  if (measuredAt) {
-    return measuredAt;
-  }
-  const updatedAt = latestTimestamp(...targets.map((target) => target.updatedAt));
-  if (updatedAt) {
-    return updatedAt;
-  }
-  return latestTimestamp(
-    activeProfile?.updatedAt,
-    profileSource?.updatedAt,
-    profileSource?.createdAt,
-  );
-}
-
-export function resolveVoiceCloningActivityNow({
-  now,
-  status,
-  completionReference,
-}: Readonly<{
-  completionReference: string | undefined | null;
-  now: number;
-  status: ActivityStatus;
-}>): number {
-  if (status === "running" || status === "attention") {
-    return now;
-  }
-  if (!completionReference) {
-    return now;
-  }
-  const parsed = Date.parse(completionReference);
-  if (!Number.isFinite(parsed)) {
-    return now;
-  }
-  return parsed;
-}
-
-function sourceActivityMessage(source: VoiceProfileSource | null): string {
-  if (!source) {
-    return "No source analysis is running.";
-  }
-  if (source.progressMessage.trim().length > 0) {
-    return source.progressMessage;
-  }
-  switch (source.status) {
-    case "queued": {
-      return "Queued for source analysis.";
-    }
-    case "normalizing": {
-      return "Preparing source audio.";
-    }
-    case "analyzing": {
-      return "Detecting and separating speaker segments.";
-    }
-    case "scoring": {
-      return "Scoring candidate voice references.";
-    }
-    case "ready": {
-      return "Voice candidates are ready for review.";
-    }
-    case "failed": {
-      return "Source analysis needs attention.";
-    }
-    case "cancelled": {
-      return "Source analysis was cancelled.";
-    }
-    default: {
-      return "Voice cloning is waiting.";
-    }
-  }
-}
-
-function resolveVoiceCloneActionLabel(status: ActivityStatus): string {
-  switch (status) {
-    case "attention": {
-      return "Review Issue";
-    }
-    case "cancelled": {
-      return "Review Cancelled";
-    }
-    case "running": {
-      return "View Progress";
-    }
-    case "complete": {
-      return "View Profile";
-    }
-    default: {
-      return "Create Clone";
-    }
-  }
-}
-
-function resolveVoiceCloneStages(
-  profileSource: VoiceProfileSource | null,
-  activeProfile: VoiceProfile | null,
-  buildingArtifactKey: string | null,
-  targetIds: readonly string[] | null,
-  engineId: string,
-): ActivityStageSummary[] {
-  const detectDetail =
-    profileSource?.status === "scoring" ? "Scoring candidate references" : "Find speaker turns";
-  return [
-    {
-      detail: profileSource?.progressDetail ?? "Prepare analysis-ready audio",
-      label: "Analyze Source",
-      status: resolveAnalyzeStageStatus(profileSource),
-    },
-    {
-      detail: detectDetail,
-      label: "Detect Speakers",
-      status: resolveDetectStageStatus(profileSource),
-    },
-    {
-      detail: activeProfile ? "Prepare selected clone targets" : "Waiting for profile",
-      label: "Build Clone",
-      status: resolveBuildStageStatus(activeProfile, buildingArtifactKey, targetIds, engineId),
-    },
-    {
-      detail: activeProfile ? "Measure likeness and readiness" : "Waiting for target",
-      label: "Validate Voice",
-      status: resolveValidateStageStatus(activeProfile, targetIds, engineId),
-    },
-  ];
-}
-
-function resolveVoiceCloneActivityStatus({
-  activeProfile,
-  attention,
-  cancelled,
-  sourceActive,
-  targetActive,
-  profileSource,
-  targetReady,
-}: Readonly<{
-  activeProfile: VoiceProfile | null;
-  attention: boolean;
-  cancelled: boolean;
-  sourceActive: boolean;
-  targetActive: boolean;
-  profileSource: VoiceProfileSource | null;
-  targetReady: boolean;
-}>): ActivityStatus {
-  if (attention) {
-    return "attention";
-  }
-  if (cancelled) {
-    return "cancelled";
-  }
-  if (sourceActive || targetActive) {
-    return "running";
-  }
-  if (activeProfile && (profileSource?.status === "ready" || targetReady)) {
-    return "complete";
-  }
-  return "idle";
-}
-
-function resolveVoiceCloneStatusLabel({
-  profileSource,
-  sourceActive,
-  status,
-}: Readonly<{
-  profileSource: VoiceProfileSource | null;
-  sourceActive: boolean;
-  status: ActivityStatus;
-}>): string {
-  if (status === "attention") {
-    return "Attention Needed";
-  }
-  if (status === "cancelled") {
-    return "Cancelled";
-  }
-  if (status === "running") {
-    return sourceActive
-      ? humanizeSourceStatus(profileSource?.status ?? "queued")
-      : "Preparing Target";
-  }
-  if (status === "complete") {
-    return "Ready";
-  }
-  return "Idle";
-}
-
-function voiceCloneSourceDetail(
-  profileSource: VoiceProfileSource | null,
-  activeProfile: VoiceProfile | null,
-): string {
-  if (profileSource) {
-    return `${shortIdentifier(profileSource.id)} · ${profileSource.sourceFile}`;
-  }
-  if (activeProfile) {
-    return `${shortIdentifier(activeProfile.id)} · ${activeProfile.name}`;
-  }
-  return "No source queued";
-}
-
-function voiceCloneDetail(
-  profileSource: VoiceProfileSource | null,
-  activeProfile: VoiceProfile | null,
-  engineId: string,
-): string {
-  if (profileSource?.progressDetail) {
-    return profileSource.progressDetail;
-  }
-  if (activeProfile) {
-    return voiceProfileTargetReadinessText(activeProfile, engineId);
-  }
-  return "Upload source media to begin.";
-}
-
-function voiceCloneEta(status: ActivityStatus): string {
-  if (status === "running") {
-    return "Polling every 3s";
-  }
-  if (status === "complete") {
-    return "Complete";
-  }
-  if (status === "cancelled") {
-    return "Stopped";
-  }
-  return "n/a";
-}
-
-export function resolveVoiceCloningActivity({
-  activeEngineId,
-  buildingArtifactKey,
-  createCandidateId,
-  error,
-  isAnalyzing,
-  now,
-  profileSource,
-  profiles,
-  selectedProfile,
-}: Readonly<{
-  activeEngineId: string;
-  buildingArtifactKey: string | null;
-  createCandidateId: string | null;
-  error: string | null;
-  isAnalyzing: boolean;
-  now: number;
-  profileSource: VoiceProfileSource | null;
-  profiles: VoiceProfile[];
-  selectedProfile: VoiceProfile | null;
-}>): VoiceCloningActivitySummary {
-  const activeProfile = resolveActiveCloneProfile(selectedProfile, profiles, activeEngineId);
-  const activeTargetIds = scopedProfileTargetIds(activeEngineId);
-  const targetReady =
-    Boolean(activeProfile) && isVoiceProfileTargetReadyForEngine(activeProfile, activeEngineId);
-  const stages = resolveVoiceCloneStages(
-    profileSource,
-    activeProfile,
-    buildingArtifactKey,
-    activeTargetIds,
-    activeEngineId,
-  );
-  const sourceActive = isAnalyzing || isVoiceProfileSourceActive(profileSource);
-  const targetBuildActive = activeProfile
-    ? buildingArtifactMatchesScope(activeProfile.id, buildingArtifactKey, activeTargetIds)
-    : Boolean(buildingArtifactKey);
-  const targetActive =
-    targetBuildActive ||
-    Boolean(createCandidateId) ||
-    profileHasActiveTarget(activeProfile, activeTargetIds);
-  const cancelled =
-    profileSource?.status === "cancelled" ||
-    profileHasTargetCancelled(activeProfile, activeTargetIds);
-  const attention =
-    Boolean(error) ||
-    profileSource?.status === "failed" ||
-    profileHasBlockingTargetAttention(activeProfile, activeTargetIds) ||
-    (!cancelled && stages.some((stage) => stage.status === "failed"));
-  const status = resolveVoiceCloneActivityStatus({
-    activeProfile,
-    attention,
-    cancelled,
-    profileSource,
-    sourceActive,
-    targetActive,
-    targetReady,
-  });
-  const completionReference = resolveVoiceCloneCompletionReference(
-    activeProfile,
-    profileSource,
-    activeTargetIds,
-  );
-  const nowForCloneTiming = resolveVoiceCloningActivityNow({
-    completionReference,
-    now,
-    status,
-  });
-  const activityTimestamp = latestTimestamp(
-    profileSource?.updatedAt,
-    latestProfileActivityTimestamp(activeProfile, activeTargetIds),
-  );
-  const message =
-    error ??
-    (status === "complete" && activeProfile
-      ? voiceProfileTargetReadinessText(activeProfile, activeEngineId)
-      : sourceActivityMessage(profileSource));
-  const candidates = profileSource?.candidates ?? [];
-  const readyCandidates = candidates.filter((candidate) => candidate.status === "ready").length;
-  const candidateDetail =
-    candidates.length > 0
-      ? `${String(readyCandidates)} ready / ${String(candidates.length)} detected`
-      : "No candidates yet";
-  return {
-    activeProfile,
-    actionLabel: resolveVoiceCloneActionLabel(status),
-    candidateDetail,
-    detail: voiceCloneDetail(profileSource, activeProfile, activeEngineId),
-    elapsed: formatElapsed(profileSource?.createdAt ?? activeProfile?.createdAt, nowForCloneTiming),
-    eta: voiceCloneEta(status),
-    lastUpdate: formatRelativeTime(activityTimestamp, nowForCloneTiming),
-    message,
-    sourceDetail: voiceCloneSourceDetail(profileSource, activeProfile),
-    stages,
-    status,
-    statusLabel: resolveVoiceCloneStatusLabel({ profileSource, sourceActive, status }),
-  };
-}
-
-function humanizeSourceStatus(status: string): string {
-  switch (status) {
-    case "queued": {
-      return "Queued";
-    }
-    case "normalizing": {
-      return "Normalizing";
-    }
-    case "analyzing": {
-      return "Detecting Speakers";
-    }
-    case "scoring": {
-      return "Scoring Candidates";
-    }
-    case "ready": {
-      return "Ready";
-    }
-    case "failed": {
-      return "Failed";
-    }
-    case "cancelled": {
-      return "Cancelled";
-    }
-    default: {
-      return "Working";
-    }
-  }
-}
-
-function getStudioJobName(job: VoiceJob | null): string {
-  if (job?.voiceProfileName) {
-    return `${job.voiceProfileName} - Long Form`;
-  }
-  return "Clean Energy - Long Form";
-}
-
 function upsertVoiceProfileByCreatedAt(
   currentProfiles: VoiceProfile[],
   profile: VoiceProfile,
@@ -1210,51 +1083,40 @@ function upsertVoiceProfileByCreatedAt(
   return [...nextProfiles.slice(0, insertAt), profile, ...nextProfiles.slice(insertAt)];
 }
 
-function loadStoredIdList(key: string): string[] {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(key) ?? "[]") as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed.filter((item): item is string => typeof item === "string" && item.trim() !== "");
-  } catch {
-    return [];
-  }
-}
-
-function rememberRecentId(ids: string[], id: string, limit = 8): string[] {
-  if (!id) {
-    return ids;
-  }
-  return [id, ...ids.filter((item) => item !== id)].slice(0, limit);
-}
-
 function TeleprompterPanel({
+  accessibilitySettings,
   canOpenBookCinema,
   isPlaybackActive,
   job,
   latestProgress,
   openSignal,
+  readAlongPreferences,
+  showCinemaAction = true,
   showInlinePreview = true,
   onOpenBookCinema,
   onResumeProgress,
   playbackControls,
   playbackCursorSec,
+  generatedAudioLifecycle,
   preparedSourceForCinema,
   settings,
   themeName,
   onOpenSettings,
 }: Readonly<{
+  accessibilitySettings: ReaderAccessibilitySettings;
   canOpenBookCinema: boolean;
   isPlaybackActive: boolean;
   job: VoiceJob | null;
   latestProgress: PlaybackProgress | null;
   openSignal: number;
+  readAlongPreferences: ReadAlongPreferences;
+  showCinemaAction?: boolean;
   showInlinePreview?: boolean;
   onOpenBookCinema: () => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
   playbackControls: PlaybackController;
   playbackCursorSec: number;
+  generatedAudioLifecycle: ReturnType<typeof generatedAudioLifecycleFromJob>;
   preparedSourceForCinema: PreparedSource | null;
   settings: TeleprompterHighlightSettings;
   themeName: ThemeName;
@@ -1293,6 +1155,15 @@ function TeleprompterPanel({
   );
   const shouldOpenBookCinema = canOpenBookCinema && (!job || Boolean(job.bookSourceId));
   const canOpenCinema = Boolean(cue) || canOpenBookCinema;
+  const playbackLifecycleReady =
+    playbackControls.isAvailable && generatedAudioLifecycle === "ready";
+  const playbackLifecycle: GeneratedAudioLifecycleState = playbackLifecycleReady
+    ? "ready"
+    : generatedAudioLifecycle;
+  const teleprompterPlaybackActionDisabledReason = playbackActionDisabledReason({
+    action: "audition",
+    lifecycle: playbackLifecycle,
+  });
   const handleOpenCinema = useCallback(() => {
     if (shouldOpenBookCinema) {
       onOpenBookCinema();
@@ -1314,7 +1185,7 @@ function TeleprompterPanel({
     }
   }, [canOpenCinema, handleOpenCinema, openSignal]);
   const handlePlayPause = useCallback(() => {
-    if (!playbackControls.isAvailable) {
+    if (!playbackLifecycleReady) {
       return;
     }
     if (playbackControls.isPlaying) {
@@ -1322,18 +1193,21 @@ function TeleprompterPanel({
       return;
     }
     void playbackControls.play();
-  }, [playbackControls]);
+  }, [playbackControls, playbackLifecycleReady]);
   const handleRestart = useCallback(() => {
-    if (!playbackControls.isAvailable) {
+    if (!playbackLifecycleReady) {
       return;
     }
     void playbackControls.restart();
-  }, [playbackControls]);
+  }, [playbackControls, playbackLifecycleReady]);
   const handleSkip = useCallback(
     (seconds: number) => {
+      if (!playbackLifecycleReady) {
+        return;
+      }
       playbackControls.skipBy?.(seconds);
     },
-    [playbackControls],
+    [playbackControls, playbackLifecycleReady],
   );
 
   if (!cue) {
@@ -1344,14 +1218,16 @@ function TeleprompterPanel({
       <section className="rounded-lg border p-5 shadow-sm vs-raised">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-sm font-semibold">Teleprompter</h2>
-          <button
-            className="h-8 rounded-md border px-3 text-xs font-semibold transition disabled:opacity-50 vs-border"
-            disabled={!canOpenCinema}
-            onClick={handleOpenCinema}
-            type="button"
-          >
-            Cinema
-          </button>
+          {showCinemaAction ? (
+            <button
+              className="h-8 rounded-md border px-3 text-xs font-semibold transition disabled:opacity-50 vs-border"
+              disabled={!canOpenCinema}
+              onClick={handleOpenCinema}
+              type="button"
+            >
+              Cinema
+            </button>
+          ) : null}
         </div>
         <p className="vs-muted mt-4 rounded-lg border border-dashed p-6 text-sm leading-6 vs-border">
           Generate audio to see a listener-friendly script with word-level focus.
@@ -1361,16 +1237,23 @@ function TeleprompterPanel({
   }
 
   const currentWordLabel = teleprompterWordLabel(cue);
+  const cinemaSourceTitle = narrationReviewSourceLabel(preparedSourceForCinema, null);
   const cinemaOverlay = isCinemaOpen ? (
     <CinemaTeleprompterOverlay
       cue={cue}
+      audioDurationMs={job?.durationMs ?? 0}
       isContextVisible={isContextVisible}
       isFocusEnabled={isFocusEnabled}
+      accessibilitySettings={accessibilitySettings}
       settings={effectiveSettings}
       themeName={cinemaThemeName}
       markdownSource={markdownCinemaSource}
+      markdownActiveWordIndex={null}
       playbackControls={playbackControls}
+      playbackCursorSec={playbackCursorSec}
+      readAlongPreferences={readAlongPreferences}
       resumeProgress={cinemaResumeProgress}
+      sourceTitle={cinemaSourceTitle}
       textSize={cinemaTextSize}
       isPlaybackActive={isPlaybackActive}
       onClose={handleCloseCinema}
@@ -1381,6 +1264,9 @@ function TeleprompterPanel({
       onFocusToggle={() => {
         setIsFocusEnabled((current) => !current);
       }}
+      playbackActionDisabledReason={teleprompterPlaybackActionDisabledReason}
+      playbackLifecycle={playbackLifecycle}
+      playbackLifecycleReady={playbackLifecycleReady}
       onPlayPause={handlePlayPause}
       onRestart={handleRestart}
       onResumeProgress={onResumeProgress}
@@ -1424,35 +1310,41 @@ function TeleprompterPanel({
             Context
           </button>
           <button
+            {...playbackActionDataAttributes("audition", playbackLifecycle)}
             className="h-8 rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
-            disabled={!playbackControls.isAvailable}
+            disabled={!playbackLifecycleReady}
+            data-disabled-reason={teleprompterPlaybackActionDisabledReason}
             onClick={handleRestart}
             type="button"
           >
             Restart
           </button>
           <button
-            className="h-8 rounded-md px-3 text-xs font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40 vs-accent-bg"
-            disabled={!playbackControls.isAvailable}
+            {...playbackActionDataAttributes("audition", playbackLifecycle)}
+            className="h-8 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40 vs-accent-bg"
+            disabled={!playbackLifecycleReady}
+            data-disabled-reason={teleprompterPlaybackActionDisabledReason}
             onClick={handlePlayPause}
             type="button"
           >
             {playbackControls.isPlaying ? "Pause" : "Play"}
           </button>
-          <button
-            className="h-8 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 transition hover:bg-orange-500/15"
-            onClick={handleOpenCinema}
-            type="button"
-          >
-            Cinema
-          </button>
+          {showCinemaAction ? (
+            <button
+              className="h-8 rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-3 text-xs font-semibold text-[var(--vs-action-primary)] transition hover:bg-[var(--vs-selected)]"
+              onClick={handleOpenCinema}
+              type="button"
+            >
+              Cinema
+            </button>
+          ) : null}
         </div>
       </div>
 
-      <div className="mt-4 grid gap-4 rounded-xl border border-orange-500/20 bg-orange-500/[0.055] p-5 sm:p-7">
+      <div className="mt-4 grid gap-4 rounded-xl border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] p-5 sm:p-7">
         {isContextVisible ? <TeleprompterContext cue={cue} /> : null}
         <TeleprompterWords cue={cue} settings={effectiveSettings} variant="panel" />
-        <div className="h-1.5 overflow-hidden rounded-full bg-orange-500/15">
+        <div className="h-1.5 overflow-hidden rounded-full bg-[var(--vs-selected)]">
           <div
             className="h-full rounded-full transition-[width] vs-accent-bg"
             style={{ width: `${String(Math.round(cue.segmentProgress * 100))}%` }}
@@ -1461,7 +1353,8 @@ function TeleprompterPanel({
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
           <button
             className="vs-muted rounded-md border px-3 py-1.5 font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-40 vs-border"
-            disabled={!playbackControls.skipBy}
+            disabled={!playbackLifecycleReady || !playbackControls.skipBy}
+            data-disabled-reason={teleprompterPlaybackActionDisabledReason}
             onClick={() => {
               handleSkip(-10);
             }}
@@ -1476,7 +1369,8 @@ function TeleprompterPanel({
           </span>
           <button
             className="vs-muted rounded-md border px-3 py-1.5 font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-40 vs-border"
-            disabled={!playbackControls.skipBy}
+            disabled={!playbackLifecycleReady || !playbackControls.skipBy}
+            data-disabled-reason={teleprompterPlaybackActionDisabledReason}
             onClick={() => {
               handleSkip(10);
             }}
@@ -1494,7 +1388,7 @@ function TeleprompterPanel({
 function teleprompterToggleClass(isActive: boolean): string {
   return `h-8 rounded-md border px-3 text-xs font-semibold transition vs-border ${
     isActive
-      ? "border-orange-300 bg-orange-500/10 text-orange-600"
+      ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-action-primary)]"
       : "vs-muted hover:bg-[var(--vs-surface)]"
   }`;
 }
@@ -1562,10 +1456,23 @@ function normalizeComparableText(value: string): string {
   return value.trim().replaceAll(/\s+/g, " ");
 }
 
+const PREVIEW_REVIEW_BLOCK_LIMIT = 36;
+
+function generationTextForPreviewSpeechPlan(
+  plan: CanonicalPreviewSpeechPlan,
+  fallbackText: string,
+): string {
+  return canonicalPreviewSpeechPlanHasBlocks(plan) ? plan.text : fallbackText;
+}
+
 function upsertPreparedSource(
   currentSources: PreparedSource[],
   source: PreparedSource,
 ): PreparedSource[] {
+  return [source, ...currentSources.filter((item) => item.id !== source.id)];
+}
+
+function upsertBookSource(currentSources: BookSource[], source: BookSource): BookSource[] {
   return [source, ...currentSources.filter((item) => item.id !== source.id)];
 }
 
@@ -1583,8 +1490,9 @@ export function mergePreparedSourcesPreservingFullContent(
   currentSources: PreparedSource[],
   nextSources: PreparedSource[],
 ): PreparedSource[] {
+  const currentById = new Map(currentSources.map((source) => [source.id, source]));
   return nextSources.map((nextSource) => {
-    const currentSource = currentSources.find((source) => source.id === nextSource.id);
+    const currentSource = currentById.get(nextSource.id);
     if (
       currentSource?.updatedAt === nextSource.updatedAt &&
       !isPreparedSourceDisplayIncomplete(currentSource)
@@ -1686,12 +1594,20 @@ function TeleprompterWords({
         const wordCue = token.wordIndex === null ? undefined : wordCueByIndex.get(token.wordIndex);
         const isActive = wordCue?.state === "active" || token.wordIndex === cue.activeWordIndex;
         const state = wordCue?.state ?? (isActive ? "active" : "idle");
+        const readAlongRole = teleprompterReadAlongRole(
+          state,
+          token.wordIndex ?? -1,
+          activeWordIndex,
+        );
         return (
           <span
-            className={`${wordClass} teleprompter-word teleprompter-word--${state} ${
+            className={`${wordClass} teleprompter-word teleprompter-word--${state} readalong-word-role--${readAlongRole} ${
               variant === "cinema" ? "teleprompter-word--cinema" : ""
             }`}
             data-effect={effectStyle}
+            data-readalong-cue-role="current"
+            data-readalong-timing-state="estimated"
+            data-readalong-word-role={readAlongRole}
             key={`${token.text}-${String(token.wordIndex)}-${String(tokenIndex)}`}
             ref={isActive && variant === "cinema" ? activeWordRef : undefined}
             style={
@@ -1707,6 +1623,23 @@ function TeleprompterWords({
       })}
     </p>
   );
+}
+
+function teleprompterReadAlongRole(
+  state: string,
+  wordIndex: number,
+  activeWordIndex: number,
+): ReadAlongWordRole {
+  if (state === "active") {
+    return "active";
+  }
+  if (state === "upcoming") {
+    return "upcoming";
+  }
+  if (state === "spoken") {
+    return activeWordIndex - wordIndex <= 2 ? "recent" : "spoken";
+  }
+  return "idle";
 }
 
 function renderTeleprompterTokenContent(text: string): ReactNode {
@@ -1803,17 +1736,28 @@ function isLinkTrailingPunctuation(character: string): boolean {
   );
 }
 
+const CINEMA_PLAYBACK_RATES = [0.8, 1, 1.25, 1.5] as const;
+
 type CinemaViewMode = "teleprompter" | "markdown";
 
-function CinemaTeleprompterOverlay({
+export function CinemaTeleprompterOverlay({
+  accessibilitySettings,
   cue,
+  audioDurationMs,
   isContextVisible,
   isFocusEnabled,
   isPlaybackActive,
+  playbackActionDisabledReason,
+  playbackLifecycle,
+  playbackLifecycleReady,
   markdownSource,
+  markdownActiveWordIndex,
   playbackControls,
+  playbackCursorSec,
+  readAlongPreferences,
   resumeProgress,
   settings,
+  sourceTitle,
   themeName,
   textSize,
   onClose,
@@ -1827,20 +1771,29 @@ function CinemaTeleprompterOverlay({
   onThemeChange,
   onTextSizeChange,
 }: Readonly<{
+  accessibilitySettings: ReaderAccessibilitySettings;
   cue: TeleprompterCue;
+  audioDurationMs: number;
   isContextVisible: boolean;
   isFocusEnabled: boolean;
   isPlaybackActive: boolean;
+  playbackActionDisabledReason?: string;
+  playbackLifecycleReady: boolean;
   markdownSource: PreparedSource | null;
+  markdownActiveWordIndex: number | null;
   playbackControls: PlaybackController;
+  playbackCursorSec: number;
+  readAlongPreferences: ReadAlongPreferences;
   resumeProgress: PlaybackProgress | null;
   settings: TeleprompterHighlightSettings;
+  sourceTitle: string;
   themeName: ThemeName;
   textSize: CinemaTextSize;
   onClose: () => void;
   onContextToggle: () => void;
   onFocusSettingsOpen: () => void;
   onFocusToggle: () => void;
+  playbackLifecycle: GeneratedAudioLifecycleState;
   onPlayPause: () => void;
   onRestart: () => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
@@ -1851,6 +1804,16 @@ function CinemaTeleprompterOverlay({
   const [viewMode, setViewMode] = useState<CinemaViewMode>(
     markdownSource ? "markdown" : "teleprompter",
   );
+  const effectiveReadAlong = useMemo(
+    () => effectiveReadAlongPreferences(readAlongPreferences, accessibilitySettings),
+    [accessibilitySettings, readAlongPreferences],
+  );
+  const timelineLabels = playbackTimeLabels({
+    currentSec: playbackCursorSec,
+    durationMs: audioDurationMs,
+    fallbackRatio: cue.segmentProgress,
+  });
+  const timelinePercent = Math.round(timelineLabels.ratio * 100);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -1884,11 +1847,11 @@ function CinemaTeleprompterOverlay({
     >
       <header className="flex flex-col gap-4 border-b px-5 py-4 vs-border sm:px-8 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-500">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--vs-action-primary)]">
             Cinema Teleprompter
           </p>
-          <h2 className="mt-1 text-lg font-semibold sm:text-xl">
-            {isPlaybackActive ? "Following playback" : "Ready for playback"}
+          <h2 className="mt-1 truncate text-lg font-semibold sm:text-xl" title={sourceTitle}>
+            {sourceTitle}
           </h2>
         </div>
         <div className="flex flex-wrap items-center gap-3 lg:justify-end">
@@ -1921,11 +1884,14 @@ function CinemaTeleprompterOverlay({
           <span
             className={`rounded-full border px-3 py-1 text-xs font-semibold ${
               isPlaybackActive
-                ? "border-orange-400 bg-orange-500 text-white"
+                ? "border-[var(--vs-selected-border)] bg-[var(--vs-action-primary)] text-[var(--vs-action-primary-text)]"
                 : "vs-muted bg-[var(--vs-surface)] vs-border"
             }`}
           >
             {isPlaybackActive ? "Playing" : "Paused"}
+          </span>
+          <span className="rounded-full border bg-[var(--vs-surface)] px-3 py-1 text-xs font-semibold tabular-nums vs-border vs-muted">
+            {timelineLabels.totalLabel}
           </span>
           <span className="vs-muted hidden text-sm sm:inline">
             Segment {String(cue.segmentIndex + 1)} / {String(cue.segmentCount)} ·{" "}
@@ -1962,7 +1928,11 @@ function CinemaTeleprompterOverlay({
           <div className="max-h-[68vh] min-h-0 overflow-y-auto rounded-xl border bg-[var(--vs-raised)] p-5 shadow-2xl sm:p-8">
             {viewMode === "markdown" && markdownSource ? (
               <MarkdownCinemaView
-                activeWordIndex={cue.documentActiveWordIndex}
+                activeWordIndex={markdownActiveWordIndex ?? cue.documentActiveWordIndex}
+                accessibilitySettings={accessibilitySettings}
+                cue={cue}
+                playbackRate={playbackControls.playbackRate}
+                readAlongPreferences={effectiveReadAlong}
                 source={markdownSource}
                 textSize={textSize}
               />
@@ -2002,7 +1972,7 @@ function CinemaTeleprompterOverlay({
           </button>
           {resumeProgress ? (
             <button
-              className="h-10 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-sm font-semibold text-orange-600 transition hover:bg-orange-500/15"
+              className="h-10 rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-3 text-sm font-semibold text-[var(--vs-action-primary)] transition hover:bg-[var(--vs-selected)]"
               onClick={() => {
                 onResumeProgress(resumeProgress);
               }}
@@ -2013,7 +1983,8 @@ function CinemaTeleprompterOverlay({
           ) : null}
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
-            disabled={!playbackControls.isAvailable}
+            disabled={!playbackLifecycleReady}
+            data-disabled-reason={playbackActionDisabledReason}
             onClick={onRestart}
             type="button"
           >
@@ -2021,7 +1992,8 @@ function CinemaTeleprompterOverlay({
           </button>
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
-            disabled={!playbackControls.skipBy}
+            disabled={!playbackLifecycleReady || !playbackControls.skipBy}
+            data-disabled-reason={playbackActionDisabledReason}
             onClick={() => {
               onSkip(-10);
             }}
@@ -2030,8 +2002,10 @@ function CinemaTeleprompterOverlay({
             -10s
           </button>
           <button
-            className="h-12 min-w-28 rounded-full px-6 text-base font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50 vs-accent-bg"
-            disabled={!playbackControls.isAvailable}
+            {...playbackActionDataAttributes("audition", playbackLifecycle)}
+            className="h-12 min-w-28 rounded-full px-6 text-base font-semibold text-[var(--vs-action-primary-text)] shadow-lg shadow-[var(--vs-shadow)] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50 vs-accent-bg"
+            disabled={!playbackLifecycleReady}
+            data-disabled-reason={playbackActionDisabledReason}
             onClick={onPlayPause}
             type="button"
           >
@@ -2039,7 +2013,8 @@ function CinemaTeleprompterOverlay({
           </button>
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
-            disabled={!playbackControls.skipBy}
+            disabled={!playbackLifecycleReady || !playbackControls.skipBy}
+            data-disabled-reason={playbackActionDisabledReason}
             onClick={() => {
               onSkip(10);
             }}
@@ -2049,7 +2024,8 @@ function CinemaTeleprompterOverlay({
           </button>
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
-            disabled={!playbackControls.skipBy}
+            disabled={!playbackLifecycleReady || !playbackControls.skipBy}
+            data-disabled-reason={playbackActionDisabledReason}
             onClick={() => {
               onSkip(-30);
             }}
@@ -2059,7 +2035,8 @@ function CinemaTeleprompterOverlay({
           </button>
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:opacity-40 vs-border"
-            disabled={!playbackControls.skipBy}
+            disabled={!playbackLifecycleReady || !playbackControls.skipBy}
+            data-disabled-reason={playbackActionDisabledReason}
             onClick={() => {
               onSkip(30);
             }}
@@ -2067,6 +2044,25 @@ function CinemaTeleprompterOverlay({
           >
             Next segment
           </button>
+          <label className="flex h-10 items-center gap-2 rounded-md border px-3 text-sm font-semibold vs-border">
+            Speed
+            <select
+              className="bg-transparent text-sm font-semibold outline-none"
+              data-testid="ui-action-cinema-playback-speed"
+              data-ui-action-owner="cinema"
+              disabled={!playbackControls.setPlaybackRate}
+              onChange={(event) => {
+                playbackControls.setPlaybackRate?.(Number(event.currentTarget.value));
+              }}
+              value={String(playbackControls.playbackRate)}
+            >
+              {CINEMA_PLAYBACK_RATES.map((rate) => (
+                <option key={rate} value={rate}>
+                  {rate.toFixed(rate === 1 ? 0 : 2)}x
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             className="h-10 rounded-md border px-3 text-sm font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
             onClick={() => {
@@ -2086,10 +2082,21 @@ function CinemaTeleprompterOverlay({
             A+
           </button>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-orange-500/15">
+        <div className="mb-1 flex items-center justify-between gap-3 text-xs tabular-nums vs-muted">
+          <span>{timelineLabels.elapsedLabel}</span>
+          <span>{timelineLabels.remainingLabel}</span>
+        </div>
+        <div
+          aria-label={`${timelineLabels.elapsedLabel} elapsed, ${timelineLabels.remainingLabel} remaining`}
+          aria-valuemax={100}
+          aria-valuemin={0}
+          aria-valuenow={timelinePercent}
+          className="h-2 overflow-hidden rounded-full bg-[var(--vs-selected)]"
+          role="progressbar"
+        >
           <div
             className="h-full rounded-full transition-[width] vs-accent-bg"
-            style={{ width: `${String(Math.round(cue.segmentProgress * 100))}%` }}
+            style={{ width: `${timelinePercent.toString()}%` }}
           />
         </div>
         <p className="vs-muted mt-3 text-center text-xs">Press Escape to return to the studio.</p>
@@ -2100,10 +2107,18 @@ function CinemaTeleprompterOverlay({
 
 function MarkdownCinemaView({
   activeWordIndex,
+  accessibilitySettings,
+  cue,
+  playbackRate,
+  readAlongPreferences,
   source,
   textSize,
 }: Readonly<{
   activeWordIndex: number;
+  accessibilitySettings: ReaderAccessibilitySettings;
+  cue: TeleprompterCue;
+  playbackRate: number;
+  readAlongPreferences: ReadAlongPreferences;
   source: PreparedSource;
   textSize: CinemaTextSize;
 }>) {
@@ -2116,6 +2131,8 @@ function MarkdownCinemaView({
     [activeWord?.blockId, source.blocks],
   );
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const domWordStateSessionRef = useRef<MarkdownCinemaDomWordStateSession | null>(null);
+  domWordStateSessionRef.current ??= new MarkdownCinemaDomWordStateSession();
   const blocks = source.blocks ?? [];
   const markdownTextClassBySize: Record<CinemaTextSize, string> = {
     compact: "text-sm leading-7 sm:text-base",
@@ -2125,21 +2142,109 @@ function MarkdownCinemaView({
     massive: "text-2xl leading-[2.8rem] sm:text-3xl",
   };
   const shouldHighlightWord = activeBlock ? isMarkdownCinemaWordHighlightable(activeBlock) : false;
-
-  useEffect(() => {
-    if (!activeWord) {
+  const shouldUseSmoothCursor =
+    readAlongPreferences.highlightMotion === "smoothCursor" && shouldHighlightWord;
+  const blockWordStartIndex = activeWord ? activeWordIndex - activeWord.wordOffset : undefined;
+  const staticMarkdownWordStates = useMemo(
+    () => (shouldUseSmoothCursor ? EMPTY_MARKDOWN_WORD_STATES : markdownWordStatesForCue(cue)),
+    [cue, shouldUseSmoothCursor],
+  );
+  const shouldRenderWordAnchors =
+    shouldHighlightWord && (shouldUseSmoothCursor || staticMarkdownWordStates.size > 0);
+  const activeWordBlockEndOffset = activeWord?.blockEndOffset;
+  const activeWordBlockStartOffset = activeWord?.blockStartOffset;
+  const smoothMarkdownWordAnchors = useMemo<MarkdownWordAnchors | undefined>(() => {
+    if (
+      activeWordBlockEndOffset === undefined ||
+      activeWordBlockStartOffset === undefined ||
+      !shouldHighlightWord ||
+      !shouldUseSmoothCursor
+    ) {
       return;
     }
-    containerRef.current?.querySelector(".markdown-cinema-word-active")?.scrollIntoView({
-      block: "center",
-      inline: "nearest",
-      behavior: "smooth",
+    return {
+      blockEndOffset: activeWordBlockEndOffset,
+      blockStartOffset: activeWordBlockStartOffset,
+      blockWordStartIndex,
+    };
+  }, [
+    activeWordBlockEndOffset,
+    activeWordBlockStartOffset,
+    blockWordStartIndex,
+    shouldHighlightWord,
+    shouldUseSmoothCursor,
+  ]);
+  const motionDurationMs = useMemo(
+    () => markdownMotionDurationMs(cue, playbackRate),
+    [cue, playbackRate],
+  );
+  const readAlongDataAttributes = useMemo(
+    () => readAlongPreferenceDataAttributes(readAlongPreferences),
+    [readAlongPreferences],
+  );
+
+  useEffect(() => {
+    const root = containerRef.current;
+    const domWordStateSession = domWordStateSessionRef.current;
+    if (!root) {
+      return;
+    }
+    if (shouldUseSmoothCursor && activeWord) {
+      domWordStateSession?.apply({
+        accessibilitySettings,
+        activeWordIndex,
+        cue,
+        highlightMotion: readAlongPreferences.highlightMotion,
+        motionDurationMs,
+        root,
+      });
+      return;
+    }
+    domWordStateSession?.clear();
+    if (!activeWord) {
+      clearReadAlongMotionCursor(root);
+      return;
+    }
+    const activeElement = root.querySelector<HTMLElement>(".markdown-cinema-word-active");
+    if (!activeElement) {
+      clearReadAlongMotionCursor(root);
+      return;
+    }
+    scrollMarkdownActiveWordIntoSafeBand(root, activeElement, accessibilitySettings);
+    const nextElement =
+      shouldUseSmoothCursor && activeWordIndex >= 0
+        ? root.querySelector<HTMLElement>(
+            `[data-readalong-word-index="${String(activeWordIndex + 1)}"]`,
+          )
+        : null;
+    updateReadAlongMotionCursor({
+      accessibilitySettings,
+      activeElement,
+      highlightMotion: readAlongPreferences.highlightMotion,
+      nextElement,
+      root,
+      transitionDurationMs: motionDurationMs,
     });
-  }, [activeWord]);
+  }, [
+    accessibilitySettings,
+    activeWord,
+    activeWordIndex,
+    cue,
+    motionDurationMs,
+    readAlongPreferences.highlightMotion,
+    shouldUseSmoothCursor,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      domWordStateSessionRef.current?.clear();
+      clearReadAlongMotionCursor(containerRef.current);
+    };
+  }, []);
 
   if (source.text) {
     return (
-      <div ref={containerRef}>
+      <div ref={containerRef} {...readAlongDataAttributes}>
         <Suspense fallback={<LazySurfaceFallback label="Loading markdown..." />}>
           <MarkdownRenderer
             className={`markdown-cinema prose-markdown ${markdownTextClassBySize[textSize]} text-[var(--vs-text)]`}
@@ -2152,14 +2257,19 @@ function MarkdownCinemaView({
                 : undefined
             }
             wordHighlight={
-              activeWord && shouldHighlightWord
+              activeWord && shouldHighlightWord && !shouldUseSmoothCursor
                 ? {
                     activeWordOffset: activeWord.wordOffset,
+                    activeWordIndex,
+                    blockWordStartIndex,
                     blockEndOffset: activeWord.blockEndOffset,
                     blockStartOffset: activeWord.blockStartOffset,
+                    renderWordAnchors: shouldRenderWordAnchors,
+                    wordStates: staticMarkdownWordStates,
                   }
                 : undefined
             }
+            wordAnchors={smoothMarkdownWordAnchors}
           >
             {source.text}
           </MarkdownRenderer>
@@ -2171,12 +2281,20 @@ function MarkdownCinemaView({
   return (
     <div
       className={`markdown-cinema prose-markdown ${markdownTextClassBySize[textSize]} text-[var(--vs-text)]`}
+      ref={containerRef}
+      {...readAlongDataAttributes}
     >
       {blocks.map((block) => (
         <MarkdownCinemaBlock
+          activeWord={shouldUseSmoothCursor ? null : activeWord}
+          activeWordIndex={shouldUseSmoothCursor ? -1 : activeWordIndex}
           block={block}
+          blockWordStartIndex={block.id === activeWord?.blockId ? blockWordStartIndex : undefined}
           isActive={block.id === activeWord?.blockId}
           key={block.id}
+          renderWordAnchors={!shouldUseSmoothCursor && shouldRenderWordAnchors}
+          useStableWordAnchors={shouldUseSmoothCursor && block.id === activeWord?.blockId}
+          wordStates={staticMarkdownWordStates}
         />
       ))}
     </div>
@@ -2193,15 +2311,272 @@ function isMarkdownCinemaWordHighlightable(block: PreparedSourceBlock): boolean 
   );
 }
 
-function MarkdownCinemaBlock({
+function markdownMotionDurationMs(cue: TeleprompterCue, playbackRate: number): number | null {
+  const activeCue = cue.wordCues.find((wordCue) => wordCue.wordIndex === cue.activeWordIndex);
+  if (!activeCue) {
+    return null;
+  }
+  const nextCue = cue.wordCues.find((wordCue) => wordCue.wordIndex === cue.activeWordIndex + 1);
+  const durationMs = Math.max(0, (nextCue?.startMs ?? activeCue.endMs) - activeCue.startMs);
+  const safeRate = Number.isFinite(playbackRate) && playbackRate > 0 ? playbackRate : 1;
+  return durationMs / safeRate;
+}
+
+function markdownWordStatesForCue(cue: TeleprompterCue): ReadonlyMap<number, MarkdownWordCueState> {
+  const segmentWordStartIndex = cue.documentActiveWordIndex - cue.activeWordIndex;
+  const states = new Map<number, MarkdownWordCueState>();
+  for (const wordCue of cue.wordCues) {
+    const documentWordIndex = segmentWordStartIndex + wordCue.wordIndex;
+    states.set(documentWordIndex, {
+      intensity: wordCue.intensity,
+      state: wordCue.state,
+      wordRole: teleprompterReadAlongRole(wordCue.state, wordCue.wordIndex, cue.activeWordIndex),
+    });
+  }
+  return states;
+}
+
+const EMPTY_MARKDOWN_WORD_STATES: ReadonlyMap<number, MarkdownWordCueState> = new Map();
+const MARKDOWN_DOM_WORD_STATE_CLASSES = [
+  "markdown-cinema-word-active",
+  "teleprompter-word",
+  "teleprompter-word--cinema",
+  "teleprompter-word--idle",
+  "teleprompter-word--spoken",
+  "teleprompter-word--active",
+  "teleprompter-word--upcoming",
+  "readalong-word-role--idle",
+  "readalong-word-role--spoken",
+  "readalong-word-role--recent",
+  "readalong-word-role--active",
+  "readalong-word-role--activePhrase",
+  "readalong-word-role--upcoming",
+  "readalong-word-role--skipped",
+  "readalong-word-role--transformed",
+] as const;
+
+interface MarkdownCinemaDomWordStateInput {
+  accessibilitySettings: Pick<ReaderAccessibilitySettings, "reducedMotion">;
+  activeWordIndex: number;
+  cue: TeleprompterCue;
+  highlightMotion: ReadAlongPreferences["highlightMotion"];
+  motionDurationMs: number | null;
+  root: HTMLElement;
+}
+
+class MarkdownCinemaDomWordStateSession {
+  private activeElement: HTMLElement | null = null;
+  private readonly elementCache = new Map<number, HTMLElement>();
+  private root: HTMLElement | null = null;
+  private readonly touchedStateKeys = new Map<number, string>();
+  private readonly touchedElements = new Map<number, HTMLElement>();
+
+  apply({
+    accessibilitySettings,
+    activeWordIndex,
+    cue,
+    highlightMotion,
+    motionDurationMs,
+    root,
+  }: MarkdownCinemaDomWordStateInput): void {
+    this.prepareRoot(root);
+    const states = markdownWordStatesForCue(cue);
+    const nextTouchedElements = new Map<number, HTMLElement>();
+    const nextTouchedStateKeys = new Map<number, string>();
+    for (const [wordIndex, wordState] of states) {
+      const element = this.resolveWordElement(root, wordIndex);
+      if (!element) {
+        continue;
+      }
+      const isActive = wordIndex === activeWordIndex;
+      const stateKey = markdownCinemaWordStateKey(wordState, isActive);
+      if (this.touchedStateKeys.get(wordIndex) !== stateKey) {
+        applyMarkdownCinemaDomWordState(element, wordState, isActive);
+      }
+      nextTouchedElements.set(wordIndex, element);
+      nextTouchedStateKeys.set(wordIndex, stateKey);
+    }
+    for (const [wordIndex, element] of this.touchedElements) {
+      if (!nextTouchedElements.has(wordIndex)) {
+        clearMarkdownCinemaDomWordState(element);
+      }
+    }
+    this.touchedElements.clear();
+    this.touchedStateKeys.clear();
+    for (const [wordIndex, element] of nextTouchedElements) {
+      this.touchedElements.set(wordIndex, element);
+    }
+    for (const [wordIndex, stateKey] of nextTouchedStateKeys) {
+      this.touchedStateKeys.set(wordIndex, stateKey);
+    }
+
+    const activeElement =
+      nextTouchedElements.get(activeWordIndex) ?? this.resolveWordElement(root, activeWordIndex);
+    if (!activeElement) {
+      this.activeElement = null;
+      clearReadAlongMotionCursor(root);
+      return;
+    }
+    if (this.activeElement !== activeElement) {
+      markReadAlongPerformance("dom-highlight-swap");
+    }
+    this.activeElement = activeElement;
+    scrollMarkdownActiveWordIntoSafeBand(root, activeElement, accessibilitySettings);
+    updateReadAlongMotionCursor({
+      accessibilitySettings,
+      activeElement,
+      highlightMotion,
+      nextElement: this.resolveWordElement(root, activeWordIndex + 1),
+      root,
+      transitionDurationMs: motionDurationMs,
+    });
+  }
+
+  clear(): void {
+    for (const element of this.touchedElements.values()) {
+      clearMarkdownCinemaDomWordState(element);
+    }
+    this.touchedElements.clear();
+    this.touchedStateKeys.clear();
+    this.elementCache.clear();
+    this.activeElement = null;
+    clearReadAlongMotionCursor(this.root);
+    this.root = null;
+  }
+
+  private prepareRoot(root: HTMLElement): void {
+    if (this.root === root) {
+      return;
+    }
+    this.clear();
+    this.root = root;
+  }
+
+  private resolveWordElement(root: HTMLElement, wordIndex: number): HTMLElement | null {
+    if (wordIndex < 0) {
+      return null;
+    }
+    const cached = this.elementCache.get(wordIndex);
+    if (cached && isMarkdownCinemaCachedElementUsable(root, cached)) {
+      markReadAlongPerformance("dom-anchor-cache-hit");
+      return cached;
+    }
+    if (cached) {
+      this.elementCache.delete(wordIndex);
+    }
+    markReadAlongPerformance("dom-anchor-resolve");
+    const element = root.querySelector<HTMLElement>(
+      `[data-readalong-word-index="${String(wordIndex)}"]`,
+    );
+    if (element) {
+      this.elementCache.set(wordIndex, element);
+    }
+    return element;
+  }
+}
+
+function markdownCinemaWordStateKey(wordState: MarkdownWordCueState, isActive: boolean): string {
+  return `${wordState.state}:${wordState.wordRole}:${wordState.intensity.toFixed(3)}:${
+    isActive ? "1" : "0"
+  }`;
+}
+
+function applyMarkdownCinemaDomWordState(
+  element: HTMLElement,
+  wordState: MarkdownWordCueState,
+  isActive: boolean,
+): void {
+  element.classList.remove(...MARKDOWN_DOM_WORD_STATE_CLASSES);
+  element.classList.add(
+    "teleprompter-word",
+    "teleprompter-word--cinema",
+    `teleprompter-word--${wordState.state}`,
+    `readalong-word-role--${wordState.wordRole}`,
+  );
+  if (isActive) {
+    element.classList.add("markdown-cinema-word-active");
+    element.setAttribute("aria-current", "true");
+    element.dataset.readalongDomActive = "true";
+  } else {
+    element.removeAttribute("aria-current");
+    delete element.dataset.readalongDomActive;
+  }
+  element.dataset.effect = "spark";
+  element.dataset.readalongWordRole = wordState.wordRole;
+  element.style.setProperty("--teleprompter-accent", "#fb923c");
+  element.style.setProperty("--teleprompter-intensity", String(wordState.intensity));
+}
+
+function clearMarkdownCinemaDomWordState(element: HTMLElement): void {
+  element.classList.remove(...MARKDOWN_DOM_WORD_STATE_CLASSES);
+  element.classList.add("readalong-word-role--idle");
+  element.removeAttribute("aria-current");
+  delete element.dataset.effect;
+  delete element.dataset.readalongDomActive;
+  element.dataset.readalongWordRole = "idle";
+  element.style.removeProperty("--teleprompter-accent");
+  element.style.removeProperty("--teleprompter-intensity");
+}
+
+function isMarkdownCinemaCachedElementUsable(root: HTMLElement, element: HTMLElement): boolean {
+  if (!element.isConnected) {
+    return false;
+  }
+  return root.contains(element);
+}
+
+function scrollMarkdownActiveWordIntoSafeBand(
+  root: HTMLElement,
+  activeElement: HTMLElement,
+  accessibilitySettings: Pick<ReaderAccessibilitySettings, "reducedMotion">,
+): void {
+  const rootRect = root.getBoundingClientRect();
+  const activeRect = activeElement.getBoundingClientRect();
+  const safeTop = rootRect.top + rootRect.height * 0.28;
+  const safeBottom = rootRect.top + rootRect.height * 0.72;
+  if (activeRect.top >= safeTop && activeRect.bottom <= safeBottom) {
+    return;
+  }
+  activeElement.scrollIntoView({
+    behavior: accessibilitySettings.reducedMotion ? "auto" : "smooth",
+    block: "center",
+    inline: "nearest",
+  });
+  markReadAlongPerformance("scroll-call");
+}
+
+const MarkdownCinemaBlock = memo(function MarkdownCinemaBlock({
+  activeWord,
+  activeWordIndex,
   block,
+  blockWordStartIndex,
   isActive,
+  renderWordAnchors,
+  useStableWordAnchors,
+  wordStates,
 }: Readonly<{
+  activeWord: PreparedSourceActiveWord | null;
+  activeWordIndex: number;
   block: NonNullable<PreparedSource["blocks"]>[number];
+  blockWordStartIndex: number | undefined;
   isActive: boolean;
+  renderWordAnchors: boolean;
+  useStableWordAnchors: boolean;
+  wordStates: ReadonlyMap<number, MarkdownWordCueState>;
 }>) {
   const blockRef = useRef<HTMLElement | null>(null);
   const blockText = markdownBlockText(block);
+  const shouldHighlightWord = isActive && activeWord && isMarkdownCinemaWordHighlightable(block);
+  const wordAnchors = useMemo<MarkdownWordAnchors | undefined>(() => {
+    if (!useStableWordAnchors || blockWordStartIndex === undefined) {
+      return;
+    }
+    return {
+      blockEndOffset: blockText.length,
+      blockStartOffset: 0,
+      blockWordStartIndex,
+    };
+  }, [blockText.length, blockWordStartIndex, useStableWordAnchors]);
 
   useEffect(() => {
     if (!isActive) {
@@ -2222,20 +2597,37 @@ function MarkdownCinemaBlock({
     <section
       className={`markdown-cinema-block rounded-lg border px-4 py-3 transition ${
         isActive
-          ? "border-orange-300 bg-orange-500/10 shadow-[0_0_0_1px_rgba(249,115,22,0.25)]"
+          ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] shadow-[0_0_0_1px_rgba(249,115,22,0.25)]"
           : "border-transparent"
       }`}
       data-active={isActive ? "true" : "false"}
       ref={blockRef}
     >
-      {renderMarkdownCinemaBlockContent(block, blockText)}
+      {renderMarkdownCinemaBlockContent(block, blockText, {
+        activeWord,
+        activeWordIndex,
+        blockWordStartIndex,
+        renderWordAnchors,
+        shouldHighlightWord: Boolean(shouldHighlightWord),
+        wordAnchors,
+        wordStates,
+      })}
     </section>
   );
-}
+});
 
 function renderMarkdownCinemaBlockContent(
   block: NonNullable<PreparedSource["blocks"]>[number],
   blockText: string,
+  highlight: {
+    activeWord: PreparedSourceActiveWord | null;
+    activeWordIndex: number;
+    blockWordStartIndex: number | undefined;
+    renderWordAnchors: boolean;
+    shouldHighlightWord: boolean;
+    wordAnchors?: MarkdownWordAnchors;
+    wordStates: ReadonlyMap<number, MarkdownWordCueState>;
+  },
 ): ReactNode {
   if (block.kind === "code" && looksLikeMermaidDiagram(blockText)) {
     return (
@@ -2255,7 +2647,25 @@ function renderMarkdownCinemaBlockContent(
 
   return (
     <Suspense fallback={<LazySurfaceFallback label="Loading markdown..." />}>
-      <MarkdownRenderer className="contents">{blockText}</MarkdownRenderer>
+      <MarkdownRenderer
+        className="contents"
+        wordAnchors={highlight.wordAnchors}
+        wordHighlight={
+          highlight.activeWord && highlight.shouldHighlightWord && !highlight.wordAnchors
+            ? {
+                activeWordOffset: highlight.activeWord.wordOffset,
+                activeWordIndex: highlight.activeWordIndex,
+                blockEndOffset: blockText.length,
+                blockStartOffset: 0,
+                blockWordStartIndex: highlight.blockWordStartIndex,
+                renderWordAnchors: highlight.renderWordAnchors,
+                wordStates: highlight.wordStates,
+              }
+            : undefined
+        }
+      >
+        {blockText}
+      </MarkdownRenderer>
     </Suspense>
   );
 }
@@ -2263,7 +2673,7 @@ function renderMarkdownCinemaBlockContent(
 function cinemaViewModeClass(isActive: boolean): string {
   return `h-8 rounded px-3 text-xs font-semibold transition ${
     isActive
-      ? "bg-orange-500 text-white shadow-sm"
+      ? "bg-[var(--vs-action-primary)] text-[var(--vs-action-primary-text)] shadow-sm"
       : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
   }`;
 }
@@ -2271,7 +2681,7 @@ function cinemaViewModeClass(isActive: boolean): string {
 function cinemaToggleClass(isActive: boolean): string {
   return `h-10 rounded-md border px-3 text-sm font-semibold transition vs-border ${
     isActive
-      ? "border-orange-300 bg-orange-500/10 text-orange-600"
+      ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-action-primary)]"
       : "vs-muted hover:bg-[var(--vs-surface)]"
   }`;
 }
@@ -2297,12 +2707,24 @@ function formatErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-function bookScopeContentMatches(
-  content: BookSourceScopeContent | null,
-  bookId: string,
-  scope: BookScope,
-): boolean {
-  return content?.bookSourceId === bookId && bookScopeKey(content.scope) === bookScopeKey(scope);
+function formatTemporarySourceError(error: unknown): string {
+  if (error instanceof ApiRequestError && error.temporarySource) {
+    return temporarySourceFailureCopy(error.code, error.message);
+  }
+  const message = formatErrorMessage(error, TEMPORARY_SOURCE_COPY.errors.failed);
+  if (/private|local address|this machine|safety/i.test(message)) {
+    return "Temporary source safety check blocked this URL. Use a public http or https article URL, or choose project intake for private sources when that workflow is explicitly enabled.";
+  }
+  if (/only http and https|unsupported scheme|unsupported content|not supported/i.test(message)) {
+    return "Temporary source does not support that webpage content. Use a readable http or https article, paste the text, or choose project intake.";
+  }
+  if (/HTTP|fetch|network|timeout|too many redirects|redirected|returned/i.test(message)) {
+    return "Temporary source fetch failed. Check the Source URL and try Re-fetch, or paste the article text instead.";
+  }
+  if (/empty|readable|extract|article/i.test(message)) {
+    return "Temporary source extraction failed. The page did not yield readable article text; try Re-fetch or paste the article text.";
+  }
+  return message;
 }
 
 function removeBookSourceById(bookId: string): (books: BookSource[]) => BookSource[] {
@@ -2327,6 +2749,14 @@ function resolveResumeBookScope(
   );
 }
 
+type PromotionSource = PreparedSource | BookSource;
+
+interface PendingTemporaryPromotion {
+  source: PromotionSource;
+  titleOverride?: string;
+  origin: "prepared" | "book";
+}
+
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export function App() {
   const [text, setText] = useState("");
@@ -2336,12 +2766,6 @@ export function App() {
   const [now, setNow] = useState(() => Date.now());
   const [voiceProfiles, setVoiceProfiles] = useState<VoiceProfile[]>([]);
   const [selectedVoiceProfileId, setSelectedVoiceProfileId] = useState("");
-  const [recentVoiceProfileIds, setRecentVoiceProfileIds] = useState<string[]>(() =>
-    loadStoredIdList(VOICE_PROFILE_RECENT_STORAGE_KEY),
-  );
-  const [pinnedVoiceProfileIds, setPinnedVoiceProfileIds] = useState<string[]>(() =>
-    loadStoredIdList(VOICE_PROFILE_PINNED_STORAGE_KEY),
-  );
   const [researchModules, setResearchModules] = useState<ResearchModuleDiagnostics[]>([]);
   const [researchModuleError, setResearchModuleError] = useState<string | null>(null);
   const [cloningResearchModuleId, setCloningResearchModuleId] = useState<string | null>(null);
@@ -2365,6 +2789,10 @@ export function App() {
   const profileLoadingHideTimerRef = useRef<number | null>(null);
   const profileLoadingVisibleRequestCounter = useRef(0);
   const profileLoadingVisibleSinceRef = useRef(0);
+  const studioRouteTiming = useInteractionTiming("studio-route-switch");
+  const bookCinemaOpenTiming = useInteractionTiming("book-cinema-open");
+  const preparedSourceCinemaOpenTiming = useInteractionTiming("prepared-source-cinema-open");
+  const readerResumeTiming = useInteractionTiming("reader-resume");
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSource, setProfileSource] = useState<VoiceProfileSource | null>(null);
   const [profileSourceDiagnostics, setProfileSourceDiagnostics] =
@@ -2372,19 +2800,101 @@ export function App() {
   const [isAnalyzingProfileSource, setIsAnalyzingProfileSource] = useState(false);
   const [profileCandidateCreateId, setProfileCandidateCreateId] = useState<string | null>(null);
   const [refreshingTranscriptKey, setRefreshingTranscriptKey] = useState<string | null>(null);
+  const [uiMemory, setUiMemory] = useState<UiMemoryState>(() => loadUiMemory());
   const [projects, setProjects] = useState<VoiceProject[]>([]);
-  const [activeProjectId, setActiveProjectId] = useState(
-    () => localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) ?? "default",
+  const [activeProjectId, setActiveProjectId] = useState(() => {
+    const queryProjectId = projectIdFromSearch(globalThis.location.search);
+    if (queryProjectId) {
+      return queryProjectId;
+    }
+    return uiMemory.rememberLastProject
+      ? (localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) ?? "default")
+      : "default";
+  });
+  const readerWorkspaceStateHandlerRef = useRef<(state: ReaderWorkspaceView) => void>(() => {
+    return;
+  });
+  const readerWorkspaceClientRef = useRef<ReaderWorkspaceClient | null>(null);
+  const readerWorkspaceSnapshotRef = useRef<ReaderWorkspaceView["snapshot"]>(null);
+  const readerWorkspaceBlockedIntentRef = useRef<ReaderWorkspaceView["snapshot"]>(null);
+  const readerWorkspaceUserIntentGenerationRef = useRef(0);
+  const readerWorkspaceBlockedIntentGenerationRef = useRef<number | null>(null);
+  const authoritativePlaybackRateRef = useRef<number | null>(null);
+  const readerWorkspaceRestoringProjectRef = useRef<string | null>(null);
+  const readerWorkspaceResponseGenerationRef = useRef(0);
+  const readerWorkspaceBaselineGenerationRef = useRef(0);
+  const projectLoaderGenerationRef = useRef(0);
+  const installReaderWorkspaceBaseline = (
+    candidate: ReaderWorkspaceView["snapshot"],
+    responseGeneration: number,
+  ) => {
+    if (
+      !candidate ||
+      !readerWorkspaceBaselineResponseIsCurrent(
+        readerWorkspaceBaselineGenerationRef.current,
+        responseGeneration,
+      )
+    )
+      return;
+    readerWorkspaceBaselineGenerationRef.current = responseGeneration;
+    readerWorkspaceSnapshotRef.current = candidate;
+  };
+  readerWorkspaceClientRef.current ??= new ReaderWorkspaceClient({
+    onChange: (state) => {
+      readerWorkspaceStateHandlerRef.current(state);
+    },
+  });
+  const readerWorkspaceClient = readerWorkspaceClientRef.current;
+  const readerWorkspacePersistLatestRef = useRef<() => void>(() => null);
+  const readerWorkspacePersistenceSchedulerRef = useRef<ReaderWorkspacePersistenceScheduler | null>(
+    null,
   );
+  readerWorkspacePersistenceSchedulerRef.current ??= new ReaderWorkspacePersistenceScheduler(() => {
+    readerWorkspacePersistLatestRef.current();
+  });
+  const activeProjectIdRef = useRef(activeProjectId);
+  activeProjectIdRef.current = activeProjectId;
+  const readerWorkspaceRestorationRef = useRef<ReaderWorkspaceRestorationCoordinator | null>(null);
+  readerWorkspaceRestorationRef.current ??= new ReaderWorkspaceRestorationCoordinator();
+  const authoritativeResumePendingRef = useRef(false);
+  const [uiMemoryResetSignal, setUiMemoryResetSignal] = useState(0);
   const [projectStateReadyId, setProjectStateReadyId] = useState<string | null>(null);
   const [projectJobs, setProjectJobs] = useState<VoiceJob[]>([]);
+  const [temporaryJobs, setTemporaryJobs] = useState<VoiceJob[]>([]);
   const [bookSources, setBookSources] = useState<BookSource[]>([]);
   const [selectedBookSourceId, setSelectedBookSourceId] = useState<string | null>(null);
   const [selectedBookScope, setSelectedBookScope] = useState<BookScope | null>(null);
   const [bookScopeContent, setBookScopeContent] = useState<BookSourceScopeContent | null>(null);
-  const [isLoadingBookScope, setIsLoadingBookScope] = useState(false);
   const [preparedSources, setPreparedSources] = useState<PreparedSource[]>([]);
+  const [temporarySources, setTemporarySources] = useState<TemporarySourceSession[]>([]);
+  const [temporaryStorageUsage, setTemporaryStorageUsage] =
+    useState<TemporaryStorageUsageSummary | null>(null);
+  const [temporarySourceBehavior, setTemporarySourceBehavior] =
+    useState<TemporarySourceBehaviorSettings>(DEFAULT_TEMPORARY_SOURCE_BEHAVIOR);
+  const [temporaryVoiceState, setTemporaryVoiceState] = useState<TemporaryVoiceState>(() =>
+    loadTemporaryVoiceState(activeProjectId),
+  );
+  const [pendingTemporaryPromotion, setPendingTemporaryPromotion] =
+    useState<PendingTemporaryPromotion | null>(null);
+  const [temporaryPromotionError, setTemporaryPromotionError] = useState<string | null>(null);
+  const [isPromotingTemporarySource, setIsPromotingTemporarySource] = useState(false);
+  const [activeTemporaryBookSource, setActiveTemporaryBookSource] = useState<BookSource | null>(
+    null,
+  );
+  const [activeTemporaryPreparedSource, setActiveTemporaryPreparedSource] =
+    useState<PreparedSource | null>(null);
   const [selectedPreparedSourceId, setSelectedPreparedSourceId] = useState<string | null>(null);
+  const [isQuickListenOpen, setIsQuickListenOpen] = useState(false);
+  const [quickListenInitialMode, setQuickListenInitialMode] = useState<QuickListenMode>("paste");
+  const [isCreatingQuickListenSource, setIsCreatingQuickListenSource] = useState(false);
+  const [quickListenError, setQuickListenError] = useState<string | null>(null);
+  const quickListenEnabled = studioFeatureFlags.temporarySources.quickListen;
+  const temporaryCinemaEnabled = studioFeatureFlags.temporarySources.cinema;
+  const temporaryWorkEnabled = studioFeatureFlags.temporarySources.premiumSurfaces;
+  const temporaryPromotionEnabled = studioFeatureFlags.temporarySources.promotion;
+  const temporaryPromotionUnavailableReason = temporaryPromotionEnabled
+    ? undefined
+    : temporaryPromotionDisabledReason();
   const [hydratingPreparedSourceId, setHydratingPreparedSourceId] = useState<string | null>(null);
   const [isPreparingSource, setIsPreparingSource] = useState(false);
   const [sourcePrepError, setSourcePrepError] = useState<string | null>(null);
@@ -2399,7 +2909,7 @@ export function App() {
     DEFAULT_SPEECH_POLICY_PROFILE,
   );
   const [speechPolicyOverrides, setSpeechPolicyOverrides] = useState<SpeechPolicyOverrides>(() =>
-    loadSpeechPolicyOverrides(localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) ?? "default"),
+    loadSpeechPolicyOverrides(activeProjectId),
   );
   const [speechPolicyError, setSpeechPolicyError] = useState<string | null>(null);
   const [isSpeechPolicyPreviewing, setIsSpeechPolicyPreviewing] = useState(false);
@@ -2414,13 +2924,74 @@ export function App() {
   const [activePlaybackSession, setActivePlaybackSession] = useState<PlaybackSession | null>(null);
   const [pendingPlaybackResume, setPendingPlaybackResume] = useState<{
     autoplay: boolean;
+    playbackRate?: number;
     readingPosition?: ReadingPosition;
     seconds: number;
   } | null>(null);
-  const [resumeRestoreStartedAt, setResumeRestoreStartedAt] = useState<number | null>(null);
-  const [bookCinemaDiagnostics, setBookCinemaDiagnostics] = useState<BookCinemaDiagnostics | null>(
-    null,
+  const [authoritativePreparedResume, setAuthoritativePreparedResume] =
+    useState<PlaybackProgress | null>(null);
+  const [preparedReaderNavigationPosition, setPreparedReaderNavigationPosition] =
+    useState<ReadingPosition | null>(null);
+  const [readerWorkspaceNomination, setReaderWorkspaceNominationState] =
+    useState<ReaderWorkspaceNomination | null>(null);
+  const readerWorkspaceNominationRef = useRef<ReaderWorkspaceNomination | null>(null);
+  const setReaderWorkspaceNomination = useCallback(
+    (nomination: ReaderWorkspaceNomination | null) => {
+      readerWorkspaceNominationRef.current = nomination;
+      setReaderWorkspaceNominationState(nomination);
+    },
+    [],
   );
+  const [readerWorkspaceUserIntentGeneration, setReaderWorkspaceUserIntentGeneration] = useState(0);
+  const markReaderWorkspaceUserIntent = useCallback(() => {
+    const nextGeneration = readerWorkspaceUserIntentGenerationRef.current + 1;
+    readerWorkspaceUserIntentGenerationRef.current = nextGeneration;
+    setReaderWorkspaceUserIntentGeneration(nextGeneration);
+    const projectId = activeProjectIdRef.current;
+    if (readerWorkspaceRestorationRef.current?.cancelForUserIntent(projectId)) {
+      readerWorkspaceRestoringProjectRef.current = null;
+      authoritativeResumePendingRef.current = false;
+      authoritativePlaybackRateRef.current = null;
+      setReaderWorkspaceNomination(
+        readerWorkspaceNominationFromBaseline(readerWorkspaceSnapshotRef.current),
+      );
+      setProjectStateReadyId(projectId);
+    }
+    setPreparedReaderNavigationPosition(null);
+  }, [setReaderWorkspaceNomination]);
+  const nominateReaderWorkspaceSource = useCallback(
+    (sourceId: string) => {
+      if (!sourceId) return;
+      markReaderWorkspaceUserIntent();
+      setReaderWorkspaceNomination({ sourceId, runId: null });
+    },
+    [markReaderWorkspaceUserIntent, setReaderWorkspaceNomination],
+  );
+  const nominateReaderWorkspaceJob = useCallback(
+    (nextJob: VoiceJob) => {
+      const sourceId = nextJob.preparedSourceId ?? nextJob.bookSourceId;
+      if (!sourceId || nextJob.temporarySourceId) return;
+      markReaderWorkspaceUserIntent();
+      setReaderWorkspaceNomination({ sourceId, runId: nextJob.id });
+    },
+    [markReaderWorkspaceUserIntent, setReaderWorkspaceNomination],
+  );
+  const markReaderWorkspaceBlockNavigation = useCallback(
+    (sourceId: string | null, blockId: string) => {
+      markReaderWorkspaceUserIntent();
+      setAuthoritativePreparedResume(null);
+      setPreparedReaderNavigationPosition(
+        readerWorkspaceBlockNavigationPosition(
+          readerWorkspaceNominationRef.current?.sourceId,
+          sourceId,
+          blockId,
+        ),
+      );
+    },
+    [markReaderWorkspaceUserIntent],
+  );
+  const [resumeFallbackNotice, setResumeFallbackNotice] = useState<string | null>(null);
+  const [resumeRestoreStartedAt, setResumeRestoreStartedAt] = useState<number | null>(null);
   const [isBookCinemaOpen, setIsBookCinemaOpen] = useState(false);
   const [bookCinemaThemeName, setBookCinemaThemeName] = useState<ThemeName>("dark");
   const [preparedSourceCinemaSourceId, setPreparedSourceCinemaSourceId] = useState<string | null>(
@@ -2430,6 +3001,9 @@ export function App() {
     useState<ThemeName>("light");
   const [readerAccessibilitySettings, setReaderAccessibilitySettings] =
     useState<ReaderAccessibilitySettings>(() => {
+      if (!uiMemory.rememberReaderPreferences) {
+        return DEFAULT_READER_ACCESSIBILITY_SETTINGS;
+      }
       try {
         return normalizeReaderAccessibilitySettings(
           JSON.parse(localStorage.getItem(READER_ACCESSIBILITY_STORAGE_KEY) ?? "null") as unknown,
@@ -2438,11 +3012,15 @@ export function App() {
         return DEFAULT_READER_ACCESSIBILITY_SETTINGS;
       }
     });
+  const [readAlongPreferences, setReadAlongPreferences] = useState<ReadAlongPreferences>(() =>
+    loadReadAlongPreferences(activeProjectId, uiMemory.rememberReaderPreferences),
+  );
+  const readAlongPreferencesProjectRef = useRef(activeProjectId);
   const [isImportingBookSource, setIsImportingBookSource] = useState(false);
   const [bookSourceError, setBookSourceError] = useState<string | null>(null);
   const [projectError, setProjectError] = useState<string | null>(null);
   const [runConfiguration, setRunConfiguration] = useState<RunConfiguration>(() => {
-    const savedConfiguration = localStorage.getItem(RUN_CONFIG_STORAGE_KEY);
+    const savedConfiguration = sessionStorage.getItem(RUN_CONFIG_STORAGE_KEY);
     if (!savedConfiguration) {
       return createRunConfiguration("checkedMaster");
     }
@@ -2467,24 +3045,147 @@ export function App() {
       }
     },
   );
+  const [telepromptTheatreSettings, setTelepromptTheatreSettings] =
+    useState<TelepromptTheatreSettings>(() => resolveTelepromptTheatreSettings(uiMemory));
   const [themeName, setThemeName] = useState<ThemeName>(() =>
-    normalizeThemeName(localStorage.getItem(THEME_STORAGE_KEY)),
+    uiMemory.rememberTheme
+      ? normalizeThemeName(localStorage.getItem(THEME_STORAGE_KEY))
+      : DEFAULT_THEME_NAME,
   );
-  const [activityFooterMode, setActivityFooterMode] = useState<ActivityFooterMode>(() => {
-    const storedMode = localStorage.getItem(ACTIVITY_FOOTER_MODE_STORAGE_KEY);
-    return storedMode ? normalizeActivityFooterMode(storedMode) : defaultActivityFooterMode();
-  });
-  const [leftRailMode, setLeftRailMode] = useState<ActivityFooterMode>(() =>
-    normalizeActivityFooterMode(localStorage.getItem(LEFT_RAIL_MODE_STORAGE_KEY)),
+  const [workspaceContext, setWorkspaceContext] = useState<WorkspaceContext>(() =>
+    createWorkspaceContext({
+      customLayout: resolveWorkspaceCustomLayout(uiMemory, activeProjectId),
+      layoutMode: resolveWorkspaceLayoutMode(uiMemory, activeProjectId),
+      speechPolicyProfile,
+      voiceProfileId: selectedVoiceProfileId,
+    }),
   );
-  const [rightRailMode, setRightRailMode] = useState<ActivityFooterMode>(() =>
-    normalizeActivityFooterMode(localStorage.getItem(RIGHT_RAIL_MODE_STORAGE_KEY)),
+  const [workspaceDisclosurePins, setWorkspaceDisclosurePins] = useState<WorkspaceDisclosurePins>(
+    () => resolveWorkspaceDisclosurePins(uiMemory, activeProjectId),
   );
-  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
+  const [workspaceInspectorDisplayState, setWorkspaceInspectorDisplayState] =
+    useState<ContextPanelDisplayState>("expanded");
+  const [selectedWorkspaceInspectorTarget, setSelectedWorkspaceInspectorTarget] =
+    useState<WorkspaceInspectorTarget | null>(null);
+  const [pinnedWorkspaceInspectorTarget, setPinnedWorkspaceInspectorTarget] =
+    useState<WorkspaceInspectorTarget | null>(null);
+  const [activeReviewPane, setActiveReviewPane] = useState<ReviewPane>(() =>
+    resolveReviewPane(uiMemory, activeProjectId),
+  );
+  const [reviewOpenFocusRequest, setReviewOpenFocusRequest] =
+    useState<ReviewOpenFocusRequest | null>(null);
+  const [temporaryReviewMode, setTemporaryReviewMode] = useState<ReviewMode>("quick");
+  const [revisionStatusByBlockId, setRevisionStatusByBlockId] = useState<
+    Record<string, RevisionStatus>
+  >({});
+  const [revisionEditedTextByBlockId, setRevisionEditedTextByBlockId] = useState<
+    Record<string, string>
+  >({});
+  const [revisionHistoryEntries, setRevisionHistoryEntries] = useState<RevisionHistoryEntry[]>([]);
+  const uiMemoryRef = useRef(uiMemory);
+  const rememberActiveProjectId = useCallback((projectId: string) => {
+    if (uiMemoryRef.current.rememberLastProject) {
+      localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, projectId);
+      return;
+    }
+    localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+  }, []);
+  const [isCommandCenterOpen, setIsCommandCenterOpen] = useState(false);
+  const [commandCenterSection, setCommandCenterSection] =
+    useState<CommandCenterSectionId>("overview");
+  const [bundleReturnSection, setBundleReturnSection] = useState<CommandCenterSectionId | null>(
+    null,
+  );
+  const [isVoiceDashboardOpen, setIsVoiceDashboardOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [activeDemoProjectId, setActiveDemoProjectId] = useState<string | null>(null);
+  const [isDemoModeOpen, setIsDemoModeOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isWorkspaceNavigationPending, startWorkspaceNavigationTransition] = useTransition();
+  const [isCommandSurfacePending, startCommandSurfaceTransition] = useTransition();
+  const [commandPaletteView, setCommandPaletteView] = useState<CommandPaletteView>("commands");
+  const [shortcutPreferences, setShortcutPreferences] = useState<ShortcutPreferences>(() =>
+    loadShortcutPreferences(),
+  );
+  const [settingsCommandTarget, setSettingsCommandTarget] = useState<SettingsCommandTarget | null>(
+    null,
+  );
+  const [helpCommandTarget, setHelpCommandTarget] = useState<HelpCommandTarget | null>(null);
+  const [commandMetadata, setCommandMetadata] = useState<CommandMetadataState | null>(null);
+  const [commandWayfinding, setCommandWayfinding] = useState<CommandWayfindingState>({
+    bookmarks: [],
+    recentPositions: [],
+  });
+  const [cinemaFocusOverrides, setCinemaFocusOverrides] = useState<
+    Record<CinemaSurfaceKind, UiMemoryCinemaState | null>
+  >({
+    book: null,
+    document: null,
+    website: null,
+  });
+  const openCommandPalette = useCallback((view: CommandPaletteView = "commands") => {
+    setIsCommandPaletteOpen(true);
+    startCommandSurfaceTransition(() => {
+      setCommandPaletteView(view);
+    });
+  }, []);
+  const closeCommandPalette = useCallback(() => {
+    setIsCommandPaletteOpen(false);
+  }, []);
+  const openShortcutCheatSheet = useCallback(() => {
+    openCommandPalette("shortcuts");
+  }, [openCommandPalette]);
+  const openContextualHelp = useCallback((target: HelpCommandTarget | null = null) => {
+    setHelpCommandTarget(target);
+    setIsHelpOpen(true);
+  }, []);
+  const openShortcutSettings = useCallback(() => {
+    closeCommandPalette();
+    setIsSettingsOpen(true);
+    startCommandSurfaceTransition(() => {
+      setSettingsCommandTarget({ fieldId: "shortcuts", groupId: "reader", scope: "machine" });
+    });
+  }, [closeCommandPalette]);
+  const createAndListenFromCurrentSourceRef = useRef<() => void>(() => {
+    return;
+  });
+  useEffect(() => {
+    saveShortcutPreferences(shortcutPreferences);
+  }, [shortcutPreferences]);
+  useEffect(() => {
+    if (!isCommandPaletteOpen || commandMetadata) {
+      return;
+    }
+    let cancelled = false;
+    void loadCommandMetadata().then((metadata) => {
+      if (cancelled) {
+        return;
+      }
+      setCommandMetadata(metadata);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [commandMetadata, isCommandPaletteOpen]);
   const [bundlePanelMode, setBundlePanelMode] = useState<BundlePanelMode>("export");
   const [isBundlePanelOpen, setIsBundlePanelOpen] = useState(false);
+  const [bundleOperationActivity, setBundleOperationActivity] =
+    useState<BundleOperationActivity | null>(null);
+  const [bundleOperationReport, setBundleOperationReport] = useState<BundleOperationReport | null>(
+    null,
+  );
+  const openCommandCenter = useCallback(
+    (section: CommandCenterSectionId = "overview") => {
+      setIsCommandCenterOpen(true);
+      startCommandSurfaceTransition(() => {
+        setCommandCenterSection(
+          section === "temporary" && !temporaryWorkEnabled ? "overview" : section,
+        );
+      });
+    },
+    [temporaryWorkEnabled],
+  );
   const [isContentIROpen, setIsContentIROpen] = useState(false);
   const [contentIRDocument, setContentIRDocument] = useState<ContentIRDocument | null>(null);
   const [contentIRError, setContentIRError] = useState<string | null>(null);
@@ -2493,14 +3194,36 @@ export function App() {
   const [playbackCursorSec, setPlaybackCursorSec] = useState(0);
   const [isPlaybackActive, setIsPlaybackActive] = useState(false);
   const [highlightMap, setHighlightMap] = useState<HighlightMap | null>(null);
+  const [highlightMapV2, setHighlightMapV2] = useState<HighlightMapV2 | null>(null);
   const [playbackControls, setPlaybackControls] = useState<PlaybackController>(
     DISABLED_PLAYBACK_CONTROLLER,
   );
   const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null);
   const [systemMetricsError, setSystemMetricsError] = useState<string | null>(null);
   const [systemMetricsUnavailable, setSystemMetricsUnavailable] = useState(false);
+  const [adapterDiagnostics, setAdapterDiagnostics] = useState<Record<
+    string,
+    AdapterDiagnostics
+  > | null>(null);
+  const [adapterDiagnosticsError, setAdapterDiagnosticsError] = useState<string | null>(null);
   const [ttsEngines, setTTSEngines] = useState<TTSEngineDiagnostics[]>([]);
   const [ttsEngineError, setTTSEngineError] = useState<string | null>(null);
+  const providerRuntimeCapabilities = useMemo(
+    () => resolveProviderRuntimeCapabilities(runConfiguration.ttsEngine, ttsEngines),
+    [runConfiguration.ttsEngine, ttsEngines],
+  );
+  const wordHighlightCapabilityReason = useMemo(() => {
+    const gate = providerCapabilityGate(providerRuntimeCapabilities, "wordTiming");
+    return gate.disabled ? gate.reason : undefined;
+  }, [providerRuntimeCapabilities]);
+  const createAndListenCapabilityReason = useMemo(
+    () => resolveCreateAndListenCapabilityReason(runConfiguration.ttsEngine, ttsEngines),
+    [runConfiguration.ttsEngine, ttsEngines],
+  );
+  const providerBackedGenerationBoundary = useMemo(
+    () => providerRuntimeLeavesLocalBoundary(runConfiguration.ttsEngine, ttsEngines),
+    [runConfiguration.ttsEngine, ttsEngines],
+  );
   const [voiceProfileCredentials, setVoiceProfileCredentials] =
     useState<VoiceProfileCredentialStatus | null>(null);
   const [voiceProfileCredentialError, setVoiceProfileCredentialError] = useState<string | null>(
@@ -2509,28 +3232,332 @@ export function App() {
   const [savingHuggingFaceTokenKey, setSavingHuggingFaceTokenKey] = useState<string | null>(null);
   const [isClearingHuggingFaceToken, setIsClearingHuggingFaceToken] = useState(false);
   const [studioMode, setStudioMode] = useState<StudioMode>("narration");
+  const { announceAssertive, announcePolite } = useLiveStatus();
   const handleStudioModeChange = useCallback(
     (mode: StudioMode) => {
       if (mode !== studioMode) {
-        startFrontendSpan("studio-route-switch");
+        studioRouteTiming.start({ fromMode: studioMode, toMode: mode });
       }
       setStudioMode(mode);
     },
-    [studioMode],
+    [studioMode, studioRouteTiming],
   );
-  const [contentMode, setContentMode] = useState<ContentMode>("sourceIntake");
   const [sourceMode, setSourceMode] = useState<SourceMode>("text");
   const [teleprompterOpenSignal, setTeleprompterOpenSignal] = useState(0);
+  const [telepromptTheatreOpenSignal, setTelepromptTheatreOpenSignal] = useState(0);
+  const [cinemaTheatreOpenSignal, setCinemaTheatreOpenSignal] = useState(0);
+  const [cinemaTheatreExitSignal, setCinemaTheatreExitSignal] = useState(0);
+  const [cinemaTheatreControlsSignal, setCinemaTheatreControlsSignal] = useState(0);
+  const workspaceLayout = workspaceResolvedLayout(
+    workspaceContext.layoutMode,
+    workspaceContext.customLayout,
+  );
+  const baseWorkspaceRails = workspaceLayoutRails(
+    workspaceContext.layoutMode,
+    workspaceContext.customLayout,
+  );
+  const contentMode = workspaceContext.stage;
+  useEffect(() => {
+    setWorkspaceInspectorDisplayState(
+      defaultWorkspaceInspectorDisplayState(contentMode, workspaceLayout.contextInspector),
+    );
+  }, [contentMode, workspaceLayout.contextInspector]);
+  const runWorkspaceStageAction = useCallback(
+    (actionId: WorkspaceStageActionId) => {
+      if (actionId === "openTeleprompt" || actionId === "openTheatre") {
+        const returnStage =
+          contentMode === "teleprompt" || contentMode === "theatre"
+            ? workspaceContext.telepromptReturnStage
+            : contentMode;
+        setTelepromptTheatreOpenSignal(0);
+        setUiMemory((currentMemory) =>
+          rememberTelepromptReturnStage(currentMemory, activeProjectId, returnStage),
+        );
+      }
+      startWorkspaceNavigationTransition(() => {
+        setWorkspaceContext((currentContext) =>
+          transitionWorkspaceContextForStageAction(currentContext, actionId),
+        );
+      });
+      if (actionId === "openTheatre") {
+        setTelepromptTheatreOpenSignal((currentSignal) => currentSignal + 1);
+      }
+    },
+    [activeProjectId, contentMode, workspaceContext.telepromptReturnStage],
+  );
+  const setContentMode = useCallback(
+    (stage: WorkspaceStage) => {
+      runWorkspaceStageAction(workspaceStageNavigationAction(stage));
+    },
+    [runWorkspaceStageAction],
+  );
+  const openReviewRepairQueue = useCallback(() => {
+    setActiveReviewPane("blocks");
+    setReviewOpenFocusRequest((current) => ({
+      focus: "needsRepair",
+      requestId: (current?.requestId ?? 0) + 1,
+    }));
+    runWorkspaceStageAction("reviewBlocks");
+  }, [runWorkspaceStageAction]);
+  function openDemoProject(project: DemoProject) {
+    setActiveDemoProjectId(project.id);
+    setIsDemoModeOpen(true);
+    setProjectStateReadyId(null);
+    setText(project.sampleText);
+    setSourceMode("text");
+    setSelectedBookSourceId(null);
+    setSelectedBookScope(null);
+    setBookScopeContent(null);
+    setSelectedPreparedSourceId(null);
+    setSourcePrepError(null);
+    setBookSourceError(null);
+    setError(null);
+    setJob(null);
+    setRequestState("idle");
+    setResumeFallbackNotice(null);
+    setActivePlaybackSession(null);
+    setPendingPlaybackResume(null);
+    setPlaybackCursorSec(0);
+    setIsPlaybackActive(false);
+    setPlaybackControls(DISABLED_PLAYBACK_CONTROLLER);
+    setSpeechPolicyProfile(project.policyProfile);
+    setSelectedVoiceProfileId(project.voiceId === "default" ? "" : project.voiceId);
+    setWorkspaceContext((currentContext) =>
+      createWorkspaceContext({
+        ...currentContext,
+        activeBlockId: null,
+        sourceId: project.id,
+        sourceType: "draft",
+        speechPolicyProfile: project.policyProfile,
+        stage: "review",
+        telepromptReturnStage: "review",
+        voiceProfileId: project.voiceId === "default" ? null : project.voiceId,
+      }),
+    );
+  }
+  const setWorkspaceLayoutMode = useCallback(
+    (layoutMode: WorkspaceLayoutMode) => {
+      setWorkspaceContext((currentContext) => ({
+        ...currentContext,
+        layoutMode,
+      }));
+      setUiMemory((currentMemory) =>
+        rememberWorkspaceLayoutMode(currentMemory, activeProjectId, layoutMode),
+      );
+    },
+    [activeProjectId],
+  );
+  const setWorkspaceCustomLayout = useCallback(
+    (customLayout: WorkspaceCustomLayout) => {
+      setWorkspaceContext((currentContext) => ({
+        ...currentContext,
+        customLayout,
+        layoutMode: "custom",
+      }));
+      setUiMemory((currentMemory) =>
+        rememberWorkspaceLayoutMode(
+          rememberWorkspaceCustomLayout(currentMemory, activeProjectId, customLayout),
+          activeProjectId,
+          "custom",
+        ),
+      );
+    },
+    [activeProjectId],
+  );
+  const setWorkspaceDisclosurePin = useCallback(
+    (panelId: WorkspaceDisclosurePanelId, pinned: boolean) => {
+      setWorkspaceDisclosurePins((currentPins) => ({
+        ...currentPins,
+        [panelId]: pinned,
+      }));
+      setWorkspaceContext((currentContext) => ({
+        ...currentContext,
+        layoutMode: "custom",
+      }));
+      setUiMemory((currentMemory) => {
+        const nextMemory = rememberWorkspaceDisclosurePin(
+          currentMemory,
+          activeProjectId,
+          panelId,
+          pinned,
+        );
+        return currentMemory.rememberPanelPins
+          ? rememberWorkspaceLayoutMode(nextMemory, activeProjectId, "custom")
+          : nextMemory;
+      });
+    },
+    [activeProjectId],
+  );
+  const handleReviewPaneChange = useCallback(
+    (pane: ReviewPane) => {
+      const normalizedPane = normalizeReviewPane(pane);
+      setActiveReviewPane(normalizedPane);
+      setUiMemory((currentMemory) =>
+        rememberReviewPane(currentMemory, activeProjectId, normalizedPane),
+      );
+    },
+    [activeProjectId],
+  );
+  const handleUiMemoryPreferenceChange = useCallback(
+    (preferenceId: UiMemoryPreferenceId, enabled: boolean) => {
+      setUiMemory((currentMemory) => {
+        const nextMemory = updateUiMemoryPreference(currentMemory, preferenceId, enabled);
+        uiMemoryRef.current = nextMemory;
+        return nextMemory;
+      });
+      if (enabled) {
+        return;
+      }
+      if (preferenceId === "rememberLastProject") {
+        localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+      }
+      if (preferenceId === "rememberReaderPreferences") {
+        localStorage.removeItem(READER_ACCESSIBILITY_STORAGE_KEY);
+        clearStoredReadAlongPreferences(activeProjectId);
+      }
+      if (preferenceId === "rememberTelepromptReturnTarget") {
+        clearStoredTelepromptReturnMemory();
+      }
+      if (preferenceId === "rememberTheme") {
+        localStorage.removeItem(THEME_STORAGE_KEY);
+      }
+      if (preferenceId === "rememberPanelPins") {
+        setWorkspaceDisclosurePins(DEFAULT_WORKSPACE_DISCLOSURE_PINS);
+      }
+      if (preferenceId === "showTutorialLauncher") {
+        setIsDemoModeOpen(false);
+      }
+    },
+    [activeProjectId],
+  );
+  const hideStudioTutorial = useCallback(() => {
+    setIsDemoModeOpen(false);
+    setUiMemory((currentMemory) => {
+      const nextMemory = updateUiMemoryPreference(currentMemory, "showTutorialLauncher", false);
+      uiMemoryRef.current = nextMemory;
+      return nextMemory;
+    });
+    announcePolite("Studio tutorial hidden. Restore it from Reader settings.");
+  }, [announcePolite]);
+  const completeStudioTutorial = useCallback(() => {
+    setIsDemoModeOpen(false);
+    setUiMemory((currentMemory) => {
+      const nextMemory = updateUiMemoryPreference(currentMemory, "showTutorialLauncher", false);
+      uiMemoryRef.current = nextMemory;
+      return nextMemory;
+    });
+    announcePolite("Studio tutorial complete. Restore it from Reader settings.");
+  }, [announcePolite]);
+  const handleUiMemoryReset = useCallback(
+    (scope: UiMemoryResetScope) => {
+      if (scope === "reader") {
+        setReaderAccessibilitySettings(DEFAULT_READER_ACCESSIBILITY_SETTINGS);
+        setReadAlongPreferences(DEFAULT_READ_ALONG_PREFERENCES);
+        localStorage.removeItem(READER_ACCESSIBILITY_STORAGE_KEY);
+        clearStoredReadAlongPreferences(activeProjectId);
+        announcePolite(liveStatusMessages.settingsReset("Reader"));
+        return;
+      }
+      if (scope === "workspace") {
+        setUiMemory((currentMemory) => {
+          const nextMemory = resetWorkspaceUiMemory(currentMemory);
+          uiMemoryRef.current = nextMemory;
+          return nextMemory;
+        });
+        setWorkspaceContext((currentContext) => ({
+          ...currentContext,
+          customLayout: DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
+          layoutMode: defaultWorkspaceLayoutMode(),
+        }));
+        setWorkspaceDisclosurePins(DEFAULT_WORKSPACE_DISCLOSURE_PINS);
+        setActiveReviewPane("blocks");
+        announcePolite(liveStatusMessages.settingsReset("Workspace"));
+        return;
+      }
+      setUiMemory((currentMemory) => {
+        const nextMemory = resetUiMemory(currentMemory, { preservePreferences: false });
+        uiMemoryRef.current = nextMemory;
+        return nextMemory;
+      });
+      clearStoredTelepromptReturnMemory();
+      localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+      localStorage.removeItem(READER_ACCESSIBILITY_STORAGE_KEY);
+      clearStoredReadAlongPreferences(activeProjectId);
+      localStorage.removeItem(THEME_STORAGE_KEY);
+      setReaderAccessibilitySettings(DEFAULT_READER_ACCESSIBILITY_SETTINGS);
+      setReadAlongPreferences(DEFAULT_READ_ALONG_PREFERENCES);
+      setThemeName(DEFAULT_THEME_NAME);
+      setCinemaFocusOverrides({
+        book: null,
+        document: null,
+        website: null,
+      });
+      setWorkspaceContext((currentContext) => ({
+        ...currentContext,
+        customLayout: DEFAULT_WORKSPACE_CUSTOM_LAYOUT,
+        layoutMode: defaultWorkspaceLayoutMode(),
+        telepromptReturnStage: "review",
+      }));
+      setWorkspaceDisclosurePins(DEFAULT_WORKSPACE_DISCLOSURE_PINS);
+      setActiveReviewPane("blocks");
+      setUiMemoryResetSignal((currentSignal) => currentSignal + 1);
+      announcePolite(liveStatusMessages.settingsReset("All"));
+    },
+    [activeProjectId, announcePolite],
+  );
+  const handleCinemaFocusStateChange = useCallback(
+    (surfaceKind: "book" | "document" | "website", state: UiMemoryCinemaState) => {
+      setCinemaFocusOverrides((currentOverrides) => {
+        const currentState = currentOverrides[surfaceKind];
+        if (currentState && isSameCinemaFocusState(currentState, state)) {
+          return currentOverrides;
+        }
+        return {
+          ...currentOverrides,
+          [surfaceKind]: state,
+        };
+      });
+      setUiMemory((currentMemory) => rememberCinemaFocusState(currentMemory, surfaceKind, state));
+    },
+    [],
+  );
+  const resolveLiveCinemaFocusState = useCallback(
+    (surfaceKind: CinemaSurfaceKind): UiMemoryCinemaState =>
+      cinemaFocusOverrides[surfaceKind] ?? resolveCinemaFocusState(uiMemory, surfaceKind),
+    [cinemaFocusOverrides, uiMemory],
+  );
+  const setCinemaFocusModeFromCommand = useCallback(
+    (surfaceKind: CinemaSurfaceKind, mode: CinemaFocusMode) => {
+      const currentState = resolveLiveCinemaFocusState(surfaceKind);
+      handleCinemaFocusStateChange(surfaceKind, {
+        ...currentState,
+        activePanelId: null,
+        mode,
+      });
+    },
+    [handleCinemaFocusStateChange, resolveLiveCinemaFocusState],
+  );
+  const setCinemaAdvancedActionFromCommand = useCallback(
+    (surfaceKind: CinemaSurfaceKind, target: CinemaAdvancedCommandTarget) => {
+      const currentState = resolveLiveCinemaFocusState(surfaceKind);
+      handleCinemaFocusStateChange(surfaceKind, {
+        ...currentState,
+        activePanelId: target.panelId,
+        mode: target.mode,
+      });
+    },
+    [handleCinemaFocusStateChange, resolveLiveCinemaFocusState],
+  );
 
   const isProcessing = requestState === "running";
-  const canSubmit = useMemo(() => text.trim().length > 0 && !isProcessing, [text, isProcessing]);
   const activeJobId =
     job && !["completed", "failed", "cancelled"].includes(job.status) ? job.id : null;
-  const ttsPipeline = useMemo(() => resolveTTSPipelineState(job), [job]);
   const selectedVoiceProfile = useMemo(
     () => voiceProfiles.find((profile) => profile.id === selectedVoiceProfileId) ?? null,
     [selectedVoiceProfileId, voiceProfiles],
   );
+  const selectedVoiceProfileLabel =
+    selectedVoiceProfile?.name ?? demoVoiceLabel(selectedVoiceProfileId || "default");
   const hasActiveVoiceProfileTargets = useMemo(
     () =>
       voiceProfiles.some((profile) =>
@@ -2579,20 +3606,309 @@ export function App() {
     }
     return projects.length > 0 ? projects[0] : null;
   }, [activeProjectId, projects]);
-  const selectedBookSource = useMemo(
+  const selectedBookSource = useMemo(() => {
+    if (selectedBookSourceId) {
+      if (activeTemporaryBookSource?.id === selectedBookSourceId) {
+        return activeTemporaryBookSource;
+      }
+      return bookSources.find((book) => book.id === selectedBookSourceId) ?? null;
+    }
+    return null;
+  }, [activeTemporaryBookSource, bookSources, selectedBookSourceId]);
+  const selectedPreparedSource = useMemo(() => {
+    if (selectedPreparedSourceId) {
+      if (activeTemporaryPreparedSource?.id === selectedPreparedSourceId) {
+        return activeTemporaryPreparedSource;
+      }
+      return preparedSources.find((source) => source.id === selectedPreparedSourceId) ?? null;
+    }
+    return null;
+  }, [activeTemporaryPreparedSource, preparedSources, selectedPreparedSourceId]);
+  const effectiveBookScope = useMemo(
     () =>
-      selectedBookSourceId
-        ? (bookSources.find((book) => book.id === selectedBookSourceId) ?? null)
-        : (bookSources[0] ?? null),
-    [bookSources, selectedBookSourceId],
+      selectedBookSource ? normalizeBookScopeForBook(selectedBookSource, selectedBookScope) : null,
+    [selectedBookScope, selectedBookSource],
   );
-  const selectedPreparedSource = useMemo(
+  const activeNarrationBookSource = sourceMode === "book" ? selectedBookSource : null;
+  const activeNarrationPreparedSource = sourceMode === "fileUrl" ? selectedPreparedSource : null;
+  const activeNarrationIsTemporary =
+    activeNarrationBookSource?.sourceOwner === "temporary" ||
+    Boolean(activeNarrationBookSource?.temporarySourceId) ||
+    activeNarrationPreparedSource?.sourceOwner === "temporary" ||
+    Boolean(activeNarrationPreparedSource?.temporarySourceId);
+  const activeTemporarySourceId =
+    activeNarrationPreparedSource?.temporarySourceId ??
+    activeNarrationBookSource?.temporarySourceId ??
+    null;
+  const activeTemporarySource = useMemo(
     () =>
-      selectedPreparedSourceId
-        ? (preparedSources.find((source) => source.id === selectedPreparedSourceId) ?? null)
-        : (preparedSources[0] ?? null),
-    [preparedSources, selectedPreparedSourceId],
+      activeTemporarySourceId
+        ? (temporarySources.find(
+            (source) =>
+              source.id === activeTemporarySourceId ||
+              source.temporarySourceId === activeTemporarySourceId,
+          ) ?? null)
+        : null,
+    [activeTemporarySourceId, temporarySources],
   );
+  const activeTemporaryVoiceSelection = useMemo(
+    () => effectiveTemporaryVoiceSelection(temporaryVoiceState, activeTemporarySourceId),
+    [activeTemporarySourceId, temporaryVoiceState],
+  );
+  const workspaceTemporaryInspector = useMemo(
+    () => (activeTemporarySource ? workspaceTemporaryInspectorModel(activeTemporarySource) : null),
+    [activeTemporarySource],
+  );
+  const activeSourceReadiness = sourceReadinessForWorkbench({
+    selectedBookSource: activeNarrationBookSource,
+    selectedPreparedSource: activeNarrationPreparedSource,
+    sourceMode,
+    text,
+  });
+  const isActiveSourceReady = activeSourceReadiness.state === "ready";
+  let activeNarrationSourceType: WorkspaceSourceType = "draft";
+  if (activeNarrationPreparedSource) {
+    activeNarrationSourceType = "prepared";
+  } else if (activeNarrationBookSource) {
+    activeNarrationSourceType = "book";
+  }
+  const revisionSessionSignature = useMemo(
+    () =>
+      [
+        activeProjectId,
+        sourceMode,
+        activeNarrationPreparedSource?.id ?? "",
+        activeNarrationBookSource?.id ?? "",
+        effectiveBookScope ? bookScopeKey(effectiveBookScope) : "",
+        sourceMode === "text" ? text : "",
+        speechPolicyProfile,
+        JSON.stringify(compactSpeechPolicyOverrides(speechPolicyOverrides)),
+        selectedVoiceProfileId,
+        activeNarrationIsTemporary ? JSON.stringify(activeTemporaryVoiceSelection) : "",
+        runConfiguration.runMode,
+        runConfiguration.ttsEngine,
+      ].join("|"),
+    [
+      activeNarrationBookSource?.id,
+      activeNarrationPreparedSource?.id,
+      activeNarrationIsTemporary,
+      activeProjectId,
+      activeTemporaryVoiceSelection,
+      effectiveBookScope,
+      runConfiguration.runMode,
+      runConfiguration.ttsEngine,
+      selectedVoiceProfileId,
+      sourceMode,
+      speechPolicyOverrides,
+      speechPolicyProfile,
+      text,
+    ],
+  );
+  const previousRevisionSessionSignatureRef = useRef(revisionSessionSignature);
+  useEffect(() => {
+    if (previousRevisionSessionSignatureRef.current === revisionSessionSignature) {
+      return;
+    }
+    previousRevisionSessionSignatureRef.current = revisionSessionSignature;
+    setRevisionStatusByBlockId({});
+    setRevisionEditedTextByBlockId({});
+    setRevisionHistoryEntries([]);
+  }, [revisionSessionSignature]);
+  useEffect(() => {
+    setTemporaryReviewMode((currentMode) =>
+      normalizeReviewMode(currentMode, activeNarrationIsTemporary),
+    );
+  }, [activeNarrationIsTemporary]);
+  const baseNarrationPreviewBlocks = useMemo(
+    () =>
+      buildNarrationReviewBlocks({
+        optimizedText: job?.optimizedText ?? "",
+        bookScopeContent,
+        selectedBookScope: effectiveBookScope,
+        selectedBookSource: activeNarrationBookSource,
+        selectedPreparedSource: activeNarrationPreparedSource,
+        text,
+      }),
+    [
+      activeNarrationBookSource,
+      activeNarrationPreparedSource,
+      bookScopeContent,
+      effectiveBookScope,
+      job?.optimizedText,
+      text,
+    ],
+  );
+  const cappedBaseNarrationPreviewBlocks = useMemo(
+    () =>
+      buildNarrationReviewBlocks({
+        optimizedText: job?.optimizedText ?? "",
+        bookScopeContent,
+        selectedBookScope: effectiveBookScope,
+        selectedBookSource: activeNarrationBookSource,
+        selectedPreparedSource: activeNarrationPreparedSource,
+        text,
+        draftTextBlockLimit: PREVIEW_REVIEW_BLOCK_LIMIT,
+      }),
+    [
+      activeNarrationBookSource,
+      activeNarrationPreparedSource,
+      bookScopeContent,
+      effectiveBookScope,
+      job?.optimizedText,
+      text,
+    ],
+  );
+  const narrationPreviewBlocks = useMemo(
+    () =>
+      applyRevisionSessionState(cappedBaseNarrationPreviewBlocks, {
+        editedTextByBlockId: revisionEditedTextByBlockId,
+        statusByBlockId: revisionStatusByBlockId,
+      }),
+    [cappedBaseNarrationPreviewBlocks, revisionEditedTextByBlockId, revisionStatusByBlockId],
+  );
+  const canonicalPreviewSpeechPlan = useMemo(
+    () =>
+      buildCanonicalPreviewSpeechPlan(
+        applyRevisionSessionState(baseNarrationPreviewBlocks, {
+          editedTextByBlockId: revisionEditedTextByBlockId,
+          statusByBlockId: revisionStatusByBlockId,
+        }),
+      ),
+    [baseNarrationPreviewBlocks, revisionEditedTextByBlockId, revisionStatusByBlockId],
+  );
+  const canonicalPreviewGenerationRequest = applySpeechPolicyToCreateVoiceJobRequest(
+    buildVoiceJobRequest(
+      generationTextForPreviewSpeechPlan(canonicalPreviewSpeechPlan, text),
+      activeNarrationPreparedSource,
+    ),
+    { speechPolicyOverrides, speechPolicyProfile },
+  );
+  const hasRevisionSessionChanges =
+    Object.keys(revisionEditedTextByBlockId).length > 0 ||
+    Object.keys(revisionStatusByBlockId).length > 0;
+  const reviewedNarrationSpeechText = useMemo(
+    () => (hasRevisionSessionChanges ? composeReviewedSpeechText(narrationPreviewBlocks) : ""),
+    [hasRevisionSessionChanges, narrationPreviewBlocks],
+  );
+  const revisionHealthSummary = useMemo(
+    () => summarizeRevisionHealth(narrationPreviewBlocks),
+    [narrationPreviewBlocks],
+  );
+  const temporaryReviewAdapter = useMemo(
+    () =>
+      activeNarrationIsTemporary
+        ? buildTemporaryReviewStateAdapter({
+            editedTextByBlockId: revisionEditedTextByBlockId,
+            mode: temporaryReviewMode,
+            noteCount: activeNarrationPreparedSource?.warnings?.length ?? 0,
+            policyPinned:
+              Boolean(activeNarrationPreparedSource?.sourceSpeechPolicyProfile?.trim()) ||
+              hasSpeechPolicyOverrides(
+                activeNarrationPreparedSource?.sourceSpeechPolicyOverrides ?? {},
+              ),
+            pronunciationOverrideCount: narrationPreviewBlocks.reduce(
+              (total, block) => total + block.pronunciationCount + block.normalisationCount,
+              0,
+            ),
+            sourceOwner: "temporary",
+            statusByBlockId: revisionStatusByBlockId,
+          })
+        : null,
+    [
+      activeNarrationIsTemporary,
+      activeNarrationPreparedSource?.sourceSpeechPolicyOverrides,
+      activeNarrationPreparedSource?.sourceSpeechPolicyProfile,
+      activeNarrationPreparedSource?.warnings?.length,
+      narrationPreviewBlocks,
+      revisionEditedTextByBlockId,
+      revisionStatusByBlockId,
+      temporaryReviewMode,
+    ],
+  );
+  const globalPreviewVoiceOptions = useMemo(
+    () => [
+      {
+        detail: "Use the current engine default voice.",
+        id: "default",
+        label: "Default voice",
+      },
+      ...demoVoices
+        .filter((voice) => voice.id !== "default")
+        .map((voice) => ({
+          detail: voice.description,
+          id: voice.id,
+          label: voice.label,
+        })),
+      ...voiceProfiles.map((profile) => ({
+        detail: `${profile.language || "language"} · ${profile.status}`,
+        id: profile.id,
+        label: profile.name,
+      })),
+    ],
+    [voiceProfiles],
+  );
+  const activePreviewVoiceSelectionId = useMemo(() => {
+    if (!activeNarrationIsTemporary) {
+      return selectedVoiceProfileId || "default";
+    }
+    if (activeTemporaryVoiceSelection.kind === "provider") {
+      return activeTemporaryVoiceSelection.providerVoiceId ?? "default";
+    }
+    if (activeTemporaryVoiceSelection.kind === "saved-profile") {
+      return activeTemporaryVoiceSelection.voiceProfileId ?? "default";
+    }
+    return "default";
+  }, [activeNarrationIsTemporary, activeTemporaryVoiceSelection, selectedVoiceProfileId]);
+  const activePreviewVoiceLabel = activeNarrationIsTemporary
+    ? `${activeTemporaryVoiceSelection.label} · Session voice override`
+    : selectedVoiceProfileLabel;
+  const globalPreviewPolicyOptions = useMemo(() => {
+    const builtInProfiles =
+      speechPolicyProfiles.length > 0
+        ? speechPolicyProfiles
+        : DEFAULT_SPEECH_POLICY_DEFINITION.profiles;
+    return [
+      ...builtInProfiles.map((profile) => ({
+        detail: profile.description || "Built-in speech policy profile.",
+        id: profile.name,
+        label: profile.label,
+      })),
+      ...customSpeechPolicyProfiles.map((profile) => ({
+        detail: profile.baseProfile
+          ? `Custom profile based on ${profile.baseProfile}.`
+          : "Custom profile.",
+        id: profile.id,
+        label: profile.name,
+      })),
+    ];
+  }, [customSpeechPolicyProfiles, speechPolicyProfiles]);
+  useEffect(() => {
+    let sourceId: string | null = null;
+    if (sourceMode === "book") {
+      sourceId = selectedBookSource?.id ?? null;
+    } else if (sourceMode === "fileUrl") {
+      sourceId = selectedPreparedSource?.id ?? null;
+    }
+    setWorkspaceContext((currentContext) =>
+      withWorkspaceSource(currentContext, workspaceSourceType(sourceMode), sourceId),
+    );
+  }, [selectedBookSource?.id, selectedPreparedSource?.id, sourceMode]);
+  useEffect(() => {
+    setWorkspaceContext((currentContext) =>
+      withWorkspaceVoiceProfile(currentContext, selectedVoiceProfileId),
+    );
+  }, [selectedVoiceProfileId]);
+  useEffect(() => {
+    setWorkspaceContext((currentContext) =>
+      withWorkspaceSpeechPolicyProfile(currentContext, speechPolicyProfile),
+    );
+  }, [speechPolicyProfile]);
+  useEffect(() => {
+    setTemporaryVoiceState(loadTemporaryVoiceState(activeProjectId));
+  }, [activeProjectId]);
+  useEffect(() => {
+    saveTemporaryVoiceState(activeProjectId, temporaryVoiceState);
+  }, [activeProjectId, temporaryVoiceState]);
   const latestProgress = (() => {
     const unfinishedProgress = projectProgress.find((progress) => !progress.finished);
     if (unfinishedProgress) {
@@ -2607,8 +3923,16 @@ export function App() {
     if (jobPreparedSource?.id === preparedSourceCinemaSourceId) {
       return jobPreparedSource;
     }
+    if (activeTemporaryPreparedSource?.id === preparedSourceCinemaSourceId) {
+      return activeTemporaryPreparedSource;
+    }
     return preparedSources.find((source) => source.id === preparedSourceCinemaSourceId) ?? null;
-  }, [jobPreparedSource, preparedSourceCinemaSourceId, preparedSources]);
+  }, [
+    activeTemporaryPreparedSource,
+    jobPreparedSource,
+    preparedSourceCinemaSourceId,
+    preparedSources,
+  ]);
   const preparedSourceCinemaJob = useMemo(
     () => (preparedSourceCinemaJobMatchesSource(job, preparedSourceCinemaSource) ? job : null),
     [job, preparedSourceCinemaSource],
@@ -2620,9 +3944,25 @@ export function App() {
         : null,
     [playbackCursorSec, preparedSourceCinemaJob, teleprompterSettings],
   );
+  const visibleAuthoritativePreparedResume = useMemo(() => {
+    if (
+      !authoritativePreparedResume ||
+      !preparedSourceCinemaSource ||
+      authoritativePreparedResume.preparedSourceId !== preparedSourceCinemaSource.id
+    ) {
+      return null;
+    }
+    return visibleAuthoritativePreparedProgress(
+      preparedSourceCinemaSource,
+      authoritativePreparedResume,
+    );
+  }, [authoritativePreparedResume, preparedSourceCinemaSource]);
   const preparedSourceCinemaProgress = useMemo(() => {
     if (!preparedSourceCinemaSource) {
       return null;
+    }
+    if (visibleAuthoritativePreparedResume) {
+      return visibleAuthoritativePreparedResume;
     }
     if (preparedSourceCinemaJob) {
       const targetId = progressTargetIdForJob(preparedSourceCinemaJob);
@@ -2643,10 +3983,19 @@ export function App() {
           progress.targetId === `prepared:${preparedSourceCinemaSource.id}`,
       ) ?? null
     );
-  }, [latestProgress, preparedSourceCinemaJob, preparedSourceCinemaSource, projectProgress]);
+  }, [
+    latestProgress,
+    preparedSourceCinemaJob,
+    preparedSourceCinemaSource,
+    projectProgress,
+    visibleAuthoritativePreparedResume,
+  ]);
   const openPreparedSourceCinema = useCallback(
     (source: PreparedSource) => {
-      startFrontendSpan("prepared-source-cinema-open");
+      preparedSourceCinemaOpenTiming.start({
+        kind: preparedSourceCinemaKind(source),
+        preparedSourceId: source.id,
+      });
       setPreparedSourceCinemaSourceId(source.id);
       if (preparedSourceCinemaKind(source) === "website") {
         setPreparedSourceCinemaThemeName(themeName === "night" ? "light" : themeName);
@@ -2654,10 +4003,11 @@ export function App() {
       }
       setPreparedSourceCinemaThemeName("dark");
     },
-    [themeName],
+    [preparedSourceCinemaOpenTiming, themeName],
   );
   useEffect(() => {
     if (
+      sourceMode !== "fileUrl" ||
       !selectedPreparedSource ||
       !isPreparedSourceDisplayIncomplete(selectedPreparedSource) ||
       hydratingPreparedSourceId === selectedPreparedSource.id
@@ -2688,7 +4038,7 @@ export function App() {
     return () => {
       isCancelled = true;
     };
-  }, [hydratingPreparedSourceId, selectedPreparedSource]);
+  }, [hydratingPreparedSourceId, selectedPreparedSource, sourceMode]);
 
   useEffect(() => {
     const preparedSourceId = job?.preparedSourceId;
@@ -2741,7 +4091,11 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (!selectedPreparedSource?.id || selectedPreparedSource.status !== "ready") {
+    if (
+      sourceMode !== "fileUrl" ||
+      !selectedPreparedSource?.id ||
+      selectedPreparedSource.status !== "ready"
+    ) {
       return;
     }
     // The request omits profile on purpose; this guard keeps backend-resolved previews fresh
@@ -2785,18 +4139,17 @@ export function App() {
     selectedVoiceProfileId,
     speechPolicyOverrides,
     speechPolicyProfile,
+    sourceMode,
   ]);
 
-  const effectiveBookScope = useMemo(
-    () =>
-      selectedBookSource ? normalizeBookScopeForBook(selectedBookSource, selectedBookScope) : null,
-    [selectedBookScope, selectedBookSource],
-  );
   const selectedBookProgress = useMemo(() => {
     if (!selectedBookSource || !effectiveBookScope) {
       return null;
     }
-    const targetId = progressTargetIdForBookScope(selectedBookSource.id, effectiveBookScope);
+    const targetId =
+      selectedBookSource.sourceOwner === "temporary" && selectedBookSource.temporarySourceId
+        ? `temporary-source:${selectedBookSource.temporarySourceId}`
+        : progressTargetIdForBookScope(selectedBookSource.id, effectiveBookScope);
     return projectProgress.find((progress) => progress.targetId === targetId) ?? null;
   }, [effectiveBookScope, projectProgress, selectedBookSource]);
   const currentReadingPosition = useMemo<ReadingPosition | null>(() => {
@@ -2806,9 +4159,10 @@ export function App() {
     const scopeKey = bookScopeKey(effectiveBookScope);
     if (
       hashReadingPosition?.bookSourceId === selectedBookSource.id &&
-      hashReadingPosition.scopeKey === scopeKey
+      (hashReadingPosition.scopeKey === scopeKey ||
+        hashReadingPosition.locatorEnvelope?.sourceId === selectedBookSource.id)
     ) {
-      return hashReadingPosition;
+      return { ...hashReadingPosition, scopeKey };
     }
     return {
       activeWordIndex: selectedBookProgress?.activeWordIndex ?? 0,
@@ -2829,29 +4183,568 @@ export function App() {
     [activeProjectId, effectiveBookScope, hashReadingPosition, selectedBookSource],
   );
   const canOpenBookCinema = selectedBookSource?.status === "ready";
+  const previewAudioCurrentness = resolvePreviewAudioCurrentness({
+    allowPreparedSourceSelectionMatch: !hasRevisionSessionChanges,
+    job,
+    request: canonicalPreviewGenerationRequest,
+    speechPlan: canonicalPreviewSpeechPlan,
+  });
+  const generatedAudioLifecycle = generatedAudioLifecycleFromJob({
+    job,
+    stale: previewAudioCurrentness.stale,
+  });
+  const playbackLifecycleReady =
+    playbackControls.isAvailable && generatedAudioLifecycle === "ready";
+  const temporaryCinemaActionsEnabled = !activeNarrationIsTemporary || temporaryCinemaEnabled;
+  const temporaryCinemaActionDisabledReason = temporaryCinemaActionsEnabled
+    ? undefined
+    : temporaryCinemaDisabledReason();
+  const canOpenCurrentCinema = generatedAudioLifecycle === "ready" && temporaryCinemaActionsEnabled;
+  const canonicalPreviewHasBlocks = canonicalPreviewSpeechPlanHasBlocks(canonicalPreviewSpeechPlan);
+  const hasCanonicalPreviewSpeechText =
+    !canonicalPreviewHasBlocks || canonicalPreviewSpeechPlan.text.trim().length > 0;
+  let hasCreatableCurrentSource = false;
+  if (!isProcessing && sourceMode === "book") {
+    hasCreatableCurrentSource =
+      selectedBookSource?.status === "ready" &&
+      Boolean(effectiveBookScope) &&
+      isActiveSourceReady &&
+      hasCanonicalPreviewSpeechText;
+  } else if (!isProcessing && sourceMode === "fileUrl") {
+    hasCreatableCurrentSource =
+      selectedPreparedSource?.status === "ready" &&
+      isActiveSourceReady &&
+      hasCanonicalPreviewSpeechText &&
+      Boolean(
+        canonicalPreviewHasBlocks ||
+          (selectedPreparedSource.speechText ?? selectedPreparedSource.text ?? "").trim(),
+      );
+  } else if (!isProcessing) {
+    hasCreatableCurrentSource = hasCanonicalPreviewSpeechText && text.trim().length > 0;
+  }
+  const canCreateCurrentSource = hasCreatableCurrentSource && !createAndListenCapabilityReason;
+  const createAndListenDisabledReason = canCreateCurrentSource
+    ? undefined
+    : (createAndListenCapabilityReason ?? "Select a ready source or wait for the current run.");
+  const canRunCurrentGenerationAction = canCreateCurrentSource || canRetryVoiceJob(job);
+  const createAndListenScope = createAndListenScopeForSource({
+    selectedBookScope: effectiveBookScope,
+    selectedBookSource: activeNarrationBookSource,
+    selectedPreparedSource: activeNarrationPreparedSource,
+    sourceMode,
+  });
+  const hasNarrationSource = hasWorkbenchNarrationSource({
+    selectedBookSource,
+    selectedPreparedSource,
+    sourceMode,
+    text,
+  });
+  let hasListenerReadyText = false;
+  if (sourceMode === "book") {
+    hasListenerReadyText =
+      selectedBookSource?.status === "ready" && Boolean(effectiveBookScope) && isActiveSourceReady;
+  } else if (sourceMode === "fileUrl") {
+    hasListenerReadyText =
+      selectedPreparedSource?.status === "ready" &&
+      isActiveSourceReady &&
+      Boolean((selectedPreparedSource.speechText ?? selectedPreparedSource.text ?? "").trim());
+  } else {
+    hasListenerReadyText = text.trim().length > 0;
+  }
+  const activeWorkbenchStageStatus = resolveWorkspaceStageStatus({
+    audioLifecycle: generatedAudioLifecycle,
+    audioFailureCanRetry:
+      generatedAudioLifecycle === "failed" && job ? canRetryVoiceJob(job) : undefined,
+    audioFailureDetail:
+      generatedAudioLifecycle === "failed"
+        ? previewGenerationFailureRecoveryDetail(job)
+        : undefined,
+    canCreate: canRunCurrentGenerationAction,
+    canOpenCinema: canOpenCurrentCinema,
+    createDisabledReason: createAndListenDisabledReason,
+    hasListenerText: hasListenerReadyText,
+    hasSource: hasNarrationSource,
+    hasVoice: !createAndListenCapabilityReason,
+    reviewWarningCount: revisionHealthSummary.previewWarnings,
+    sourceError: sourcePrepError ?? bookSourceError,
+    sourceReadiness: activeSourceReadiness,
+    sourcePreparing: isPreparingSource || isImportingBookSource,
+    stage: contentMode,
+  });
+  const activeNarrationSourceLabel =
+    activeNarrationPreparedSource?.title ??
+    activeNarrationPreparedSource?.sourceName ??
+    (activeNarrationBookSource ? bookSourceName(activeNarrationBookSource) : "Draft text");
+  const activeNarrationScopeLabel = workbenchScopeTitle({
+    selectedBookScope: effectiveBookScope,
+    selectedBookSource: activeNarrationBookSource,
+    selectedPreparedSource: activeNarrationPreparedSource,
+    sourceMode,
+  });
+  const statusSourceLifecycle = useMemo(
+    () =>
+      workbenchSourceLifecycleEnvelope({
+        generatedAudioLifecycle,
+        job,
+        projectId: activeProjectId,
+        selectedBookSource: activeNarrationBookSource,
+        selectedPreparedSource: activeNarrationPreparedSource,
+        selectedScopeLabel: activeNarrationScopeLabel,
+        sourceMode,
+        surface: workspaceSourceLifecycleSurface(contentMode),
+        text,
+      }),
+    [
+      activeNarrationBookSource,
+      activeNarrationPreparedSource,
+      activeNarrationScopeLabel,
+      activeProjectId,
+      contentMode,
+      generatedAudioLifecycle,
+      job,
+      sourceMode,
+      text,
+    ],
+  );
+  const workspaceDisclosure = useMemo<WorkspaceDisclosureModel>(() => {
+    const sourceError = sourcePrepError ?? bookSourceError;
+    const diagnosticsBlocking = Boolean(
+      profileSourceDiagnostics &&
+        !profileSourceDiagnostics.ffmpegAvailable &&
+        (studioMode === "voiceCloning" || profileSource !== null),
+    );
+    const diagnosticsWarning = Boolean(
+      profileError !== null ||
+        ttsEngineError !== null ||
+        diagnosticsBlocking ||
+        (profileSourceDiagnostics &&
+          (!profileSourceDiagnostics.localModelAvailable ||
+            !profileSourceDiagnostics.tokenConfigured)),
+    );
+    const backendWarning =
+      systemMetricsError !== null || ttsEngineError !== null || researchModuleError !== null;
+    const storageBytes = projectStorage?.totalBytes ?? 0;
+    return resolveWorkspaceDisclosure({
+      audioGeneration: {
+        lifecycle: generatedAudioLifecycle,
+        requiresPlayback:
+          activeWorkbenchStageStatus.blocker?.id === "audioMissing" ||
+          activeWorkbenchStageStatus.blocker?.id === "audioStale" ||
+          activeWorkbenchStageStatus.blocker?.id === "generationFailed",
+      },
+      backendState: {
+        active: isSettingsOpen || isCommandCenterOpen,
+        blocking: Boolean(createAndListenCapabilityReason && hasNarrationSource),
+        detail:
+          createAndListenCapabilityReason ??
+          ttsEngineError ??
+          systemMetricsError ??
+          researchModuleError ??
+          (systemMetrics ? "Backend metrics online." : "Backend metrics load when needed."),
+        online: !systemMetricsError,
+        warning: backendWarning,
+      },
+      diagnostics: {
+        active: isSettingsOpen,
+        blocking: diagnosticsBlocking,
+        detail:
+          profileError ??
+          ttsEngineError ??
+          profileSourceDiagnostics?.setupMessage ??
+          "Diagnostics available when setup or quality changes.",
+        warning: diagnosticsWarning,
+      },
+      exportImport: {
+        active: isBundlePanelOpen,
+        blocking: false,
+        detail: isBundlePanelOpen ? "Bundle flow is open." : "Bundle tools are in Command Center.",
+        warning: false,
+      },
+      pins: workspaceDisclosurePins,
+      sourceDetails: {
+        active: isPreparingSource || isImportingBookSource,
+        blocking: Boolean(sourceError),
+        detail:
+          sourceError ??
+          (isPreparingSource || isImportingBookSource
+            ? "Source preparation is running."
+            : activeNarrationSourceLabel),
+        hasSource: hasNarrationSource,
+        warning: false,
+      },
+      stage: contentMode,
+      storage: {
+        blocking: false,
+        detail: projectStorageError ?? `${formatBytes(storageBytes)} in current project storage`,
+        warning: projectStorageError !== null || storageBytes > 1024 * 1024 * 1024,
+      },
+      voiceCloning: {
+        blocking: false,
+        detail: voiceCloningActivity.message,
+        status: voiceCloningActivity.status,
+      },
+    });
+  }, [
+    activeNarrationSourceLabel,
+    activeWorkbenchStageStatus.blocker?.id,
+    bookSourceError,
+    contentMode,
+    createAndListenCapabilityReason,
+    generatedAudioLifecycle,
+    hasNarrationSource,
+    isBundlePanelOpen,
+    isImportingBookSource,
+    isPreparingSource,
+    isSettingsOpen,
+    isCommandCenterOpen,
+    profileError,
+    profileSource,
+    profileSourceDiagnostics,
+    projectStorage?.totalBytes,
+    projectStorageError,
+    researchModuleError,
+    sourcePrepError,
+    studioMode,
+    systemMetrics,
+    systemMetricsError,
+    ttsEngineError,
+    voiceCloningActivity.message,
+    voiceCloningActivity.status,
+    workspaceDisclosurePins,
+  ]);
+  const ttsPipelineHint = isProcessing
+    ? (job?.progress.message ?? "TTS pipeline is processing the current job.")
+    : "Start a job to see live TTS pipeline status.";
+  const narrationStatusModel = useMemo(
+    () =>
+      resolveNarrationStatusModel({
+        canCreate: canRunCurrentGenerationAction,
+        canOpenCinema: canOpenCurrentCinema,
+        audioCurrentnessDetail: previewAudioCurrentness.technicalDetail,
+        disclosure: workspaceDisclosure,
+        generatedAudioLifecycle,
+        hint: ttsPipelineHint,
+        isPlaybackActive,
+        isPlaybackPlaying: playbackControls.isPlaying,
+        isProcessing,
+        job,
+        now,
+        projectJobs,
+        sourceLifecycle: statusSourceLifecycle,
+        stageStatus: activeWorkbenchStageStatus,
+        voiceCloningActivity,
+      }),
+    [
+      activeWorkbenchStageStatus,
+      previewAudioCurrentness.technicalDetail,
+      canRunCurrentGenerationAction,
+      canOpenCurrentCinema,
+      generatedAudioLifecycle,
+      isPlaybackActive,
+      isProcessing,
+      job,
+      now,
+      playbackControls.isPlaying,
+      projectJobs,
+      statusSourceLifecycle,
+      ttsPipelineHint,
+      voiceCloningActivity,
+      workspaceDisclosure,
+    ],
+  );
+  const selectedInspectorBlock =
+    narrationPreviewBlocks.find((block) => block.id === workspaceContext.activeBlockId) ??
+    narrationPreviewBlocks[0];
+  const selectedInspectorBlockIndex = narrationPreviewBlocks.findIndex(
+    (block) => block.id === selectedInspectorBlock.id,
+  );
+  const nextInspectorBlockIndex = selectedInspectorBlockIndex + 1;
+  const nextInspectorBlockLabel =
+    nextInspectorBlockIndex < narrationPreviewBlocks.length
+      ? narrationPreviewBlocks[nextInspectorBlockIndex].label
+      : "End of script";
+  const workspaceInspectorSourceMetrics = workbenchSourceMetrics({
+    bookScopeContent,
+    job,
+    selectedBookScope: effectiveBookScope,
+    selectedBookSource: activeNarrationBookSource,
+    selectedPreparedSource: activeNarrationPreparedSource,
+    sourceMode,
+    text,
+  });
+  const workspaceInspectorPolicyNotes = narrationPreviewPolicyNotes({
+    bookScopeContent,
+    policyProfileLabel: speechPolicyProfileDisplayName(
+      speechPolicyProfile,
+      customSpeechPolicyProfiles,
+    ),
+    scopeTitle: activeNarrationScopeLabel,
+    selectedBookSource: activeNarrationBookSource,
+    selectedPreparedSource: activeNarrationPreparedSource,
+    sourceMode,
+    voiceProfileLabel: selectedVoiceProfileLabel,
+  });
+  const workspaceAudioReviewSummary = audioReviewWarningSummary(job);
+  const workspaceAudioLifecycleLabel =
+    workspaceAudioReviewSummary && generatedAudioLifecycle === "ready"
+      ? "Audio review"
+      : generatedAudioLifecycleLabel(generatedAudioLifecycle);
+  const workspaceAudioLifecycleTone =
+    workspaceAudioReviewSummary && generatedAudioLifecycle === "ready"
+      ? "warning"
+      : audioLifecycleTone(generatedAudioLifecycle);
+  const workspaceInspectorTargets = useMemo<WorkspaceInspectorContextTargets>(
+    () => ({
+      cues: narrationPreviewBlocks.map((block) =>
+        workspaceInspectorCueDetail(block, narrationPreviewBlocks.length),
+      ),
+      issues: narrationStatusModel.issues,
+      jobs: job
+        ? [
+            workspaceInspectorJobDetail({
+              audioCurrentnessDetail: previewAudioCurrentness.technicalDetail,
+              audioLifecycleLabel: workspaceAudioLifecycleLabel,
+              job,
+              queue: narrationStatusModel.queue,
+            }),
+          ]
+        : [],
+      source: statusSourceLifecycle.sourceId
+        ? {
+            id: statusSourceLifecycle.sourceId,
+            kind: "source",
+            label: activeNarrationSourceLabel,
+          }
+        : null,
+      voice: {
+        id: selectedVoiceProfileId || "provider",
+        kind: "voice",
+        label: selectedVoiceProfileLabel,
+      },
+    }),
+    [
+      activeNarrationSourceLabel,
+      job,
+      narrationPreviewBlocks,
+      narrationStatusModel.issues,
+      narrationStatusModel.queue,
+      previewAudioCurrentness.technicalDetail,
+      selectedVoiceProfileId,
+      selectedVoiceProfileLabel,
+      statusSourceLifecycle.sourceId,
+      workspaceAudioLifecycleLabel,
+    ],
+  );
+  const workspaceInspectorPinned = workspaceLayout.contextInspector === "pinned";
+  const previewWorkspaceInspectorFallbackTarget = useMemo<WorkspaceInspectorTarget | null>(() => {
+    if (contentMode !== "preview") {
+      return null;
+    }
+    const audioIssue = workspaceInspectorTargets.issues.find(
+      (issue) => issue.owner === "audio" && issue.severity !== "ok",
+    );
+    if (audioIssue) {
+      return { id: audioIssue.id, kind: "issue", label: audioIssue.label };
+    }
+    const activeInspectorJob = workspaceInspectorTargets.jobs.at(0);
+    return activeInspectorJob
+      ? { id: activeInspectorJob.id, kind: "job", label: activeInspectorJob.label }
+      : null;
+  }, [contentMode, workspaceInspectorTargets.issues, workspaceInspectorTargets.jobs]);
+  const previewAudioInspectorShouldExpand = Boolean(
+    previewWorkspaceInspectorFallbackTarget &&
+      (previewWorkspaceInspectorFallbackTarget.kind === "issue" ||
+        previewWorkspaceInspectorFallbackTarget.kind === "job") &&
+      job &&
+      (Boolean(workspaceAudioReviewSummary) ||
+        ["queued", "optimizing", "synthesizing", "checking", "retrying"].includes(job.status) ||
+        (job.status === "failed" &&
+          job.retriable !== false &&
+          job.terminalReason !== "configuration_failed")),
+  );
+  useEffect(() => {
+    if (
+      previewAudioInspectorShouldExpand &&
+      !workspaceInspectorPinned &&
+      workspaceInspectorDisplayState === "collapsed"
+    ) {
+      setWorkspaceInspectorDisplayState("expanded");
+    }
+  }, [previewAudioInspectorShouldExpand, workspaceInspectorDisplayState, workspaceInspectorPinned]);
+  const selectWorkspaceInspectorTarget = useCallback((target: WorkspaceInspectorTarget | null) => {
+    setSelectedWorkspaceInspectorTarget(target);
+    if (target) {
+      setWorkspaceInspectorDisplayState("expanded");
+    }
+  }, []);
+  const inspectWorkspaceCue = useCallback(
+    (blockId: string | null) => {
+      if (!blockId) {
+        return;
+      }
+      const cue = workspaceInspectorTargets.cues.find((item) => item.id === blockId);
+      if (cue) {
+        selectWorkspaceInspectorTarget({ id: cue.id, kind: "cue", label: cue.label });
+      }
+    },
+    [selectWorkspaceInspectorTarget, workspaceInspectorTargets.cues],
+  );
+  const inspectWorkspaceSource = useCallback(() => {
+    selectWorkspaceInspectorTarget(workspaceInspectorTargets.source);
+  }, [selectWorkspaceInspectorTarget, workspaceInspectorTargets.source]);
+  const inspectWorkspaceJob = useCallback(() => {
+    const activeInspectorJob = workspaceInspectorTargets.jobs.at(0);
+    if (activeInspectorJob) {
+      selectWorkspaceInspectorTarget({
+        id: activeInspectorJob.id,
+        kind: "job",
+        label: activeInspectorJob.label,
+      });
+    }
+  }, [selectWorkspaceInspectorTarget, workspaceInspectorTargets.jobs]);
+  useEffect(() => {
+    if (!workspaceInspectorPinned && pinnedWorkspaceInspectorTarget) {
+      setPinnedWorkspaceInspectorTarget(null);
+    }
+  }, [pinnedWorkspaceInspectorTarget, workspaceInspectorPinned]);
+  const previousWorkspaceInspectorStageRef = useRef<WorkspaceStage>(contentMode);
+  useEffect(() => {
+    const previousStage = previousWorkspaceInspectorStageRef.current;
+    previousWorkspaceInspectorStageRef.current = contentMode;
+    if (
+      contentMode === "preview" &&
+      previousStage !== "preview" &&
+      !workspaceInspectorPinned &&
+      selectedWorkspaceInspectorTarget?.kind === "cue"
+    ) {
+      setSelectedWorkspaceInspectorTarget(null);
+    }
+  }, [contentMode, selectedWorkspaceInspectorTarget, workspaceInspectorPinned]);
+  const effectiveWorkspaceInspectorDisplayState =
+    workspaceInspectorPinned || workspaceInspectorDisplayState === "pinned"
+      ? "pinned"
+      : workspaceInspectorDisplayState;
+  const disclosureRails = workspaceDisclosureRails(baseWorkspaceRails, workspaceDisclosure);
+  const activityFooterMode: ActivityFooterMode = disclosureRails.activityFooterMode;
+  const visibleNarrationStatusChips =
+    activityFooterMode === "collapsed"
+      ? narrationStatusModel.chips.slice(0, 3)
+      : narrationStatusModel.chips;
+  const handleNarrationStatusChipSelect = useCallback(
+    (chip: NarrationStatusChip) => {
+      if (chip.issue.id === "review-needs-repair" || chip.issue.id === "review-required") {
+        openReviewRepairQueue();
+        return;
+      }
+      selectWorkspaceInspectorTarget({
+        id: chip.issue.id,
+        kind: "issue",
+        label: chip.issue.label,
+      });
+    },
+    [openReviewRepairQueue, selectWorkspaceInspectorTarget],
+  );
+  const openStatusActivityFromShortcut = useCallback(() => {
+    inspectWorkspaceJob();
+    openCommandCenter("activity");
+  }, [inspectWorkspaceJob, openCommandCenter]);
+  const inspectNarrationStatusIssueFromShortcut = useCallback(() => {
+    if (visibleNarrationStatusChips.length === 0) {
+      announcePolite("No status issues.");
+      return;
+    }
+    const selectedChip =
+      selectedWorkspaceInspectorTarget?.kind === "issue"
+        ? visibleNarrationStatusChips.find(
+            (chip) => chip.issue.id === selectedWorkspaceInspectorTarget.id,
+          )
+        : undefined;
+    const actionableChip =
+      visibleNarrationStatusChips.find(
+        (chip) => chip.issue.blocksCurrentStage || chip.issue.recovery.id !== "none",
+      ) ?? visibleNarrationStatusChips[0];
+    const chip = selectedChip ?? actionableChip;
+    handleNarrationStatusChipSelect(chip);
+  }, [
+    announcePolite,
+    handleNarrationStatusChipSelect,
+    selectedWorkspaceInspectorTarget,
+    visibleNarrationStatusChips,
+  ]);
+  const leftRailMode = disclosureRails.leftRailMode;
+  const rightRailMode = disclosureRails.rightRailMode;
+  const inspectorSummonedInTheatre =
+    workspaceInspectorPinned || effectiveWorkspaceInspectorDisplayState === "pinned";
+  const displayRightRailMode =
+    contentMode === "theatre" && !inspectorSummonedInTheatre ? "collapsed" : rightRailMode;
+  const workspaceInspectorDisplayVisible = displayRightRailMode !== "collapsed";
+  const telepromptTheatreStageOpenSignal = theatreOpenSignalForWorkbenchStage({
+    blockerId: activeWorkbenchStageStatus.blocker?.id ?? null,
+    signal: telepromptTheatreOpenSignal,
+    stage: contentMode,
+  });
   const isResumeRestoring = useDelayedBusy(resumeRestoreStartedAt !== null, 250);
   const openReadingCinema = useCallback(
     (target?: "book") => {
+      if (target !== "book" && activeNarrationPreparedSource) {
+        openPreparedSourceCinema(activeNarrationPreparedSource);
+        return;
+      }
       const shouldOpenSelectedBook = target === "book" || !job || Boolean(job.bookSourceId);
       if (canOpenBookCinema && shouldOpenSelectedBook) {
-        startFrontendSpan("book-cinema-open");
+        bookCinemaOpenTiming.start({ target: "book" });
         setBookCinemaThemeName(themeName === "light" ? "dark" : themeName);
         setIsBookCinemaOpen(true);
         return;
       }
       setTeleprompterOpenSignal((currentSignal) => currentSignal + 1);
     },
-    [canOpenBookCinema, job, themeName],
+    [
+      activeNarrationPreparedSource,
+      bookCinemaOpenTiming,
+      canOpenBookCinema,
+      job,
+      openPreparedSourceCinema,
+      themeName,
+    ],
   );
   const openSelectedBookCinema = useCallback(() => {
     if (canOpenBookCinema) {
-      startFrontendSpan("book-cinema-open");
+      bookCinemaOpenTiming.start({ target: "selected-book" });
       setBookCinemaThemeName(themeName === "light" ? "dark" : themeName);
       setIsBookCinemaOpen(true);
       return;
     }
     setTeleprompterOpenSignal((currentSignal) => currentSignal + 1);
-  }, [canOpenBookCinema, themeName]);
+  }, [bookCinemaOpenTiming, canOpenBookCinema, themeName]);
+  const openTelepromptStage = useCallback(() => {
+    if (!temporaryCinemaActionsEnabled) {
+      const message = temporaryCinemaActionDisabledReason ?? temporaryCinemaDisabledReason();
+      setSourcePrepError(message);
+      announceAssertive(message);
+      return;
+    }
+    runWorkspaceStageAction("openTeleprompt");
+  }, [
+    announceAssertive,
+    runWorkspaceStageAction,
+    temporaryCinemaActionDisabledReason,
+    temporaryCinemaActionsEnabled,
+  ]);
+  const openTelepromptTheatreStage = useCallback(() => {
+    if (!temporaryCinemaActionsEnabled) {
+      const message = temporaryCinemaActionDisabledReason ?? temporaryCinemaDisabledReason();
+      setSourcePrepError(message);
+      announceAssertive(message);
+      return;
+    }
+    runWorkspaceStageAction("openTheatre");
+  }, [
+    announceAssertive,
+    runWorkspaceStageAction,
+    temporaryCinemaActionDisabledReason,
+    temporaryCinemaActionsEnabled,
+  ]);
   const handleSelectBookCinemaSource = useCallback(
     (bookId: string) => {
       const book = bookSources.find((item) => item.id === bookId);
@@ -2859,15 +4752,14 @@ export function App() {
         return;
       }
       setSelectedBookSourceId(book.id);
+      if (book.status === "ready" && book.sourceOwner !== "temporary") {
+        nominateReaderWorkspaceSource(book.id);
+      }
       setSelectedBookScope(resolveDefaultBookScope(book));
       setBookScopeContent(null);
     },
-    [bookSources],
+    [bookSources, nominateReaderWorkspaceSource],
   );
-  const ttsPipelineHint = isProcessing
-    ? (job?.progress.message ?? "TTS pipeline is processing the current job.")
-    : "Start a job to see live TTS pipeline status.";
-
   useEffect(() => {
     if (hasRecordedColdUsableRef.current) {
       return;
@@ -2877,18 +4769,18 @@ export function App() {
   }, [studioMode]);
 
   useEffect(() => {
-    endFrontendSpan("studio-route-switch", { studioMode });
-  }, [studioMode]);
+    studioRouteTiming.end({ studioMode });
+  }, [studioMode, studioRouteTiming]);
 
   useEffect(() => {
     if (!isBookCinemaOpen || !selectedBookSource || !effectiveBookScope) {
       return;
     }
-    endFrontendSpan("book-cinema-open", {
+    bookCinemaOpenTiming.end({
       bookSourceId: selectedBookSource.id,
       scope: bookScopeKey(effectiveBookScope),
     });
-  }, [effectiveBookScope, isBookCinemaOpen, selectedBookSource]);
+  }, [bookCinemaOpenTiming, effectiveBookScope, isBookCinemaOpen, selectedBookSource]);
 
   useEffect(() => {
     if (!preparedSourceCinemaSourceId) {
@@ -2898,14 +4790,22 @@ export function App() {
       setPreparedSourceCinemaSourceId(null);
       return;
     }
-    endFrontendSpan("prepared-source-cinema-open", {
+    preparedSourceCinemaOpenTiming.end({
       preparedSourceId: preparedSourceCinemaSource.id,
       kind: preparedSourceCinemaSource.kind,
     });
-  }, [preparedSourceCinemaSource, preparedSourceCinemaSourceId]);
+  }, [preparedSourceCinemaOpenTiming, preparedSourceCinemaSource, preparedSourceCinemaSourceId]);
 
   useEffect(() => {
     const syncHashPosition = () => {
+      if (
+        serverWorkspaceOwnsNavigation(
+          activeProjectIdRef.current,
+          readerWorkspaceRestoringProjectRef.current,
+          readerWorkspaceSnapshotRef.current?.projectId,
+        )
+      )
+        return;
       setHashReadingPosition(parseBookCinemaHash(globalThis.location.hash));
     };
     globalThis.addEventListener("hashchange", syncHashPosition);
@@ -2915,6 +4815,15 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (
+      serverWorkspaceOwnsNavigation(
+        activeProjectIdRef.current,
+        readerWorkspaceRestoringProjectRef.current,
+        readerWorkspaceSnapshotRef.current?.projectId,
+      )
+    ) {
+      return;
+    }
     if (!hashReadingPosition?.bookSourceId) {
       return;
     }
@@ -2925,11 +4834,14 @@ export function App() {
     setSelectedBookSourceId(book.id);
     setSelectedBookScope(scopeFromBookScopeKey(book, hashReadingPosition.scopeKey));
     if (book.status === "ready") {
-      startFrontendSpan("book-cinema-open");
+      bookCinemaOpenTiming.start({
+        bookSourceId: book.id,
+        reason: "hash-resume",
+      });
       setBookCinemaThemeName(themeName === "light" ? "dark" : themeName);
       setIsBookCinemaOpen(true);
     }
-  }, [bookSources, hashReadingPosition, themeName]);
+  }, [bookCinemaOpenTiming, bookSources, hashReadingPosition, themeName]);
 
   const beginProfileLoadingIndicator = useCallback(() => {
     const visibleRequestToken = ++profileLoadingVisibleRequestCounter.current;
@@ -3184,13 +5096,15 @@ export function App() {
       const nextProjects = await listProjects();
       setProjects(nextProjects);
       setActiveProjectId((currentProjectId) => {
-        const storedProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+        const storedProjectId = uiMemoryRef.current.rememberLastProject
+          ? localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY)
+          : null;
         const candidate =
           currentProjectId.trim().length > 0 ? currentProjectId : (storedProjectId ?? "default");
         const resolved = nextProjects.some((project) => project.id === candidate)
           ? candidate
           : (nextProjects[0]?.id ?? "default");
-        localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, resolved);
+        rememberActiveProjectId(resolved);
         return resolved;
       });
     } catch (caughtError) {
@@ -3198,24 +5112,41 @@ export function App() {
         caughtError instanceof Error ? caughtError.message : "Unable to load projects",
       );
     }
+  }, [rememberActiveProjectId]);
+
+  const projectLoaderGuard = useCallback((projectId: string) => {
+    const generation = projectLoaderGenerationRef.current;
+    return () =>
+      projectLoaderResponseIsCurrent(
+        projectId,
+        generation,
+        activeProjectIdRef.current,
+        projectLoaderGenerationRef.current,
+      );
   }, []);
 
-  const refreshProjectJobs = useCallback(async (projectId: string) => {
-    if (projectId.trim().length === 0) {
-      setProjectJobs([]);
-      return;
-    }
-    try {
-      const jobs = await listProjectJobs(projectId);
-      setProjectJobs(jobs);
-      setProjectError(null);
-    } catch (caughtError) {
-      setProjectJobs([]);
-      setProjectError(
-        caughtError instanceof Error ? caughtError.message : "Unable to load project jobs",
-      );
-    }
-  }, []);
+  const refreshProjectJobs = useCallback(
+    async (projectId: string) => {
+      const isCurrent = projectLoaderGuard(projectId);
+      if (projectId.trim().length === 0) {
+        setProjectJobs([]);
+        return;
+      }
+      try {
+        const jobs = await listProjectJobs(projectId);
+        if (!isCurrent()) return;
+        setProjectJobs(jobs);
+        setProjectError(null);
+      } catch (caughtError) {
+        if (!isCurrent()) return;
+        setProjectJobs([]);
+        setProjectError(
+          caughtError instanceof Error ? caughtError.message : "Unable to load project jobs",
+        );
+      }
+    },
+    [projectLoaderGuard],
+  );
 
   const refreshBookSources = useCallback(
     async (projectId: string) => {
@@ -3228,16 +5159,18 @@ export function App() {
       }
       try {
         const books = await listProjectBookSources(projectId);
+        if (activeProjectIdRef.current !== projectId) return;
         setBookSources(books);
         setSelectedBookSourceId((currentId) => {
           if (currentId && books.some((book) => book.id === currentId)) {
             return currentId;
           }
-          return books[0]?.id ?? null;
+          return null;
         });
         setSelectedBookScope((currentScope) => currentScope);
         setBookSourceError(null);
       } catch (caughtError) {
+        if (activeProjectIdRef.current !== projectId) return;
         setBookSources([]);
         setSelectedBookSourceId(null);
         setSelectedBookScope(null);
@@ -3253,66 +5186,47 @@ export function App() {
     [refreshProjects],
   );
 
-  const refreshPreparedSources = useCallback(
+  const refreshProjectProgress = useCallback(
     async (projectId: string) => {
+      const isCurrent = projectLoaderGuard(projectId);
       if (projectId.trim().length === 0) {
-        setPreparedSources([]);
-        setSelectedPreparedSourceId(null);
+        setProjectProgress([]);
         return;
       }
       try {
-        const sources = await listPreparedSources(projectId);
-        setPreparedSources((currentSources) =>
-          mergePreparedSourcesPreservingFullContent(currentSources, sources),
-        );
-        setSelectedPreparedSourceId((currentId) => {
-          if (currentId && sources.some((source) => source.id === currentId)) {
-            return currentId;
-          }
-          return sources[0]?.id ?? null;
-        });
-        setSourcePrepError(null);
-      } catch (caughtError) {
-        setPreparedSources([]);
-        setSelectedPreparedSourceId(null);
-        if (isApiNotFoundError(caughtError)) {
-          setSourcePrepError(null);
-          void refreshProjects();
-          return;
-        }
-        setSourcePrepError(formatErrorMessage(caughtError, "Unable to load prepared sources"));
+        const progress = await listProjectProgress(projectId);
+        if (!isCurrent()) return;
+        setProjectProgress(progress);
+      } catch {
+        if (!isCurrent()) return;
+        setProjectProgress([]);
       }
     },
-    [refreshProjects],
+    [projectLoaderGuard],
   );
 
-  const refreshProjectProgress = useCallback(async (projectId: string) => {
-    if (projectId.trim().length === 0) {
-      setProjectProgress([]);
-      return;
-    }
-    try {
-      setProjectProgress(await listProjectProgress(projectId));
-    } catch {
-      setProjectProgress([]);
-    }
-  }, []);
-
-  const refreshProjectStorage = useCallback(async (projectId: string) => {
-    if (projectId.trim().length === 0) {
-      setProjectStorage(null);
-      return;
-    }
-    try {
-      setProjectStorage(await getProjectStorageSummary(projectId));
-      setProjectStorageError(null);
-    } catch (caughtError) {
-      setProjectStorage(null);
-      setProjectStorageError(
-        caughtError instanceof Error ? caughtError.message : "Unable to load project storage",
-      );
-    }
-  }, []);
+  const refreshProjectStorage = useCallback(
+    async (projectId: string) => {
+      const isCurrent = projectLoaderGuard(projectId);
+      if (projectId.trim().length === 0) {
+        setProjectStorage(null);
+        return;
+      }
+      try {
+        const storage = await getProjectStorageSummary(projectId);
+        if (!isCurrent()) return;
+        setProjectStorage(storage);
+        setProjectStorageError(null);
+      } catch (caughtError) {
+        if (!isCurrent()) return;
+        setProjectStorage(null);
+        setProjectStorageError(
+          caughtError instanceof Error ? caughtError.message : "Unable to load project storage",
+        );
+      }
+    },
+    [projectLoaderGuard],
+  );
 
   const refreshSpeechPolicyProfiles = useCallback(async () => {
     try {
@@ -3331,31 +5245,31 @@ export function App() {
     }
   }, []);
 
-  const refreshProjectSpeechPolicy = useCallback(async (projectId: string) => {
-    if (projectId.trim().length === 0) {
-      setSpeechPolicyProfile(DEFAULT_SPEECH_POLICY_PROFILE);
-      setCustomSpeechPolicyProfiles([]);
-      return;
-    }
-    try {
-      const settings = await getProjectSpeechPolicy(projectId);
-      setSpeechPolicyProfile(normalizeSpeechPolicyProfile(settings.profile));
-      setCustomSpeechPolicyProfiles(settings.customProfiles ?? []);
-      setSpeechPolicyError(null);
-    } catch (caughtError) {
-      setSpeechPolicyProfile(DEFAULT_SPEECH_POLICY_PROFILE);
-      setCustomSpeechPolicyProfiles([]);
-      setSpeechPolicyError(formatErrorMessage(caughtError, "Unable to load project speech policy"));
-    }
-  }, []);
-
-  const refreshBookCinemaDiagnostics = useCallback(async () => {
-    try {
-      setBookCinemaDiagnostics(await getBookCinemaDiagnostics());
-    } catch {
-      setBookCinemaDiagnostics(null);
-    }
-  }, []);
+  const refreshProjectSpeechPolicy = useCallback(
+    async (projectId: string) => {
+      const isCurrent = projectLoaderGuard(projectId);
+      if (projectId.trim().length === 0) {
+        setSpeechPolicyProfile(DEFAULT_SPEECH_POLICY_PROFILE);
+        setCustomSpeechPolicyProfiles([]);
+        return;
+      }
+      try {
+        const settings = await getProjectSpeechPolicy(projectId);
+        if (!isCurrent()) return;
+        setSpeechPolicyProfile(normalizeSpeechPolicyProfile(settings.profile));
+        setCustomSpeechPolicyProfiles(settings.customProfiles ?? []);
+        setSpeechPolicyError(null);
+      } catch (caughtError) {
+        if (!isCurrent()) return;
+        setSpeechPolicyProfile(DEFAULT_SPEECH_POLICY_PROFILE);
+        setCustomSpeechPolicyProfiles([]);
+        setSpeechPolicyError(
+          formatErrorMessage(caughtError, "Unable to load project speech policy"),
+        );
+      }
+    },
+    [projectLoaderGuard],
+  );
 
   const refreshProfileSourceDiagnostics = useCallback(async () => {
     try {
@@ -3363,6 +5277,19 @@ export function App() {
       setProfileSourceDiagnostics(diagnostics);
     } catch {
       setProfileSourceDiagnostics(null);
+    }
+  }, []);
+
+  const refreshAdapterDiagnostics = useCallback(async () => {
+    try {
+      const diagnostics = await getAdapterDiagnostics();
+      setAdapterDiagnostics(diagnostics);
+      setAdapterDiagnosticsError(null);
+    } catch (caughtError) {
+      setAdapterDiagnostics(null);
+      setAdapterDiagnosticsError(
+        caughtError instanceof Error ? caughtError.message : "Unable to load adapter diagnostics",
+      );
     }
   }, []);
 
@@ -3378,22 +5305,91 @@ export function App() {
     }
   }, []);
 
-  const selectVoiceProfile = useCallback((profileId: string) => {
-    setSelectedVoiceProfileId(profileId);
-    localStorage.setItem(VOICE_PROFILE_ID_STORAGE_KEY, profileId);
-    setRecentVoiceProfileIds((currentIds) => rememberRecentId(currentIds, profileId));
-  }, []);
+  const selectVoiceProfile = useCallback(
+    (profileId: string) => {
+      const profile = voiceProfiles.find((item) => item.id === profileId);
+      setSelectedVoiceProfileId(profileId);
+      localStorage.setItem(VOICE_PROFILE_ID_STORAGE_KEY, profileId);
+      selectWorkspaceInspectorTarget({
+        id: profileId || "provider",
+        kind: "voice",
+        label: profile?.name ?? "Selected voice",
+      });
+    },
+    [selectWorkspaceInspectorTarget, voiceProfiles],
+  );
 
   const clearVoiceProfileSelection = useCallback(() => {
     setSelectedVoiceProfileId("");
     localStorage.removeItem(VOICE_PROFILE_ID_STORAGE_KEY);
-  }, []);
+    selectWorkspaceInspectorTarget({
+      id: "provider",
+      kind: "voice",
+      label: "Default voice",
+    });
+  }, [selectWorkspaceInspectorTarget]);
 
-  const togglePinnedVoiceProfile = useCallback((profileId: string) => {
-    setPinnedVoiceProfileIds((currentIds) =>
-      currentIds.includes(profileId)
-        ? currentIds.filter((item) => item !== profileId)
-        : [...currentIds, profileId],
+  const useVoiceProfileForTemporarySource = useCallback(
+    (profileId: string) => {
+      if (!activeTemporarySourceId) {
+        return;
+      }
+      const profile = voiceProfiles.find((item) => item.id === profileId);
+      if (!profile) {
+        return;
+      }
+      setTemporaryVoiceState((currentState) =>
+        selectTemporaryVoiceForSource(
+          currentState,
+          activeTemporarySourceId,
+          savedProfileTemporaryVoiceSelection(profile),
+        ),
+      );
+      selectWorkspaceInspectorTarget({
+        id: profile.id,
+        kind: "voice",
+        label: `${profile.name} (temporary)`,
+      });
+    },
+    [activeTemporarySourceId, selectWorkspaceInspectorTarget, voiceProfiles],
+  );
+
+  const applyTemporaryVoiceForSource = useCallback(
+    (voiceId: string) => {
+      if (!activeTemporarySourceId) {
+        return;
+      }
+      const cleanVoiceId = voiceId.trim();
+      const profile = voiceProfiles.find((item) => item.id === cleanVoiceId);
+      const providerVoice = demoVoices.find((item) => item.id === cleanVoiceId);
+      let selection = defaultTemporaryVoiceSelection();
+      if (profile) {
+        selection = savedProfileTemporaryVoiceSelection(profile);
+      } else if (providerVoice && cleanVoiceId !== "default") {
+        selection = providerTemporaryVoiceSelection(providerVoice.id, providerVoice.label);
+      }
+      setTemporaryVoiceState((currentState) =>
+        selectTemporaryVoiceForSource(currentState, activeTemporarySourceId, selection),
+      );
+      selectWorkspaceInspectorTarget({
+        id: cleanVoiceId || "provider",
+        kind: "voice",
+        label: `${selection.label} (temporary)`,
+      });
+    },
+    [activeTemporarySourceId, selectWorkspaceInspectorTarget, voiceProfiles],
+  );
+
+  const confirmTemporaryCloneConsent = useCallback((temporarySourceId: string) => {
+    if (!temporarySourceId.trim()) {
+      return;
+    }
+    setTemporaryVoiceState((currentState) =>
+      confirmTemporaryVoiceCloneConsent(currentState, {
+        confirmedAt: new Date().toISOString(),
+        provenanceSummary: "Temporary media provenance confirmed for Voice Studio reference use.",
+        temporarySourceId,
+      }),
     );
   }, []);
 
@@ -3578,6 +5574,22 @@ export function App() {
     localStorage.setItem(KOKORO_VOICE_STORAGE_KEY, nextVoiceId);
   }, []);
 
+  const saveTemporaryVoicePreferenceToProject = useCallback(
+    (selection: TemporaryVoiceSelection) => {
+      if (selection.kind === "saved-profile" && selection.voiceProfileId) {
+        selectVoiceProfile(selection.voiceProfileId);
+        return;
+      }
+      if (selection.kind === "provider" && selection.providerVoiceId) {
+        selectKokoroVoice(selection.providerVoiceId);
+        clearVoiceProfileSelection();
+        return;
+      }
+      clearVoiceProfileSelection();
+    },
+    [clearVoiceProfileSelection, selectKokoroVoice, selectVoiceProfile],
+  );
+
   const resetPlaybackSurface = useCallback(() => {
     setPlaybackCursorSec(0);
     setIsPlaybackActive(false);
@@ -3596,6 +5608,174 @@ export function App() {
     );
   }, []);
 
+  const handleRenameBookSourceAsset = useCallback(async (id: string, name: string) => {
+    setBookSourceError(null);
+    try {
+      const renamed = await renameBookSource(id, { name });
+      setBookSources((currentBooks) =>
+        currentBooks.some((book) => book.id === renamed.id)
+          ? currentBooks.map((book) => (book.id === renamed.id ? renamed : book))
+          : [renamed, ...currentBooks],
+      );
+      setBookScopeContent((currentContent) =>
+        currentContent?.bookSourceId === renamed.id ? null : currentContent,
+      );
+    } catch (caughtError) {
+      setBookSourceError(formatErrorMessage(caughtError, "Unable to rename book source"));
+    }
+  }, []);
+
+  const handleDeleteBookSourceAsset = useCallback(
+    async (id: string) => {
+      setBookSourceError(null);
+      try {
+        await deleteBookSource(id);
+        setBookSources(removeBookSourceById(id));
+        setBookScopeContent((currentContent) =>
+          currentContent?.bookSourceId === id ? null : currentContent,
+        );
+        if (sourceMode === "book" && selectedBookSourceId === id) {
+          setSelectedBookSourceId(null);
+          setSelectedBookScope(null);
+          setSourceMode("text");
+          setContentMode("review");
+          setText("");
+          selectWorkspaceInspectorTarget({
+            id: "draft",
+            kind: "source",
+            label: "Draft text",
+          });
+        }
+      } catch (caughtError) {
+        setBookSourceError(formatErrorMessage(caughtError, "Unable to delete book source"));
+      }
+    },
+    [selectWorkspaceInspectorTarget, selectedBookSourceId, setContentMode, sourceMode],
+  );
+
+  const handleRenamePreparedSourceAsset = useCallback(async (id: string, name: string) => {
+    setSourcePrepError(null);
+    try {
+      const renamed = await renamePreparedSource(id, { name });
+      setPreparedSources((currentSources) =>
+        currentSources.some((source) => source.id === renamed.id)
+          ? currentSources.map((source) => (source.id === renamed.id ? renamed : source))
+          : [renamed, ...currentSources],
+      );
+      setJobPreparedSource((currentSource) =>
+        currentSource?.id === renamed.id ? renamed : currentSource,
+      );
+    } catch (caughtError) {
+      setSourcePrepError(formatErrorMessage(caughtError, "Unable to rename prepared source"));
+    }
+  }, []);
+
+  const handleDeletePreparedSourceAsset = useCallback(
+    async (id: string) => {
+      setSourcePrepError(null);
+      try {
+        await deletePreparedSource(id);
+        setPreparedSources((currentSources) => currentSources.filter((source) => source.id !== id));
+        setJobPreparedSource((currentSource) => (currentSource?.id === id ? null : currentSource));
+        if (sourceMode === "fileUrl" && selectedPreparedSourceId === id) {
+          setSelectedPreparedSourceId(null);
+          setSourceMode("text");
+          setContentMode("review");
+          setText("");
+          selectWorkspaceInspectorTarget({
+            id: "draft",
+            kind: "source",
+            label: "Draft text",
+          });
+        }
+      } catch (caughtError) {
+        setSourcePrepError(formatErrorMessage(caughtError, "Unable to delete prepared source"));
+      }
+    },
+    [selectWorkspaceInspectorTarget, selectedPreparedSourceId, setContentMode, sourceMode],
+  );
+
+  const handleDeleteVoiceJob = useCallback(
+    async (id: string) => {
+      setProjectError(null);
+      try {
+        await deleteVoiceJob(id);
+        setProjectJobs((currentJobs) => currentJobs.filter((item) => item.id !== id));
+        void refreshProjectJobs(activeProjectId);
+        void refreshProjectStorage(activeProjectId);
+        if (job?.id === id) {
+          setJob(null);
+          setRequestState("idle");
+          setError(null);
+          setHighlightMap(null);
+          setHighlightMapV2(null);
+          setActivePlaybackSession(null);
+          setPendingPlaybackResume(null);
+          resetPlaybackSurface();
+          saveProjectWorkspaceState(activeProjectId, {
+            activeBlockId: workspaceContext.activeBlockId,
+            bookScope: selectedBookScope,
+            bookSourceId: selectedBookSourceId,
+            jobId: null,
+            preparedSourceId: selectedPreparedSourceId,
+            readingPosition: currentReadingPosition,
+            sourceMode,
+            sourceType: workspaceSourceType(sourceMode),
+            speechPolicyProfile,
+            stage: contentMode,
+            text,
+            voiceProfileId: selectedVoiceProfileId,
+          });
+        }
+      } catch (caughtError) {
+        setProjectError(
+          caughtError instanceof Error ? caughtError.message : "Unable to delete narration",
+        );
+      }
+    },
+    [
+      activeProjectId,
+      contentMode,
+      currentReadingPosition,
+      job?.id,
+      refreshProjectJobs,
+      refreshProjectStorage,
+      resetPlaybackSurface,
+      selectedBookScope,
+      selectedBookSourceId,
+      selectedPreparedSourceId,
+      selectedVoiceProfileId,
+      sourceMode,
+      speechPolicyProfile,
+      text,
+      workspaceContext.activeBlockId,
+    ],
+  );
+
+  const announceVoiceJobTerminalStatus = useCallback(
+    (nextJob: VoiceJob) => {
+      if (nextJob.status === "completed") {
+        announcePolite(liveStatusMessages.audioGenerationCompleted());
+        return;
+      }
+      if (nextJob.status === "failed") {
+        announceAssertive(liveStatusMessages.audioGenerationFailed());
+      }
+    },
+    [announceAssertive, announcePolite],
+  );
+
+  const announceSourceExtractionResult = useCallback(
+    (source: BookSource | PreparedSource) => {
+      if (source.status === "ready") {
+        announcePolite(liveStatusMessages.sourceExtractionCompleted());
+        return;
+      }
+      announceAssertive(liveStatusMessages.sourceExtractionFailed());
+    },
+    [announceAssertive, announcePolite],
+  );
+
   const applyJobStatusState = useCallback((nextJob: VoiceJob) => {
     if (nextJob.status === "completed") {
       setRequestState("complete");
@@ -3609,7 +5789,7 @@ export function App() {
     }
     if (nextJob.status === "cancelled") {
       setRequestState("cancelled");
-      setError(nextJob.error ?? "Voice job cancelled");
+      setError(null);
       return;
     }
     setRequestState("running");
@@ -3618,6 +5798,7 @@ export function App() {
 
   const clearVisibleProjectWorkspace = useCallback(
     (projectId: string) => {
+      const currentUiMemory = uiMemoryRef.current;
       clearProjectWorkspaceState(projectId);
       setText("");
       setJob(null);
@@ -3627,78 +5808,317 @@ export function App() {
       setBookSources([]);
       setSelectedBookSourceId(null);
       setSelectedBookScope(null);
+      setHashReadingPosition(null);
       setBookScopeContent(null);
       setPreparedSources([]);
       setSelectedPreparedSourceId(null);
+      setPreparedSourceCinemaSourceId(null);
+      setAuthoritativePreparedResume(null);
+      setPreparedReaderNavigationPosition(null);
+      setReaderWorkspaceNomination(null);
       setSourcePrepError(null);
+      setSourceMode("text");
+      setWorkspaceContext(() =>
+        createWorkspaceContext({
+          customLayout: resolveWorkspaceCustomLayout(currentUiMemory, projectId),
+          layoutMode: resolveWorkspaceLayoutMode(currentUiMemory, projectId),
+          speechPolicyProfile,
+          voiceProfileId: selectedVoiceProfileId,
+        }),
+      );
+      setWorkspaceDisclosurePins(resolveWorkspaceDisclosurePins(currentUiMemory, projectId));
+      setActiveReviewPane(resolveReviewPane(currentUiMemory, projectId));
       setProjectProgress([]);
       setActivePlaybackSession(null);
+      setIsPlaybackActive(false);
       setPendingPlaybackResume(null);
       setBookSourceError(null);
       setIsBookCinemaOpen(false);
       resetPlaybackSurface();
-      setProjectStateReadyId(projectId);
     },
-    [resetPlaybackSurface],
+    [
+      resetPlaybackSurface,
+      selectedVoiceProfileId,
+      setReaderWorkspaceNomination,
+      speechPolicyProfile,
+    ],
   );
 
-  const restoreProjectWorkspace = useCallback(
-    async (projectId: string) => {
-      setProjectStateReadyId(null);
-      setError(null);
-      setProfileSource(null);
-      const hashPosition = parseBookCinemaHash(globalThis.location.hash);
-      if (hashPosition?.bookSourceId) {
-        setSelectedBookSourceId(hashPosition.bookSourceId);
-      } else {
-        setSelectedBookSourceId(null);
-        setSelectedBookScope(null);
+  // Keep transport acknowledgements and fail-closed restoration events in one ordered owner.
+  // eslint-disable-next-line sonarjs/cognitive-complexity
+  readerWorkspaceStateHandlerRef.current = (state) => {
+    if (state.projectId !== activeProjectIdRef.current) {
+      return;
+    }
+    const projectId = state.projectId;
+    if (!projectId) {
+      return;
+    }
+    const responseGeneration = readerWorkspaceResponseGenerationRef.current + 1;
+    readerWorkspaceResponseGenerationRef.current = responseGeneration;
+    const isSuccessfulAcknowledgement =
+      state.event === "write-ack" || state.event === "conflict-retry-ack";
+    if (isSuccessfulAcknowledgement) {
+      const authoritativeSnapshot = state.baselineSnapshot ?? state.snapshot;
+      installReaderWorkspaceBaseline(authoritativeSnapshot, responseGeneration);
+      const coordinator = readerWorkspaceRestorationRef.current;
+      coordinator?.installBaseline(projectId);
+      if (readerWorkspaceRestoringProjectRef.current === projectId) {
+        readerWorkspaceRestoringProjectRef.current = null;
       }
-      setBookScopeContent(null);
-      setActivePlaybackSession(null);
-      setPendingPlaybackResume(null);
-      resetPlaybackSurface();
-      const savedState = loadProjectWorkspaceState(projectId);
-      setText(savedState.text);
-      if (hashPosition?.bookSourceId) {
-        setSelectedBookSourceId(hashPosition.bookSourceId);
-      } else {
-        setSelectedBookSourceId(savedState.bookSourceId);
-        setSelectedBookScope(savedState.bookScope);
-      }
-
-      if (!savedState.jobId) {
-        setJob(null);
-        setRequestState("idle");
+      if (
+        !state.snapshot ||
+        !authoritativeSnapshot ||
+        !readerWorkspaceSuccessfulAckNeedsRestoration(
+          state.snapshot,
+          authoritativeSnapshot,
+          state.sentIntentGeneration,
+          readerWorkspaceUserIntentGenerationRef.current,
+          state.hasNewerIntent,
+        )
+      ) {
+        authoritativeResumePendingRef.current = false;
+        authoritativePlaybackRateRef.current = null;
         setProjectStateReadyId(projectId);
         return;
       }
+      if (
+        !readerWorkspaceSuccessfulAckNeedsNavigationRestoration(
+          state.snapshot,
+          authoritativeSnapshot,
+        )
+      ) {
+        authoritativeResumePendingRef.current = false;
+        const authoritativePlaybackRate = authoritativeSnapshot.playbackRate;
+        authoritativePlaybackRateRef.current = authoritativePlaybackRate;
+        if (
+          authoritativePlaybackRate !== null &&
+          playbackControls.setPlaybackRate &&
+          playbackControls.playbackRate !== authoritativePlaybackRate
+        ) {
+          playbackControls.setPlaybackRate(authoritativePlaybackRate);
+        }
+        setPlaybackCursorSec(Math.max(0, (authoritativeSnapshot.playbackCursorMs ?? 0) / 1000));
+        setReadAlongPreferences((current) =>
+          applyAuthoritativeFollowPreference(current, authoritativeSnapshot.followPreference),
+        );
+        setProjectStateReadyId(projectId);
+        return;
+      }
+    }
+    if (state.event === "conflict-current-pending") {
+      readerWorkspaceBlockedIntentRef.current = state.snapshot;
+      readerWorkspaceBlockedIntentGenerationRef.current =
+        readerWorkspaceUserIntentGenerationRef.current;
+    } else if (state.event === "conflict-retry-pending") {
+      readerWorkspaceBlockedIntentRef.current = null;
+      readerWorkspaceBlockedIntentGenerationRef.current = null;
+    }
+    if (state.event === "load-start") {
+      readerWorkspaceRestoringProjectRef.current = projectId;
+      readerWorkspaceRestorationRef.current?.invalidate(projectId);
+      authoritativeResumePendingRef.current = false;
+      authoritativePlaybackRateRef.current = null;
+      readerWorkspaceBlockedIntentRef.current = null;
+      readerWorkspaceBlockedIntentGenerationRef.current = null;
+      readerWorkspaceSnapshotRef.current = null;
+      clearVisibleProjectWorkspace(projectId);
+      setProjectStateReadyId(null);
+      return;
+    }
+    if (state.event === "write-error") {
+      if (state.snapshot) {
+        readerWorkspaceSnapshotRef.current = state.snapshot;
+      }
+      setError(state.error?.message ?? "Unable to save the project workspace.");
+      return;
+    }
+    if (state.event === "load-error") {
+      if (readerWorkspaceRestoringProjectRef.current === projectId) {
+        readerWorkspaceRestoringProjectRef.current = null;
+      }
+      authoritativeResumePendingRef.current = false;
+      authoritativePlaybackRateRef.current = null;
+      readerWorkspaceBlockedIntentRef.current = null;
+      readerWorkspaceBlockedIntentGenerationRef.current = null;
+      readerWorkspaceSnapshotRef.current = null;
+      clearVisibleProjectWorkspace(projectId);
+      setProjectStateReadyId(null);
+      setError(state.error?.message ?? "Unable to restore the project workspace.");
+      return;
+    }
+    const snapshot = isSuccessfulAcknowledgement ? state.baselineSnapshot : state.snapshot;
+    if (!snapshot) {
+      return;
+    }
+    const restorationBaseline = state.baselineSnapshot ?? snapshot;
+    if (state.event.startsWith("conflict-")) {
+      installReaderWorkspaceBaseline(restorationBaseline, responseGeneration);
+    } else {
+      readerWorkspaceBlockedIntentRef.current = null;
+    }
 
+    const coordinator = readerWorkspaceRestorationRef.current;
+    if (!coordinator) {
+      return;
+    }
+    const acknowledgementIntentGeneration = isSuccessfulAcknowledgement
+      ? state.sentIntentGeneration
+      : undefined;
+    const token = coordinator.begin(projectId, snapshot, {
+      cancelOnUserIntent: isSuccessfulAcknowledgement,
+      intentGeneration: acknowledgementIntentGeneration,
+    });
+    authoritativePlaybackRateRef.current = snapshot.playbackRate;
+    readerWorkspaceRestoringProjectRef.current = projectId;
+    authoritativeResumePendingRef.current = false;
+    if (!isSuccessfulAcknowledgement && !state.event.startsWith("conflict-")) {
+      readerWorkspaceSnapshotRef.current = null;
+    }
+    const conflictWarning =
+      state.event === "conflict-current-pending"
+        ? "Workspace changed again; your newer reading position is retained until your next edit."
+        : null;
+    clearVisibleProjectWorkspace(projectId);
+    if (conflictWarning) {
+      setError(conflictWarning);
+    }
+    setProjectStateReadyId(null);
+    const restorationIsStale = () =>
+      !coordinator.isCurrent(token, readerWorkspaceUserIntentGenerationRef.current) ||
+      activeProjectIdRef.current !== projectId;
+
+    // Keep the fail-closed hydration transaction ordered: every async boundary rechecks the
+    // restoration token before any visible or durable state becomes authoritative.
+    // eslint-disable-next-line sonarjs/cognitive-complexity
+    void (async () => {
       try {
-        const restoredJob = await getVoiceJob(savedState.jobId);
-        if ((restoredJob.projectId || "default") !== projectId) {
-          throw new Error("Stored job belongs to another project.");
+        if (!snapshot.sourceId) {
+          setPlaybackCursorSec(Math.max(0, (snapshot.playbackCursorMs ?? 0) / 1000));
+          setReadAlongPreferences((current) =>
+            applyAuthoritativeFollowPreference(current, snapshot.followPreference),
+          );
+          if (!coordinator.complete(token, readerWorkspaceUserIntentGenerationRef.current)) return;
+          installReaderWorkspaceBaseline(restorationBaseline, responseGeneration);
+          readerWorkspaceRestoringProjectRef.current = null;
+          setProjectStateReadyId(projectId);
+          if (conflictWarning) setError(conflictWarning);
+          return;
         }
-        setJob(restoredJob);
-        if (typeof restoredJob.inputText === "string") {
-          setText(restoredJob.inputText);
+
+        const authoritativeSource = await resolveAuthoritativeReaderSource(
+          snapshot.sourceId,
+          snapshot.projectId,
+          {
+            getBook: getBookSource,
+            getPrepared: getPreparedSource,
+          },
+        );
+        if (restorationIsStale()) return;
+        const sourceKind = authoritativeSource.kind;
+        if (authoritativeSource.kind === "book") {
+          setBookSources((current) => upsertBookSource(current, authoritativeSource.source));
+        } else {
+          setPreparedSources((current) =>
+            upsertPreparedSource(current, authoritativeSource.source),
+          );
         }
-        applyJobStatusState(restoredJob);
-      } catch {
-        saveProjectWorkspaceState(projectId, {
-          bookScope: savedState.bookScope,
-          bookSourceId: savedState.bookSourceId,
-          readingPosition: savedState.readingPosition,
-          text: savedState.text,
-          jobId: null,
-        });
+        const restoredSourceMode = sourceKind === "book" ? "book" : "fileUrl";
+        setSourceMode(restoredSourceMode);
+        setSelectedBookSourceId(sourceKind === "book" ? snapshot.sourceId : null);
+        setSelectedPreparedSourceId(sourceKind === "prepared" ? snapshot.sourceId : null);
+        const preparedResume =
+          sourceKind === "prepared" ? authoritativePreparedProgress(projectId, snapshot) : null;
+        const preparedSource = sourceKind === "prepared" ? authoritativeSource.source : undefined;
+        const restoredActiveBlockId =
+          (preparedSource && preparedResume
+            ? resolveAuthoritativePreparedBlockId(preparedSource, preparedResume.readingPosition)
+            : null) ??
+          snapshot.readerLocator?.nodeId ??
+          null;
+        setWorkspaceContext((current) => ({
+          ...withWorkspaceSource(
+            current,
+            workspaceSourceType(restoredSourceMode),
+            snapshot.sourceId,
+          ),
+          activeBlockId: restoredActiveBlockId,
+        }));
+        if (sourceKind === "book" && snapshot.readerLocator) {
+          const restoredBook = authoritativeSource.source;
+          const readingPosition = {
+            ...authoritativeResumePlan(snapshot).readingPosition,
+            bookSourceId: snapshot.sourceId,
+          };
+          setHashReadingPosition(readingPosition);
+          setSelectedBookScope(
+            scopeFromBookScopeKey(restoredBook, readingPosition.scopeKey ?? "book"),
+          );
+          setIsBookCinemaOpen(restoredBook.status === "ready");
+        } else if (sourceKind === "prepared") {
+          setAuthoritativePreparedResume(preparedResume);
+          setPreparedSourceCinemaSourceId(preparedResume ? snapshot.sourceId : null);
+        }
+        setPlaybackCursorSec(Math.max(0, (snapshot.playbackCursorMs ?? 0) / 1000));
+        setReadAlongPreferences((current) =>
+          applyAuthoritativeFollowPreference(current, snapshot.followPreference),
+        );
+
+        let restoredJob: VoiceJob | null = null;
+        if (snapshot.runId) {
+          restoredJob = await getVoiceJob(snapshot.runId);
+          if (restorationIsStale()) return;
+          validateAuthoritativeVoiceJob(restoredJob, snapshot, sourceKind);
+          setJob(restoredJob);
+          if (typeof restoredJob.inputText === "string") {
+            setText(restoredJob.inputText);
+          }
+          applyJobStatusState(restoredJob);
+        } else {
+          setJob(null);
+          setRequestState("idle");
+        }
+
+        if (restorationIsStale()) return;
+        authoritativeResumePendingRef.current = Boolean(restoredJob);
+        setPendingPlaybackResume(restoredJob ? authoritativeResumePlan(snapshot) : null);
+        if (restorationIsStale()) return;
+        setReaderWorkspaceNomination({ sourceId: snapshot.sourceId, runId: snapshot.runId });
+        if (!coordinator.complete(token, readerWorkspaceUserIntentGenerationRef.current)) return;
+        installReaderWorkspaceBaseline(restorationBaseline, responseGeneration);
+        readerWorkspaceRestoringProjectRef.current = null;
+        setProjectStateReadyId(projectId);
+        if (conflictWarning) setError(conflictWarning);
+      } catch (caughtError) {
+        if (restorationIsStale()) return;
+        readerWorkspaceRestoringProjectRef.current = null;
+        authoritativeResumePendingRef.current = false;
+        authoritativePlaybackRateRef.current = null;
+        readerWorkspaceSnapshotRef.current = null;
+        setReaderWorkspaceNomination(null);
         setJob(null);
         setRequestState("idle");
-      } finally {
-        setProjectStateReadyId(projectId);
+        setSelectedBookSourceId(null);
+        setSelectedPreparedSourceId(null);
+        setSourceMode("text");
+        setText("");
+        setPendingPlaybackResume(null);
+        setProjectStateReadyId(null);
+        setError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "The server workspace could not be restored exactly.",
+        );
       }
+    })();
+  };
+
+  const restoreProjectWorkspace = useCallback(
+    async (projectId: string) => {
+      clearProjectWorkspaceState(projectId);
+      await readerWorkspaceClient.load(projectId);
     },
-    [applyJobStatusState, resetPlaybackSurface],
+    [readerWorkspaceClient],
   );
 
   const selectProject = useCallback(
@@ -3706,27 +6126,44 @@ export function App() {
       if (projectId === activeProjectId) {
         return;
       }
-      if (projectStateReadyId === activeProjectId) {
+      readerWorkspacePersistenceSchedulerRef.current?.flush();
+      if (!activeDemoProjectId && projectStateReadyId === activeProjectId) {
         saveProjectWorkspaceState(activeProjectId, {
+          activeBlockId: workspaceContext.activeBlockId,
           bookScope: selectedBookScope,
           bookSourceId: selectedBookSourceId,
-          readingPosition: currentReadingPosition,
-          text,
           jobId: job?.id ?? null,
+          preparedSourceId: selectedPreparedSourceId,
+          readingPosition: currentReadingPosition,
+          sourceMode,
+          sourceType: workspaceSourceType(sourceMode),
+          speechPolicyProfile,
+          stage: contentMode,
+          text,
+          voiceProfileId: selectedVoiceProfileId,
         });
       }
       setProjectStateReadyId(null);
+      setActiveDemoProjectId(null);
       setActiveProjectId(projectId);
-      localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, projectId);
+      rememberActiveProjectId(projectId);
     },
     [
+      activeDemoProjectId,
+      contentMode,
       activeProjectId,
       currentReadingPosition,
       job?.id,
       projectStateReadyId,
+      selectedPreparedSourceId,
       selectedBookScope,
       selectedBookSourceId,
+      selectedVoiceProfileId,
+      sourceMode,
+      speechPolicyProfile,
       text,
+      rememberActiveProjectId,
+      workspaceContext.activeBlockId,
     ],
   );
 
@@ -3749,6 +6186,75 @@ export function App() {
       }
     },
     [clearVisibleProjectWorkspace, selectProject],
+  );
+
+  const handleUiMemoryExportPreferences = useCallback(async () => {
+    const { buildUiMemoryExportJson } = await import("./features/ui-memory/uiMemoryExport");
+    return buildUiMemoryExportJson({
+      lastProjectId: activeProjectId,
+      readerAccessibilitySettings,
+      readAlongPreferences,
+      themeName,
+      uiMemory,
+    });
+  }, [activeProjectId, readAlongPreferences, readerAccessibilitySettings, themeName, uiMemory]);
+
+  const handleUiMemoryImportPreferences = useCallback(
+    async (json: string): Promise<UiMemoryImportApplyResult> => {
+      try {
+        const { parseUiMemoryImportJson } = await import("./features/ui-memory/uiMemoryExport");
+        const imported = parseUiMemoryImportJson(json);
+        uiMemoryRef.current = imported.uiMemory;
+        setUiMemory(imported.uiMemory);
+        setWorkspaceDisclosurePins(
+          resolveWorkspaceDisclosurePins(imported.uiMemory, activeProjectId),
+        );
+        setTelepromptTheatreSettings(resolveTelepromptTheatreSettings(imported.uiMemory));
+        if (imported.readerAccessibilitySettings) {
+          setReaderAccessibilitySettings(imported.readerAccessibilitySettings);
+        }
+        if (imported.readAlongPreferences) {
+          setReadAlongPreferences(imported.readAlongPreferences);
+        }
+        if (imported.themeName) {
+          setThemeName(imported.themeName);
+        }
+        if (
+          imported.lastProjectId &&
+          imported.lastProjectId !== activeProjectId &&
+          projects.some((project) => project.id === imported.lastProjectId)
+        ) {
+          selectProject(imported.lastProjectId);
+        }
+        return {
+          message:
+            "Preferences imported. Project content, generated audio, secrets, and model paths were not included.",
+          ok: true,
+        };
+      } catch (caughtError) {
+        return {
+          message:
+            caughtError instanceof Error
+              ? caughtError.message
+              : "Unable to import UI preferences JSON.",
+          ok: false,
+        };
+      }
+    },
+    [activeProjectId, projects, selectProject],
+  );
+
+  const handleTelepromptTheatreSettingsChange = useCallback(
+    (settings: TelepromptTheatreSettings) => {
+      const normalizedSettings = normalizeTelepromptTheatreSettings(settings);
+      setTelepromptTheatreSettings(normalizedSettings);
+      setUiMemory((currentMemory) => {
+        const nextMemory = rememberTelepromptTheatreSettings(currentMemory, normalizedSettings);
+        uiMemoryRef.current = nextMemory;
+        return nextMemory;
+      });
+    },
+    [],
   );
 
   const handleRenameProject = useCallback(async (id: string, name: string) => {
@@ -3777,7 +6283,7 @@ export function App() {
           const nextProjectId = remainingProjects[0]?.id ?? "default";
           clearVisibleProjectWorkspace(nextProjectId);
           setActiveProjectId(nextProjectId);
-          localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, nextProjectId);
+          rememberActiveProjectId(nextProjectId);
         }
         void refreshProjects();
       } catch (caughtError) {
@@ -3786,23 +6292,52 @@ export function App() {
         );
       }
     },
-    [activeProjectId, clearVisibleProjectWorkspace, projects, refreshProjects],
+    [
+      activeProjectId,
+      clearVisibleProjectWorkspace,
+      projects,
+      refreshProjects,
+      rememberActiveProjectId,
+    ],
   );
 
   const applyVoiceJobToState = useCallback(
     (nextJob: VoiceJob) => {
       const nextProjectId = nextJob.projectId || activeProjectId;
+      let nextSourceMode: SourceMode = "text";
+      if (nextJob.bookSourceId) {
+        nextSourceMode = "book";
+      } else if (nextJob.preparedSourceId) {
+        nextSourceMode = "fileUrl";
+      }
+      const nextSourceType = workspaceSourceType(nextSourceMode);
+      nominateReaderWorkspaceJob(nextJob);
       setJob(nextJob);
       setSelectedBookSourceId(nextJob.bookSourceId ?? null);
       setSelectedBookScope(nextJob.bookScope ?? null);
+      setSelectedPreparedSourceId(nextJob.preparedSourceId ?? null);
+      setSourceMode(nextSourceMode);
+      setWorkspaceContext((currentContext) =>
+        transitionWorkspaceContextForStageAction(
+          withWorkspaceSource(
+            currentContext,
+            nextSourceType,
+            nextJob.preparedSourceId ?? nextJob.bookSourceId ?? null,
+          ),
+          "previewSpeech",
+        ),
+      );
       if (nextProjectId !== activeProjectId) {
         setActiveProjectId(nextProjectId);
-        localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, nextProjectId);
+        rememberActiveProjectId(nextProjectId);
       }
       setProjectStateReadyId(nextProjectId);
       saveProjectWorkspaceState(nextProjectId, {
+        activeBlockId: workspaceContext.activeBlockId,
         bookScope: nextJob.bookScope ?? null,
         bookSourceId: nextJob.bookSourceId ?? null,
+        jobId: nextJob.id,
+        preparedSourceId: nextJob.preparedSourceId ?? null,
         readingPosition:
           nextJob.bookSourceId && nextJob.bookScope
             ? {
@@ -3811,15 +6346,28 @@ export function App() {
                 scopeKey: bookScopeKey(nextJob.bookScope),
               }
             : null,
+        sourceMode: nextSourceMode,
+        sourceType: nextSourceType,
+        speechPolicyProfile,
+        stage: "preview",
         text: typeof nextJob.inputText === "string" ? nextJob.inputText : text,
-        jobId: nextJob.id,
+        voiceProfileId: selectedVoiceProfileId,
       });
       if (typeof nextJob.inputText === "string") {
         setText(nextJob.inputText);
       }
       applyJobStatusState(nextJob);
     },
-    [activeProjectId, applyJobStatusState, text],
+    [
+      activeProjectId,
+      applyJobStatusState,
+      nominateReaderWorkspaceJob,
+      rememberActiveProjectId,
+      selectedVoiceProfileId,
+      speechPolicyProfile,
+      text,
+      workspaceContext.activeBlockId,
+    ],
   );
 
   const handleSelectJob = useCallback(
@@ -3865,8 +6413,12 @@ export function App() {
   const handleResumeProgress = useCallback(
     async (progress: PlaybackProgress, seconds = progress.currentTimeSec) => {
       const startedAt = performance.now();
+      setResumeFallbackNotice(null);
       setResumeRestoreStartedAt(startedAt);
-      startFrontendSpan("reader-resume");
+      readerResumeTiming.start({
+        jobId: progress.jobId ?? null,
+        targetId: progress.targetId,
+      });
       try {
         if (progress.bookSourceId) {
           setSelectedBookSourceId(progress.bookSourceId);
@@ -3879,34 +6431,15 @@ export function App() {
           await handleSelectJob(progress.jobId);
         }
         const locatorSeconds = secondsForReadingPosition(highlightMap, progress.readingPosition);
-        if (progress.readingPosition && locatorSeconds === null) {
-          recordFrontendDegradedState("slow-resume", "reader-resume", {
-            fallback: "saved-elapsed-seconds",
-            jobId: progress.jobId ?? null,
-            targetId: progress.targetId,
-          });
-        }
         const targetSeconds = Math.max(0, locatorSeconds ?? seconds);
         setPlaybackCursorSec(targetSeconds);
-        const resumeElapsedMs = performance.now() - startedAt;
-        if (resumeElapsedMs > READER_RESUME_BUDGET_MS) {
-          recordFrontendDegradedState("slow-resume", "reader-resume", {
-            durationMs: Math.round(resumeElapsedMs),
-            targetSeconds,
-            usedLocator: locatorSeconds !== null,
-          });
-        }
-        endFrontendSpan("reader-resume", {
-          targetSeconds,
-          usedLocator: locatorSeconds !== null,
-        });
-        setResumeRestoreStartedAt(null);
         setPendingPlaybackResume({
           autoplay: true,
           readingPosition: progress.readingPosition,
           seconds: targetSeconds,
         });
       } catch (caughtError) {
+        readerResumeTiming.cancel();
         setResumeRestoreStartedAt(null);
         setError(formatErrorMessage(caughtError, "Unable to resume saved progress"));
       }
@@ -3917,6 +6450,7 @@ export function App() {
       highlightMap,
       hydratePreparedSourceForResume,
       job?.id,
+      readerResumeTiming,
       selectedBookSource,
       themeName,
     ],
@@ -3952,6 +6486,7 @@ export function App() {
     async (files: File[], options: BookSourceImportOptions = {}) => {
       setIsImportingBookSource(true);
       setBookSourceError(null);
+      announcePolite(liveStatusMessages.sourceExtractionStarted());
       try {
         const book = await createBookSource(activeProjectId, files, options);
         setBookSources((currentBooks) => [
@@ -3961,34 +6496,64 @@ export function App() {
         setSelectedBookSourceId(book.id);
         const defaultScope = resolveDefaultBookScope(book);
         setSelectedBookScope(defaultScope);
+        setSourceMode("book");
+        if (contentMode !== "intake") {
+          setContentMode("review");
+        }
+        selectWorkspaceInspectorTarget({
+          id: book.id,
+          kind: "source",
+          label: bookSourceName(book),
+        });
         if (book.status === "ready") {
           setText(bookScopeText(book, defaultScope));
         }
+        announceSourceExtractionResult(book);
+        return book;
       } catch (caughtError) {
         if (isApiNotFoundError(caughtError)) {
           setBookSourceError(
             "The selected project is no longer available. I refreshed the workspace; choose a project and import again.",
           );
           void refreshProjects();
+          announceAssertive(liveStatusMessages.sourceExtractionFailed());
           return;
         }
         setBookSourceError(
           caughtError instanceof Error ? caughtError.message : "Unable to import book source",
         );
+        announceAssertive(liveStatusMessages.sourceExtractionFailed());
       } finally {
         setIsImportingBookSource(false);
       }
     },
-    [activeProjectId, refreshProjects],
+    [
+      activeProjectId,
+      announceAssertive,
+      announcePolite,
+      announceSourceExtractionResult,
+      contentMode,
+      refreshProjects,
+      selectWorkspaceInspectorTarget,
+      setContentMode,
+    ],
   );
 
   const handlePrepareSourceFile = useCallback(
-    async (file: File, markdownParseMode: MarkdownParseMode = "strict") => {
+    async (
+      file: File,
+      markdownParseMode: MarkdownParseMode = "strict",
+      preparationTarget: IntakePreparationTarget = "auto",
+    ) => {
       setIsPreparingSource(true);
       setSourcePrepError(null);
+      announcePolite(liveStatusMessages.sourceExtractionStarted());
       try {
         const extension = file.name.toLowerCase().split(".").pop() ?? "";
-        if (isBookSourceExtension(extension)) {
+        if (
+          preparationTarget === "book" ||
+          (preparationTarget === "auto" && isBookSourceExtension(extension))
+        ) {
           const book = await createBookSource(activeProjectId, file);
           setBookSources((currentBooks) => [
             book,
@@ -3996,7 +6561,17 @@ export function App() {
           ]);
           setSelectedBookSourceId(book.id);
           setSelectedBookScope(resolveDefaultBookScope(book));
-          return;
+          setSourceMode("book");
+          if (contentMode !== "intake") {
+            setContentMode("review");
+          }
+          selectWorkspaceInspectorTarget({
+            id: book.id,
+            kind: "source",
+            label: bookSourceName(book),
+          });
+          announceSourceExtractionResult(book);
+          return book;
         }
         const source = await createPreparedSource(activeProjectId, file, { markdownParseMode });
         setPreparedSources((currentSources) => [
@@ -4004,30 +6579,53 @@ export function App() {
           ...currentSources.filter((item) => item.id !== source.id),
         ]);
         setSelectedPreparedSourceId(source.id);
+        setSourceMode("fileUrl");
+        if (contentMode !== "intake") {
+          setContentMode("review");
+        }
+        selectWorkspaceInspectorTarget({
+          id: source.id,
+          kind: "source",
+          label: source.title ?? source.sourceName,
+        });
         if (source.speechText) {
           setText(source.speechText);
         }
+        announceSourceExtractionResult(source);
+        return source;
       } catch (caughtError) {
         if (isApiNotFoundError(caughtError)) {
           setSourcePrepError(
             "The selected project is no longer available. I refreshed the workspace; choose a project and prepare the file again.",
           );
           void refreshProjects();
+          announceAssertive(liveStatusMessages.sourceExtractionFailed());
           return;
         }
         setSourcePrepError(
           caughtError instanceof Error ? caughtError.message : "Unable to prepare source file",
         );
+        announceAssertive(liveStatusMessages.sourceExtractionFailed());
       } finally {
         setIsPreparingSource(false);
       }
     },
-    [activeProjectId, refreshProjects],
+    [
+      activeProjectId,
+      announceAssertive,
+      announcePolite,
+      announceSourceExtractionResult,
+      contentMode,
+      refreshProjects,
+      selectWorkspaceInspectorTarget,
+      setContentMode,
+    ],
   );
   const handlePrepareCinemaSourceFile = useCallback(
     async (file: File) => {
       setIsPreparingSource(true);
       setSourcePrepError(null);
+      announcePolite(liveStatusMessages.sourceExtractionStarted());
       try {
         const source = await createPreparedSource(activeProjectId, file, {
           markdownParseMode: "strict",
@@ -4040,25 +6638,41 @@ export function App() {
         setPreparedSourceCinemaSourceId(source.id);
         setSourceMode("fileUrl");
         setContentMode("review");
+        selectWorkspaceInspectorTarget({
+          id: source.id,
+          kind: "source",
+          label: source.title ?? source.sourceName,
+        });
         if (source.speechText) {
           setText(source.speechText);
         }
+        announceSourceExtractionResult(source);
       } catch (caughtError) {
         if (isApiNotFoundError(caughtError)) {
           setSourcePrepError(
             "The selected project is no longer available. I refreshed the workspace; choose a project and prepare the file again.",
           );
           void refreshProjects();
+          announceAssertive(liveStatusMessages.sourceExtractionFailed());
           return;
         }
         setSourcePrepError(
           caughtError instanceof Error ? caughtError.message : "Unable to prepare that source",
         );
+        announceAssertive(liveStatusMessages.sourceExtractionFailed());
       } finally {
         setIsPreparingSource(false);
       }
     },
-    [activeProjectId, refreshProjects],
+    [
+      activeProjectId,
+      announceAssertive,
+      announcePolite,
+      announceSourceExtractionResult,
+      refreshProjects,
+      selectWorkspaceInspectorTarget,
+      setContentMode,
+    ],
   );
   const handleSelectPreparedCinemaSource = useCallback(
     (sourceId: string) => {
@@ -4067,18 +6681,30 @@ export function App() {
         return;
       }
       setSelectedPreparedSourceId(source.id);
+      if (source.status === "ready" && source.sourceOwner !== "temporary") {
+        nominateReaderWorkspaceSource(source.id);
+      }
       openPreparedSourceCinema(source);
     },
-    [openPreparedSourceCinema, preparedSources],
+    [nominateReaderWorkspaceSource, openPreparedSourceCinema, preparedSources],
   );
 
   const handlePrepareSourceUrl = useCallback(
-    async (url: string, markdownParseMode: MarkdownParseMode = "strict") => {
+    async (
+      url: string,
+      markdownParseMode: MarkdownParseMode = "strict",
+      preparationTarget: IntakePreparationTarget = "auto",
+      htmlContainerSelector?: string,
+    ) => {
       setIsPreparingSource(true);
       setSourcePrepError(null);
+      announcePolite(liveStatusMessages.sourceExtractionStarted());
       try {
         const lowerURL = url.toLowerCase().split("?")[0] ?? "";
-        if (isBookSourceURL(lowerURL)) {
+        if (
+          preparationTarget === "book" ||
+          (preparationTarget === "auto" && isBookSourceURL(lowerURL))
+        ) {
           const book = await createBookSourceFromUrl(activeProjectId, url);
           setBookSources((currentBooks) => [
             book,
@@ -4086,9 +6712,20 @@ export function App() {
           ]);
           setSelectedBookSourceId(book.id);
           setSelectedBookScope(resolveDefaultBookScope(book));
-          return;
+          setSourceMode("book");
+          if (contentMode !== "intake") {
+            setContentMode("review");
+          }
+          selectWorkspaceInspectorTarget({
+            id: book.id,
+            kind: "source",
+            label: bookSourceName(book),
+          });
+          announceSourceExtractionResult(book);
+          return book;
         }
         const source = await createPreparedSource(activeProjectId, {
+          htmlContainerSelector,
           kind: "url",
           markdownParseMode,
           url,
@@ -4099,48 +6736,1052 @@ export function App() {
           ...currentSources.filter((item) => item.id !== source.id),
         ]);
         setSelectedPreparedSourceId(source.id);
+        setSourceMode("fileUrl");
+        if (contentMode !== "intake") {
+          setContentMode("review");
+        }
+        selectWorkspaceInspectorTarget({
+          id: source.id,
+          kind: "source",
+          label: source.title ?? source.sourceName,
+        });
         if (source.speechText) {
           setText(source.speechText);
         }
+        announceSourceExtractionResult(source);
+        return source;
       } catch (caughtError) {
         if (isApiNotFoundError(caughtError)) {
           setSourcePrepError(
             "The selected project is no longer available. I refreshed the workspace; choose a project and prepare the URL again.",
           );
           void refreshProjects();
+          announceAssertive(liveStatusMessages.sourceExtractionFailed());
           return;
         }
         setSourcePrepError(
           caughtError instanceof Error ? caughtError.message : "Unable to prepare source URL",
         );
+        announceAssertive(liveStatusMessages.sourceExtractionFailed());
       } finally {
         setIsPreparingSource(false);
       }
     },
-    [activeProjectId, refreshProjects],
+    [
+      activeProjectId,
+      announceAssertive,
+      announcePolite,
+      announceSourceExtractionResult,
+      contentMode,
+      refreshProjects,
+      selectWorkspaceInspectorTarget,
+      setContentMode,
+    ],
   );
 
-  const handleUsePreparedSource = useCallback(async (source: PreparedSource) => {
-    setSelectedPreparedSourceId(source.id);
-    let nextSource = source;
-    if (isPreparedSourceDisplayIncomplete(source)) {
+  const handlePrepareDraftText = useCallback(
+    async (draftText: string, markdownParseMode: MarkdownParseMode = "strict") => {
+      setIsPreparingSource(true);
+      setSourcePrepError(null);
+      announcePolite(liveStatusMessages.sourceExtractionStarted());
       try {
-        nextSource = await getPreparedSource(source.id);
+        const source = await createPreparedSource(activeProjectId, {
+          kind: "text",
+          markdownParseMode,
+          sourceName: "Pasted text",
+          text: draftText,
+        });
         setPreparedSources((currentSources) => [
-          nextSource,
-          ...currentSources.filter((item) => item.id !== nextSource.id),
+          source,
+          ...currentSources.filter((item) => item.id !== source.id),
         ]);
+        setSelectedPreparedSourceId(source.id);
+        setSourceMode("fileUrl");
+        if (contentMode !== "intake") {
+          setContentMode("review");
+        }
+        selectWorkspaceInspectorTarget({
+          id: source.id,
+          kind: "source",
+          label: source.title ?? source.sourceName,
+        });
+        if (source.speechText) {
+          setText(source.speechText);
+        }
+        announceSourceExtractionResult(source);
+        return source;
       } catch (caughtError) {
         setSourcePrepError(
-          caughtError instanceof Error ? caughtError.message : "Unable to load prepared source",
+          caughtError instanceof Error ? caughtError.message : "Unable to prepare pasted text",
+        );
+        announceAssertive(liveStatusMessages.sourceExtractionFailed());
+        return;
+      } finally {
+        setIsPreparingSource(false);
+      }
+    },
+    [
+      activeProjectId,
+      announceAssertive,
+      announcePolite,
+      announceSourceExtractionResult,
+      contentMode,
+      selectWorkspaceInspectorTarget,
+      setContentMode,
+    ],
+  );
+
+  const activateTemporarySource = useCallback(
+    (session: TemporarySourceSession, destination: TemporaryQuickListenDestination = "review") => {
+      setTemporarySources((currentSources) => [
+        session,
+        ...currentSources.filter((item) => item.id !== session.id),
+      ]);
+      setSourceMode("fileUrl");
+      setQuickListenError(null);
+      setIsQuickListenOpen(false);
+      if (temporarySessionPrefersBookCinema(session)) {
+        const book = temporarySessionToBookSource(session);
+        setActiveTemporaryBookSource(book);
+        setActiveTemporaryPreparedSource(null);
+        setSelectedPreparedSourceId(null);
+        setSelectedBookSourceId(book.id);
+        setSelectedBookScope(resolveDefaultBookScope(book));
+        setBookScopeContent(null);
+        setSourceMode("book");
+        setText(book.text ?? "");
+        selectWorkspaceInspectorTarget({
+          id: book.id,
+          kind: "source",
+          label: bookSourceName(book),
+        });
+        setContentMode(destination === "preview" ? "preview" : "review");
+        if (destination === "cinema" && temporaryCinemaEnabled) {
+          setIsBookCinemaOpen(true);
+        }
+        announcePolite("Quick Listen book source is ready as a temporary session.");
+        return;
+      }
+      const source = temporarySessionToPreparedSource(session);
+      setActiveTemporaryBookSource(null);
+      setActiveTemporaryPreparedSource(source);
+      setSelectedBookSourceId(null);
+      setSelectedBookScope(null);
+      setBookScopeContent(null);
+      setSelectedPreparedSourceId(source.id);
+      setText(source.speechText ?? source.text ?? "");
+      selectWorkspaceInspectorTarget({
+        id: source.id,
+        kind: "source",
+        label: source.title ?? source.sourceName,
+      });
+      setContentMode(destination === "preview" ? "preview" : "review");
+      if (destination === "cinema" && temporaryCinemaEnabled) {
+        openPreparedSourceCinema(source);
+      }
+      announcePolite("Quick Listen source is ready as a temporary session.");
+    },
+    [
+      announcePolite,
+      openPreparedSourceCinema,
+      selectWorkspaceInspectorTarget,
+      setContentMode,
+      temporaryCinemaEnabled,
+    ],
+  );
+
+  const refreshTemporaryStorageUsage = useCallback(async () => {
+    try {
+      setTemporaryStorageUsage(await getTemporaryStorageUsageSummary());
+    } catch {
+      setTemporaryStorageUsage(null);
+    }
+  }, []);
+
+  const refreshTemporarySources = useCallback(async () => {
+    try {
+      setTemporarySources(await listTemporarySources());
+    } catch {
+      setTemporarySources([]);
+    }
+  }, []);
+
+  const refreshTemporaryJobs = useCallback(async () => {
+    try {
+      setTemporaryJobs(await listTemporarySourceJobs());
+    } catch {
+      setTemporaryJobs([]);
+    }
+  }, []);
+
+  const createQuickListenSource = useCallback(
+    async (
+      request: Parameters<typeof createTemporarySource>[0],
+      markdownParseMode: MarkdownParseMode,
+      confirmation?: SourceReadinessConfirmationRequest,
+      destination: TemporaryQuickListenDestination = "review",
+    ) => {
+      if (!quickListenEnabled) {
+        const message = quickListenDisabledReason();
+        setQuickListenError(message);
+        setSourcePrepError(message);
+        announceAssertive(message);
+        return;
+      }
+      setIsCreatingQuickListenSource(true);
+      setQuickListenError(null);
+      setSourcePrepError(null);
+      announcePolite(liveStatusMessages.sourceExtractionStarted());
+      try {
+        let session = await createTemporarySource(request, { markdownParseMode });
+        if (session.status === "failed" || session.sourceReadiness?.state === "failed") {
+          const message =
+            session.error ?? session.sourceReadiness?.detail ?? "Quick Listen source failed.";
+          setQuickListenError(message);
+          setSourcePrepError(message);
+          announceAssertive(liveStatusMessages.sourceExtractionFailed());
+          return;
+        }
+        if (session.sourceReadiness?.state === "unsupported") {
+          const message =
+            session.sourceReadiness.detail || "That source is not supported for Quick Listen yet.";
+          setQuickListenError(message);
+          setSourcePrepError(message);
+          announceAssertive(liveStatusMessages.sourceExtractionFailed());
+          return;
+        }
+        const effectiveDestination =
+          destination === "cinema" && !temporaryCinemaEnabled ? "review" : destination;
+        if (destination === "cinema" && !temporaryCinemaEnabled) {
+          const message = temporaryCinemaDisabledReason();
+          setQuickListenError(message);
+          announceAssertive(message);
+        }
+        if (
+          (effectiveDestination === "preview" || effectiveDestination === "cinema") &&
+          confirmation
+        ) {
+          session = await confirmTemporarySourceReadiness(session.id, confirmation);
+        }
+        activateTemporarySource(session, effectiveDestination);
+        void refreshTemporarySources();
+        void refreshTemporaryJobs();
+        void refreshTemporaryStorageUsage();
+      } catch (caughtError) {
+        const message = formatTemporarySourceError(caughtError);
+        setQuickListenError(message);
+        setSourcePrepError(message);
+        announceAssertive(liveStatusMessages.sourceExtractionFailed());
+      } finally {
+        setIsCreatingQuickListenSource(false);
+      }
+    },
+    [
+      activateTemporarySource,
+      announceAssertive,
+      announcePolite,
+      quickListenEnabled,
+      refreshTemporaryJobs,
+      refreshTemporarySources,
+      refreshTemporaryStorageUsage,
+      temporaryCinemaEnabled,
+    ],
+  );
+
+  const handleRerunWebsiteExtraction = useCallback(
+    (source: PreparedSource, containerSelector: string) => {
+      if (!source.sourceUrl) {
+        return;
+      }
+      if (source.sourceOwner === "temporary") {
+        void createQuickListenSource(
+          {
+            htmlContainerSelector: containerSelector,
+            kind: "url",
+            markdownParseMode: source.markdownParseMode ?? "strict",
+            sourceName: source.sourceUrl,
+            url: source.sourceUrl,
+          },
+          source.markdownParseMode ?? "strict",
+          undefined,
+          "review",
         );
         return;
       }
+      void handlePrepareSourceUrl(
+        source.sourceUrl,
+        source.markdownParseMode ?? "strict",
+        "prepared",
+        containerSelector,
+      );
+    },
+    [createQuickListenSource, handlePrepareSourceUrl],
+  );
+
+  const handleQuickListenText = useCallback(
+    async (
+      draftText: string,
+      markdownParseMode: MarkdownParseMode,
+      confirmation: SourceReadinessConfirmationRequest,
+      destination: TemporaryQuickListenDestination,
+      sourceName = "Quick Listen paste",
+    ) => {
+      await createQuickListenSource(
+        {
+          kind: "text",
+          markdownParseMode,
+          sourceName,
+          text: draftText,
+        },
+        markdownParseMode,
+        confirmation,
+        destination,
+      );
+    },
+    [createQuickListenSource],
+  );
+
+  const handleQuickListenUrl = useCallback(
+    async (
+      url: string,
+      markdownParseMode: MarkdownParseMode,
+      confirmation: SourceReadinessConfirmationRequest,
+      destination: TemporaryQuickListenDestination,
+    ) => {
+      await createQuickListenSource(
+        {
+          kind: "url",
+          markdownParseMode,
+          sourceName: url,
+          url,
+        },
+        markdownParseMode,
+        confirmation,
+        destination,
+      );
+    },
+    [createQuickListenSource],
+  );
+
+  const handleQuickListenFile = useCallback(
+    async (
+      file: File,
+      markdownParseMode: MarkdownParseMode,
+      confirmation: SourceReadinessConfirmationRequest,
+      destination: TemporaryQuickListenDestination,
+    ) => {
+      await createQuickListenSource(file, markdownParseMode, confirmation, destination);
+    },
+    [createQuickListenSource],
+  );
+
+  useEffect(() => {
+    if (isQuickListenOpen) {
+      void refreshTemporarySources();
+      void refreshTemporaryJobs();
+      void refreshTemporaryStorageUsage();
     }
-    if (nextSource.speechText) {
-      setText(nextSource.speechText);
+  }, [
+    isQuickListenOpen,
+    refreshTemporaryJobs,
+    refreshTemporarySources,
+    refreshTemporaryStorageUsage,
+  ]);
+
+  useEffect(() => {
+    if (temporaryWorkEnabled || quickListenEnabled) {
+      void refreshTemporarySources();
+      void refreshTemporaryJobs();
+      void refreshTemporaryStorageUsage();
     }
+  }, [
+    quickListenEnabled,
+    refreshTemporaryJobs,
+    refreshTemporarySources,
+    refreshTemporaryStorageUsage,
+    temporaryWorkEnabled,
+  ]);
+
+  const markTemporarySourceExpired = useCallback((temporarySourceId: string, message: string) => {
+    setTemporarySources((currentSources) =>
+      currentSources.map((source) =>
+        source.id === temporarySourceId || source.temporarySourceId === temporarySourceId
+          ? {
+              ...source,
+              error: message,
+              sourceReadiness: {
+                detail: message,
+                state: "stale",
+                title: source.title ?? source.sourceName,
+              },
+              status: "expired",
+            }
+          : source,
+      ),
+    );
+    setActiveTemporaryPreparedSource((currentSource) => {
+      if (
+        currentSource?.id !== temporarySourceId &&
+        currentSource?.temporarySourceId !== temporarySourceId
+      ) {
+        return currentSource;
+      }
+      return {
+        ...currentSource,
+        sourceReadiness: {
+          detail: message,
+          state: "stale",
+          title: currentSource.title ?? currentSource.sourceName,
+        },
+        warnings: [...(currentSource.warnings ?? []), message],
+      };
+    });
+    setActiveTemporaryBookSource((currentSource) => {
+      if (
+        currentSource?.id !== temporarySourceId &&
+        currentSource?.temporarySourceId !== temporarySourceId
+      ) {
+        return currentSource;
+      }
+      return {
+        ...currentSource,
+        ingestion: {
+          ...currentSource.ingestion,
+          temporaryStatus: "expired",
+          warnings: [...(currentSource.ingestion?.warnings ?? []), message],
+        },
+        sourceReadiness: {
+          detail: message,
+          state: "stale",
+          title: currentSource.title ?? currentSource.sourceFile,
+        },
+        warnings: [...(currentSource.warnings ?? []), message],
+      };
+    });
+    setSourcePrepError(message);
   }, []);
+
+  const handleUseTemporarySource = useCallback(
+    async (session: TemporarySourceSession) => {
+      try {
+        const refreshed = await reopenTemporarySource(session.id);
+        activateTemporarySource(
+          refreshed,
+          refreshed.sourceReadiness?.state === "ready" ? "preview" : "review",
+        );
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Temporary source is no longer available.";
+        markTemporarySourceExpired(session.id, message);
+        setQuickListenError(message);
+      }
+    },
+    [activateTemporarySource, markTemporarySourceExpired],
+  );
+
+  const openQuickListenMode = useCallback(
+    (mode: QuickListenMode = "paste") => {
+      if (!quickListenEnabled) {
+        const message = quickListenDisabledReason();
+        setQuickListenError(message);
+        announceAssertive(message);
+        return;
+      }
+      setQuickListenInitialMode(mode);
+      setQuickListenError(null);
+      setIsQuickListenOpen(true);
+    },
+    [announceAssertive, quickListenEnabled],
+  );
+
+  const handleOpenTemporarySourceInReview = useCallback(
+    async (session: TemporarySourceSession) => {
+      try {
+        activateTemporarySource(await reopenTemporarySource(session.id), "review");
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Temporary source is no longer available.";
+        markTemporarySourceExpired(session.id, message);
+        setQuickListenError(message);
+      }
+    },
+    [activateTemporarySource, markTemporarySourceExpired],
+  );
+
+  const handleOpenTemporarySourceInPreview = useCallback(
+    async (session: TemporarySourceSession) => {
+      try {
+        activateTemporarySource(await reopenTemporarySource(session.id), "preview");
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Temporary source is no longer available.";
+        markTemporarySourceExpired(session.id, message);
+        setQuickListenError(message);
+      }
+    },
+    [activateTemporarySource, markTemporarySourceExpired],
+  );
+
+  const handleOpenTemporarySourceCinema = useCallback(
+    async (session: TemporarySourceSession) => {
+      try {
+        const refreshed = await reopenTemporarySource(session.id);
+        if (temporarySessionPrefersBookCinema(refreshed)) {
+          activateTemporarySource(refreshed, "review");
+          setIsBookCinemaOpen(true);
+          return;
+        }
+        const source = temporarySessionToPreparedSource(refreshed);
+        activateTemporarySource(refreshed, "review");
+        openPreparedSourceCinema(source);
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Temporary source is no longer available.";
+        markTemporarySourceExpired(session.id, message);
+        setQuickListenError(message);
+      }
+    },
+    [activateTemporarySource, markTemporarySourceExpired, openPreparedSourceCinema],
+  );
+
+  const refreshActiveTemporarySourceSession = useCallback(
+    async (temporarySourceId: string) => {
+      try {
+        const refreshed = await getTemporarySource(temporarySourceId);
+        setTemporarySources((currentSources) => [
+          refreshed,
+          ...currentSources.filter((item) => item.id !== refreshed.id),
+        ]);
+        setActiveTemporaryPreparedSource((currentSource) => {
+          if (
+            currentSource?.id !== refreshed.id &&
+            currentSource?.temporarySourceId !== refreshed.temporarySourceId
+          ) {
+            return currentSource;
+          }
+          return temporarySessionToPreparedSource(refreshed);
+        });
+        setActiveTemporaryBookSource((currentSource) => {
+          if (
+            currentSource?.id !== refreshed.id &&
+            currentSource?.temporarySourceId !== refreshed.temporarySourceId
+          ) {
+            return currentSource;
+          }
+          return temporarySessionPrefersBookCinema(refreshed)
+            ? temporarySessionToBookSource(refreshed)
+            : null;
+        });
+      } catch (caughtError) {
+        markTemporarySourceExpired(
+          temporarySourceId,
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Temporary source expired after Theatre closed.",
+        );
+      }
+    },
+    [markTemporarySourceExpired],
+  );
+
+  const handleDiscardTemporarySource = useCallback(
+    async (session: TemporarySourceSession) => {
+      if (!globalThis.confirm(TEMPORARY_SOURCE_COPY.confirmation.discard)) {
+        return;
+      }
+      try {
+        await cleanupTemporarySource(session.id, { action: "discardNow" });
+        setTemporarySources((currentSources) =>
+          currentSources.filter((source) => source.id !== session.id),
+        );
+        setActiveTemporaryPreparedSource((currentSource) =>
+          currentSource?.temporarySourceId === session.id ? null : currentSource,
+        );
+        setActiveTemporaryBookSource((currentSource) =>
+          currentSource?.temporarySourceId === session.id ? null : currentSource,
+        );
+        setSelectedPreparedSourceId((currentId) => (currentId === session.id ? null : currentId));
+        setSelectedBookSourceId((currentId) => (currentId === session.id ? null : currentId));
+        void refreshTemporaryJobs();
+        void refreshTemporaryStorageUsage();
+      } catch (caughtError) {
+        setQuickListenError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Unable to discard temporary source.",
+        );
+      }
+    },
+    [refreshTemporaryJobs, refreshTemporaryStorageUsage],
+  );
+
+  const handleExtendTemporarySource = useCallback(
+    async (session: TemporarySourceSession, extendByHours: number) => {
+      try {
+        const result = await cleanupTemporarySource(session.id, {
+          action: "extendSession",
+          extendByHours,
+        });
+        if (result.source) {
+          const updatedSource = result.source;
+          setTemporarySources((currentSources) => [
+            updatedSource,
+            ...currentSources.filter((source) => source.id !== session.id),
+          ]);
+        }
+        void refreshTemporaryStorageUsage();
+      } catch (caughtError) {
+        setQuickListenError(
+          caughtError instanceof Error ? caughtError.message : "Unable to extend temporary source.",
+        );
+      }
+    },
+    [refreshTemporaryStorageUsage],
+  );
+
+  const handleCleanupTemporarySource = useCallback(
+    async (
+      session: TemporarySourceSession,
+      action: "removeGeneratedAudioOnly" | "removeAllTemporaryArtifacts",
+    ) => {
+      try {
+        const result = await cleanupTemporarySource(session.id, { action });
+        if (result.source) {
+          const updatedSource = result.source;
+          setTemporarySources((currentSources) => [
+            updatedSource,
+            ...currentSources.filter((source) => source.id !== session.id),
+          ]);
+        } else if (action === "removeAllTemporaryArtifacts") {
+          markTemporarySourceExpired(
+            session.id,
+            result.message ?? "Temporary artifacts were removed.",
+          );
+        }
+        void refreshTemporaryJobs();
+        void refreshTemporaryStorageUsage();
+      } catch (caughtError) {
+        setQuickListenError(
+          caughtError instanceof Error ? caughtError.message : "Unable to clean temporary source.",
+        );
+      }
+    },
+    [markTemporarySourceExpired, refreshTemporaryJobs, refreshTemporaryStorageUsage],
+  );
+
+  const handleClearExpiredTemporarySources = useCallback(async () => {
+    if ((temporaryStorageUsage?.expiredCount ?? 0) === 0) {
+      setQuickListenError(TEMPORARY_SOURCE_COPY.empty.noExpired);
+      announcePolite(TEMPORARY_SOURCE_COPY.empty.noExpired);
+      return;
+    }
+    if (
+      !globalThis.confirm(
+        "Clear expired temporary work? This deletes only expired temporary content and artifacts. Project sources are unchanged.",
+      )
+    ) {
+      return;
+    }
+    try {
+      await clearExpiredTemporarySources();
+      await refreshTemporarySources();
+      await refreshTemporaryJobs();
+      await refreshTemporaryStorageUsage();
+    } catch (caughtError) {
+      setQuickListenError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Unable to clear expired temporary sessions.",
+      );
+    }
+  }, [
+    announcePolite,
+    refreshTemporaryJobs,
+    refreshTemporarySources,
+    refreshTemporaryStorageUsage,
+    temporaryStorageUsage?.expiredCount,
+  ]);
+
+  const handleClearTemporarySources = useCallback(async () => {
+    if (
+      !globalThis.confirm(
+        "Clear temporary sources? This deletes temporary content and artifacts. Project sources are unchanged.",
+      )
+    ) {
+      return;
+    }
+    try {
+      const temporaryIds = new Set(
+        temporarySources.flatMap((source) => [source.id, source.temporarySourceId]),
+      );
+      await clearTemporarySources();
+      setTemporarySources([]);
+      setActiveTemporaryPreparedSource(null);
+      setActiveTemporaryBookSource(null);
+      setSelectedPreparedSourceId((currentId) =>
+        currentId && temporaryIds.has(currentId) ? null : currentId,
+      );
+      setSelectedBookSourceId((currentId) =>
+        currentId && temporaryIds.has(currentId) ? null : currentId,
+      );
+      await refreshTemporaryJobs();
+      await refreshTemporaryStorageUsage();
+    } catch (caughtError) {
+      setQuickListenError(
+        caughtError instanceof Error ? caughtError.message : "Unable to clear temporary sources.",
+      );
+    }
+  }, [refreshTemporaryJobs, refreshTemporaryStorageUsage, temporarySources]);
+
+  const handleDiscardTemporaryPreparedSource = useCallback(
+    async (source: PreparedSource) => {
+      const temporarySourceId = source.temporarySourceId ?? source.id;
+      if (!globalThis.confirm(TEMPORARY_SOURCE_COPY.confirmation.discard)) {
+        return;
+      }
+      try {
+        await cleanupTemporarySource(temporarySourceId, { action: "discardNow" });
+        setTemporarySources((currentSources) =>
+          currentSources.filter(
+            (session) =>
+              session.id !== temporarySourceId && session.temporarySourceId !== temporarySourceId,
+          ),
+        );
+        setActiveTemporaryPreparedSource((currentSource) =>
+          currentSource?.id === source.id || currentSource?.temporarySourceId === temporarySourceId
+            ? null
+            : currentSource,
+        );
+        setActiveTemporaryBookSource((currentSource) =>
+          currentSource?.temporarySourceId === temporarySourceId ? null : currentSource,
+        );
+        setSelectedPreparedSourceId((currentId) => (currentId === source.id ? null : currentId));
+        setSourceMode("text");
+        setContentMode("intake");
+        announcePolite("Temporary source discarded.");
+        void refreshTemporaryStorageUsage();
+      } catch (caughtError) {
+        setSourcePrepError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Unable to discard temporary source.",
+        );
+      }
+    },
+    [announcePolite, refreshTemporaryStorageUsage, setContentMode],
+  );
+
+  const handleDiscardTemporaryBookSource = useCallback(
+    async (source: BookSource) => {
+      const temporarySourceId = source.temporarySourceId ?? source.id;
+      if (!globalThis.confirm(TEMPORARY_SOURCE_COPY.confirmation.discard)) {
+        return;
+      }
+      try {
+        await cleanupTemporarySource(temporarySourceId, { action: "discardNow" });
+        setTemporarySources((currentSources) =>
+          currentSources.filter(
+            (session) =>
+              session.id !== temporarySourceId && session.temporarySourceId !== temporarySourceId,
+          ),
+        );
+        setActiveTemporaryBookSource((currentSource) =>
+          currentSource?.id === source.id || currentSource?.temporarySourceId === temporarySourceId
+            ? null
+            : currentSource,
+        );
+        setSelectedBookSourceId((currentId) => (currentId === source.id ? null : currentId));
+        setSelectedBookScope(null);
+        setBookScopeContent(null);
+        setSourceMode("text");
+        setContentMode("intake");
+        setIsBookCinemaOpen(false);
+        announcePolite("Temporary source discarded.");
+        void refreshTemporaryStorageUsage();
+      } catch (caughtError) {
+        setBookSourceError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Unable to discard temporary source.",
+        );
+      }
+    },
+    [announcePolite, refreshTemporaryStorageUsage, setContentMode],
+  );
+
+  const handleKeepTemporarySource = useCallback(
+    (source: PreparedSource, titleOverride?: string) => {
+      if (!temporaryPromotionEnabled) {
+        const message = temporaryPromotionDisabledReason();
+        setTemporaryPromotionError(message);
+        setSourcePrepError(message);
+        announceAssertive(message);
+        return;
+      }
+      if (!source.temporarySourceId) {
+        return;
+      }
+      setTemporaryPromotionError(null);
+      setPendingTemporaryPromotion({ origin: "prepared", source, titleOverride });
+    },
+    [announceAssertive, temporaryPromotionEnabled],
+  );
+
+  const handleKeepTemporaryBookSource = useCallback(
+    (source: BookSource, titleOverride?: string) => {
+      if (!temporaryPromotionEnabled) {
+        const message = temporaryPromotionDisabledReason();
+        setTemporaryPromotionError(message);
+        setBookSourceError(message);
+        announceAssertive(message);
+        return;
+      }
+      if (!source.temporarySourceId) {
+        return;
+      }
+      setTemporaryPromotionError(null);
+      setPendingTemporaryPromotion({ origin: "book", source, titleOverride });
+    },
+    [announceAssertive, temporaryPromotionEnabled],
+  );
+
+  const handleKeepTemporarySession = useCallback(
+    (session: TemporarySourceSession) => {
+      if (!temporaryPromotionEnabled) {
+        const message = temporaryPromotionDisabledReason();
+        setTemporaryPromotionError(message);
+        setQuickListenError(message);
+        announceAssertive(message);
+        return;
+      }
+      setTemporaryPromotionError(null);
+      if (temporarySessionPrefersBookCinema(session)) {
+        setPendingTemporaryPromotion({
+          origin: "book",
+          source: temporarySessionToBookSource(session),
+          titleOverride: session.title ?? session.sourceName,
+        });
+        return;
+      }
+      setPendingTemporaryPromotion({
+        origin: "prepared",
+        source: temporarySessionToPreparedSource(session),
+        titleOverride: session.title ?? session.sourceName,
+      });
+    },
+    [announceAssertive, temporaryPromotionEnabled],
+  );
+
+  const handleConfirmTemporaryPromotion = useCallback(
+    async (request: {
+      conflictResolution?: "error" | "keepBoth";
+      createProjectName?: string;
+      keep: TemporarySourcePromotionKeep;
+      language?: string;
+      projectId: string;
+      scope?: string;
+      sourceType?: string;
+      title: string;
+    }) => {
+      if (!pendingTemporaryPromotion?.source.temporarySourceId) {
+        return;
+      }
+      const { source, origin } = pendingTemporaryPromotion;
+      const temporarySourceId = source.temporarySourceId;
+      if (!temporarySourceId) {
+        return;
+      }
+      setTemporaryPromotionError(null);
+      setSourcePrepError(null);
+      setBookSourceError(null);
+      try {
+        setIsPromotingTemporarySource(true);
+        const promoted = await promoteTemporarySource(temporarySourceId, {
+          conflictResolution: request.conflictResolution,
+          createProjectName: request.createProjectName,
+          keep: request.keep,
+          language: request.language,
+          manifest: {
+            keep: request.keep,
+            language: request.language,
+            projectId: request.projectId,
+            scope: request.scope,
+            sourceType: request.sourceType,
+            temporarySourceId,
+            title: request.title,
+          },
+          projectId: request.projectId,
+          scope: request.scope,
+          sourceType: request.sourceType,
+          speechPolicyProfile: source.sourceSpeechPolicyProfile,
+          structureLabel: source.sourceReadiness?.structureLabel,
+          title: request.title,
+        });
+        if (request.createProjectName) {
+          const refreshedProjects = await listProjects();
+          setProjects(refreshedProjects);
+        }
+        setPreparedSources((currentSources) => [
+          promoted,
+          ...currentSources.filter((item) => item.id !== promoted.id),
+        ]);
+        setTemporarySources((currentSources) =>
+          currentSources.map((item) =>
+            item.id === temporarySourceId
+              ? {
+                  ...item,
+                  promotedProjectId: promoted.projectId,
+                  promotedSourceId: promoted.id,
+                  promotionStatus: "promoted",
+                  status: "promoted",
+                }
+              : item,
+          ),
+        );
+        setPendingTemporaryPromotion(null);
+        setActiveTemporaryPreparedSource(null);
+        setActiveTemporaryBookSource(null);
+        setSelectedBookSourceId(null);
+        setSelectedBookScope(null);
+        setBookScopeContent(null);
+        setSourceMode("fileUrl");
+        setSelectedPreparedSourceId(promoted.id);
+        if (promoted.projectId === activeProjectId && promoted.status === "ready") {
+          nominateReaderWorkspaceSource(promoted.id);
+        }
+        setPreparedSourceCinemaSourceId(promoted.id);
+        setIsBookCinemaOpen(false);
+        if (promoted.projectId !== activeProjectId) {
+          selectProject(promoted.projectId);
+        }
+        selectWorkspaceInspectorTarget({
+          id: promoted.id,
+          kind: "source",
+          label: promoted.title ?? promoted.sourceName,
+        });
+        announcePolite("Temporary source kept in project.");
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : TEMPORARY_SOURCE_COPY.errors.keepFailed;
+        setTemporaryPromotionError(message);
+        if (origin === "book") {
+          setBookSourceError(message);
+        } else {
+          setSourcePrepError(message);
+        }
+        setQuickListenError(message);
+      } finally {
+        setIsPromotingTemporarySource(false);
+      }
+    },
+    [
+      activeProjectId,
+      announcePolite,
+      nominateReaderWorkspaceSource,
+      pendingTemporaryPromotion,
+      selectProject,
+      selectWorkspaceInspectorTarget,
+    ],
+  );
+
+  const handleUsePreparedSource = useCallback(
+    async (source: PreparedSource) => {
+      if (source.sourceOwner !== "temporary") {
+        setActiveTemporaryPreparedSource(null);
+        if (source.status === "ready") nominateReaderWorkspaceSource(source.id);
+      }
+      setSelectedPreparedSourceId(source.id);
+      setSourceMode("fileUrl");
+      setContentMode("review");
+      selectWorkspaceInspectorTarget({
+        id: source.id,
+        kind: "source",
+        label: source.title ?? source.sourceName,
+      });
+      let nextSource = source;
+      if (isPreparedSourceDisplayIncomplete(source)) {
+        try {
+          nextSource = await getPreparedSource(source.id);
+          setPreparedSources((currentSources) => [
+            nextSource,
+            ...currentSources.filter((item) => item.id !== nextSource.id),
+          ]);
+        } catch (caughtError) {
+          setSourcePrepError(
+            caughtError instanceof Error ? caughtError.message : "Unable to load prepared source",
+          );
+          return;
+        }
+      }
+      if (nextSource.speechText) {
+        setText(nextSource.speechText);
+      }
+    },
+    [nominateReaderWorkspaceSource, selectWorkspaceInspectorTarget, setContentMode],
+  );
+
+  const handleConfirmPreparedReadiness = useCallback(
+    async (source: PreparedSource, request: SourceReadinessConfirmationRequest) => {
+      if (source.sourceOwner === "temporary" && source.temporarySourceId) {
+        const session = await confirmTemporarySourceReadiness(source.temporarySourceId, request);
+        const confirmed = temporarySessionToPreparedSource(session);
+        setTemporarySources((currentSources) => [
+          session,
+          ...currentSources.filter((item) => item.id !== session.id),
+        ]);
+        setActiveTemporaryPreparedSource(confirmed);
+        setSelectedPreparedSourceId(confirmed.id);
+        setSourceMode("fileUrl");
+        if (confirmed.speechText) {
+          setText(confirmed.speechText);
+        }
+        return confirmed;
+      }
+      const confirmed = await confirmPreparedSourceReadiness(source.id, request);
+      setPreparedSources((currentSources) => [
+        confirmed,
+        ...currentSources.filter((item) => item.id !== confirmed.id),
+      ]);
+      setSelectedPreparedSourceId(confirmed.id);
+      if (confirmed.status === "ready") nominateReaderWorkspaceSource(confirmed.id);
+      setSourceMode("fileUrl");
+      if (confirmed.speechText) {
+        setText(confirmed.speechText);
+      }
+      return confirmed;
+    },
+    [nominateReaderWorkspaceSource],
+  );
+
+  const handleConfirmBookReadiness = useCallback(
+    async (book: BookSource, request: SourceReadinessConfirmationRequest) => {
+      const confirmed = await confirmBookSourceReadiness(book.id, request);
+      setBookSources((currentBooks) => [
+        confirmed,
+        ...currentBooks.filter((item) => item.id !== confirmed.id),
+      ]);
+      setSelectedBookSourceId(confirmed.id);
+      if (confirmed.status === "ready") nominateReaderWorkspaceSource(confirmed.id);
+      const nextScope = request.scope ?? selectedBookScope ?? resolveDefaultBookScope(confirmed);
+      setSelectedBookScope(nextScope);
+      setSourceMode("book");
+      if (confirmed.status === "ready") {
+        setText(bookScopeText(confirmed, nextScope));
+      }
+      return confirmed;
+    },
+    [nominateReaderWorkspaceSource, selectedBookScope],
+  );
 
   const handleInspectContentIR = useCallback(
     async (sourceId: string, title: string, previewSpeechPolicy = false) => {
@@ -4181,48 +7822,163 @@ export function App() {
         return;
       }
       setSelectedBookSourceId(book.id);
+      if (book.sourceOwner !== "temporary") {
+        nominateReaderWorkspaceSource(book.id);
+      }
       setSelectedBookScope(scope);
+      setSourceMode("book");
+      setContentMode("review");
+      selectWorkspaceInspectorTarget({
+        id: book.id,
+        kind: "source",
+        label: bookSourceName(book),
+      });
       setText(scopedText);
       setBookSourceError(null);
     },
-    [bookScopeContent],
+    [
+      bookScopeContent,
+      nominateReaderWorkspaceSource,
+      selectWorkspaceInspectorTarget,
+      setContentMode,
+    ],
+  );
+  const openBookCinemaFromIntake = useCallback(
+    (book?: BookSource, scope?: BookScope) => {
+      const nextBook = book ?? selectedBookSource;
+      if (nextBook?.status === "ready") {
+        const nextScope = scope ?? resolveDefaultBookScope(nextBook);
+        setSelectedBookSourceId(nextBook.id);
+        if (nextBook.sourceOwner !== "temporary") {
+          nominateReaderWorkspaceSource(nextBook.id);
+        }
+        setSelectedBookScope(nextScope);
+        setSourceMode("book");
+        setContentMode("review");
+        selectWorkspaceInspectorTarget({
+          id: nextBook.id,
+          kind: "source",
+          label: bookSourceName(nextBook),
+        });
+        setText(bookScopeText(nextBook, nextScope));
+        setBookSourceError(null);
+        bookCinemaOpenTiming.start({ target: "intake-book" });
+        setBookCinemaThemeName(themeName === "light" ? "dark" : themeName);
+        setIsBookCinemaOpen(true);
+        return;
+      }
+      openSelectedBookCinema();
+    },
+    [
+      bookCinemaOpenTiming,
+      nominateReaderWorkspaceSource,
+      openSelectedBookCinema,
+      selectWorkspaceInspectorTarget,
+      selectedBookSource,
+      setContentMode,
+      themeName,
+    ],
   );
 
   const handlePlaybackControlsChange = useCallback((controls: PlaybackController | null) => {
     setPlaybackControls(controls ?? DISABLED_PLAYBACK_CONTROLLER);
   }, []);
 
+  const userIntentPlaybackControls = useMemo<PlaybackController>(
+    () => ({
+      ...playbackControls,
+      play: () => {
+        markReaderWorkspaceUserIntent();
+        return playbackControls.play();
+      },
+      pause: () => {
+        markReaderWorkspaceUserIntent();
+        playbackControls.pause();
+      },
+      restart: () => {
+        markReaderWorkspaceUserIntent();
+        return playbackControls.restart();
+      },
+      setPlaybackRate: playbackControls.setPlaybackRate
+        ? (rate) => {
+            markReaderWorkspaceUserIntent();
+            playbackControls.setPlaybackRate?.(rate);
+          }
+        : undefined,
+      skipBy: playbackControls.skipBy
+        ? (seconds) => {
+            markReaderWorkspaceUserIntent();
+            playbackControls.skipBy?.(seconds);
+          }
+        : undefined,
+      seekTo: playbackControls.seekTo
+        ? (seconds) => {
+            markReaderWorkspaceUserIntent();
+            playbackControls.seekTo?.(seconds);
+          }
+        : undefined,
+    }),
+    [markReaderWorkspaceUserIntent, playbackControls],
+  );
+
+  const handleGlobalPreviewVoiceChange = useCallback(
+    (profileId: string) => {
+      if (activeNarrationIsTemporary) {
+        applyTemporaryVoiceForSource(profileId);
+        return;
+      }
+      if (profileId === "default") {
+        clearVoiceProfileSelection();
+        return;
+      }
+      selectVoiceProfile(profileId);
+    },
+    [
+      activeNarrationIsTemporary,
+      clearVoiceProfileSelection,
+      selectVoiceProfile,
+      applyTemporaryVoiceForSource,
+    ],
+  );
+
+  const handleGlobalPreviewRunModeChange = useCallback((runMode: RunMode) => {
+    setRunConfiguration((currentConfiguration) => {
+      const nextConfiguration = createRunConfiguration(runMode);
+      return {
+        ...nextConfiguration,
+        engineOptions: currentConfiguration.engineOptions,
+        ttsEngine: currentConfiguration.ttsEngine,
+      };
+    });
+  }, []);
+
   const handleBookCinemaPlayPause = useCallback(() => {
-    if (!playbackControls.isAvailable) {
+    if (!playbackLifecycleReady) {
       return;
     }
-    if (playbackControls.isPlaying) {
-      playbackControls.pause();
+    if (userIntentPlaybackControls.isPlaying) {
+      userIntentPlaybackControls.pause();
       return;
     }
-    void playbackControls.play();
-  }, [playbackControls]);
+    void userIntentPlaybackControls.play();
+  }, [playbackLifecycleReady, userIntentPlaybackControls]);
 
   const handleBookCinemaRestart = useCallback(() => {
-    if (!playbackControls.isAvailable) {
+    if (!playbackLifecycleReady) {
       return;
     }
-    void playbackControls.restart();
-  }, [playbackControls]);
+    void userIntentPlaybackControls.restart();
+  }, [playbackLifecycleReady, userIntentPlaybackControls]);
 
   const handleBookCinemaSkip = useCallback(
     (seconds: number) => {
-      playbackControls.skipBy?.(seconds);
+      if (!playbackLifecycleReady) {
+        return;
+      }
+      userIntentPlaybackControls.skipBy?.(seconds);
     },
-    [playbackControls],
+    [playbackLifecycleReady, userIntentPlaybackControls],
   );
-
-  const activeHighlightCue = useMemo<HighlightCue | null>(() => {
-    if (!job || highlightMap?.jobId !== job.id) {
-      return null;
-    }
-    return resolveHighlightCue(highlightMap, playbackCursorSec);
-  }, [highlightMap, job, playbackCursorSec]);
 
   const activeWordIndexForPlaybackProgress = useCallback(
     (currentJob: VoiceJob, currentTimeSec: number) => {
@@ -4274,25 +8030,45 @@ export function App() {
     [activeWordIndexForPlaybackProgress, effectiveBookScope, highlightMap, selectedBookSource],
   );
 
+  const livePlaybackReadingPosition = useMemo<ReadingPosition | null>(() => {
+    if (!job) return null;
+    const resolved = readingPositionForPlaybackProgress(job, playbackCursorSec);
+    if (resolved) return resolved;
+    if (
+      preparedSourceCinemaSource &&
+      job.preparedSourceId === preparedSourceCinemaSource.id &&
+      preparedSourceCinemaCue
+    ) {
+      return { activeWordIndex: preparedSourceCinemaCue.documentActiveWordIndex };
+    }
+    return null;
+  }, [
+    job,
+    playbackCursorSec,
+    preparedSourceCinemaCue,
+    preparedSourceCinemaSource,
+    readingPositionForPlaybackProgress,
+  ]);
+
   useEffect(() => {
     if (!isBookCinemaOpen || !selectedBookSource || !effectiveBookScope) {
       return;
     }
     let readingPosition: ReadingPosition | null | undefined = currentReadingPosition;
     if (job?.bookSourceId === selectedBookSource.id) {
-      readingPosition = readingPositionForPlaybackProgress(job, playbackCursorSec);
+      readingPosition = livePlaybackReadingPosition;
     }
     if (!readingPosition) {
       return;
     }
+    setHashReadingPosition(readingPosition);
     replaceBookCinemaHash(readingPosition);
   }, [
     currentReadingPosition,
     effectiveBookScope,
     isBookCinemaOpen,
     job,
-    playbackCursorSec,
-    readingPositionForPlaybackProgress,
+    livePlaybackReadingPosition,
     selectedBookSource,
   ]);
 
@@ -4331,11 +8107,15 @@ export function App() {
         progress,
         ...currentProgress.filter((item) => item.targetId !== progress.targetId),
       ]);
+      announcePolite(liveStatusMessages.bookmarkSaved());
     } catch {
       setError("Unable to save bookmark.");
+      announceAssertive("Bookmark could not be saved.");
     }
   }, [
     activeWordIndexForPlaybackProgress,
+    announceAssertive,
+    announcePolite,
     job,
     playbackCursorSec,
     readingPositionForPlaybackProgress,
@@ -4352,23 +8132,26 @@ export function App() {
   }, [refreshProjects, refreshSpeechPolicyProfiles, refreshVoiceProfiles]);
 
   useEffect(() => {
-    if (sourceMode !== "book" && contentMode !== "review" && !isBookCinemaOpen) {
+    if (
+      studioMode !== "voiceCloning" &&
+      !isCommandCenterOpen &&
+      !isCommandPaletteOpen &&
+      !isHelpOpen &&
+      !isSettingsOpen
+    ) {
       return;
     }
-    void refreshBookCinemaDiagnostics();
-  }, [contentMode, isBookCinemaOpen, refreshBookCinemaDiagnostics, sourceMode]);
-
-  useEffect(() => {
-    if (studioMode !== "voiceCloning" && !isHelpOpen && !isSettingsOpen) {
-      return;
-    }
+    void refreshAdapterDiagnostics();
     void refreshProfileSourceDiagnostics();
     void refreshResearchModules();
     void refreshTTSEngines();
     void refreshVoiceProfileCredentials();
   }, [
+    isCommandCenterOpen,
     isHelpOpen,
+    isCommandPaletteOpen,
     isSettingsOpen,
+    refreshAdapterDiagnostics,
     refreshProfileSourceDiagnostics,
     refreshResearchModules,
     refreshTTSEngines,
@@ -4377,11 +8160,10 @@ export function App() {
   ]);
 
   useEffect(() => {
-    localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, activeProjectId);
+    projectLoaderGenerationRef.current += 1;
+    rememberActiveProjectId(activeProjectId);
     migrateLegacyWorkspaceState(activeProjectId);
     void refreshProjectJobs(activeProjectId);
-    void refreshBookSources(activeProjectId);
-    void refreshPreparedSources(activeProjectId);
     void refreshProjectProgress(activeProjectId);
     void refreshProjectStorage(activeProjectId);
     void refreshProjectSpeechPolicy(activeProjectId);
@@ -4389,12 +8171,11 @@ export function App() {
     setSpeechPolicyOverrides(loadSpeechPolicyOverrides(activeProjectId));
   }, [
     activeProjectId,
-    refreshBookSources,
-    refreshPreparedSources,
     refreshProjectJobs,
     refreshProjectProgress,
     refreshProjectStorage,
     refreshProjectSpeechPolicy,
+    rememberActiveProjectId,
     restoreProjectWorkspace,
   ]);
 
@@ -4421,9 +8202,8 @@ export function App() {
   }, [hashReadingPosition, selectedBookScope, selectedBookSource]);
 
   useEffect(() => {
-    if (selectedBookSource?.status !== "ready" || !effectiveBookScope) {
+    if (sourceMode !== "book" || selectedBookSource?.status !== "ready" || !effectiveBookScope) {
       setBookScopeContent(null);
-      setIsLoadingBookScope(false);
       return;
     }
     // The request omits profile on purpose; this guard keeps backend-resolved previews fresh
@@ -4433,7 +8213,6 @@ export function App() {
       return;
     }
     let isCurrent = true;
-    setIsLoadingBookScope(true);
     void previewBookSourceScopeSpeechPolicy(selectedBookSource.id, {
       ...sessionSpeechPolicyRequest(speechPolicyOverrides),
       scope: effectiveBookScope,
@@ -4458,11 +8237,6 @@ export function App() {
           return;
         }
         setBookSourceError(formatErrorMessage(caughtError, "Unable to load selected book scope"));
-      })
-      .finally(() => {
-        if (isCurrent) {
-          setIsLoadingBookScope(false);
-        }
       });
     return () => {
       isCurrent = false;
@@ -4475,6 +8249,7 @@ export function App() {
     selectedVoiceProfileId,
     speechPolicyOverrides,
     speechPolicyProfile,
+    sourceMode,
   ]);
 
   useEffect(() => {
@@ -4490,12 +8265,12 @@ export function App() {
   }, [clearVoiceProfileSelection, selectedVoiceProfileId, voiceProfiles]);
 
   const handleAnalyzeVoiceSource = useCallback(
-    async (file: File) => {
+    async (request: CreateVoiceProfileSourceRequest) => {
       setIsAnalyzingProfileSource(true);
       setProfileError(null);
       try {
         void refreshProfileSourceDiagnostics();
-        const source = await createVoiceProfileSource({ file });
+        const source = await createVoiceProfileSource(request);
         setProfileSource(source);
       } catch (caughtError) {
         void refreshProfileSourceDiagnostics();
@@ -4536,6 +8311,20 @@ export function App() {
     },
     [profileSource, selectVoiceProfile],
   );
+
+  const handleRenameVoiceProfile = useCallback(async (id: string, name: string) => {
+    setProfileError(null);
+    try {
+      const profile = await renameVoiceProfile(id, { name });
+      setVoiceProfiles((currentProfiles) =>
+        upsertVoiceProfileByCreatedAt(currentProfiles, profile),
+      );
+    } catch (caughtError) {
+      setProfileError(
+        caughtError instanceof Error ? caughtError.message : "Unable to rename voice profile",
+      );
+    }
+  }, []);
 
   const handleRefreshVoiceSourceTranscript = useCallback(async (sourceId: string) => {
     const key = `source:${sourceId}`;
@@ -4650,72 +8439,189 @@ export function App() {
     };
   }, [profileSource, refreshProfileSourceDiagnostics]);
 
-  useEffect(() => {
-    if (projectStateReadyId !== activeProjectId) {
+  readerWorkspacePersistLatestRef.current = () => {
+    const persisted = readerWorkspaceSnapshotRef.current;
+    if (
+      activeDemoProjectId ||
+      projectStateReadyId !== activeProjectId ||
+      persisted?.projectId !== activeProjectId ||
+      !readerWorkspaceRestorationRef.current?.isPersistenceEnabled(activeProjectId) ||
+      pendingPlaybackResume !== null ||
+      authoritativeResumePendingRef.current
+    ) {
       return;
     }
-    saveProjectWorkspaceState(activeProjectId, {
-      bookScope: selectedBookScope,
-      bookSourceId: selectedBookSourceId,
-      readingPosition: currentReadingPosition,
-      text,
-      jobId: job?.id ?? null,
+    const playbackCursorMs = Math.max(0, Math.round(playbackCursorSec * 1000));
+    const playbackRate = playbackControls.isAvailable
+      ? playbackControls.playbackRate
+      : (authoritativePlaybackRateRef.current ?? persisted.playbackRate ?? 1);
+    const followPreference = readAlongPreferences.scrollFollow !== "off";
+    const desired = projectReaderWorkspaceIntent(persisted, readerWorkspaceNomination, {
+      readMode: "paused",
+      readingPosition:
+        preparedReaderNavigationPosition ??
+        livePlaybackReadingPosition ??
+        currentReadingPosition ??
+        authoritativePreparedResume?.readingPosition ??
+        preparedSourceCinemaProgress?.readingPosition ??
+        (preparedSourceCinemaProgress
+          ? { activeWordIndex: preparedSourceCinemaProgress.activeWordIndex }
+          : undefined),
+      playbackCursorMs,
+      playbackRate,
+      followPreference,
     });
+    if (!desired) return;
+    const blockedIntent = readerWorkspaceBlockedIntentRef.current;
+    const persistenceDecision = readerWorkspacePersistenceDecision(
+      persisted,
+      desired,
+      readerWorkspaceBlockedIntentGenerationRef.current,
+      readerWorkspaceUserIntentGeneration,
+    );
+    if (persistenceDecision === "blocked") return;
+    if (blockedIntent) {
+      readerWorkspaceBlockedIntentRef.current = null;
+      readerWorkspaceBlockedIntentGenerationRef.current = null;
+    }
+    if (persistenceDecision === "unchanged") return;
+    readerWorkspaceClientRef.current?.update(() => desired, readerWorkspaceUserIntentGeneration);
+  };
+
+  // Automatic reader movement arms one fixed-cadence checkpoint; projection occurs on flush.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reader values intentionally trigger a coalesced checkpoint without being retained.
+  useEffect(() => {
+    readerWorkspacePersistenceSchedulerRef.current?.scheduleAutomatic();
   }, [
-    activeProjectId,
-    job?.id,
     currentReadingPosition,
+    livePlaybackReadingPosition,
+    playbackCursorSec,
+    preparedSourceCinemaProgress,
+  ]);
+
+  // Durable explicit intent bypasses the debounce and includes the latest automatic cursor.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: explicit reader values intentionally trigger an immediate projection without being retained.
+  useEffect(() => {
+    readerWorkspacePersistenceSchedulerRef.current?.flushExplicit();
+  }, [
+    activeDemoProjectId,
+    activeProjectId,
+    authoritativePreparedResume,
+    pendingPlaybackResume,
+    playbackControls.isAvailable,
+    playbackControls.playbackRate,
+    preparedReaderNavigationPosition,
     projectStateReadyId,
-    selectedBookScope,
-    selectedBookSourceId,
-    text,
+    readAlongPreferences.scrollFollow,
+    readerWorkspaceNomination,
+    readerWorkspaceUserIntentGeneration,
   ]);
 
   useEffect(() => {
-    localStorage.setItem(RUN_CONFIG_STORAGE_KEY, JSON.stringify(runConfiguration));
+    readerWorkspacePersistenceSchedulerRef.current?.cancel();
+    activeProjectIdRef.current = activeProjectId;
+  }, [activeProjectId]);
+
+  useEffect(() => {
+    if (!isPlaybackActive) readerWorkspacePersistenceSchedulerRef.current?.flush();
+  }, [isPlaybackActive]);
+
+  useEffect(() => {
+    const flushPendingWorkspace = () => {
+      readerWorkspacePersistenceSchedulerRef.current?.flush();
+    };
+    const flushHiddenWorkspace = () => {
+      if (document.visibilityState === "hidden") flushPendingWorkspace();
+    };
+    globalThis.addEventListener("pagehide", flushPendingWorkspace);
+    document.addEventListener("visibilitychange", flushHiddenWorkspace);
+    return () => {
+      globalThis.removeEventListener("pagehide", flushPendingWorkspace);
+      document.removeEventListener("visibilitychange", flushHiddenWorkspace);
+      flushPendingWorkspace();
+    };
+  }, []);
+
+  useEffect(() => {
+    sessionStorage.setItem(RUN_CONFIG_STORAGE_KEY, JSON.stringify(runConfiguration));
   }, [runConfiguration]);
-
-  useEffect(() => {
-    localStorage.setItem(VOICE_PROFILE_RECENT_STORAGE_KEY, JSON.stringify(recentVoiceProfileIds));
-  }, [recentVoiceProfileIds]);
-
-  useEffect(() => {
-    localStorage.setItem(VOICE_PROFILE_PINNED_STORAGE_KEY, JSON.stringify(pinnedVoiceProfileIds));
-  }, [pinnedVoiceProfileIds]);
 
   useEffect(() => {
     localStorage.setItem(TELEPROMPTER_SETTINGS_STORAGE_KEY, JSON.stringify(teleprompterSettings));
   }, [teleprompterSettings]);
 
   useEffect(() => {
+    if (!uiMemory.rememberReaderPreferences) {
+      localStorage.removeItem(READER_ACCESSIBILITY_STORAGE_KEY);
+      clearStoredReadAlongPreferences(activeProjectId);
+      return;
+    }
     localStorage.setItem(
       READER_ACCESSIBILITY_STORAGE_KEY,
       JSON.stringify(readerAccessibilitySettings),
     );
-  }, [readerAccessibilitySettings]);
+  }, [activeProjectId, readerAccessibilitySettings, uiMemory.rememberReaderPreferences]);
 
   useEffect(() => {
+    const previousProjectId = readAlongPreferencesProjectRef.current;
+    if (previousProjectId !== activeProjectId && readAlongPreferences.scope === "project") {
+      readAlongPreferencesProjectRef.current = activeProjectId;
+      setReadAlongPreferences(
+        loadReadAlongPreferences(activeProjectId, uiMemory.rememberReaderPreferences),
+      );
+      return;
+    }
+    readAlongPreferencesProjectRef.current = activeProjectId;
+    saveReadAlongPreferences(
+      readAlongPreferences,
+      activeProjectId,
+      uiMemory.rememberReaderPreferences,
+    );
+  }, [activeProjectId, readAlongPreferences, uiMemory.rememberReaderPreferences]);
+
+  useEffect(() => {
+    if (!uiMemory.rememberTheme) {
+      localStorage.removeItem(THEME_STORAGE_KEY);
+      return;
+    }
     localStorage.setItem(THEME_STORAGE_KEY, themeName);
-  }, [themeName]);
+  }, [themeName, uiMemory.rememberTheme]);
 
   useEffect(() => {
-    localStorage.setItem(ACTIVITY_FOOTER_MODE_STORAGE_KEY, activityFooterMode);
-  }, [activityFooterMode]);
+    saveUiMemory(uiMemory);
+    uiMemoryRef.current = uiMemory;
+  }, [uiMemory]);
 
   useEffect(() => {
-    localStorage.setItem(LEFT_RAIL_MODE_STORAGE_KEY, leftRailMode);
-  }, [leftRailMode]);
+    if (!uiMemory.rememberTelepromptTheatreSettings) {
+      return;
+    }
+    setTelepromptTheatreSettings(resolveTelepromptTheatreSettings(uiMemory));
+  }, [uiMemory]);
 
   useEffect(() => {
-    localStorage.setItem(RIGHT_RAIL_MODE_STORAGE_KEY, rightRailMode);
-  }, [rightRailMode]);
+    if (!uiMemory.rememberLastProject) {
+      localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+    }
+  }, [uiMemory.rememberLastProject]);
+
+  useEffect(() => {
+    if (!uiMemory.rememberTelepromptReturnTarget) {
+      clearStoredTelepromptReturnMemory();
+    }
+  }, [uiMemory.rememberTelepromptReturnTarget]);
 
   useEffect(() => {
     const hasJob = Boolean(job?.id);
-    setPlaybackCursorSec(0);
+    setPlaybackCursorSec(
+      authoritativeResumePendingRef.current
+        ? Math.max(0, (readerWorkspaceSnapshotRef.current?.playbackCursorMs ?? 0) / 1000)
+        : 0,
+    );
     setPlaybackControls(DISABLED_PLAYBACK_CONTROLLER);
     setActivePlaybackSession(null);
-    setPendingPlaybackResume(null);
+    setPendingPlaybackResume((current) => (authoritativeResumePendingRef.current ? current : null));
+    setResumeFallbackNotice(null);
     if (hasJob) {
       setIsPlaybackActive(false);
     }
@@ -4729,7 +8635,24 @@ export function App() {
       highlightMap,
       pendingPlaybackResume.readingPosition,
     );
-    const targetSeconds = Math.max(0, locatorSeconds ?? pendingPlaybackResume.seconds);
+    const usedLocator = locatorSeconds !== null;
+    const targetSeconds = Math.max(0, pendingPlaybackResume.seconds);
+    const restoredPlaybackRate =
+      pendingPlaybackResume.playbackRate ?? readerWorkspaceSnapshotRef.current?.playbackRate;
+    if (restoredPlaybackRate && playbackControls.setPlaybackRate) {
+      playbackControls.setPlaybackRate(restoredPlaybackRate);
+    }
+    if (pendingPlaybackResume.readingPosition && !usedLocator) {
+      recordFrontendDegradedState("resume-position-fallback", "reader-resume", {
+        fallback: "saved-elapsed-seconds",
+        targetSeconds,
+      });
+      setResumeFallbackNotice(
+        "Saved locator could not be mapped in this timing pass, so resume used saved elapsed time.",
+      );
+    } else {
+      setResumeFallbackNotice(null);
+    }
     if (playbackControls.seekTo) {
       playbackControls.seekTo(targetSeconds);
     } else if (playbackControls.skipBy) {
@@ -4745,41 +8668,26 @@ export function App() {
       recordFrontendDegradedState("slow-resume", "reader-resume", {
         durationMs: Math.round(resumeElapsedMs),
         targetSeconds,
-        usedLocator: locatorSeconds !== null,
+        usedLocator,
       });
     }
-    endFrontendSpan("reader-resume", {
+    readerResumeTiming.end({
       targetSeconds,
-      usedLocator: locatorSeconds !== null,
+      usedLocator,
     });
     setResumeRestoreStartedAt(null);
+    authoritativeResumePendingRef.current = false;
+    authoritativePlaybackRateRef.current = null;
+    setAuthoritativePreparedResume(null);
     setPendingPlaybackResume(null);
   }, [
     highlightMap,
     pendingPlaybackResume,
     playbackControls,
     playbackCursorSec,
+    readerResumeTiming,
     resumeRestoreStartedAt,
   ]);
-
-  useEffect(() => {
-    const restoreJobId = new URLSearchParams(globalThis.location.search).get("jobId");
-
-    if (!restoreJobId) {
-      return;
-    }
-
-    const restore = async () => {
-      try {
-        const restoredJob = await getVoiceJob(restoreJobId);
-        applyVoiceJobToState(restoredJob);
-      } catch {
-        setError("Unable to restore the requested job.");
-      }
-    };
-
-    void restore();
-  }, [applyVoiceJobToState]);
 
   useEffect(() => {
     if (!activeJobId) {
@@ -4799,18 +8707,19 @@ export function App() {
         }
         if (nextJob.status === "completed") {
           setRequestState("complete");
+          announceVoiceJobTerminalStatus(nextJob);
           void refreshProjectJobs(nextJob.projectId || activeProjectId);
           void refreshProjectStorage(nextJob.projectId || activeProjectId);
         }
         if (nextJob.status === "failed") {
           setRequestState("error");
           setError(nextJob.error ?? "Voice job failed");
+          announceVoiceJobTerminalStatus(nextJob);
           void refreshProjectJobs(nextJob.projectId || activeProjectId);
         }
 
         if (nextJob.status === "cancelled") {
           setRequestState("cancelled");
-          setError(nextJob.error ?? "Voice job cancelled");
           void refreshProjectJobs(nextJob.projectId || activeProjectId);
         }
       },
@@ -4821,7 +8730,13 @@ export function App() {
         setError(caughtError.message);
       },
     );
-  }, [activeJobId, activeProjectId, refreshProjectJobs, refreshProjectStorage]);
+  }, [
+    activeJobId,
+    activeProjectId,
+    announceVoiceJobTerminalStatus,
+    refreshProjectJobs,
+    refreshProjectStorage,
+  ]);
 
   useEffect(() => {
     if (!job?.id || !job.timing?.highlightMapUrl) {
@@ -4854,6 +8769,28 @@ export function App() {
     job?.timing?.summary.status,
     job?.timing?.summary.tokenCount,
   ]);
+
+  useEffect(() => {
+    if (!job?.id || !job.timing?.highlightMapV2Url) {
+      setHighlightMapV2(null);
+      return;
+    }
+    let isCancelled = false;
+    void getHighlightMapV2(job.id)
+      .then((map) => {
+        if (!isCancelled) {
+          setHighlightMapV2(map);
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setHighlightMapV2(null);
+        }
+      });
+    return () => {
+      isCancelled = true;
+    };
+  }, [job?.id, job?.timing?.highlightMapV2Url]);
 
   useEffect(() => {
     if (!hasActiveVoiceCloningActivity) {
@@ -4970,7 +8907,7 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (!isProcessing && !isSettingsOpen && !isWorkspaceOpen) {
+    if (!isProcessing && !isSettingsOpen && !isCommandCenterOpen) {
       return;
     }
     if (systemMetricsUnavailable) {
@@ -5018,16 +8955,16 @@ export function App() {
       isCancelled = true;
       globalThis.clearInterval(interval);
     };
-  }, [isProcessing, isSettingsOpen, isWorkspaceOpen, systemMetricsUnavailable]);
+  }, [isCommandCenterOpen, isProcessing, isSettingsOpen, systemMetricsUnavailable]);
 
   function handleSubmit(event: React.SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!canSubmit) {
+    if (!canRunCurrentGenerationAction) {
       return;
     }
 
-    void submitVoiceJob();
+    createAndListenFromCurrentSource();
   }
 
   async function handleCancelVoiceJob() {
@@ -5044,6 +8981,49 @@ export function App() {
     }
   }
 
+  function previewGenerationFailureRecoveryDetail(candidate: VoiceJob | null): string {
+    if (candidate?.retriable === false || candidate?.terminalReason === "configuration_failed") {
+      return (
+        candidate.error ?? "Full narration generation failed. Open diagnostics before retrying."
+      );
+    }
+    const readySegments = Math.max(0, candidate?.audioReadySegments ?? 0);
+    const totalSegments = Math.max(
+      readySegments,
+      candidate?.retries.totalSegments ?? 0,
+      candidate?.progress.totalSegments ?? 0,
+      candidate?.segments?.length ?? 0,
+    );
+    if (readySegments > 0 && totalSegments > 0) {
+      return `Full narration generation failed. ${readySegments.toString()}/${totalSegments.toString()} ready segments remain available. Retry generation to create the full narration track.`;
+    }
+    return candidate?.error
+      ? `${candidate.error} Retry generation to create the full narration track.`
+      : "Full narration generation failed. Retry generation to create the full narration track.";
+  }
+
+  async function retryGenerationFromCurrentJob(currentJob: VoiceJob) {
+    setRequestState("running");
+    setError(null);
+    setPlaybackCursorSec(0);
+    setIsPlaybackActive(false);
+    announcePolite(liveStatusMessages.audioGenerationStarted());
+
+    try {
+      const nextJob = await retryVoiceJob(currentJob.id);
+      setActiveDemoProjectId(null);
+      setJob(nextJob);
+      setContentMode("preview");
+      void refreshProjectJobs(nextJob.projectId || activeProjectId);
+      setRequestState(nextJob.status === "completed" ? "complete" : "running");
+      announceVoiceJobTerminalStatus(nextJob);
+    } catch (caughtError) {
+      setRequestState("error");
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to retry generation");
+      announceAssertive(liveStatusMessages.audioGenerationFailed());
+    }
+  }
+
   function buildVoiceJobRequest(
     sourceText: string,
     preparedSource?: PreparedSource | null,
@@ -5053,262 +9033,1418 @@ export function App() {
     const selectedProviderVoice = isSupertonicRun
       ? (runConfiguration.engineOptions.voiceStyle ?? "M1")
       : selectedKokoroVoice?.id;
+    const effectiveProviderVoice =
+      activeNarrationIsTemporary && activeTemporaryVoiceSelection.kind === "provider"
+        ? activeTemporaryVoiceSelection.providerVoiceId
+        : selectedProviderVoice;
     const selectedProviderLanguage = isSupertonicRun
       ? resolveSupertonicLanguage(runConfiguration.engineOptions.lang, preparedSource)
       : selectedKokoroVoice?.langCode;
+    const requestedVoiceProfileId =
+      activeNarrationIsTemporary && activeTemporaryVoiceSelection.kind === "saved-profile"
+        ? (activeTemporaryVoiceSelection.voiceProfileId ?? "")
+        : selectedVoiceProfileId;
+    const voiceProfileIdForRequest = voiceProfiles.some(
+      (profile) => profile.id === requestedVoiceProfileId,
+    )
+      ? requestedVoiceProfileId
+      : "";
     const request: CreateVoiceJobRequest = buildCreateVoiceJobRequest(
       sourceText,
       runConfiguration,
-      selectedVoiceProfileId,
+      voiceProfileIdForRequest,
       activeProjectId,
-      selectedProviderVoice,
+      effectiveProviderVoice,
       selectedProviderLanguage,
     );
     request.locale = resolveRunLocale(runConfiguration);
     return request;
   }
 
-  async function submitVoiceJob() {
-    const request = buildVoiceJobRequest(text);
-
-    setRequestState("running");
-    setError(null);
-    setPlaybackCursorSec(0);
-    setIsPlaybackActive(false);
-
+  async function auditionVoicePreviewFromCurrentConfig(
+    sampleText: string,
+  ): Promise<VoicePreviewAudio> {
+    const request = buildVoiceJobRequest(sampleText);
+    request.projectId = activeProject?.id ?? activeProjectId;
     try {
-      const nextJob = await createVoiceJob(request);
-      setJob(nextJob);
-      void refreshProjectJobs(nextJob.projectId || activeProjectId);
-      setRequestState(nextJob.status === "completed" ? "complete" : "running");
+      const preview = await createVoicePreview(request);
+      recordTemporaryAudition(sampleText, "played");
+      return preview;
     } catch (caughtError) {
-      setRequestState("error");
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to create voice job");
-    }
-  }
-
-  async function loadBookNarrationText(book: BookSource, scope: BookScope): Promise<string | null> {
-    const existingText = bookScopeContentMatches(bookScopeContent, book.id, scope)
-      ? (bookScopeContent?.text ?? "")
-      : bookScopeText(book, scope);
-    if (existingText.trim()) {
-      return existingText;
-    }
-    try {
-      const content = await getBookSourceScope(book.id, scope);
-      setBookScopeContent(content);
-      return content.text;
-    } catch (caughtError) {
+      recordTemporaryAudition(sampleText, "failed");
       if (isApiNotFoundError(caughtError)) {
-        clearMissingBookSource(book.id);
-      } else {
-        setBookSourceError(formatErrorMessage(caughtError, "Unable to load book narration text"));
+        void refreshProjects();
+        throw new Error(PREVIEW_AUDITION_NOT_FOUND_MESSAGE);
       }
-      return null;
+      throw caughtError;
     }
   }
 
-  async function submitBookNarrationJob(book: BookSource, scope: BookScope) {
-    if (book.status !== "ready") {
-      setBookSourceError(book.error ?? "Book source is not ready for narration.");
+  function recordTemporaryAudition(sampleText: string, result: "failed" | "played") {
+    if (!activeTemporarySourceId) {
       return;
     }
-    const scopedText = await loadBookNarrationText(book, scope);
-    if (!scopedText) {
+    setTemporaryVoiceState((currentState) =>
+      recordTemporaryVoiceAudition(currentState, {
+        createdAt: new Date().toISOString(),
+        id: `audition-${activeTemporarySourceId}-${Date.now().toString()}`,
+        result,
+        sample: sampleText,
+        selection: activeTemporaryVoiceSelection,
+        temporarySourceId: activeTemporarySourceId,
+      }),
+    );
+  }
+
+  const submissionDependencies: SubmissionDependencies = {
+    activeProjectId,
+    hasRevisionSessionChanges,
+    speechPolicyOverrides,
+    speechPolicyProfile,
+    reviewedNarrationSpeechText,
+    canonicalPreviewSpeechPlan,
+    text,
+    narrationPreviewBlocks,
+    bookScopeContent,
+    buildVoiceJobRequest,
+    applySpeechPolicyToCreateVoiceJobRequest,
+    createVoiceJob,
+    createBookNarrationJob,
+    createPreparedSourceJob,
+    createTemporarySourceJob,
+    getBookSourceScope,
+    getPreparedSource,
+    isApiNotFoundError,
+    announcePolite: () => {
+      announcePolite(liveStatusMessages.audioGenerationStarted());
+    },
+    announceAssertive: () => {
+      announceAssertive(liveStatusMessages.audioGenerationFailed());
+    },
+    announceVoiceJobTerminalStatus,
+    refreshProjectJobs,
+    setRequestState,
+    setError,
+    setBookSourceError,
+    setSourcePrepError,
+    setPlaybackCursorSec,
+    setIsPlaybackActive,
+    setActiveDemoProjectId,
+    setJob,
+    setContentMode: (mode) => {
+      setContentMode(mode as WorkspaceStage);
+    },
+    setSelectedBookSourceId,
+    setSelectedBookScope,
+    setSourceMode,
+    setText,
+    setSelectedPreparedSourceId,
+    setBookScopeContent,
+    setPreparedSources,
+    clearMissingBookSource,
+  };
+
+  async function submitVoiceJob() {
+    await submitVoiceJobFromFeature(submissionDependencies);
+  }
+
+  async function submitBookNarrationJob(
+    book: BookSource,
+    scope: BookScope,
+    options: AssetNarrationGenerationOptions = {},
+  ) {
+    await submitBookNarrationJobFromFeature(submissionDependencies, book, scope, options);
+  }
+
+  async function submitPreparedSourceJob(
+    source: PreparedSource,
+    options: AssetNarrationGenerationOptions = {},
+  ) {
+    let fallbackSelectedBlockIds = options.fallbackSelectedBlockIds;
+    if (!fallbackSelectedBlockIds || fallbackSelectedBlockIds.length === 0) {
+      fallbackSelectedBlockIds =
+        job?.preparedSourceId === source.id ? job.selectedBlockIds : undefined;
+    }
+    await submitPreparedSourceJobFromFeature(submissionDependencies, source, {
+      ...options,
+      fallbackSelectedBlockIds,
+    });
+  }
+
+  function createAndListenFromCurrentSource() {
+    if (canRetryVoiceJob(job)) {
+      void retryGenerationFromCurrentJob(job);
       return;
     }
-    const sessionOverrides = compactSpeechPolicyOverrides(speechPolicyOverrides);
-    const request = {
-      ...buildVoiceJobRequest(scopedText),
-      bookSourceId: book.id,
-      bookScope: scope,
-      ...(hasSpeechPolicyOverrides(sessionOverrides)
-        ? { speechPolicyOverrides: sessionOverrides }
-        : {}),
+    if (!canCreateCurrentSource) {
+      return;
+    }
+    createGenerationFromCurrentSourcePlan();
+  }
+
+  function createGenerationFromCurrentSourcePlan() {
+    if (!canCreateCurrentSource) {
+      return;
+    }
+    if (sourceMode === "book" && selectedBookSource && effectiveBookScope) {
+      void submitBookNarrationJob(selectedBookSource, effectiveBookScope);
+      return;
+    }
+    if (sourceMode === "fileUrl" && selectedPreparedSource) {
+      void submitPreparedSourceJob(selectedPreparedSource);
+      return;
+    }
+    void submitVoiceJob();
+  }
+  createAndListenFromCurrentSourceRef.current = createAndListenFromCurrentSource;
+
+  const runGlobalShortcutCommand = useCallback(
+    (shortcutCommand: ShortcutCommandId) => {
+      switch (shortcutCommand) {
+        case "command.palette": {
+          if (isCommandPaletteOpen) {
+            closeCommandPalette();
+            return;
+          }
+          openCommandPalette("commands");
+          return;
+        }
+        case "shortcut.cheatsheet": {
+          openShortcutCheatSheet();
+          return;
+        }
+        case "status.openActivity": {
+          openStatusActivityFromShortcut();
+          return;
+        }
+        case "status.inspectIssue": {
+          inspectNarrationStatusIssueFromShortcut();
+          return;
+        }
+        case "settings.open": {
+          setSettingsCommandTarget(null);
+          setIsSettingsOpen(true);
+          return;
+        }
+        case "help.open": {
+          setHelpCommandTarget(null);
+          setIsHelpOpen(true);
+          return;
+        }
+        case "temporary.quickListen": {
+          openQuickListenMode("paste");
+          return;
+        }
+        case "temporary.keepInProject": {
+          if (activeTemporarySource) {
+            handleKeepTemporarySession(activeTemporarySource);
+          }
+          return;
+        }
+        default: {
+          if (canRunCurrentGenerationAction) {
+            createAndListenFromCurrentSourceRef.current();
+          }
+        }
+      }
+    },
+    [
+      canRunCurrentGenerationAction,
+      closeCommandPalette,
+      activeTemporarySource,
+      handleKeepTemporarySession,
+      inspectNarrationStatusIssueFromShortcut,
+      isCommandPaletteOpen,
+      openCommandPalette,
+      openQuickListenMode,
+      openShortcutCheatSheet,
+      openStatusActivityFromShortcut,
+    ],
+  );
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+      if (event.key === "Escape" && isCommandPaletteOpen) {
+        event.preventDefault();
+        closeCommandPalette();
+        return;
+      }
+      const shortcutCommand = resolveGlobalShortcutCommand(event, shortcutPreferences);
+      if (
+        !shortcutCommand ||
+        (shortcutCommand === "command.palette"
+          ? !isCommandPaletteOpen && shouldIgnoreGlobalShortcutTarget(event.target)
+          : shouldIgnoreGlobalShortcutTarget(event.target))
+      ) {
+        return;
+      }
+      if (shortcutCommand === "shortcut.cheatsheet" && contentMode === "theatre") {
+        return;
+      }
+      event.preventDefault();
+      runGlobalShortcutCommand(shortcutCommand);
     };
-    setRequestState("running");
-    setError(null);
-    setBookSourceError(null);
-    setPlaybackCursorSec(0);
-    setIsPlaybackActive(false);
-    setSelectedBookSourceId(book.id);
-    setSelectedBookScope(scope);
-    setText(scopedText);
-
-    try {
-      const nextJob = await createBookNarrationJob(book.id, request);
-      setJob(nextJob);
-      setSelectedBookSourceId(nextJob.bookSourceId ?? book.id);
-      setSelectedBookScope(nextJob.bookScope ?? scope);
-      void refreshProjectJobs(nextJob.projectId || activeProjectId);
-      setRequestState(nextJob.status === "completed" ? "complete" : "running");
-    } catch (caughtError) {
-      setRequestState("error");
-      setBookSourceError(
-        caughtError instanceof Error ? caughtError.message : "Unable to create book narration",
-      );
-    }
-  }
-
-  async function submitPreparedSourceJob(source: PreparedSource) {
-    if (source.status !== "ready") {
-      setSourcePrepError(source.error ?? "Prepared source is not ready for narration.");
-      return;
-    }
-    const speechText = source.speechText ?? "";
-    if (!speechText.trim()) {
-      setSourcePrepError("Prepared source has no speakable blocks.");
-      return;
-    }
-    const sessionOverrides = compactSpeechPolicyOverrides(speechPolicyOverrides);
-    const request = {
-      ...buildVoiceJobRequest(speechText, source),
-      preparedSourceId: source.id,
-      selectedBlockIds:
-        source.blocks?.filter((block) => block.speakMode !== "skip").map((block) => block.id) ?? [],
-      sourceKind: source.kind,
-      progressTargetId: `prepared:${source.id}`,
-      ...(hasSpeechPolicyOverrides(sessionOverrides)
-        ? { speechPolicyOverrides: sessionOverrides }
-        : {}),
+    globalThis.addEventListener("keydown", handleKeyDown);
+    return () => {
+      globalThis.removeEventListener("keydown", handleKeyDown);
     };
-    setRequestState("running");
-    setError(null);
-    setSourcePrepError(null);
-    setPlaybackCursorSec(0);
-    setIsPlaybackActive(false);
-    setSelectedPreparedSourceId(source.id);
-    setText(speechText);
+  }, [
+    closeCommandPalette,
+    contentMode,
+    isCommandPaletteOpen,
+    runGlobalShortcutCommand,
+    shortcutPreferences,
+  ]);
 
-    try {
-      const nextJob = await createPreparedSourceJob(source.id, request);
-      setJob(nextJob);
-      void refreshProjectJobs(nextJob.projectId || activeProjectId);
-      setRequestState(nextJob.status === "completed" ? "complete" : "running");
-    } catch (caughtError) {
-      setRequestState("error");
-      setSourcePrepError(
-        caughtError instanceof Error ? caughtError.message : "Unable to create prepared narration",
-      );
+  useEffect(() => {
+    if (contentMode !== "review" && contentMode !== "preview") {
+      return;
     }
-  }
+    // eslint-disable-next-line sonarjs/cognitive-complexity
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+      if (isCommandPaletteOpen || isHelpOpen || isSettingsOpen) {
+        return;
+      }
+      const shortcut = resolveLocalizedReviewPreviewShortcut(event, shortcutPreferences);
+      if (!shortcut) {
+        return;
+      }
+      event.preventDefault();
+      const selectedBlockId = selectReviewBlockId(
+        narrationPreviewBlocks,
+        workspaceContext.activeBlockId,
+      );
+      const selectedBlockIndex = narrationPreviewBlocks.findIndex(
+        (block) => block.id === selectedBlockId,
+      );
+      if (shortcut === "nextIssue") {
+        if (contentMode !== "review") {
+          return;
+        }
+        const nextIssueBlockId = selectNextReviewIssueBlockId(
+          narrationPreviewBlocks,
+          selectedBlockId,
+        );
+        if (!nextIssueBlockId) {
+          announcePolite("No review issues.");
+          return;
+        }
+        markReaderWorkspaceBlockNavigation(workspaceContext.sourceId, nextIssueBlockId);
+        setWorkspaceContext((currentContext) =>
+          withWorkspaceActiveBlock(currentContext, nextIssueBlockId),
+        );
+        inspectWorkspaceCue(nextIssueBlockId);
+        return;
+      }
+      if (shortcut === "playPause") {
+        if (!playbackLifecycleReady) {
+          return;
+        }
+        if (userIntentPlaybackControls.isPlaying) {
+          userIntentPlaybackControls.pause();
+          return;
+        }
+        void userIntentPlaybackControls.play();
+        return;
+      }
+      if (shortcut === "restart") {
+        if (playbackLifecycleReady) {
+          void userIntentPlaybackControls.restart();
+        }
+        return;
+      }
+      if (shortcut === "speedDown" || shortcut === "speedUp") {
+        userIntentPlaybackControls.setPlaybackRate?.(
+          nextReaderPlaybackRate(
+            userIntentPlaybackControls.playbackRate,
+            shortcut === "speedDown" ? -1 : 1,
+          ),
+        );
+        return;
+      }
+      if (shortcut === "jumpToAudio") {
+        const seekTargetSec = playbackSeekSecondsForRevisionBlock(
+          narrationPreviewBlocks,
+          selectedBlockId,
+          job,
+        );
+        if (
+          playbackLifecycleReady &&
+          seekTargetSec !== null &&
+          (userIntentPlaybackControls.seekTo ?? userIntentPlaybackControls.skipBy)
+        ) {
+          seekPlaybackToSeconds(userIntentPlaybackControls, seekTargetSec, playbackCursorSec);
+        }
+        return;
+      }
+      const direction = shortcut === "previousBlock" ? -1 : 1;
+      if (narrationPreviewBlocks.length === 0 || selectedBlockIndex === -1) {
+        return;
+      }
+      const nextIndex = Math.max(
+        0,
+        Math.min(narrationPreviewBlocks.length - 1, selectedBlockIndex + direction),
+      );
+      const nextBlock = narrationPreviewBlocks[nextIndex];
+      markReaderWorkspaceBlockNavigation(workspaceContext.sourceId, nextBlock.id);
+      setWorkspaceContext((currentContext) =>
+        withWorkspaceActiveBlock(currentContext, nextBlock.id),
+      );
+      inspectWorkspaceCue(nextBlock.id);
+    };
+    globalThis.addEventListener("keydown", handleKeyDown);
+    return () => {
+      globalThis.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [
+    announcePolite,
+    contentMode,
+    isCommandPaletteOpen,
+    isHelpOpen,
+    isSettingsOpen,
+    inspectWorkspaceCue,
+    job,
+    markReaderWorkspaceBlockNavigation,
+    narrationPreviewBlocks,
+    playbackCursorSec,
+    playbackLifecycleReady,
+    shortcutPreferences,
+    userIntentPlaybackControls,
+    workspaceContext.activeBlockId,
+    workspaceContext.sourceId,
+  ]);
 
-  const studioJobName = getStudioJobName(job);
   const studioProjectName = activeProject?.name ?? DEFAULT_PROJECT_NAME;
+  const studioContextSourceName =
+    studioMode === "narration" ? activeNarrationSourceLabel : studioProjectName;
+  const studioContextScopeName =
+    studioMode === "narration" ? activeNarrationScopeLabel : selectedVoiceProfileLabel;
+  const studioRightRailMode = studioMode === "narration" ? displayRightRailMode : rightRailMode;
   const studioGridStyle = {
     "--studio-left-column": railColumnWidth(leftRailMode, "left"),
-    "--studio-right-column": railColumnWidth(rightRailMode, "right"),
+    "--studio-right-column": railColumnWidth(studioRightRailMode, "right"),
+  } as CSSProperties;
+  const preparedSourceCinemaSurfaceKind =
+    preparedSourceCinemaSource && preparedSourceCinemaKind(preparedSourceCinemaSource) === "website"
+      ? "website"
+      : "document";
+  const PreparedCinemaOverlay =
+    preparedSourceCinemaSurfaceKind === "website" ? WebsiteCinemaOverlay : DocumentCinemaOverlay;
+  const handleBookCinemaFocusStateChange = useCallback(
+    (state: UiMemoryCinemaState) => {
+      handleCinemaFocusStateChange("book", state);
+    },
+    [handleCinemaFocusStateChange],
+  );
+  const handlePreparedCinemaFocusStateChange = useCallback(
+    (state: UiMemoryCinemaState) => {
+      handleCinemaFocusStateChange(preparedSourceCinemaSurfaceKind, state);
+    },
+    [handleCinemaFocusStateChange, preparedSourceCinemaSurfaceKind],
+  );
+  let activeHelpCinema: "book" | "prepared" | null = null;
+  if (isBookCinemaOpen) {
+    activeHelpCinema = "book";
+  } else if (preparedSourceCinemaSourceId) {
+    activeHelpCinema = "prepared";
+  }
+  let activeCinemaSurfaceKind: CinemaSurfaceKind | null = null;
+  if (isBookCinemaOpen) {
+    activeCinemaSurfaceKind = "book";
+  } else if (preparedSourceCinemaSource) {
+    activeCinemaSurfaceKind = preparedSourceCinemaSurfaceKind;
+  }
+  const readerNavigationLabels = useMemo(
+    () => ({
+      bookSources: new Map(bookSources.map((book) => [book.id, bookSourceName(book)])),
+      preparedSources: new Map(
+        preparedSources.map((source) => [source.id, source.title ?? source.sourceName]),
+      ),
+    }),
+    [bookSources, preparedSources],
+  );
+  const commandBookmarkProgress =
+    (isBookCinemaOpen ? (selectedBookProgress ?? hashProgress) : preparedSourceCinemaProgress) ??
+    latestProgress;
+  useEffect(() => {
+    if (!isCommandPaletteOpen) {
+      return;
+    }
+    let cancelled = false;
+    void import("./features/reader-navigation").then((module) => {
+      if (cancelled) {
+        return;
+      }
+      const recentPositions = module
+        .readerRecentPositionsFromProgress(projectProgress, readerNavigationLabels, 8)
+        .map<CommandRecentData>((recent) => ({
+          detail: recent.detail,
+          id: `wayfinding:recent:${recent.id}`,
+          keywords: ["recent", "resume", "position", recent.label],
+          label: recent.label,
+          progressItem: recent.progressItem,
+        }));
+      const bookmarks =
+        commandBookmarkProgress === null
+          ? []
+          : module
+              .readerBookmarksFromProgress(commandBookmarkProgress)
+              .map<CommandBookmarkData>((bookmark) => ({
+                detail: `${bookmark.detail} · ${module.formatReaderClock(bookmark.currentTimeSec)}`,
+                id: `wayfinding:bookmark:${bookmark.progressTargetId}:${bookmark.id}`,
+                keywords: ["bookmark", "saved", bookmark.detail],
+                label: bookmark.label,
+                resumeProgress: module.playbackProgressForBookmark(
+                  commandBookmarkProgress,
+                  bookmark,
+                ),
+              }));
+      setCommandWayfinding({ bookmarks, recentPositions });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [commandBookmarkProgress, isCommandPaletteOpen, projectProgress, readerNavigationLabels]);
+  const baseCommandEntries = buildCommandEntries({
+    activeCinemaSurfaceKind,
+    activeProjectId,
+    canCreateCurrentSource,
+    canOpenCurrentCinema,
+    commandMetadata,
+    commandWayfinding,
+    createAndListenCapabilityReason,
+    createAndListenDisabledReason,
+    createAndListenScope,
+    handlers: buildCommandPaletteHandlers({
+      activeCinemaSurfaceKind,
+      setCinemaAdvancedActionFromCommand: (target, surface) => {
+        setCinemaAdvancedActionFromCommand(surface, target);
+      },
+      setCinemaFocusModeFromCommand: (mode, surface) => {
+        setCinemaFocusModeFromCommand(surface, mode);
+      },
+      setHelpCommandTarget,
+      setIsHelpOpen,
+      setIsWorkspaceOpen: setIsCommandCenterOpen,
+      setSettingsCommandTarget,
+      setIsSettingsOpen,
+      setContentMode,
+      setWorkspaceLayoutMode,
+      openCommandCenterRoute: openCommandCenter,
+      openExportCurrent: () => {
+        setCommandCenterSection("importsExports");
+        setBundleReturnSection("importsExports");
+        setIsCommandCenterOpen(false);
+        setBundlePanelMode("export");
+        setIsBundlePanelOpen(true);
+      },
+      openImportBundle: () => {
+        setCommandCenterSection("importsExports");
+        setBundleReturnSection("importsExports");
+        setIsCommandCenterOpen(false);
+        setBundlePanelMode("import");
+        setIsBundlePanelOpen(true);
+      },
+      openQuickListen: openQuickListenMode,
+      openTemporarySourceCinema: handleOpenTemporarySourceCinema,
+      openTemporarySourceInReview: handleOpenTemporarySourceInReview,
+      openTemporarySourceInPreview: handleOpenTemporarySourceInPreview,
+      keepTemporarySourceInProject: handleKeepTemporarySession,
+      discardTemporarySource: handleDiscardTemporarySource,
+      clearExpiredTemporarySources: handleClearExpiredTemporarySources,
+      createAndListenFromCurrentSource,
+      handleAddPlaybackBookmark,
+      handleResumeProgress,
+      handleUseBookText,
+      handleUsePreparedSource,
+      openShortcutCheatSheet,
+      openTelepromptStage,
+      openTelepromptTheatreStage,
+      openReadingCinema,
+      openPreparedSourceCinema,
+      preparedSourceCinemaActionLabel,
+      resolveBookSourceLabel: bookSourceName,
+      resolveDefaultBookScope,
+      setIsBookCinemaOpen,
+      setPreparedSourceCinemaSourceId,
+      selectProject,
+      setCinemaTheatreOpenSignal,
+      setCinemaTheatreControlsSignal,
+      setCinemaTheatreExitSignal,
+      setIsVoiceDashboardOpen,
+      setSourceMode,
+    }),
+    job,
+    projects,
+    bookSources,
+    preparedSources,
+    activeTemporarySource,
+    quickListenEnabled,
+    temporaryPromotionEnabled,
+    temporarySources,
+    temporaryStorageUsage,
+    temporaryWorkEnabled,
+    wordHighlightCapabilityReason,
+    workspaceStageActionLabel,
+  });
+  const selectedNarrationCommandBlockId = selectReviewBlockId(
+    narrationPreviewBlocks,
+    workspaceContext.activeBlockId,
+  );
+  const selectedNarrationCommandBlock = narrationPreviewBlocks.find(
+    (block) => block.id === selectedNarrationCommandBlockId,
+  );
+  let blockNavigationCommandBlockedReason: string | undefined;
+  if (contentMode === "review" || contentMode === "preview") {
+    blockNavigationCommandBlockedReason = selectedNarrationCommandBlock
+      ? undefined
+      : "Select a block before using this command.";
+  } else {
+    blockNavigationCommandBlockedReason = "Open Review or Preview before using this command.";
+  }
+  let reviewCommandBlockedReason: string | undefined;
+  if (contentMode === "review") {
+    reviewCommandBlockedReason = selectedNarrationCommandBlock
+      ? undefined
+      : "Select a review block before using this command.";
+  } else {
+    reviewCommandBlockedReason = "Open Review before using this command.";
+  }
+  let openTheatreCommandBlockedReason: string | undefined;
+  if (temporaryCinemaActionsEnabled) {
+    openTheatreCommandBlockedReason =
+      contentMode === "teleprompt" ? undefined : "Open Teleprompt before using Theatre.";
+  } else {
+    openTheatreCommandBlockedReason = temporaryCinemaActionDisabledReason;
+  }
+  const playbackLifecycle: GeneratedAudioLifecycleState = playbackLifecycleReady
+    ? "ready"
+    : generatedAudioLifecycle;
+  const playbackCommandDisabledReason = playbackActionDisabledReason({
+    action: "audition",
+    lifecycle: playbackLifecycle,
+  });
+  const runPlaybackToggleCommand = () => {
+    if (!playbackLifecycleReady) {
+      return;
+    }
+    if (userIntentPlaybackControls.isPlaying) {
+      userIntentPlaybackControls.pause();
+      return;
+    }
+    void userIntentPlaybackControls.play();
+  };
+  const selectedNarrationCommandBlockIndex = narrationPreviewBlocks.findIndex(
+    (block) => block.id === selectedNarrationCommandBlockId,
+  );
+  const moveNarrationCommandBlock = (direction: -1 | 1) => {
+    if (selectedNarrationCommandBlockIndex === -1 || narrationPreviewBlocks.length === 0) {
+      return;
+    }
+    const nextIndex = Math.max(
+      0,
+      Math.min(narrationPreviewBlocks.length - 1, selectedNarrationCommandBlockIndex + direction),
+    );
+    const nextBlock = narrationPreviewBlocks[nextIndex];
+    markReaderWorkspaceBlockNavigation(workspaceContext.sourceId, nextBlock.id);
+    setWorkspaceContext((currentContext) => withWorkspaceActiveBlock(currentContext, nextBlock.id));
+    inspectWorkspaceCue(nextBlock.id);
+  };
+  const jumpNarrationCommandAudio = () => {
+    const seekTargetSec = playbackSeekSecondsForRevisionBlock(
+      narrationPreviewBlocks,
+      selectedNarrationCommandBlockId,
+      job,
+    );
+    if (
+      playbackLifecycleReady &&
+      seekTargetSec !== null &&
+      (userIntentPlaybackControls.seekTo ?? userIntentPlaybackControls.skipBy)
+    ) {
+      seekPlaybackToSeconds(userIntentPlaybackControls, seekTargetSec, playbackCursorSec);
+    }
+  };
+  let temporaryProjectVoiceCommandReason: string | undefined;
+  if (!activeNarrationIsTemporary) {
+    temporaryProjectVoiceCommandReason =
+      "Open a temporary source before using a session voice override.";
+  } else if (!selectedVoiceProfileId) {
+    temporaryProjectVoiceCommandReason =
+      "Select a saved project voice before applying it as a temporary override.";
+  }
+  const narrationShortcutCommandEntries: CommandEntry[] = [
+    {
+      availability: {
+        reason: playbackCommandDisabledReason,
+        state: playbackCommandDisabledReason ? "disabled" : "available",
+      },
+      category: "Playback",
+      detail: "Play or pause generated narration playback.",
+      id: "narration:playback:toggle",
+      keywords: ["pause", "resume", "audio", "keyboard"],
+      owner: "playback",
+      perform: runPlaybackToggleCommand,
+      section: "Playback",
+      shortcutCommandId: "playback.toggle",
+      title: playbackControls.isPlaying ? "Pause playback" : "Play playback",
+    },
+    {
+      availability: {
+        reason: playbackCommandDisabledReason,
+        state: playbackCommandDisabledReason ? "disabled" : "available",
+      },
+      category: "Playback",
+      detail: "Restart generated narration playback.",
+      id: "narration:playback:restart",
+      keywords: ["restart", "audio", "keyboard"],
+      owner: "playback",
+      perform: () => {
+        if (playbackLifecycleReady) {
+          void userIntentPlaybackControls.restart();
+        }
+      },
+      section: "Playback",
+      shortcutCommandId: "playback.restart",
+      title: "Restart playback",
+    },
+    {
+      availability: {
+        reason: playbackControls.setPlaybackRate
+          ? undefined
+          : "Playback speed is available after generated audio is loaded.",
+        state: playbackControls.setPlaybackRate ? "available" : "disabled",
+      },
+      category: "Playback",
+      detail: "Adjust generated narration playback speed.",
+      id: "narration:playback:speed",
+      keywords: ["speed", "rate", "audio", "keyboard"],
+      owner: "playback",
+      perform: () => {
+        userIntentPlaybackControls.setPlaybackRate?.(
+          nextReaderPlaybackRate(userIntentPlaybackControls.playbackRate, 1),
+        );
+      },
+      section: "Playback",
+      shortcutCommandId: "playback.speed",
+      title: "Increase playback speed",
+    },
+    {
+      category: "Diagnostics",
+      detail: "Open Command Center Activity for active narration work.",
+      id: "status:activity:open",
+      keywords: ["activity", "status", "command center", "keyboard"],
+      owner: "status",
+      perform: openStatusActivityFromShortcut,
+      section: "Diagnostics",
+      shortcutCommandId: "status.openActivity",
+      title: "Open Activity",
+    },
+    {
+      availability: {
+        reason:
+          visibleNarrationStatusChips.length > 0
+            ? undefined
+            : "No status issues are currently visible.",
+        state: visibleNarrationStatusChips.length > 0 ? "available" : "disabled",
+      },
+      category: "Diagnostics",
+      detail: "Inspect the selected or first visible status issue.",
+      id: "status:issue:inspect",
+      keywords: ["issue", "status", "inspect", "keyboard"],
+      owner: "status",
+      perform: inspectNarrationStatusIssueFromShortcut,
+      section: "Diagnostics",
+      shortcutCommandId: "status.inspectIssue",
+      title: "Inspect status issue",
+    },
+    {
+      availability: {
+        reason: activeNarrationIsTemporary
+          ? undefined
+          : "Open a temporary source before using a session voice override.",
+        state: activeNarrationIsTemporary ? "available" : "blocked",
+      },
+      category: "Voice",
+      detail: "Use the provider default as a Session voice override for this temporary source.",
+      id: "voice:temporary:use-default",
+      keywords: ["temporary", "voice", "session", "override", "default"],
+      owner: "voice",
+      perform: () => {
+        applyTemporaryVoiceForSource("default");
+      },
+      section: "Voice",
+      title: "Use default voice for temporary source",
+    },
+    {
+      availability: {
+        reason: temporaryProjectVoiceCommandReason,
+        state: temporaryProjectVoiceCommandReason ? "blocked" : "available",
+      },
+      category: "Voice",
+      detail:
+        "Use the current saved project voice as a Session voice override without saving a new project default.",
+      id: "voice:temporary:use-current-project",
+      keywords: ["temporary", "voice", "session", "override", "project"],
+      owner: "voice",
+      perform: () => {
+        if (selectedVoiceProfileId) {
+          applyTemporaryVoiceForSource(selectedVoiceProfileId);
+        }
+      },
+      section: "Voice",
+      title: "Use project voice for temporary source",
+    },
+    {
+      category: "Voice",
+      detail: "Open Voice Dashboard temporary usage and provider readiness.",
+      id: "voice:temporary:dashboard",
+      keywords: ["temporary", "voice", "dashboard", "readiness", "provider"],
+      owner: "voice",
+      perform: () => {
+        setIsVoiceDashboardOpen(true);
+      },
+      section: "Voice",
+      title: "Inspect temporary voice usage",
+    },
+    {
+      availability: {
+        reason:
+          blockNavigationCommandBlockedReason ??
+          (selectedNarrationCommandBlockIndex <= 0 ? "Already at the first block." : undefined),
+        state:
+          blockNavigationCommandBlockedReason || selectedNarrationCommandBlockIndex <= 0
+            ? "disabled"
+            : "available",
+      },
+      category: "Review",
+      detail: "Move to the previous Review or Preview block.",
+      id: "review:block:previous",
+      keywords: ["previous", "block", "review", "keyboard"],
+      owner: "review",
+      perform: () => {
+        moveNarrationCommandBlock(-1);
+      },
+      section: "Review",
+      shortcutCommandId: "review.previousBlock",
+      title: "Previous block",
+    },
+    {
+      availability: {
+        reason:
+          blockNavigationCommandBlockedReason ??
+          (selectedNarrationCommandBlockIndex >= narrationPreviewBlocks.length - 1
+            ? "Already at the final block."
+            : undefined),
+        state:
+          blockNavigationCommandBlockedReason ||
+          selectedNarrationCommandBlockIndex >= narrationPreviewBlocks.length - 1
+            ? "disabled"
+            : "available",
+      },
+      category: "Review",
+      detail: "Move to the next Review or Preview block.",
+      id: "review:block:next",
+      keywords: ["next", "block", "review", "keyboard"],
+      owner: "review",
+      perform: () => {
+        moveNarrationCommandBlock(1);
+      },
+      section: "Review",
+      shortcutCommandId: "review.nextBlock",
+      title: "Next block",
+    },
+    {
+      availability: {
+        reason:
+          reviewCommandBlockedReason ??
+          (narrationPreviewBlocks.some((block) => block.needsAttention)
+            ? undefined
+            : "No review issues."),
+        state:
+          reviewCommandBlockedReason ||
+          !narrationPreviewBlocks.some((block) => block.needsAttention)
+            ? "disabled"
+            : "available",
+      },
+      category: "Review",
+      detail: "Move to the next Review block that needs attention.",
+      id: "review:block:next-issue",
+      keywords: ["next", "issue", "repair", "review", "keyboard"],
+      owner: "review",
+      perform: () => {
+        const nextIssueBlockId = selectNextReviewIssueBlockId(
+          narrationPreviewBlocks,
+          selectedNarrationCommandBlockId,
+        );
+        if (nextIssueBlockId) {
+          markReaderWorkspaceBlockNavigation(workspaceContext.sourceId, nextIssueBlockId);
+          setWorkspaceContext((currentContext) =>
+            withWorkspaceActiveBlock(currentContext, nextIssueBlockId),
+          );
+          inspectWorkspaceCue(nextIssueBlockId);
+        }
+      },
+      section: "Review",
+      shortcutCommandId: "review.nextIssue",
+      title: "Next review issue",
+    },
+    {
+      availability: {
+        reason: blockNavigationCommandBlockedReason ?? playbackCommandDisabledReason,
+        state:
+          blockNavigationCommandBlockedReason || playbackCommandDisabledReason
+            ? "disabled"
+            : "available",
+      },
+      category: "Playback",
+      detail: "Jump generated audio to the selected block timing.",
+      id: "review:block:jump-audio",
+      keywords: ["jump", "audio", "timing", "review", "keyboard"],
+      owner: "review",
+      perform: jumpNarrationCommandAudio,
+      section: "Review",
+      shortcutCommandId: "review.jumpToAudio",
+      title: "Jump to selected audio",
+    },
+    {
+      availability: {
+        reason: reviewCommandBlockedReason,
+        state: reviewCommandBlockedReason ? "blocked" : "available",
+      },
+      category: "Review",
+      detail: "Approve the selected review block.",
+      id: "review:block:approve",
+      keywords: ["approve", "review", "keyboard"],
+      owner: "review",
+      perform: () => {
+        clickUiActionOnNextFrame("ui-action-revision-block-approve");
+      },
+      section: "Review",
+      shortcutCommandId: "review.approve",
+      title: "Approve current block",
+    },
+    {
+      availability: {
+        reason: reviewCommandBlockedReason,
+        state: reviewCommandBlockedReason ? "blocked" : "available",
+      },
+      category: "Review",
+      detail: "Focus the inline speech editor for the selected block.",
+      id: "review:block:edit",
+      keywords: ["edit", "spoken", "block", "keyboard"],
+      owner: "review",
+      perform: focusRevisionInlineEditor,
+      section: "Review",
+      shortcutCommandId: "review.edit",
+      title: "Edit current block",
+    },
+    {
+      availability: {
+        reason: reviewCommandBlockedReason,
+        state: reviewCommandBlockedReason ? "blocked" : "available",
+      },
+      category: "Review",
+      detail: "Retry the selected review block.",
+      id: "review:block:retry",
+      keywords: ["retry", "repair", "review", "keyboard"],
+      owner: "review",
+      perform: () => {
+        clickUiActionOnNextFrame("ui-action-revision-block-retry");
+      },
+      section: "Review",
+      shortcutCommandId: "review.retry",
+      title: "Retry current block",
+    },
+    {
+      availability: {
+        reason: reviewCommandBlockedReason,
+        state: reviewCommandBlockedReason ? "blocked" : "available",
+      },
+      category: "Review",
+      detail: "Regenerate the selected review block.",
+      id: "review:block:regenerate",
+      keywords: ["regenerate", "repair", "review", "keyboard"],
+      owner: "review",
+      perform: () => {
+        clickUiActionOnNextFrame("ui-action-revision-block-regenerate");
+      },
+      section: "Review",
+      shortcutCommandId: "review.regenerate",
+      title: "Regenerate current block",
+    },
+    {
+      availability: {
+        reason: reviewCommandBlockedReason,
+        state: reviewCommandBlockedReason ? "blocked" : "available",
+      },
+      category: "Review",
+      detail: "Open source structure or inspector context for the selected block.",
+      id: "review:block:inspector",
+      keywords: ["inspect", "structure", "review", "keyboard"],
+      owner: "review",
+      perform: () => {
+        clickUiActionOnNextFrame("workspace-stage-action-inspectStructure");
+      },
+      section: "Review",
+      shortcutCommandId: "review.inspector",
+      title: "Open review inspector",
+    },
+    {
+      availability: {
+        reason: openTheatreCommandBlockedReason,
+        state: openTheatreCommandBlockedReason ? "blocked" : "available",
+      },
+      category: "Teleprompt",
+      detail: "Open Theatre from the current Teleprompt cue.",
+      id: "teleprompt:open-theatre",
+      keywords: ["teleprompt", "theatre", "cue", "keyboard"],
+      owner: "teleprompt",
+      perform: openTelepromptTheatreStage,
+      section: "Teleprompt",
+      shortcutCommandId: "teleprompt.openTheatre",
+      title: "Open Theatre",
+    },
+    {
+      category: "Teleprompt",
+      detail: "Return from Teleprompt to Review.",
+      id: "teleprompt:return-review",
+      keywords: ["teleprompt", "return", "review"],
+      owner: "teleprompt",
+      perform: () => {
+        setContentMode("review");
+      },
+      section: "Teleprompt",
+      shortcutCommandId: "teleprompt.returnReview",
+      title: "Return to Review",
+    },
+    {
+      category: "Teleprompt",
+      detail: "Return from Teleprompt to Preview.",
+      id: "teleprompt:return-preview",
+      keywords: ["teleprompt", "return", "preview"],
+      owner: "teleprompt",
+      perform: () => {
+        setContentMode("preview");
+      },
+      section: "Teleprompt",
+      shortcutCommandId: "teleprompt.returnPreview",
+      title: "Return to Preview",
+    },
+    {
+      availability: {
+        reason: contentMode === "theatre" ? undefined : "Enter Theatre before using this command.",
+        state: contentMode === "theatre" ? "available" : "blocked",
+      },
+      category: "Teleprompt",
+      detail: "Exit Theatre and return to the previous narration view.",
+      id: "theatre:exit",
+      keywords: ["theatre", "exit", "escape"],
+      owner: "theatre",
+      perform: () => {
+        document
+          .querySelector<HTMLButtonElement>('[data-testid="ui-action-teleprompt-exit-theatre"]')
+          ?.click();
+      },
+      section: "Teleprompt",
+      shortcutCommandId: "theatre.exit",
+      title: "Exit Theatre",
+    },
+  ];
+  const commandEntries = [...baseCommandEntries, ...narrationShortcutCommandEntries];
+  let globalPreviewOwner: "preview" | "teleprompt" = "preview";
+  if (contentMode === "teleprompt" || contentMode === "theatre") {
+    globalPreviewOwner = "teleprompt";
+  }
+  const globalPreviewVisible =
+    studioMode === "narration" &&
+    contentMode === "preview" &&
+    shouldShowGlobalPreviewPlayer({
+      activityFooterMode,
+      isCinemaOpen: isBookCinemaOpen,
+      isSettingsOpen,
+      owner: globalPreviewOwner,
+      preparedSourceCinemaOpen: Boolean(preparedSourceCinemaSource),
+      stage: contentMode,
+    });
+  const workspaceOverlay = workspaceOverlayState({
+    activityFooterMode,
+    previewPlayerVisible: globalPreviewVisible,
+    rightRailMode,
+    stage: contentMode,
+  });
+  const deferredCommandEntries = useDeferredValue(commandEntries);
+  const deferredAdapterDiagnostics = useDeferredValue(adapterDiagnostics);
+  const deferredBookSources = useDeferredValue(bookSources);
+  const deferredCustomSpeechPolicyProfiles = useDeferredValue(customSpeechPolicyProfiles);
+  const deferredJob = useDeferredValue(job);
+  const deferredMetrics = useDeferredValue(systemMetrics);
+  const deferredNarrationStatusModel = useDeferredValue(narrationStatusModel);
+  const deferredPreparedSources = useDeferredValue(preparedSources);
+  const deferredProjectJobs = useDeferredValue(projectJobs);
+  const deferredProjectStorage = useDeferredValue(projectStorage);
+  const deferredProjects = useDeferredValue(projects);
+  const deferredSpeechPolicyProfiles = useDeferredValue(speechPolicyProfiles);
+  const deferredTemporaryJobs = useDeferredValue(temporaryJobs);
+  const deferredTemporarySources = useDeferredValue(temporarySources);
+  const deferredTTSEngines = useDeferredValue(ttsEngines);
+  const commandSurfaceBusy = isCommandSurfacePending || isWorkspaceNavigationPending;
+  let activityFooterReserve = "5rem";
+  if (activityFooterMode === "compact") {
+    activityFooterReserve = "9rem";
+  }
+  if (activityFooterMode === "full") {
+    activityFooterReserve = "min(34vh,24rem)";
+  }
+  const workspaceOverlayStyle = {
+    ...studioGridStyle,
+    "--overlay-activity-footer-reserved": activityFooterReserve,
+    "--overlay-preview-bottom": `calc(${activityFooterReserve} + 0.75rem)`,
+    "--overlay-preview-right": "0.75rem",
+    scrollPaddingBottom: `calc(${activityFooterReserve} + 1rem)`,
   } as CSSProperties;
 
   return (
     <main
-      className="vs-app flex h-screen min-h-0 flex-col overflow-y-auto lg:overflow-hidden"
+      className="vs-app flex h-screen min-h-0 flex-col overflow-hidden"
       data-theme={themeName}
+      data-workspace-navigation-pending={isWorkspaceNavigationPending ? "true" : undefined}
+      data-overlay-reserved-zones={workspaceOverlay.reservedZones.join(" ")}
+      style={workspaceOverlayStyle}
     >
       <TopProductBar
-        activeJobId={activeJobId}
-        activeProjectId={activeProjectId}
-        canSubmit={canSubmit}
-        isProcessing={isProcessing}
-        job={job}
-        jobName={studioJobName}
-        projectJobs={projectJobs}
-        projectName={studioProjectName}
-        projects={projects}
-        requestState={requestState}
+        commandPaletteShortcutLabel={
+          shortcutLabelForCommand("command.palette", shortcutPreferences) ?? "Ctrl+K / Cmd+K"
+        }
+        settingsShortcutLabel={
+          shortcutLabelForCommand("settings.open", shortcutPreferences) ?? "Ctrl+, / Cmd+,"
+        }
         studioMode={studioMode}
-        onCancel={() => {
-          void handleCancelVoiceJob();
+        workContext={{
+          chapterName: studioContextScopeName,
+          projectName: studioContextSourceName,
+          workspaceLabel:
+            studioMode === "narration" ? "Narration Workbench" : "Voice Cloning Workbench",
         }}
-        onExportOpen={() => {
-          setBundlePanelMode("export");
-          setIsBundlePanelOpen(true);
-        }}
-        onHelpOpen={() => {
-          setIsHelpOpen(true);
-        }}
-        onImportOpen={() => {
-          setBundlePanelMode("import");
-          setIsBundlePanelOpen(true);
-        }}
-        onJobSelect={(jobId) => {
-          void handleSelectJob(jobId);
-        }}
-        onProjectSelect={selectProject}
+        onCommandPaletteOpen={openCommandPalette}
+        onQuickListenOpen={openQuickListenMode}
+        quickListenEnabled={quickListenEnabled}
         onSettingsOpen={() => {
+          setSettingsCommandTarget(null);
           setIsSettingsOpen(true);
         }}
         onStudioModeChange={handleStudioModeChange}
-        onSubmit={() => {
-          void submitVoiceJob();
-        }}
-        onWorkspaceOpen={() => {
-          setIsWorkspaceOpen(true);
+        onWorkspaceCustomLayoutChange={setWorkspaceCustomLayout}
+        onWorkspaceDisclosurePinChange={setWorkspaceDisclosurePin}
+        onWorkspaceLayoutModeChange={setWorkspaceLayoutMode}
+        onCommandCenterOpen={() => {
+          openCommandCenter("overview");
         }}
         runConfiguration={runConfiguration}
+        workspaceCustomLayout={workspaceContext.customLayout}
+        workspaceDisclosurePins={workspaceDisclosurePins}
+        workspaceLayoutMode={workspaceContext.layoutMode}
       />
+      {uiMemory.showTutorialLauncher && !isDemoModeOpen ? (
+        <div className="border-b px-3 py-2 vs-border vs-surface lg:px-4">
+          <Button
+            className="gap-2"
+            data-testid="ui-action-demo-open"
+            data-ui-action-surface="Workspace"
+            onClick={() => {
+              setIsDemoModeOpen(true);
+            }}
+            size="sm"
+            variant="secondary"
+          >
+            Try the Studio
+            {activeDemoProjectId ? <StatusChip className="py-0.5">Demo loaded</StatusChip> : null}
+          </Button>
+        </div>
+      ) : null}
+      {isDemoModeOpen ? (
+        <Suspense fallback={null}>
+          <LazyDemoMode
+            activeDemoProjectId={activeDemoProjectId}
+            canCreateAudio={canRunCurrentGenerationAction}
+            canOpenCinema={canOpenCurrentCinema}
+            currentStage={contentMode}
+            hasGeneratedAudio={Boolean(job)}
+            onClose={() => {
+              setIsDemoModeOpen(false);
+            }}
+            onCompleteTutorial={completeStudioTutorial}
+            onCreateAndListen={createAndListenFromCurrentSource}
+            onHideTutorial={hideStudioTutorial}
+            onOpenCinema={openReadingCinema}
+            onOpenDemoProject={openDemoProject}
+            onStageSelect={setContentMode}
+            providerEngineId={runConfiguration.ttsEngine}
+            providerEngines={ttsEngines}
+          />
+        </Suspense>
+      ) : null}
+      {isCommandPaletteOpen ? (
+        <Suspense fallback={null}>
+          <CommandPalette
+            entries={deferredCommandEntries}
+            isOpen={isCommandPaletteOpen}
+            shortcutPreferences={shortcutPreferences}
+            view={commandPaletteView}
+            onClose={closeCommandPalette}
+            onCustomizeShortcuts={openShortcutSettings}
+            onViewChange={setCommandPaletteView}
+          />
+        </Suspense>
+      ) : null}
+      {quickListenEnabled && isQuickListenOpen ? (
+        <Suspense fallback={<LazySurfaceFallback label="Loading Quick Listen..." />}>
+          <LazyQuickListenPanel
+            error={quickListenError}
+            initialMode={quickListenInitialMode}
+            isOpen={isQuickListenOpen}
+            isSubmitting={isCreatingQuickListenSource}
+            recentSources={temporarySources}
+            storageUsage={temporaryStorageUsage}
+            temporaryBehavior={temporarySourceBehavior}
+            onClearExpired={handleClearExpiredTemporarySources}
+            onClose={() => {
+              setIsQuickListenOpen(false);
+            }}
+            onCreateFromFile={handleQuickListenFile}
+            onCreateFromText={handleQuickListenText}
+            onCreateFromUrl={handleQuickListenUrl}
+            onCleanup={handleCleanupTemporarySource}
+            onDiscard={handleDiscardTemporarySource}
+            onExtend={handleExtendTemporarySource}
+            onUseRecentSource={handleUseTemporarySource}
+          />
+        </Suspense>
+      ) : null}
+      {pendingTemporaryPromotion ? (
+        <TemporaryPromotionDialog
+          activeProjectId={activeProjectId}
+          error={temporaryPromotionError}
+          includeGeneratedAudioDefault={temporarySourceBehavior.includeGeneratedAudioOnPromotion}
+          isSubmitting={isPromotingTemporarySource}
+          pending={pendingTemporaryPromotion}
+          projects={projects}
+          session={
+            temporarySources.find(
+              (source) => source.id === pendingTemporaryPromotion.source.temporarySourceId,
+            ) ?? null
+          }
+          onCancel={() => {
+            setPendingTemporaryPromotion(null);
+            setTemporaryPromotionError(null);
+          }}
+          onConfirm={(request) => {
+            void handleConfirmTemporaryPromotion(request);
+          }}
+        />
+      ) : null}
 
-      {isWorkspaceOpen ? (
-        <Suspense fallback={<LazySurfaceFallback label="Loading workspace..." />}>
+      {isCommandCenterOpen ? (
+        <Suspense fallback={<LazySurfaceFallback label="Loading Command Center..." />}>
           <WorkspaceDrawer
             activeProjectId={activeProjectId}
-            bookSources={bookSources}
-            isOpen={isWorkspaceOpen}
-            job={job}
-            metrics={systemMetrics}
+            activeScopeLabel={activeNarrationScopeLabel}
+            activeSection={commandCenterSection}
+            activeSourceLabel={activeNarrationSourceLabel}
+            adapterDiagnostics={deferredAdapterDiagnostics}
+            adapterDiagnosticsError={adapterDiagnosticsError}
+            bookSources={deferredBookSources}
+            bundleActivity={bundleOperationActivity}
+            bundleReport={bundleOperationReport}
+            canCreate={canRunCurrentGenerationAction}
+            hydrationBusy={commandSurfaceBusy}
+            isOpen={isCommandCenterOpen}
+            job={deferredJob}
+            metrics={deferredMetrics}
             metricsError={systemMetricsError}
+            narrationStatusModel={deferredNarrationStatusModel}
+            preparedSources={deferredPreparedSources}
             projectError={projectError}
-            projectJobs={projectJobs}
-            projects={projects}
+            projectJobs={[...deferredProjectJobs, ...deferredTemporaryJobs]}
+            projectStorage={deferredProjectStorage}
+            projectStorageError={projectStorageError}
+            projects={deferredProjects}
             profileSource={profileSource}
             profiles={voiceProfiles}
-            customSpeechPolicyProfiles={customSpeechPolicyProfiles}
+            returnWorkspaceLabel={
+              studioMode === "narration" ? "Narration Workbench" : "Voice Cloning Workbench"
+            }
+            customSpeechPolicyProfiles={deferredCustomSpeechPolicyProfiles}
+            selectedBookScope={sourceMode === "book" ? selectedBookScope : null}
             speechPolicyProfile={speechPolicyProfile}
-            speechPolicyProfiles={speechPolicyProfiles}
+            speechPolicyOverrides={speechPolicyOverrides}
+            speechPolicyProfiles={deferredSpeechPolicyProfiles}
+            selectedBookSourceId={sourceMode === "book" ? selectedBookSourceId : null}
+            selectedPreparedSourceId={sourceMode === "fileUrl" ? selectedPreparedSourceId : null}
+            selectedEngineId={runConfiguration.ttsEngine}
             selectedProfileId={selectedVoiceProfileId}
+            sourceFallbackLabel={
+              sourceMode === "text" && hasNarrationSource ? activeNarrationSourceLabel : null
+            }
             cancelingProfileSourceId={cancelingProfileSourceId}
             cancelingTargetKey={cancelingTargetKey}
+            ttsEngineError={ttsEngineError}
+            ttsEngines={deferredTTSEngines}
+            temporarySources={deferredTemporarySources}
+            temporaryStorageUsage={temporaryStorageUsage}
+            temporaryPromotionEnabled={temporaryPromotionEnabled}
+            temporaryWorkEnabled={temporaryWorkEnabled}
             onCancelJob={handleCancelVoiceJob}
             onCancelProfileSource={handleCancelVoiceProfileSource}
             onCancelProfileTarget={handleCancelVoiceProfileTarget}
+            onClearExpiredTemporarySources={handleClearExpiredTemporarySources}
             onDeleteProject={handleDeleteProject}
             onCreateProject={handleCreateProject}
             onClose={() => {
-              setIsWorkspaceOpen(false);
+              setIsCommandCenterOpen(false);
             }}
             onExportOpen={() => {
-              setIsWorkspaceOpen(false);
+              setCommandCenterSection("importsExports");
+              setBundleReturnSection("importsExports");
+              setIsCommandCenterOpen(false);
               setBundlePanelMode("export");
               setIsBundlePanelOpen(true);
             }}
             onImportOpen={() => {
-              setIsWorkspaceOpen(false);
+              setCommandCenterSection("importsExports");
+              setBundleReturnSection("importsExports");
+              setIsCommandCenterOpen(false);
               setBundlePanelMode("import");
               setIsBundlePanelOpen(true);
             }}
-            onOpenSettings={() => {
-              setIsWorkspaceOpen(false);
+            onOpenSettings={(target = null) => {
+              setIsCommandCenterOpen(false);
+              setSettingsCommandTarget(target);
               setIsSettingsOpen(true);
             }}
+            onOpenIntake={() => {
+              setIsCommandCenterOpen(false);
+              setContentMode("intake");
+              setSourceMode("text");
+            }}
+            onOpenQuickListen={() => {
+              setIsCommandCenterOpen(false);
+              openQuickListenMode();
+            }}
+            quickListenEnabled={quickListenEnabled}
+            onOpenVoiceDashboard={() => {
+              setIsCommandCenterOpen(false);
+              setIsVoiceDashboardOpen(true);
+            }}
+            onOpenVoiceCloning={() => {
+              setIsCommandCenterOpen(false);
+              handleStudioModeChange("voiceCloning");
+            }}
+            onDiscardTemporarySource={handleDiscardTemporarySource}
+            onKeepTemporarySource={handleKeepTemporarySession}
+            onOpenTemporarySource={async (session) => {
+              setIsCommandCenterOpen(false);
+              await handleUseTemporarySource(session);
+            }}
             onRenameProject={handleRenameProject}
+            onRenameBookSource={handleRenameBookSourceAsset}
+            onRenamePreparedSource={handleRenamePreparedSourceAsset}
+            onRenameVoiceProfile={handleRenameVoiceProfile}
+            onSectionChange={setCommandCenterSection}
             onSelectProject={selectProject}
             onSelectProfile={selectVoiceProfile}
+            onClearVoiceProfile={clearVoiceProfileSelection}
+            onDeleteBookSource={handleDeleteBookSourceAsset}
+            onDeletePreparedSource={handleDeletePreparedSourceAsset}
+            onDeleteVoiceProfile={handleDeleteVoiceProfile}
+            onDeleteVoiceJob={handleDeleteVoiceJob}
+            onGenerateBookSourceNarration={(book, scope, options) => {
+              setIsCommandCenterOpen(false);
+              void submitBookNarrationJob(book, scope, options);
+            }}
+            onGeneratePreparedSourceNarration={(source, options) => {
+              setIsCommandCenterOpen(false);
+              void submitPreparedSourceJob(source, options);
+            }}
             onSpeechPolicyProfileChange={(profile) => {
               void handleSpeechPolicyProfileChange(profile);
             }}
+            onUseBookSource={handleUseBookText}
+            onUsePreparedSource={handleUsePreparedSource}
+          />
+        </Suspense>
+      ) : null}
+      {isVoiceDashboardOpen ? (
+        <Suspense fallback={<LazySurfaceFallback label="Loading voice dashboard..." />}>
+          <VoiceProfileDashboard
+            buildingArtifactKey={buildingArtifactKey}
+            cancelingProfileSourceId={cancelingProfileSourceId}
+            cancelingTargetKey={cancelingTargetKey}
+            diagnostics={profileSourceDiagnostics}
+            profileSource={profileSource}
+            profiles={voiceProfiles}
+            researchModules={researchModules}
+            selectedProfileId={selectedVoiceProfileId}
+            temporarySourceId={activeTemporarySourceId}
+            temporarySources={temporarySources}
+            temporaryWorkEnabled={temporaryWorkEnabled}
+            temporaryVoiceState={temporaryVoiceState}
+            ttsEngines={ttsEngines}
+            onBuildArtifact={handleBuildVoiceProfileArtifact}
+            onCancelProfileSource={handleCancelVoiceProfileSource}
+            onCancelProfileTarget={handleCancelVoiceProfileTarget}
+            onConfirmTemporaryCloneConsent={confirmTemporaryCloneConsent}
+            onClose={() => {
+              setIsVoiceDashboardOpen(false);
+            }}
+            onDeleteProfile={(id) => {
+              void handleDeleteVoiceProfile(id);
+            }}
+            onOpenVoiceCloning={() => {
+              setIsVoiceDashboardOpen(false);
+              handleStudioModeChange("voiceCloning");
+            }}
+            onSaveTemporaryVoicePreference={saveTemporaryVoicePreferenceToProject}
+            onSelectProfile={selectVoiceProfile}
+            onUseProfileForTemporarySource={useVoiceProfileForTemporarySource}
           />
         </Suspense>
       ) : null}
       {isHelpOpen ? (
         <Suspense fallback={<LazySurfaceFallback label="Loading help..." />}>
           <HelpPanel
+            commandPaletteShortcutLabel={
+              shortcutLabelForCommand("command.palette", shortcutPreferences) ?? "Ctrl+K / Cmd+K"
+            }
+            context={{
+              activeCinema: activeHelpCinema,
+              runConfiguration,
+              sourceMode,
+              stage: contentMode,
+              studioMode,
+            }}
             isOpen={isHelpOpen}
             job={job}
             profileSourceDiagnostics={profileSourceDiagnostics}
             profileSource={profileSource}
+            preferredAnchorId={helpCommandTarget?.anchorId ?? null}
             selectedProfile={selectedVoiceProfile}
+            shortcutCheatSheetLabel={
+              shortcutLabelForCommand("shortcut.cheatsheet", shortcutPreferences) ?? "?"
+            }
             onClose={() => {
               setIsHelpOpen(false);
+            }}
+            onOpenSettings={(target) => {
+              setHelpCommandTarget(null);
+              setIsHelpOpen(false);
+              setSettingsCommandTarget(target);
+              setIsSettingsOpen(true);
             }}
           />
         </Suspense>
@@ -5316,35 +10452,88 @@ export function App() {
       {isSettingsOpen ? (
         <Suspense fallback={<LazySurfaceFallback label="Loading settings..." />}>
           <SettingsPanel
-            canSubmit={canSubmit}
+            adapterDiagnostics={deferredAdapterDiagnostics}
+            adapterDiagnosticsError={adapterDiagnosticsError}
+            canSubmit={canCreateCurrentSource}
+            commandTarget={settingsCommandTarget}
+            customSpeechPolicyProfiles={deferredCustomSpeechPolicyProfiles}
+            hydrationBusy={commandSurfaceBusy}
             isOpen={isSettingsOpen}
-            job={job}
-            metrics={systemMetrics}
+            isSpeechPolicyPreviewing={isSpeechPolicyPreviewing}
+            job={deferredJob}
+            metrics={deferredMetrics}
             metricsError={systemMetricsError}
             profileSourceDiagnostics={profileSourceDiagnostics}
             profileSource={profileSource}
-            projectStorage={projectStorage}
+            projectStorage={deferredProjectStorage}
             projectStorageError={projectStorageError}
+            readerAccessibilitySettings={readerAccessibilitySettings}
+            readAlongPreferences={readAlongPreferences}
             researchModules={researchModules}
             runConfiguration={runConfiguration}
+            selectedBookSource={selectedBookSource}
+            selectedPreparedSource={selectedPreparedSource}
             selectedProfile={selectedVoiceProfile}
+            sourceMode={sourceMode}
+            sourceFallbackLabel={
+              sourceMode === "text" && hasNarrationSource ? activeNarrationSourceLabel : null
+            }
+            sourcePolicySavingKey={sourcePolicySavingKey}
+            speechPolicyDefinition={speechPolicyDefinition}
+            speechPolicyError={speechPolicyError}
+            speechPolicyOverrides={speechPolicyOverrides}
+            speechPolicyProfile={speechPolicyProfile}
+            speechPolicyProfiles={deferredSpeechPolicyProfiles}
+            shortcutPreferences={shortcutPreferences}
+            telepromptTheatreSettings={telepromptTheatreSettings}
             teleprompterSettings={teleprompterSettings}
+            temporarySourceBehavior={temporarySourceBehavior}
+            temporaryStorageUsage={temporaryStorageUsage}
             themeName={themeName}
             ttsEngineError={ttsEngineError}
-            ttsEngines={ttsEngines}
-            onPrepareProfileTarget={handleBuildVoiceProfileArtifact}
+            ttsEngines={deferredTTSEngines}
+            uiMemory={uiMemory}
+            onClearBookSourcePolicy={handleClearBookSourcePolicy}
+            onClearPreparedSourcePolicy={handleClearPreparedSourcePolicy}
+            onClearSpeechPolicyOverrides={handleClearSpeechPolicyOverrides}
+            onCreateCustomSpeechPolicyProfile={handleCreateCustomSpeechPolicyProfile}
+            onDeleteCustomSpeechPolicyProfile={handleDeleteCustomSpeechPolicyProfile}
+            onReaderAccessibilitySettingsChange={setReaderAccessibilitySettings}
+            onReadAlongPreferencesChange={(preferences) => {
+              markReaderWorkspaceUserIntent();
+              setReadAlongPreferences(preferences);
+            }}
             onRunConfigurationChange={setRunConfiguration}
+            onSaveBookSourcePolicy={handleSaveBookSourcePolicy}
+            onSavePreparedSourcePolicy={handleSavePreparedSourcePolicy}
+            onShortcutPreferencesChange={setShortcutPreferences}
+            onShortcutPreferencesReset={() => {
+              setShortcutPreferences(resetShortcutPreferences());
+              announcePolite(liveStatusMessages.settingsReset("Shortcut"));
+            }}
             onClose={() => {
               setIsSettingsOpen(false);
             }}
+            onSpeechPolicyOverridesChange={handleSpeechPolicyOverridesChange}
+            onSpeechPolicyProfileChange={(profile) => {
+              void handleSpeechPolicyProfileChange(profile);
+            }}
             onSubmit={() => {
               setIsSettingsOpen(false);
-              void submitVoiceJob();
+              createAndListenFromCurrentSource();
             }}
+            onTelepromptTheatreSettingsChange={handleTelepromptTheatreSettingsChange}
             onTeleprompterSettingsChange={(settings) => {
               setTeleprompterSettings(normalizeTeleprompterHighlightSettings(settings));
             }}
+            onClearTemporarySources={handleClearTemporarySources}
+            onTemporarySourceBehaviorChange={setTemporarySourceBehavior}
             onThemeChange={setThemeName}
+            onUiMemoryExportPreferences={handleUiMemoryExportPreferences}
+            onUiMemoryImportPreferences={handleUiMemoryImportPreferences}
+            onUiMemoryPreferenceChange={handleUiMemoryPreferenceChange}
+            onUiMemoryReset={handleUiMemoryReset}
+            onUpdateCustomSpeechPolicyProfile={handleUpdateCustomSpeechPolicyProfile}
           />
         </Suspense>
       ) : null}
@@ -5358,7 +10547,13 @@ export function App() {
             projects={projects}
             onClose={() => {
               setIsBundlePanelOpen(false);
+              if (bundleReturnSection) {
+                openCommandCenter(bundleReturnSection);
+                setBundleReturnSection(null);
+              }
             }}
+            onOperationActivityChange={setBundleOperationActivity}
+            onOperationReportChange={setBundleOperationReport}
             onImported={handleBundleImported}
           />
         </Suspense>
@@ -5377,31 +10572,117 @@ export function App() {
           />
         </Suspense>
       ) : null}
+      {studioMode === "narration" ? (
+        <Suspense fallback={null}>
+          <LazyGlobalPreviewPlayer
+            activeBlockId={workspaceContext.activeBlockId}
+            blocks={narrationPreviewBlocks}
+            canOpenCinema={canOpenCurrentCinema}
+            currentPolicyId={speechPolicyProfile}
+            currentRunMode={runConfiguration.runMode}
+            currentVoiceId={activePreviewVoiceSelectionId}
+            hidden={!globalPreviewVisible || workspaceOverlay.previewPlacement === "hidden"}
+            isPlaybackActive={isPlaybackActive}
+            generatedAudioLifecycle={generatedAudioLifecycle}
+            job={job}
+            mode={contentMode === "preview" ? "full" : "comparison-only"}
+            playbackControls={userIntentPlaybackControls}
+            playbackCursorSec={playbackCursorSec}
+            placement={workspaceOverlay.previewPlacement}
+            policyOptions={globalPreviewPolicyOptions}
+            providerEngineId={runConfiguration.ttsEngine}
+            providerEngines={ttsEngines}
+            policyProfileLabel={speechPolicyProfileDisplayName(
+              speechPolicyProfile,
+              customSpeechPolicyProfiles,
+            )}
+            runConfigurationLabel={getRunModePreset(runConfiguration.runMode).label}
+            scopeLabel={workbenchScopeTitle({
+              selectedBookScope: effectiveBookScope,
+              selectedBookSource: activeNarrationBookSource,
+              selectedPreparedSource: activeNarrationPreparedSource,
+              sourceMode,
+            })}
+            sourceLabel={narrationReviewSourceLabel(
+              activeNarrationPreparedSource,
+              activeNarrationBookSource,
+            )}
+            variant={
+              workspaceOverlay.previewPlacement === "floating"
+                ? previewPlayerVariantForSurface({ isSettingsOpen, stage: contentMode })
+                : workspaceOverlay.previewVariant
+            }
+            voiceOptions={globalPreviewVoiceOptions}
+            voiceProfileLabel={activePreviewVoiceLabel}
+            onActiveBlockChange={(blockId) => {
+              if (blockId) {
+                markReaderWorkspaceBlockNavigation(workspaceContext.sourceId, blockId);
+              } else {
+                markReaderWorkspaceUserIntent();
+              }
+              setWorkspaceContext((currentContext) =>
+                withWorkspaceActiveBlock(currentContext, blockId),
+              );
+              inspectWorkspaceCue(blockId);
+            }}
+            onOpenCinema={openReadingCinema}
+            onPolicyProfileChange={handleSpeechPolicyProfileChange}
+            onRunModeChange={handleGlobalPreviewRunModeChange}
+            onVoiceProfileChange={handleGlobalPreviewVoiceChange}
+          />
+        </Suspense>
+      ) : null}
       <TeleprompterPanel
+        accessibilitySettings={readerAccessibilitySettings}
         canOpenBookCinema={canOpenBookCinema}
         isPlaybackActive={isPlaybackActive}
         job={job}
         latestProgress={latestProgress}
         openSignal={teleprompterOpenSignal}
-        playbackControls={playbackControls}
+        generatedAudioLifecycle={generatedAudioLifecycle}
+        playbackControls={userIntentPlaybackControls}
         playbackCursorSec={playbackCursorSec}
         preparedSourceForCinema={jobPreparedSource ?? selectedPreparedSource}
+        readAlongPreferences={readAlongPreferences}
         settings={teleprompterSettings}
         showInlinePreview={false}
         themeName={themeName}
         onOpenBookCinema={openReadingCinema}
         onOpenSettings={() => {
+          setSettingsCommandTarget(null);
           setIsSettingsOpen(true);
         }}
         onResumeProgress={(progress) => {
+          markReaderWorkspaceUserIntent();
           void handleResumeProgress(progress);
         }}
       />
+      {job ? (
+        <PlaybackControllerHost
+          job={job}
+          latestProgress={latestProgress}
+          onOpenCinema={openReadingCinema}
+          onPlaybackCursorChange={setPlaybackCursorSec}
+          onPlaybackControlsChange={handlePlaybackControlsChange}
+          onPlaybackStateChange={setIsPlaybackActive}
+          onResumeProgress={(progress) => {
+            markReaderWorkspaceUserIntent();
+            void handleResumeProgress(progress);
+          }}
+        />
+      ) : null}
       {isBookCinemaOpen && selectedBookSource && effectiveBookScope ? (
         <Suspense fallback={<LazySurfaceFallback label="Loading Book Cinema..." />}>
           <BookCinemaOverlay
             book={selectedBookSource}
-            bookSources={bookSources}
+            bookSources={
+              activeTemporaryBookSource
+                ? [
+                    activeTemporaryBookSource,
+                    ...bookSources.filter((source) => source.id !== activeTemporaryBookSource.id),
+                  ]
+                : bookSources
+            }
             canCreateAudio={!isProcessing}
             customPolicyProfiles={customSpeechPolicyProfiles}
             importError={bookSourceError}
@@ -5409,42 +10690,71 @@ export function App() {
             isProcessing={isProcessing}
             isResumeRestoring={isResumeRestoring}
             job={job}
-            playbackControls={playbackControls}
+            playbackControls={userIntentPlaybackControls}
             playbackCursorSec={playbackCursorSec}
             policyDefinition={speechPolicyDefinition}
             policyError={speechPolicyError}
             policyOverrides={speechPolicyOverrides}
             policyProfile={speechPolicyProfile}
             policyProfiles={speechPolicyProfiles}
-            progress={selectedBookProgress ?? hashProgress}
+            progress={hashProgress ?? selectedBookProgress}
             progressItems={projectProgress}
+            resumeFallbackNotice={resumeFallbackNotice}
+            readAlongPreferences={readAlongPreferences}
             sourcePolicySaving={sourcePolicySavingKey === `book:${selectedBookSource.id}`}
+            theatreControlsSignal={cinemaTheatreControlsSignal}
+            theatreExitSignal={cinemaTheatreExitSignal}
+            theatreOpenSignal={cinemaTheatreOpenSignal}
+            uiMemoryFocusState={resolveLiveCinemaFocusState("book")}
+            uiMemoryResetSignal={uiMemoryResetSignal}
             accessibilitySettings={readerAccessibilitySettings}
             scope={effectiveBookScope}
             scopeContent={bookScopeContent}
-            highlightCue={activeHighlightCue}
             highlightMap={highlightMap}
+            highlightMapV2={highlightMapV2}
             themeName={bookCinemaThemeName}
             onClose={() => {
+              markReaderWorkspaceUserIntent();
               setIsBookCinemaOpen(false);
             }}
             onCreateAudio={(book, scope) => {
               void submitBookNarrationJob(book, scope);
             }}
-            onImport={handleImportBookSource}
+            onDiscardTemporarySource={(book) => {
+              void handleDiscardTemporaryBookSource(book);
+            }}
+            onImport={async (files, options) => {
+              await handleImportBookSource(files, options);
+            }}
             onInspectStructure={(book) => {
               void handleInspectContentIR(book.id, bookSourceName(book));
             }}
             onBookmark={() => {
               void handleAddPlaybackBookmark();
             }}
+            onCommandPaletteOpen={() => {
+              openCommandPalette("commands");
+            }}
             onPlayPause={handleBookCinemaPlayPause}
+            onHelpOpen={openContextualHelp}
+            keepTemporarySourceDisabledReason={temporaryPromotionUnavailableReason}
+            onKeepTemporarySource={(book, title) => {
+              handleKeepTemporaryBookSource(book, title);
+            }}
             onRestart={handleBookCinemaRestart}
-            onScopeChange={setSelectedBookScope}
-            onSelectBook={handleSelectBookCinemaSource}
+            onScopeChange={(scope) => {
+              markReaderWorkspaceUserIntent();
+              setSelectedBookScope(scope);
+            }}
+            onSelectBook={(bookId) => {
+              markReaderWorkspaceUserIntent();
+              handleSelectBookCinemaSource(bookId);
+            }}
+            onShortcutCheatSheetOpen={openShortcutCheatSheet}
             onSkip={handleBookCinemaSkip}
             onClearSourcePolicy={() => handleClearBookSourcePolicy(selectedBookSource.id)}
             onResumeProgress={(progress, seconds) => {
+              markReaderWorkspaceUserIntent();
               void handleResumeProgress(progress, seconds);
             }}
             onSaveSourcePolicy={(request) =>
@@ -5452,15 +10762,22 @@ export function App() {
             }
             onAccessibilitySettingsChange={setReaderAccessibilitySettings}
             onThemeChange={setBookCinemaThemeName}
+            onUiMemoryFocusStateChange={handleBookCinemaFocusStateChange}
           />
         </Suspense>
       ) : null}
       {preparedSourceCinemaSource ? (
         <Suspense fallback={<LazySurfaceFallback label="Loading source cinema..." />}>
-          <PreparedSourceCinemaOverlay
+          <PreparedCinemaOverlay
             accessibilitySettings={readerAccessibilitySettings}
-            activeWordIndex={preparedSourceCinemaCue?.documentActiveWordIndex ?? -1}
+            activeWordIndex={
+              visibleAuthoritativePreparedResume?.activeWordIndex ??
+              preparedSourceCinemaCue?.documentActiveWordIndex ??
+              -1
+            }
             canCreateAudio={!isProcessing}
+            highlightMap={highlightMap}
+            highlightMapV2={highlightMapV2}
             importError={sourcePrepError}
             isImporting={isPreparingSource}
             isProcessing={isProcessing}
@@ -5469,7 +10786,7 @@ export function App() {
               preparedSourceCinemaJobMatchesSource(job, preparedSourceCinemaSource)
             }
             job={preparedSourceCinemaJob}
-            playbackControls={playbackControls}
+            playbackControls={userIntentPlaybackControls}
             playbackCursorSec={playbackCursorSec}
             customPolicyProfiles={customSpeechPolicyProfiles}
             policyDefinition={speechPolicyDefinition}
@@ -5479,40 +10796,74 @@ export function App() {
             policyProfiles={speechPolicyProfiles}
             progress={preparedSourceCinemaProgress}
             progressItems={projectProgress}
+            readAlongPreferences={readAlongPreferences}
             source={preparedSourceCinemaSource}
             sourcePolicySaving={
               sourcePolicySavingKey === `prepared:${preparedSourceCinemaSource.id}`
             }
             sources={preparedSources}
+            theatreControlsSignal={cinemaTheatreControlsSignal}
+            theatreExitSignal={cinemaTheatreExitSignal}
+            theatreOpenSignal={cinemaTheatreOpenSignal}
             themeName={preparedSourceCinemaThemeName}
+            uiMemoryFocusState={resolveLiveCinemaFocusState(preparedSourceCinemaSurfaceKind)}
+            uiMemoryResetSignal={uiMemoryResetSignal}
             onAccessibilitySettingsChange={setReaderAccessibilitySettings}
             onBookmark={() => {
               void handleAddPlaybackBookmark();
+            }}
+            onCommandPaletteOpen={() => {
+              openCommandPalette("commands");
             }}
             onClearSourcePolicy={() =>
               handleClearPreparedSourcePolicy(preparedSourceCinemaSource.id)
             }
             onClose={() => {
+              markReaderWorkspaceUserIntent();
+              setAuthoritativePreparedResume(null);
+              setPreparedReaderNavigationPosition(null);
               setPreparedSourceCinemaSourceId(null);
             }}
             onCreateAudio={(source) => {
               void submitPreparedSourceJob(source);
             }}
+            onDiscardTemporarySource={(source) => {
+              void handleDiscardTemporaryPreparedSource(source);
+            }}
             onInspectStructure={(source) => {
               void handleInspectContentIR(source.id, source.title ?? source.sourceName, true);
             }}
+            onKeepTemporarySource={(source, title) => {
+              handleKeepTemporarySource(source, title);
+            }}
             onPrepareFile={handlePrepareCinemaSourceFile}
             onPlayPause={handleBookCinemaPlayPause}
+            onHelpOpen={openContextualHelp}
+            keepTemporarySourceDisabledReason={temporaryPromotionUnavailableReason}
+            onRerunWebsiteExtraction={handleRerunWebsiteExtraction}
+            onReaderNavigate={(item) => {
+              markReaderWorkspaceBlockNavigation(preparedSourceCinemaSource.id, item.blockId);
+            }}
             onRestart={handleBookCinemaRestart}
             onResumeProgress={(progress) => {
+              markReaderWorkspaceUserIntent();
+              setAuthoritativePreparedResume(null);
+              setPreparedReaderNavigationPosition(progress.readingPosition ?? null);
               void handleResumeProgress(progress);
             }}
             onSaveSourcePolicy={(request) =>
               handleSavePreparedSourcePolicy(preparedSourceCinemaSource.id, request)
             }
-            onSelectSource={handleSelectPreparedCinemaSource}
+            onSelectSource={(sourceId) => {
+              markReaderWorkspaceUserIntent();
+              setAuthoritativePreparedResume(null);
+              setPreparedReaderNavigationPosition(null);
+              handleSelectPreparedCinemaSource(sourceId);
+            }}
+            onShortcutCheatSheetOpen={openShortcutCheatSheet}
             onSkip={handleBookCinemaSkip}
             onThemeChange={setPreparedSourceCinemaThemeName}
+            onUiMemoryFocusStateChange={handlePreparedCinemaFocusStateChange}
           />
         </Suspense>
       ) : null}
@@ -5530,25 +10881,21 @@ export function App() {
 
       {studioMode === "voiceCloning" ? (
         <section
-          className="grid min-h-0 grid-cols-1 border-t lg:flex-1 lg:grid-cols-[var(--studio-left-column)_minmax(0,1fr)_var(--studio-right-column)] lg:overflow-hidden vs-border"
+          className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto border-t lg:grid-cols-[var(--studio-left-column)_minmax(0,1fr)_var(--studio-right-column)] lg:overflow-hidden vs-border"
           style={studioGridStyle}
         >
-          <aside className="vs-raised order-3 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-r">
-            {leftRailMode === "collapsed" ? null : (
-              <RailModeToolbar
-                label="Voice Command"
-                mode={leftRailMode}
-                onModeChange={setLeftRailMode}
-              />
-            )}
+          <aside
+            className={`vs-raised order-3 hidden min-w-0 flex-col border-[var(--vs-border-subtle)] lg:order-none lg:flex lg:min-h-0 lg:overflow-y-auto ${
+              leftRailMode === "collapsed" ? "lg:border-r-0" : "lg:border-r"
+            }`}
+            {...overlayDataAttributes("left-rail", "left-rail")}
+          >
             {leftRailMode === "full" ? (
               <VoiceCloningVoiceRail
                 buildingArtifactKey={buildingArtifactKey}
                 isClearingHuggingFaceToken={isClearingHuggingFaceToken}
                 isLoading={isLoadingProfiles}
                 profiles={voiceProfiles}
-                pinnedProfileIds={pinnedVoiceProfileIds}
-                recentProfileIds={recentVoiceProfileIds}
                 researchModules={researchModules}
                 runConfiguration={runConfiguration}
                 savingHuggingFaceTokenKey={savingHuggingFaceTokenKey}
@@ -5569,23 +10916,24 @@ export function App() {
                 onDeleteProfile={(id) => {
                   void handleDeleteVoiceProfile(id);
                 }}
+                onOpenVoiceDashboard={() => {
+                  setIsVoiceDashboardOpen(true);
+                }}
                 onRunConfigurationChange={setRunConfiguration}
                 onSaveHuggingFaceToken={handleSaveHuggingFaceTokenAndValidate}
                 onSelectKokoroVoice={selectKokoroVoice}
                 onSelectProfile={selectVoiceProfile}
-                onTogglePinnedProfile={togglePinnedVoiceProfile}
               />
-            ) : (
+            ) : null}
+            {leftRailMode === "compact" ? (
               <VoiceCloningRailMini
-                mode={leftRailMode}
                 profile={selectedVoiceProfile}
                 source={profileSource}
                 totalProfiles={voiceProfiles.length}
-                onModeChange={setLeftRailMode}
               />
-            )}
+            ) : null}
           </aside>
-          <section className="order-1 min-w-0 p-5 lg:order-none lg:min-h-0 lg:overflow-y-auto xl:p-6">
+          <section className="order-1 min-w-0 px-5 pt-5 pb-24 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:pb-5 xl:px-6 xl:pt-6 xl:pb-6">
             <VoiceCloningWorkspace
               activity={voiceCloningActivity}
               buildingArtifactKey={buildingArtifactKey}
@@ -5612,14 +10960,12 @@ export function App() {
               onRunConfigurationChange={setRunConfiguration}
             />
           </section>
-          <aside className="vs-raised order-2 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-l">
-            {rightRailMode === "collapsed" ? null : (
-              <RailModeToolbar
-                label="Readiness"
-                mode={rightRailMode}
-                onModeChange={setRightRailMode}
-              />
-            )}
+          <aside
+            className={`vs-raised order-2 hidden min-w-0 flex-col border-[var(--vs-border-subtle)] lg:order-none lg:flex lg:min-h-0 lg:overflow-y-auto ${
+              displayRightRailMode === "collapsed" ? "lg:border-l-0" : "lg:border-l"
+            }`}
+            {...overlayDataAttributes("right-rail", "right-rail")}
+          >
             {rightRailMode === "full" ? (
               <div className="grid gap-3 p-4 xl:p-5">
                 <CloneArtifactReadinessPanel
@@ -5634,45 +10980,36 @@ export function App() {
                   onRunConfigurationChange={setRunConfiguration}
                 />
               </div>
-            ) : (
+            ) : null}
+            {rightRailMode === "compact" ? (
               <CloneReadinessRailMini
                 activity={voiceCloningActivity}
-                mode={rightRailMode}
-                onModeChange={setRightRailMode}
                 onOpenVoiceCloning={() => {
                   handleStudioModeChange("voiceCloning");
                 }}
               />
-            )}
+            ) : null}
           </aside>
         </section>
       ) : (
         <section
-          className="grid min-h-0 grid-cols-1 border-t lg:flex-1 lg:grid-cols-[var(--studio-left-column)_minmax(0,1fr)_var(--studio-right-column)] lg:overflow-hidden vs-border"
+          className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto border-t lg:grid-cols-[var(--studio-left-column)_minmax(0,1fr)_var(--studio-right-column)] lg:overflow-hidden vs-border"
           style={studioGridStyle}
         >
-          <aside className="vs-raised order-3 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-r">
-            {leftRailMode === "collapsed" ? null : (
-              <RailModeToolbar
-                label="Voice Command"
-                mode={leftRailMode}
-                onModeChange={setLeftRailMode}
-              />
-            )}
+          <aside
+            className={`vs-raised order-3 hidden min-w-0 flex-col border-[var(--vs-border-subtle)] lg:order-none lg:flex lg:min-h-0 lg:overflow-y-auto ${
+              leftRailMode === "collapsed" ? "lg:border-r-0" : "lg:border-r"
+            }`}
+            {...overlayDataAttributes("left-rail", "left-rail")}
+          >
             {leftRailMode === "full" ? (
               <NarrationSidebar
                 bookSources={bookSources}
-                buildingArtifactKey={buildingArtifactKey}
                 customSpeechPolicyProfiles={customSpeechPolicyProfiles}
-                isClearingHuggingFaceToken={isClearingHuggingFaceToken}
-                isLoadingProfiles={isLoadingProfiles}
                 preparedSources={preparedSources}
                 profiles={voiceProfiles}
-                pinnedProfileIds={pinnedVoiceProfileIds}
-                recentProfileIds={recentVoiceProfileIds}
                 researchModules={researchModules}
                 runConfiguration={runConfiguration}
-                savingHuggingFaceTokenKey={savingHuggingFaceTokenKey}
                 selectedBookSourceId={selectedBookSourceId}
                 selectedKokoroVoiceId={selectedKokoroVoiceId}
                 selectedPreparedSourceId={selectedPreparedSourceId}
@@ -5681,20 +11018,12 @@ export function App() {
                 speechPolicyProfile={speechPolicyProfile}
                 speechPolicyProfiles={speechPolicyProfiles}
                 ttsEngines={ttsEngines}
-                voiceProfileCredentialError={voiceProfileCredentialError}
-                voiceProfileCredentials={voiceProfileCredentials}
-                onBuildArtifact={handleBuildVoiceProfileArtifact}
-                onClearHuggingFaceToken={() => {
-                  void handleClearLocalHuggingFaceToken();
-                }}
                 onClearSelection={clearVoiceProfileSelection}
                 onCloneVoice={() => {
                   handleStudioModeChange("voiceCloning");
                 }}
-                onDeleteProfile={(id) => {
-                  void handleDeleteVoiceProfile(id);
-                }}
                 onInspectSelectedSource={() => {
+                  inspectWorkspaceSource();
                   if (selectedPreparedSource) {
                     void handleInspectContentIR(
                       selectedPreparedSource.id,
@@ -5711,324 +11040,907 @@ export function App() {
                   }
                 }}
                 onCreateSource={() => {
-                  setContentMode("sourceIntake");
+                  setContentMode("intake");
                   setSourceMode("text");
                 }}
-                onRunConfigurationChange={setRunConfiguration}
-                onSaveHuggingFaceToken={handleSaveHuggingFaceTokenAndValidate}
-                onSelectBook={(bookId) => {
-                  setSelectedBookSourceId(bookId);
-                  setSourceMode("book");
-                  setContentMode("review");
+                onOpenProjectDashboard={() => {
+                  openCommandCenter("assets");
                 }}
-                onSelectKokoroVoice={selectKokoroVoice}
-                onSelectPreparedSource={(source) => {
-                  setSourceMode("fileUrl");
-                  setContentMode("review");
-                  void handleUsePreparedSource(source);
+                onOpenVoiceDashboard={() => {
+                  openCommandCenter("assets");
                 }}
                 onSelectProfile={selectVoiceProfile}
                 onSpeechPolicyProfileChange={(profile) => {
                   void handleSpeechPolicyProfileChange(profile);
                 }}
-                onTogglePinnedProfile={togglePinnedVoiceProfile}
               />
-            ) : (
+            ) : null}
+            {leftRailMode === "compact" ? (
               <NarrationRailMini
-                activeSourceLabel={
-                  selectedPreparedSource?.title ??
-                  (selectedBookSource ? bookSourceName(selectedBookSource) : undefined)
+                activeScopeLabel={activeNarrationScopeLabel}
+                activeSourceLabel={activeNarrationSourceLabel}
+                audioDetail={
+                  job?.durationMs
+                    ? `${formatDuration(job.durationMs)} · ${activeWorkbenchStageStatus.currentTask.title}`
+                    : activeWorkbenchStageStatus.currentTask.title
                 }
-                mode={leftRailMode}
+                audioReady={canOpenCurrentCinema}
+                audioValue={
+                  canOpenCurrentCinema
+                    ? "Audio ready"
+                    : generatedAudioLifecycleLabel(generatedAudioLifecycle)
+                }
                 profile={selectedVoiceProfile}
+                settingsDetail={`${speechPolicyProfileDisplayName(
+                  speechPolicyProfile,
+                  customSpeechPolicyProfiles,
+                )} · ${getRunModePreset(runConfiguration.runMode).label}`}
+                settingsValue={activeWorkbenchStageStatus.label}
                 sourceCount={preparedSources.length + bookSources.length}
-                onModeChange={setLeftRailMode}
-                onOpenVoiceCloning={() => {
+                onOpenAudio={() => {
+                  if (canOpenCurrentCinema) {
+                    openReadingCinema();
+                    return;
+                  }
+                  createAndListenFromCurrentSource();
+                }}
+                onOpenSettings={() => {
+                  openCommandCenter("overview");
+                }}
+                onOpenSource={() => {
+                  if (!hasNarrationSource) {
+                    setContentMode("intake");
+                    return;
+                  }
+                  openCommandCenter("assets");
+                }}
+                onOpenVoice={() => {
                   handleStudioModeChange("voiceCloning");
                 }}
               />
-            )}
+            ) : null}
           </aside>
 
-          <section className="order-1 flex min-w-0 flex-col gap-3 p-4 lg:order-none lg:min-h-0 lg:overflow-y-auto xl:p-5">
+          <section className="order-1 flex min-w-0 flex-col gap-3 px-4 pt-4 pb-24 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:pb-4 xl:px-5 xl:pt-5 xl:pb-5">
             <SourceTextPanel
+              activeReviewPane={activeReviewPane}
+              activeReviewBlockId={workspaceContext.activeBlockId}
+              baseReviewBlocks={baseNarrationPreviewBlocks}
+              reviewOpenFocusRequest={reviewOpenFocusRequest}
+              stageStatus={activeWorkbenchStageStatus}
               projectId={activeProjectId}
-              bookControls={
-                <Suspense fallback={<LazySurfaceFallback label="Loading book tools..." />}>
-                  <BookCinemaPanel
-                    bookSources={bookSources}
-                    canCreateAudio={!isProcessing}
-                    diagnostics={bookCinemaDiagnostics}
-                    error={bookSourceError}
-                    isImporting={isImportingBookSource}
-                    isProcessing={isProcessing}
-                    isScopeLoading={isLoadingBookScope}
-                    scopeContent={bookScopeContent}
-                    selectedBookScope={effectiveBookScope}
-                    selectedBookSourceId={selectedBookSourceId}
-                    onCreateAudio={(book, scope) => {
-                      void submitBookNarrationJob(book, scope);
-                    }}
-                    onImport={handleImportBookSource}
-                    onOpenCinema={openSelectedBookCinema}
-                    onInspectStructure={(book) => {
-                      void handleInspectContentIR(book.id, bookSourceName(book));
-                    }}
-                    onScopeChange={setSelectedBookScope}
-                    onSelectBook={setSelectedBookSourceId}
-                    onUseText={handleUseBookText}
-                  />
-                </Suspense>
-              }
-              canSubmit={canSubmit}
+              bookSourceError={bookSourceError}
+              bookSources={bookSources}
+              canSubmit={canRunCurrentGenerationAction}
               contentMode={contentMode}
+              generatedAudioLifecycle={generatedAudioLifecycle}
+              isImportingBookSource={isImportingBookSource}
               isPreparingSource={isPreparingSource}
               isProcessing={isProcessing}
-              isSpeechPolicyPreviewing={isSpeechPolicyPreviewing}
               job={job}
               bookScopeContent={bookScopeContent}
+              historyEntries={revisionHistoryEntries}
               optimizedText={job?.optimizedText ?? ""}
               preparedSources={preparedSources}
+              previewSpeechPlan={canonicalPreviewSpeechPlan}
+              reviewBlocks={narrationPreviewBlocks}
+              revisionStatusByBlockId={revisionStatusByBlockId}
               selectedBookScope={effectiveBookScope}
               selectedBookSource={selectedBookSource}
               selectedPreparedSource={selectedPreparedSource}
+              shortcutPreferences={shortcutPreferences}
               sourceMode={sourceMode}
-              speechPolicyError={speechPolicyError}
-              speechPolicyDefinition={speechPolicyDefinition}
-              speechPolicyOverrides={speechPolicyOverrides}
-              speechPolicyProfile={speechPolicyProfile}
-              customSpeechPolicyProfiles={customSpeechPolicyProfiles}
-              speechPolicyProfiles={speechPolicyProfiles}
+              speechPolicyProfileLabel={speechPolicyProfileDisplayName(
+                speechPolicyProfile,
+                customSpeechPolicyProfiles,
+              )}
               sourcePrepError={sourcePrepError}
+              telepromptStage={
+                <Suspense fallback={<LazySurfaceFallback label="Loading teleprompt..." />}>
+                  <LazyTelepromptStudio
+                    activeBlockId={workspaceContext.activeBlockId}
+                    blocks={narrationPreviewBlocks}
+                    canCreate={canRunCurrentGenerationAction}
+                    canOpenCinema={canOpenCurrentCinema}
+                    contextInspectorDensity={workspaceLayout.contextInspector}
+                    createAndListenCapabilityReason={createAndListenCapabilityReason}
+                    createAndListenDisabledReason={createAndListenDisabledReason}
+                    highlightMap={highlightMap}
+                    highlightMapV2={highlightMapV2}
+                    isPlaybackActive={isPlaybackActive}
+                    job={job}
+                    playbackControls={userIntentPlaybackControls}
+                    playbackCursorSec={playbackCursorSec}
+                    policyProfile={speechPolicyProfileDisplayName(
+                      speechPolicyProfile,
+                      customSpeechPolicyProfiles,
+                    )}
+                    projectId={activeProjectId}
+                    rememberReturnMemory={uiMemory.rememberTelepromptReturnTarget}
+                    returnStage={workspaceContext.telepromptReturnStage}
+                    scopeLabel={workbenchScopeTitle({
+                      selectedBookScope: effectiveBookScope,
+                      selectedBookSource: activeNarrationBookSource,
+                      selectedPreparedSource: activeNarrationPreparedSource,
+                      sourceMode,
+                    })}
+                    sourceLabel={narrationReviewSourceLabel(
+                      activeNarrationPreparedSource,
+                      activeNarrationBookSource,
+                    )}
+                    sourceLifecycle={workbenchSourceLifecycleEnvelope({
+                      generatedAudioLifecycle,
+                      job,
+                      projectId: activeProjectId,
+                      selectedScopeLabel: workbenchScopeTitle({
+                        selectedBookScope: effectiveBookScope,
+                        selectedBookSource: activeNarrationBookSource,
+                        selectedPreparedSource: activeNarrationPreparedSource,
+                        sourceMode,
+                      }),
+                      selectedBookSource: activeNarrationBookSource,
+                      selectedPreparedSource: activeNarrationPreparedSource,
+                      sourceMode,
+                      surface: contentMode === "theatre" ? "Theatre" : "Teleprompt",
+                      text,
+                    })}
+                    sourceMeta={narrationReviewSourceMeta({
+                      bookScopeContent,
+                      selectedBookScope: effectiveBookScope,
+                      selectedBookSource: activeNarrationBookSource,
+                      selectedPreparedSource: activeNarrationPreparedSource,
+                      text,
+                    })}
+                    settings={teleprompterSettings}
+                    shortcutPreferences={shortcutPreferences}
+                    theatreSettings={telepromptTheatreSettings}
+                    theatreSettingsMemoryEnabled={uiMemory.rememberTelepromptTheatreSettings}
+                    sourceId={
+                      activeNarrationPreparedSource?.id ?? activeNarrationBookSource?.id ?? null
+                    }
+                    voiceProfile={selectedVoiceProfileLabel}
+                    sourceType={activeNarrationSourceType}
+                    theatreOpenSignal={telepromptTheatreStageOpenSignal}
+                    onActiveBlockChange={(blockId) => {
+                      setWorkspaceContext((currentContext) =>
+                        withWorkspaceActiveBlock(currentContext, blockId),
+                      );
+                      inspectWorkspaceCue(blockId);
+                    }}
+                    onUserNavigate={(blockId) => {
+                      markReaderWorkspaceBlockNavigation(workspaceContext.sourceId, blockId);
+                    }}
+                    onBackToPreview={() => {
+                      runWorkspaceStageAction("previewSpeech");
+                    }}
+                    onBackToReview={() => {
+                      runWorkspaceStageAction("reviewBlocks");
+                    }}
+                    onCreateAndListen={createAndListenFromCurrentSource}
+                    onExitTheatreStage={() => {
+                      runWorkspaceStageAction(
+                        workspaceStageNavigationAction(workspaceContext.telepromptReturnStage),
+                      );
+                    }}
+                    onOpenCinema={openReadingCinema}
+                    onOpenTheatreStage={() => {
+                      runWorkspaceStageAction("openTheatre");
+                    }}
+                    onRefreshTemporarySource={refreshActiveTemporarySourceSession}
+                    onTheatreSettingsChange={handleTelepromptTheatreSettingsChange}
+                  />
+                </Suspense>
+              }
               text={text}
+              temporaryReview={temporaryReviewAdapter}
+              temporaryReviewMode={temporaryReviewMode}
+              temporaryCinemaDisabledReason={temporaryCinemaActionDisabledReason}
+              temporaryVoiceOptions={
+                activeNarrationIsTemporary ? globalPreviewVoiceOptions : undefined
+              }
+              temporaryVoiceSelectionId={
+                activeNarrationIsTemporary ? activePreviewVoiceSelectionId : undefined
+              }
               voiceProfileId={selectedVoiceProfileId}
-              onClearSpeechPolicyOverrides={handleClearSpeechPolicyOverrides}
-              onContentModeChange={setContentMode}
-              onCreatePreparedAudio={(source) => {
-                void submitPreparedSourceJob(source);
+              voiceProfileLabel={selectedVoiceProfileLabel}
+              voiceProfiles={voiceProfiles}
+              onCreateAndListen={createAndListenFromCurrentSource}
+              onCreateWithCurrentPlan={createGenerationFromCurrentSourcePlan}
+              createAndListenCapabilityReason={createAndListenCapabilityReason}
+              createAndListenDisabledReason={createAndListenDisabledReason}
+              createAndListenScope={createAndListenScope}
+              isPlaybackActive={isPlaybackActive}
+              playbackControls={userIntentPlaybackControls}
+              playbackCursorSec={playbackCursorSec}
+              onAuditionVoice={auditionVoicePreviewFromCurrentConfig}
+              onTemporaryVoiceChange={
+                activeNarrationIsTemporary ? applyTemporaryVoiceForSource : undefined
+              }
+              onCancelRun={() => {
+                void handleCancelVoiceJob();
               }}
               onInspectBookSource={(book) => {
+                selectWorkspaceInspectorTarget({
+                  id: book.id,
+                  kind: "source",
+                  label: bookSourceName(book),
+                });
                 void handleInspectContentIR(book.id, bookSourceName(book));
               }}
               onInspectPreparedSource={(source) => {
+                selectWorkspaceInspectorTarget({
+                  id: source.id,
+                  kind: "source",
+                  label: source.title ?? source.sourceName,
+                });
                 void handleInspectContentIR(source.id, source.title ?? source.sourceName, true);
               }}
+              onOpenCinema={openReadingCinema}
+              onOpenTheatre={openTelepromptTheatreStage}
+              onOpenBookCinema={openBookCinemaFromIntake}
+              onOpenVoiceCloning={() => {
+                handleStudioModeChange("voiceCloning");
+              }}
               onOpenPreparedSourceCinema={openPreparedSourceCinema}
-              onOpenTeleprompter={openReadingCinema}
+              onImportBookSource={handleImportBookSource}
+              onBookScopeChange={setSelectedBookScope}
+              onConfirmBookSourceReadiness={handleConfirmBookReadiness}
+              onConfirmPreparedSourceReadiness={handleConfirmPreparedReadiness}
+              onPrepareDraftText={handlePrepareDraftText}
               onPrepareFile={handlePrepareSourceFile}
               onPrepareUrl={handlePrepareSourceUrl}
-              onSourceModeChange={setSourceMode}
-              onSpeechPolicyOverridesChange={handleSpeechPolicyOverridesChange}
+              providerBackedGenerationBoundary={providerBackedGenerationBoundary}
+              runConfiguration={runConfiguration}
+              onSelectVoiceProfile={selectVoiceProfile}
+              selectedProfile={selectedVoiceProfile}
+              onOpenReviewRepair={openReviewRepairQueue}
+              onDiscardTemporarySource={() => {
+                if (activeNarrationPreparedSource) {
+                  void handleDiscardTemporaryPreparedSource(activeNarrationPreparedSource);
+                }
+              }}
+              onKeepTemporarySource={() => {
+                if (activeNarrationPreparedSource) {
+                  handleKeepTemporarySource(activeNarrationPreparedSource);
+                }
+              }}
+              keepTemporarySourceDisabledReason={temporaryPromotionUnavailableReason}
+              onStageAction={runWorkspaceStageAction}
               onSpeechPolicyProfileChange={(profile) => {
                 void handleSpeechPolicyProfileChange(profile);
               }}
-              onCreateCustomSpeechPolicyProfile={handleCreateCustomSpeechPolicyProfile}
-              onDeleteCustomSpeechPolicyProfile={handleDeleteCustomSpeechPolicyProfile}
-              onUpdateCustomSpeechPolicyProfile={handleUpdateCustomSpeechPolicyProfile}
+              onReviewBlockChange={(blockId) => {
+                setWorkspaceContext((currentContext) =>
+                  withWorkspaceActiveBlock(currentContext, blockId),
+                );
+                inspectWorkspaceCue(blockId);
+              }}
+              onReviewUserNavigate={(blockId) => {
+                markReaderWorkspaceBlockNavigation(workspaceContext.sourceId, blockId);
+              }}
+              onEditedTextByBlockIdChange={setRevisionEditedTextByBlockId}
+              onHistoryEntriesChange={setRevisionHistoryEntries}
+              onReviewPaneChange={handleReviewPaneChange}
+              onTemporaryReviewModeChange={setTemporaryReviewMode}
+              onStatusByBlockIdChange={setRevisionStatusByBlockId}
               onSubmit={handleSubmit}
-              onTextChange={setText}
+              onUseBookSource={handleUseBookText}
               onUsePreparedSource={handleUsePreparedSource}
+              runConfigurationLabel={getRunModePreset(runConfiguration.runMode).label}
+              ttsEngines={ttsEngines}
             />
             {error ? (
-              <section className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900">
+              <section className="rounded-lg border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] p-4 text-sm text-[var(--vs-status-danger)]">
                 {error}
               </section>
             ) : null}
           </section>
 
-          <aside className="vs-raised order-2 flex min-w-0 flex-col border-zinc-200 lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-l">
-            {rightRailMode === "collapsed" ? null : (
-              <RailModeToolbar
-                label="Playback"
-                mode={rightRailMode}
-                onModeChange={setRightRailMode}
-              />
-            )}
-            {rightRailMode === "full" ? (
-              <div className="grid gap-3 p-4 xl:p-5">
-                <AudioPanel
-                  canOpenCinema={Boolean(job) || canOpenBookCinema}
-                  job={job}
-                  latestProgress={latestProgress}
-                  onOpenCinema={openReadingCinema}
-                  onPlaybackCursorChange={setPlaybackCursorSec}
-                  onPlaybackControlsChange={handlePlaybackControlsChange}
-                  onPlaybackStateChange={setIsPlaybackActive}
-                  onResumeProgress={(progress) => {
-                    void handleResumeProgress(progress);
+          <aside
+            className={`vs-raised order-2 hidden min-w-0 flex-col border-[var(--vs-border-subtle)] lg:order-none lg:flex lg:min-h-0 lg:overflow-y-auto ${
+              rightRailMode === "collapsed" ? "lg:border-l-0" : "lg:border-l"
+            }`}
+            style={{
+              maxHeight: "calc(100vh - var(--overlay-activity-footer-reserved, 5rem) - 4rem)",
+            }}
+            {...overlayDataAttributes("right-rail", "right-rail")}
+          >
+            {workspaceInspectorDisplayVisible ? (
+              <div
+                className="grid gap-3 p-2 xl:p-4"
+                style={{
+                  paddingBottom: "calc(var(--overlay-activity-footer-reserved, 5rem) + 1rem)",
+                }}
+              >
+                <WorkspaceInspectorPanel
+                  audio={{
+                    detail: workspaceAudioReviewSummary ?? narrationStatusModel.detail,
+                    eta: narrationStatusModel.eta,
+                    jobLabel: narrationStatusModel.activeJobLabel,
+                    lifecycleLabel: workspaceAudioLifecycleLabel,
+                    queue: narrationStatusModel.queue,
+                    tone: workspaceAudioLifecycleTone,
                   }}
-                />
-                {job?.progress.message ? <ProgressPanel job={job} now={now} /> : null}
-                <RelevantMetricsPanel
-                  job={job}
-                  metrics={systemMetrics}
-                  metricsError={systemMetricsError}
+                  diagnostics={{
+                    facts: workspaceInspectorDiagnosticsFacts({
+                      job,
+                      metrics: systemMetrics,
+                      metricsError: systemMetricsError,
+                      backendDetail:
+                        createAndListenCapabilityReason ??
+                        ttsEngineError ??
+                        systemMetricsError ??
+                        researchModuleError ??
+                        "Backend ready",
+                    }),
+                    notes: workspaceInspectorDiagnosticsNotes({
+                      profileError,
+                      profileSourceDiagnosticsMessage: profileSourceDiagnostics?.setupMessage,
+                      researchModuleError,
+                      ttsEngineError,
+                    }),
+                  }}
+                  displayState={effectiveWorkspaceInspectorDisplayState}
+                  fallbackTarget={previewWorkspaceInspectorFallbackTarget}
+                  history={{
+                    facts: [
+                      { label: "Stage", value: workspaceStageMeta(contentMode).label },
+                      { label: "Source", value: activeNarrationSourceLabel },
+                      { label: "Job", value: narrationStatusModel.activeJobLabel },
+                    ],
+                    notes: narrationStatusModel.activityItems.slice(0, 3).map((item) => ({
+                      detail: item.detail,
+                      label: item.title,
+                      tone: item.tone,
+                    })),
+                  }}
+                  pinned={workspaceInspectorPinned}
+                  pinnedTarget={pinnedWorkspaceInspectorTarget}
+                  policy={{
+                    notes: workspaceInspectorPolicyNotes,
+                    profileLabel: speechPolicyProfileDisplayName(
+                      speechPolicyProfile,
+                      customSpeechPolicyProfiles,
+                    ),
+                    scopeLabel: statusSourceLifecycle.policyScope,
+                  }}
+                  review={{
+                    activeBlockDetail: `${selectedInspectorBlock.index.toString()} of ${Math.max(1, narrationPreviewBlocks.length).toString()}`,
+                    activeBlockLabel: selectedInspectorBlock.label,
+                    diagnosticsContent: narrationReviewMathPanel(activeNarrationPreparedSource),
+                    policyContent: narrationReviewRulesPanel(
+                      activeNarrationPreparedSource,
+                      narrationPreviewBlocks,
+                      text,
+                    ),
+                  }}
+                  selectedTarget={selectedWorkspaceInspectorTarget}
+                  source={{
+                    detail: statusSourceLifecycle.selectedScope,
+                    importConfidence: workspaceInspectorImportConfidence({
+                      isImportingBookSource,
+                      isPreparingSource,
+                      selectedBookSource: activeNarrationBookSource,
+                      selectedPreparedSource: activeNarrationPreparedSource,
+                      sourcePrepError: sourcePrepError ?? bookSourceError,
+                    }),
+                    label: activeNarrationSourceLabel,
+                    metrics: workspaceInspectorSourceMetrics,
+                    scopeLabel: activeNarrationScopeLabel,
+                    stateLabel: statusSourceLifecycle.canonicalState,
+                    typeLabel: statusSourceLifecycle.sourceKind,
+                  }}
+                  stage={contentMode}
+                  status={activeWorkbenchStageStatus}
+                  targets={workspaceInspectorTargets}
+                  teleprompt={{
+                    cueSyncLabel:
+                      playbackControls.isPlaying || isPlaybackActive ? "Following audio" : "Manual",
+                    cueTimingLabel: formatDuration(selectedInspectorBlock.estimatedDurationMs),
+                    currentBlockLabel: selectedInspectorBlock.label,
+                    nextBlockLabel: nextInspectorBlockLabel,
+                    returnTargetLabel: workspaceStageMeta(workspaceContext.telepromptReturnStage)
+                      .label,
+                  }}
+                  temporary={workspaceTemporaryInspector}
+                  voice={{
+                    detail: selectedVoiceProfile
+                      ? formatLikenessLabel(selectedVoiceProfile)
+                      : "Provider voice",
+                    label: selectedVoiceProfileLabel,
+                    tone: createAndListenCapabilityReason ? "warning" : "success",
+                  }}
+                  onDisplayStateChange={setWorkspaceInspectorDisplayState}
+                  onPinnedChange={(pinned) => {
+                    setWorkspaceCustomLayout({
+                      ...workspaceContext.customLayout,
+                      contextInspector: pinned ? "pinned" : "summary",
+                    });
+                  }}
+                  onPinnedTargetChange={setPinnedWorkspaceInspectorTarget}
                 />
               </div>
-            ) : (
-              <PlaybackRailMini
-                job={job}
-                mode={rightRailMode}
-                onModeChange={setRightRailMode}
-                onOpenCinema={openReadingCinema}
-              />
-            )}
+            ) : null}
           </aside>
         </section>
       )}
-      <PipelineStatusFooter
-        activeJobId={activeJobId}
-        canSubmit={canSubmit}
-        hint={ttsPipelineHint}
-        isProcessing={isProcessing}
-        job={job}
+      <NarrationStatusStrip
+        canCancel={Boolean(activeJobId)}
+        canCreate={canRunCurrentGenerationAction}
+        canOpenCinema={canOpenCurrentCinema}
         mode={activityFooterMode}
-        pipeline={ttsPipeline}
-        voiceCloningActivity={voiceCloningActivity}
+        model={narrationStatusModel}
+        selectedIssueId={
+          selectedWorkspaceInspectorTarget?.kind === "issue"
+            ? selectedWorkspaceInspectorTarget.id
+            : null
+        }
         onCancel={() => {
           void handleCancelVoiceJob();
+        }}
+        onCreate={() => {
+          createAndListenFromCurrentSource();
+        }}
+        onOpenDiagnostics={() => {
+          openCommandCenter("reports");
+        }}
+        onOpenIntake={() => {
+          runWorkspaceStageAction("intakeSource");
+        }}
+        onOpenCinema={openReadingCinema}
+        onOpenReview={() => {
+          openReviewRepairQueue();
+        }}
+        onOpenActivity={() => {
+          inspectWorkspaceJob();
+          openCommandCenter("activity");
         }}
         onOpenVoiceCloning={() => {
           handleStudioModeChange("voiceCloning");
         }}
-        onModeChange={setActivityFooterMode}
-        onSubmit={() => {
-          void submitVoiceJob();
-        }}
+        onStatusChipSelect={handleNarrationStatusChipSelect}
       />
     </main>
   );
 }
 
-function railColumnWidth(mode: ActivityFooterMode, side: "left" | "right"): string {
-  if (mode === "collapsed") {
-    return "52px";
-  }
-  if (mode === "compact") {
-    return "156px";
-  }
-  if (side === "left") {
-    return "clamp(300px, 18vw, 340px)";
-  }
-  return "clamp(320px, 19vw, 360px)";
-}
-
-function RailModeToolbar({
-  label,
-  mode,
-  onModeChange,
+function TemporaryPromotionDialog({
+  activeProjectId,
+  error,
+  includeGeneratedAudioDefault,
+  isSubmitting,
+  pending,
+  projects,
+  session,
+  onCancel,
+  onConfirm,
 }: Readonly<{
-  label: string;
-  mode: ActivityFooterMode;
-  onModeChange: (mode: ActivityFooterMode) => void;
+  activeProjectId: string;
+  error: string | null;
+  includeGeneratedAudioDefault: boolean;
+  isSubmitting: boolean;
+  pending: PendingTemporaryPromotion;
+  projects: VoiceProject[];
+  session: TemporarySourceSession | null;
+  onCancel: () => void;
+  onConfirm: (request: {
+    conflictResolution?: "error" | "keepBoth";
+    createProjectName?: string;
+    keep: TemporarySourcePromotionKeep;
+    language?: string;
+    projectId: string;
+    scope?: string;
+    sourceType?: string;
+    title: string;
+  }) => void;
 }>) {
-  const labelByMode: Record<ActivityFooterMode, string> = {
-    collapsed: "Hide",
-    compact: "Slim",
-    full: "Full",
+  const source = pending.source;
+  const fallbackSourceName = "sourceName" in source ? source.sourceName : source.sourceFile;
+  const [projectMode, setProjectMode] = useState<"existing" | "new">("existing");
+  const [projectId, setProjectId] = useState(activeProjectId);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [title, setTitle] = useState(
+    firstNonEmptyString(
+      pending.titleOverride?.trim(),
+      source.title,
+      source.sourceReadiness?.title,
+      fallbackSourceName,
+    ) ?? fallbackSourceName,
+  );
+  const [sourceType, setSourceType] = useState(source.sourceReadiness?.sourceType ?? "");
+  const [language, setLanguage] = useState(source.sourceReadiness?.language ?? "");
+  const [scope, setScope] = useState(source.sourceReadiness?.structureLabel ?? "Whole source");
+  const [conflictResolution, setConflictResolution] = useState<"error" | "keepBoth">("error");
+  const [keep, setKeep] = useState<TemporarySourcePromotionKeep>({
+    bookmarks: Boolean(session?.bookmarks?.length),
+    diagnosticsReport: Boolean(
+      session?.artifacts.some((artifact) => artifact.kind === "validation"),
+    ),
+    extractedSource: true,
+    generatedAudio:
+      includeGeneratedAudioDefault &&
+      Boolean(session?.artifacts.some((artifact) => artifact.kind === "generatedAudio")),
+    lexiconOverrides: Boolean(source.sourceSpeechPolicyOverrides),
+    policySourcePin: Boolean(source.sourceSpeechPolicyProfile),
+    progress: Boolean(session?.playbackProgress),
+    reviewEdits: true,
+    timingMaps: false,
+  });
+  const generatedArtifactBytes =
+    session?.artifacts
+      .filter((artifact) => artifact.kind === "generatedAudio")
+      .reduce((total, artifact) => total + (artifact.bytes ?? 0), 0) ?? 0;
+  const generatedAudioLabel =
+    generatedArtifactBytes > 0
+      ? `${TEMPORARY_SOURCE_COPY.terms.generatedTemporaryAudio} (${formatBytes(generatedArtifactBytes)})`
+      : TEMPORARY_SOURCE_COPY.terms.generatedTemporaryAudio;
+  const hasGeneratedAudio =
+    session?.artifacts.some((artifact) => artifact.kind === "generatedAudio") ?? false;
+  const hasTimingMaps = session?.artifacts.some((artifact) => artifact.kind === "timing") ?? false;
+  const audioWarnings = [
+    keep.generatedAudio && session?.status === "generating" ? "Generated audio is partial." : null,
+    keep.generatedAudio && session?.status === "stale" ? "Generated audio may be stale." : null,
+    keep.generatedAudio && !hasGeneratedAudio ? "No generated audio is available to keep." : null,
+  ].filter(Boolean);
+  const canSubmit =
+    title.trim().length > 0 &&
+    (projectMode === "existing" ? projectId.trim().length > 0 : newProjectName.trim().length > 0);
+  const submitLabel = temporaryPromotionSubmitLabel(Boolean(keep.generatedAudio));
+
+  const setKeepFlag = (key: keyof TemporarySourcePromotionKeep, value: boolean) => {
+    setKeep((current) => ({ ...current, [key]: value }));
   };
-  const buttonLabel = (item: ActivityFooterMode) => {
-    return labelByMode[item];
-  };
+
   return (
-    <div
-      className={`sticky top-0 z-20 flex min-w-0 items-center justify-between gap-2 border-b backdrop-blur vs-border vs-raised ${
-        mode === "compact" ? "px-1.5 py-1" : "px-2 py-1.5"
-      }`}
-    >
-      <span
-        className={`min-w-0 truncate text-[0.58rem] font-semibold uppercase tracking-[0.12em] vs-muted ${
-          mode === "compact" ? "sr-only" : ""
-        }`}
+    <div className="fixed inset-0 z-[75] grid place-items-center bg-[var(--vs-surface-overlay)] px-4 py-6">
+      <section
+        aria-labelledby="temporary-promotion-title"
+        aria-modal="true"
+        className="max-h-full w-full max-w-3xl overflow-auto rounded-lg border bg-[var(--vs-surface)] p-5 shadow-2xl vs-border"
+        role="dialog"
       >
-        {label}
-      </span>
-      <div className="grid shrink-0 grid-cols-3 gap-0.5 rounded-md border p-0.5 vs-border vs-surface">
-        {(["full", "compact", "collapsed"] as const).map((item) => (
-          <button
-            aria-label={`${label} ${item}`}
-            className={`h-6 rounded px-1.5 text-[0.58rem] font-semibold capitalize transition ${
-              mode === item
-                ? "bg-orange-500 text-white"
-                : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
-            }`}
-            key={item}
+        <div className="flex flex-col gap-1 border-b pb-4 vs-border">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--vs-action-primary)]">
+            {TEMPORARY_SOURCE_COPY.terms.temporarySource}
+          </p>
+          <h2 className="text-xl font-semibold" id="temporary-promotion-title">
+            {TEMPORARY_SOURCE_COPY.promotion.title}
+          </h2>
+          <p className="vs-muted text-sm">{TEMPORARY_SOURCE_COPY.promotion.subtitle}</p>
+        </div>
+
+        <div className="grid gap-5 py-5 md:grid-cols-[1fr_1fr]">
+          <div className="grid gap-3">
+            <label className="grid gap-1 text-sm font-medium">
+              Project
+              <select
+                className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-sm vs-border"
+                disabled={projectMode === "new"}
+                onChange={(event) => {
+                  setProjectId(event.target.value);
+                }}
+                value={projectId}
+              >
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                checked={projectMode === "new"}
+                onChange={(event) => {
+                  setProjectMode(event.target.checked ? "new" : "existing");
+                }}
+                type="checkbox"
+              />
+              Create a project
+            </label>
+            {projectMode === "new" ? (
+              <label className="grid gap-1 text-sm font-medium">
+                New project name
+                <input
+                  className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-sm vs-border"
+                  onChange={(event) => {
+                    setNewProjectName(event.target.value);
+                  }}
+                  value={newProjectName}
+                />
+              </label>
+            ) : null}
+            <label className="grid gap-1 text-sm font-medium">
+              Source title
+              <input
+                className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-sm vs-border"
+                onChange={(event) => {
+                  setTitle(event.target.value);
+                }}
+                value={title}
+              />
+            </label>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label className="grid gap-1 text-sm font-medium">
+                Type
+                <input
+                  className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-sm vs-border"
+                  onChange={(event) => {
+                    setSourceType(event.target.value);
+                  }}
+                  value={sourceType}
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                Language
+                <input
+                  className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-sm vs-border"
+                  onChange={(event) => {
+                    setLanguage(event.target.value);
+                  }}
+                  value={language}
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                Scope
+                <input
+                  className="rounded-md border bg-[var(--vs-surface)] px-3 py-2 text-sm vs-border"
+                  onChange={(event) => {
+                    setScope(event.target.value);
+                  }}
+                  value={scope}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="grid gap-3">
+            <fieldset className="grid gap-2">
+              <legend className="text-sm font-semibold">
+                {TEMPORARY_SOURCE_COPY.promotion.manifestIntro}
+              </legend>
+              <PromotionKeepCheckbox
+                checked
+                disabled
+                label={TEMPORARY_SOURCE_COPY.promotion.extractedSource}
+              />
+              <PromotionKeepCheckbox
+                checked={Boolean(keep.reviewEdits)}
+                label="Review edits"
+                onChange={(checked) => {
+                  setKeepFlag("reviewEdits", checked);
+                }}
+              />
+              <PromotionKeepCheckbox
+                checked={Boolean(keep.lexiconOverrides)}
+                label={TEMPORARY_SOURCE_COPY.promotion.sessionLexicon}
+                onChange={(checked) => {
+                  setKeepFlag("lexiconOverrides", checked);
+                }}
+              />
+              <PromotionKeepCheckbox
+                checked={Boolean(keep.policySourcePin)}
+                label={TEMPORARY_SOURCE_COPY.promotion.sourcePin}
+                onChange={(checked) => {
+                  setKeepFlag("policySourcePin", checked);
+                }}
+              />
+              <PromotionKeepCheckbox
+                checked={Boolean(keep.generatedAudio)}
+                label={generatedAudioLabel}
+                onChange={(checked) => {
+                  setKeepFlag("generatedAudio", checked);
+                  if (!checked) {
+                    setKeepFlag("timingMaps", false);
+                  }
+                }}
+              />
+              <PromotionKeepCheckbox
+                checked={Boolean(keep.timingMaps)}
+                disabled={!keep.generatedAudio || !hasTimingMaps}
+                label="Timing maps"
+                onChange={(checked) => {
+                  setKeepFlag("timingMaps", checked);
+                }}
+              />
+              <PromotionKeepCheckbox
+                checked={Boolean(keep.bookmarks)}
+                label="Bookmarks"
+                onChange={(checked) => {
+                  setKeepFlag("bookmarks", checked);
+                }}
+              />
+              <PromotionKeepCheckbox
+                checked={Boolean(keep.progress)}
+                label="Progress"
+                onChange={(checked) => {
+                  setKeepFlag("progress", checked);
+                }}
+              />
+              <PromotionKeepCheckbox
+                checked={Boolean(keep.diagnosticsReport)}
+                label="Diagnostics report"
+                onChange={(checked) => {
+                  setKeepFlag("diagnosticsReport", checked);
+                }}
+              />
+            </fieldset>
+            <label className="flex items-start gap-2 rounded-md border p-3 text-sm vs-border">
+              <input
+                checked={conflictResolution === "keepBoth"}
+                onChange={(event) => {
+                  setConflictResolution(event.target.checked ? "keepBoth" : "error");
+                }}
+                type="checkbox"
+              />
+              <span>
+                Keep both project sources if the title or source URL already exists.
+                <span className="block vs-muted">
+                  Leave unchecked to stop and resolve duplicate project history first.
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        {audioWarnings.length > 0 ? (
+          <div className="mb-4 rounded-md border border-[var(--vs-status-warning)] bg-[var(--vs-warning-soft)] p-3 text-sm">
+            {audioWarnings.map((warning) => (
+              <p key={warning}>{warning}</p>
+            ))}
+          </div>
+        ) : null}
+        {error ? (
+          <p className="mb-4 rounded-md border border-[var(--vs-status-danger)] p-3 text-sm text-[var(--vs-status-danger)]">
+            {error}
+          </p>
+        ) : null}
+
+        <div className="flex flex-col-reverse gap-3 border-t pt-4 vs-border sm:flex-row sm:justify-end">
+          <Button onClick={onCancel} type="button" variant="secondary">
+            Cancel
+          </Button>
+          <Button
+            disabled={!canSubmit || isSubmitting}
             onClick={() => {
-              onModeChange(item);
+              onConfirm({
+                conflictResolution,
+                createProjectName:
+                  projectMode === "new" ? newProjectName.trim() || undefined : undefined,
+                keep: { ...keep, extractedSource: true },
+                language: language.trim() || undefined,
+                projectId,
+                scope: scope.trim() || undefined,
+                sourceType: sourceType.trim() || undefined,
+                title: title.trim(),
+              });
             }}
             type="button"
+            variant="primary"
           >
-            {buttonLabel(item)}
-          </button>
-        ))}
-      </div>
+            {isSubmitting ? "Keeping..." : submitLabel}
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }
 
-function NarrationRailMini({
-  activeSourceLabel,
-  mode,
-  profile,
-  sourceCount,
-  onModeChange,
-  onOpenVoiceCloning,
+function PromotionKeepCheckbox({
+  checked,
+  disabled = false,
+  label,
+  onChange,
 }: Readonly<{
-  activeSourceLabel?: string;
-  mode: ActivityFooterMode;
-  profile: VoiceProfile | null;
-  sourceCount: number;
-  onModeChange: (mode: ActivityFooterMode) => void;
-  onOpenVoiceCloning: () => void;
+  checked: boolean;
+  disabled?: boolean;
+  label: string;
+  onChange?: (checked: boolean) => void;
 }>) {
-  if (mode === "collapsed") {
-    return (
-      <CollapsedRailButton
-        label="Voice Command"
-        shortLabel="V"
-        onExpand={() => {
-          onModeChange("compact");
+  return (
+    <label className={`flex items-center gap-2 text-sm ${disabled ? "opacity-60" : ""}`}>
+      <input
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => {
+          onChange?.(event.target.checked);
         }}
+        type="checkbox"
       />
-    );
+      {label}
+    </label>
+  );
+}
+
+function temporaryPromotionSubmitLabel(includeGeneratedAudio: boolean): string {
+  if (includeGeneratedAudio) {
+    return TEMPORARY_SOURCE_COPY.promotion.submitWithAudio;
   }
+  return TEMPORARY_SOURCE_COPY.promotion.submitSourceOnly;
+}
+
+function NarrationRailMini({
+  activeScopeLabel,
+  activeSourceLabel,
+  audioDetail,
+  audioReady,
+  audioValue,
+  profile,
+  settingsDetail,
+  settingsValue,
+  sourceCount,
+  onOpenAudio,
+  onOpenSettings,
+  onOpenSource,
+  onOpenVoice,
+}: Readonly<{
+  activeScopeLabel: string;
+  activeSourceLabel: string;
+  audioDetail: string;
+  audioReady: boolean;
+  audioValue: string;
+  profile: VoiceProfile | null;
+  settingsDetail: string;
+  settingsValue: string;
+  sourceCount: number;
+  onOpenAudio: () => void;
+  onOpenSettings: () => void;
+  onOpenSource: () => void;
+  onOpenVoice: () => void;
+}>) {
   return (
     <RailMiniStack
       items={[
-        { label: "Sources", value: String(sourceCount), detail: activeSourceLabel ?? "No source" },
-        { label: "Voice", value: profile?.name ?? "Default", detail: profile?.status ?? "ready" },
-        { label: "Backend", value: "Run", detail: "Settings" },
+        {
+          actionSurface: "Source Rail",
+          detail: `${activeScopeLabel} · ${sourceCount.toString()} source${
+            sourceCount === 1 ? "" : "s"
+          }`,
+          label: "Source",
+          onClick: onOpenSource,
+          testId: "ui-action-rail-narration-source",
+          value: activeSourceLabel,
+        },
+        {
+          actionSurface: "Voice Rail",
+          detail: profile?.status ?? "ready",
+          label: "Voice",
+          onClick: onOpenVoice,
+          testId: "ui-action-rail-narration-voice",
+          value: profile?.name ?? "Default",
+        },
+        {
+          actionSurface: "Audio Rail",
+          detail: audioDetail,
+          label: "Audio",
+          noopReason: "Audio rail already shows the current generation state.",
+          onClick: onOpenAudio,
+          testId: "ui-action-rail-narration-audio",
+          tone: audioReady ? "ready" : "default",
+          value: audioValue,
+        },
+        {
+          actionSurface: "Settings Rail",
+          detail: settingsDetail,
+          label: "Settings",
+          onClick: onOpenSettings,
+          testId: "ui-action-rail-narration-settings",
+          value: settingsValue,
+        },
       ]}
-      actionLabel="Clone"
-      onAction={onOpenVoiceCloning}
     />
   );
 }
 
 function VoiceCloningRailMini({
-  mode,
   profile,
   source,
   totalProfiles,
-  onModeChange,
 }: Readonly<{
-  mode: ActivityFooterMode;
   profile: VoiceProfile | null;
   source: VoiceProfileSource | null;
   totalProfiles: number;
-  onModeChange: (mode: ActivityFooterMode) => void;
 }>) {
-  if (mode === "collapsed") {
-    return (
-      <CollapsedRailButton
-        label="Voice Cloning"
-        shortLabel="C"
-        onExpand={() => {
-          onModeChange("compact");
-        }}
-      />
-    );
-  }
   return (
     <RailMiniStack
       items={[
@@ -6040,69 +11952,134 @@ function VoiceCloningRailMini({
   );
 }
 
-function PlaybackRailMini({
-  job,
-  mode,
-  onModeChange,
-  onOpenCinema,
+function workspaceTemporaryInspectorModel(
+  source: TemporarySourceSession,
+): WorkspaceInspectorTemporaryModel {
+  const artifactKinds = new Set(source.artifacts.map((artifact) => artifact.kind));
+  const hasPolicy =
+    Boolean(source.sourceSpeechPolicyProfile) ||
+    hasSpeechPolicyOverrides(source.sourceSpeechPolicyOverrides ?? {});
+  return {
+    artifactCount: source.artifacts.length,
+    audioStatus: artifactKinds.has("generatedAudio")
+      ? "Generated audio ready"
+      : "No generated audio",
+    bookmarkCount: source.bookmarks?.length ?? 0,
+    expiryLabel: temporaryExpiryLabel(source.expiresAt),
+    originLabel: source.sourceUrl ?? source.sourceName,
+    policyLabel:
+      source.sourceSpeechPolicyProfile ?? (hasPolicy ? "Session override" : "Project default"),
+    promotionItems: temporaryWorkspacePromotionItems({
+      artifactKinds,
+      bookmarkCount: source.bookmarks?.length ?? 0,
+      hasPolicy,
+      reviewEditCount: source.artifacts.filter((artifact) => artifact.kind === "review").length,
+    }),
+    pronunciationCount: 0,
+    recentPositionCount: source.playbackProgress ? 1 : 0,
+    repairNoteCount: source.reviewNotes?.length ?? 0,
+    reviewEditCount: source.artifacts.filter((artifact) => artifact.kind === "review").length,
+    sessionId: source.temporarySourceId,
+    skippedCount: source.skippedItems?.length ?? 0,
+    sourceTypeLabel: source.sourceContentType ?? source.kind,
+    statusLabel: temporarySourceStatusLabel(source.status),
+    timingConfidence: artifactKinds.has("timing") ? "Timing map available" : "No timing map",
+    title: source.title ?? source.sourceName,
+    warningCount: source.warnings?.length ?? 0,
+    warnings: source.warnings,
+  };
+}
+
+function temporaryWorkspacePromotionItems({
+  artifactKinds,
+  bookmarkCount,
+  hasPolicy,
+  reviewEditCount,
 }: Readonly<{
-  job: VoiceJob | null;
-  mode: ActivityFooterMode;
-  onModeChange: (mode: ActivityFooterMode) => void;
-  onOpenCinema: () => void;
-}>) {
-  const total = job?.retries.totalSegments ?? job?.segments?.length ?? 0;
-  const ready = job?.audioReadySegments ?? 0;
-  if (mode === "collapsed") {
-    return (
-      <CollapsedRailButton
-        label="Playback"
-        shortLabel="P"
-        onExpand={() => {
-          onModeChange("compact");
-        }}
-      />
-    );
+  artifactKinds: ReadonlySet<string>;
+  bookmarkCount: number;
+  hasPolicy: boolean;
+  reviewEditCount: number;
+}>): string[] {
+  const items: string[] = [TEMPORARY_SOURCE_COPY.promotion.extractedSource];
+  if (reviewEditCount > 0) {
+    items.push("Review edits");
   }
+  if (hasPolicy) {
+    items.push(TEMPORARY_SOURCE_COPY.promotion.sourcePin);
+  }
+  if (artifactKinds.has("generatedAudio")) {
+    items.push(TEMPORARY_SOURCE_COPY.promotion.generatedAudio);
+  }
+  if (artifactKinds.has("timing")) {
+    items.push("Timing maps");
+  }
+  if (bookmarkCount > 0) {
+    items.push("Bookmarks");
+  }
+  if (artifactKinds.has("progress")) {
+    items.push("Progress");
+  }
+  if (artifactKinds.has("validation")) {
+    items.push("Diagnostics report");
+  }
+  return items;
+}
+
+function temporaryExpiryLabel(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Expires with this session";
+  }
+  return `Expires ${new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date)}`;
+}
+
+function temporarySourceStatusLabel(status: TemporarySourceSession["status"]): string {
+  switch (status) {
+    case "audio_ready": {
+      return "Temporary source · audio ready";
+    }
+    case "discarded": {
+      return "Temporary source discarded";
+    }
+    case "expired": {
+      return "Temporary source expired";
+    }
+    case "failed": {
+      return "Temporary source failed";
+    }
+    case "generating": {
+      return "Temporary source · generating audio";
+    }
+    case "promoted": {
+      return "Temporary source kept in project";
+    }
+    default: {
+      return "Temporary source";
+    }
+  }
+}
+
+function WorkspaceInspectorPanel(props: Readonly<WorkspaceContextInspectorProps>) {
   return (
-    <RailMiniStack
-      items={[
-        { label: "Audio", value: job?.status ?? "Idle", detail: estimateFirstAudioETA(job) },
-        {
-          label: "Segments",
-          value: total > 0 ? formatPercentageRatio(ready, total) : "0%",
-          detail: total > 0 ? `${String(ready)} / ${String(total)}` : "waiting",
-        },
-        { label: "Check", value: formatSimilarity(job?.voiceCheck.similarity ?? 0), detail: "ASR" },
-      ]}
-      actionLabel="Cinema"
-      onAction={onOpenCinema}
-    />
+    <Suspense
+      fallback={<LazySurfaceFallback label="Loading inspector..." surface="workspace-inspector" />}
+    >
+      <LazyWorkspaceContextInspector {...props} />
+    </Suspense>
   );
 }
 
 function CloneReadinessRailMini({
   activity,
-  mode,
-  onModeChange,
   onOpenVoiceCloning,
 }: Readonly<{
   activity: VoiceCloningActivitySummary;
-  mode: ActivityFooterMode;
-  onModeChange: (mode: ActivityFooterMode) => void;
   onOpenVoiceCloning: () => void;
 }>) {
-  if (mode === "collapsed") {
-    return (
-      <CollapsedRailButton
-        label="Readiness"
-        shortLabel="R"
-        onExpand={() => {
-          onModeChange("compact");
-        }}
-      />
-    );
-  }
   return (
     <RailMiniStack
       items={[
@@ -6116,172 +12093,13 @@ function CloneReadinessRailMini({
   );
 }
 
-function RailMiniStack({
-  actionLabel,
-  items,
-  onAction,
-}: Readonly<{
-  actionLabel?: string;
-  items: { detail: string; label: string; value: string }[];
-  onAction?: () => void;
-}>) {
-  return (
-    <div className="grid min-w-0 gap-2 p-2">
-      {items.map((item) => (
-        <div className="min-w-0 rounded-md border p-2 vs-border vs-surface" key={item.label}>
-          <p className="truncate text-[0.58rem] font-semibold uppercase tracking-[0.12em] vs-muted">
-            {item.label}
-          </p>
-          <p className="mt-1 truncate text-xs font-semibold" title={item.value}>
-            {item.value}
-          </p>
-          <p className="mt-0.5 truncate text-[0.65rem] vs-muted" title={item.detail}>
-            {item.detail}
-          </p>
-        </div>
-      ))}
-      {actionLabel && onAction ? (
-        <button
-          className="min-h-8 rounded-md border border-orange-300 px-2 text-[0.68rem] font-semibold text-orange-700 transition hover:bg-orange-50"
-          onClick={onAction}
-          type="button"
-        >
-          {actionLabel}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function CollapsedRailButton({
-  label,
-  shortLabel,
-  onExpand,
-}: Readonly<{ label: string; shortLabel: string; onExpand: () => void }>) {
-  return (
-    <button
-      aria-label={`Expand ${label}`}
-      className="mx-auto mt-2 grid h-9 w-9 place-items-center rounded-md border text-xs font-semibold transition hover:bg-[var(--vs-surface)] vs-border"
-      onClick={onExpand}
-      title={label}
-      type="button"
-    >
-      {shortLabel}
-    </button>
-  );
-}
-
-function RelevantMetricsPanel({
-  job,
-  metrics,
-  metricsError,
-}: Readonly<{
-  job: VoiceJob | null;
-  metrics: SystemMetrics | null;
-  metricsError: string | null;
-}>) {
-  const total = job?.retries.totalSegments ?? job?.segments?.length ?? 0;
-  const ready = job?.audioReadySegments ?? 0;
-  const throughput = calculateArrivalThroughput(job);
-  const gpu = metrics?.gpus?.[0];
-  const gpuMemory = gpu ? formatPercentageRatio(gpu.memoryUsedMiB, gpu.memoryTotalMiB) : "n/a";
-  const confidence = formatSimilarity(job?.voiceCheck.similarity ?? 0);
-
-  return (
-    <section className="rounded-lg border shadow-sm vs-border vs-raised">
-      <div className="border-b px-3 py-3 vs-border">
-        <h2 className="text-sm font-semibold text-[var(--vs-text)]">Output Health</h2>
-        <p className="vs-muted mt-1 truncate text-xs">
-          {job ? `${job.status} · ${estimateFirstAudioETA(job)}` : "Waiting for a narration run"}
-        </p>
-      </div>
-      <dl className="grid grid-cols-2">
-        <ProductMetric
-          label="Segment Progress"
-          value={total > 0 ? formatPercentageRatio(ready, total) : "0%"}
-          detail={total > 0 ? `${String(ready)} / ${String(total)} segments` : "Waiting"}
-          tone="blue"
-        />
-        <ProductMetric
-          label="First Audio ETA"
-          value={estimateFirstAudioETA(job)}
-          detail="until first checked segment"
-        />
-        <ProductMetric
-          label="Buffer Health"
-          value={formatBufferHealth(job)}
-          detail={ready > 0 ? `${String(ready)} ready` : "No buffer yet"}
-          tone="green"
-        />
-        <ProductMetric
-          label="Clone Pace"
-          value={formatPace(throughput?.pace)}
-          detail="realtime"
-          tone="orange"
-        />
-        <ProductMetric
-          label="Checker Confidence"
-          value={confidence}
-          detail={job?.voiceCheck.provider ?? "waiting"}
-        />
-        <ProductMetric
-          label="GPU Memory"
-          value={gpuMemory}
-          detail={gpu?.name ?? metricsError ?? "metrics unavailable"}
-          tone="orange"
-        />
-      </dl>
-    </section>
-  );
-}
-
-function ProductMetric({
-  detail,
-  label,
-  tone = "neutral",
-  value,
-}: Readonly<{
-  detail: string;
-  label: string;
-  tone?: "neutral" | "blue" | "green" | "orange";
-  value: string;
-}>) {
-  const barClassByTone: Record<"neutral" | "blue" | "green" | "orange", string> = {
-    neutral: "bg-blue-500",
-    blue: "bg-blue-500",
-    green: "bg-emerald-500",
-    orange: "bg-orange-500",
-  };
-  const barClass = barClassByTone[tone];
-  return (
-    <div className="min-w-0 border-b p-3 last:border-b-0 vs-border">
-      <dt className="vs-muted text-xs font-medium">{label}</dt>
-      <dd className="mt-2 break-words text-base font-semibold leading-tight text-[var(--vs-text)]">
-        {value}
-      </dd>
-      <p className="vs-muted mt-1 truncate text-xs" title={detail}>
-        {detail}
-      </p>
-      <div className="mt-3 h-1 rounded-full bg-[var(--vs-surface)]">
-        <div className={`h-1 w-2/5 rounded-full ${barClass}`} />
-      </div>
-    </div>
-  );
-}
-
 function NarrationSidebar({
   bookSources,
-  buildingArtifactKey,
   customSpeechPolicyProfiles,
-  isClearingHuggingFaceToken,
-  isLoadingProfiles,
   preparedSources,
-  pinnedProfileIds,
   profiles,
-  recentProfileIds,
   researchModules,
   runConfiguration,
-  savingHuggingFaceTokenKey,
   selectedBookSourceId,
   selectedKokoroVoiceId,
   selectedPreparedSourceId,
@@ -6290,36 +12108,21 @@ function NarrationSidebar({
   speechPolicyProfile,
   speechPolicyProfiles,
   ttsEngines,
-  voiceProfileCredentialError,
-  voiceProfileCredentials,
-  onBuildArtifact,
-  onClearHuggingFaceToken,
   onClearSelection,
   onCloneVoice,
   onCreateSource,
-  onDeleteProfile,
   onInspectSelectedSource,
-  onRunConfigurationChange,
-  onSaveHuggingFaceToken,
-  onSelectBook,
-  onSelectKokoroVoice,
-  onSelectPreparedSource,
+  onOpenProjectDashboard,
+  onOpenVoiceDashboard,
   onSelectProfile,
   onSpeechPolicyProfileChange,
-  onTogglePinnedProfile,
 }: Readonly<{
   bookSources: BookSource[];
-  buildingArtifactKey: string | null;
   customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
-  isClearingHuggingFaceToken: boolean;
-  isLoadingProfiles: boolean;
   preparedSources: PreparedSource[];
-  pinnedProfileIds: string[];
   profiles: VoiceProfile[];
-  recentProfileIds: string[];
   researchModules: ResearchModuleDiagnostics[];
   runConfiguration: RunConfiguration;
-  savingHuggingFaceTokenKey: string | null;
   selectedBookSourceId: string | null;
   selectedKokoroVoiceId: string;
   selectedPreparedSourceId: string | null;
@@ -6328,171 +12131,139 @@ function NarrationSidebar({
   speechPolicyProfile: string;
   speechPolicyProfiles: SpeechPolicyProfile[];
   ttsEngines: TTSEngineDiagnostics[];
-  voiceProfileCredentialError: string | null;
-  voiceProfileCredentials: VoiceProfileCredentialStatus | null;
-  onBuildArtifact: VoiceProfileArtifactBuildAction;
-  onClearHuggingFaceToken: () => void;
   onClearSelection: () => void;
   onCloneVoice: () => void;
   onCreateSource: () => void;
-  onDeleteProfile: (id: string) => void;
   onInspectSelectedSource: () => void;
-  onRunConfigurationChange: (configuration: RunConfiguration) => void;
-  onSaveHuggingFaceToken: (profileId: string, targetId: string, token: string) => Promise<void>;
-  onSelectBook: (bookId: string) => void;
-  onSelectKokoroVoice: (voiceId: string) => void;
-  onSelectPreparedSource: (source: PreparedSource) => void;
+  onOpenProjectDashboard: () => void;
+  onOpenVoiceDashboard: () => void;
   onSelectProfile: (id: string) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
-  onTogglePinnedProfile: (id: string) => void;
 }>) {
-  const voiceLibrary = buildVoiceLibraryViewModel({
-    pinnedIds: pinnedProfileIds,
-    profiles,
-    recentIds: recentProfileIds,
-    selectedProfileId,
-  });
-  const [sourceSearch, setSourceSearch] = useState("");
-  const sourceNeedle = sourceSearch.trim().toLowerCase();
-  const matchesSourceSearch = useCallback(
-    (value: string) => !sourceNeedle || value.toLowerCase().includes(sourceNeedle),
-    [sourceNeedle],
+  const selectedPreparedSource = preparedSources.find(
+    (source) => source.id === selectedPreparedSourceId,
   );
-  const visiblePreparedSources = preparedSources
-    .filter((source) =>
-      matchesSourceSearch(`${source.title ?? ""} ${source.sourceName} ${source.kind}`),
-    )
-    .slice(0, sourceNeedle ? 7 : 4);
-  const visibleBookSources = bookSources
-    .filter((book) => matchesSourceSearch(`${bookSourceName(book)} ${book.kind}`))
-    .slice(0, sourceNeedle ? 7 : 3);
-  const hasSourceResults = visiblePreparedSources.length > 0 || visibleBookSources.length > 0;
+  const selectedBookSource = bookSources.find((book) => book.id === selectedBookSourceId);
+  const activeSourceLabel =
+    selectedPreparedSource?.title ??
+    selectedPreparedSource?.sourceName ??
+    (selectedBookSource ? bookSourceName(selectedBookSource) : "Draft text");
+  const activeSourceDetail = narrationSourceSummaryDetail({
+    bookSource: selectedBookSource,
+    preparedSource: selectedPreparedSource,
+    sourceCount: preparedSources.length + bookSources.length,
+  });
+  const voiceRuntimeLabel = selectedProfile?.name ?? kokoroVoicepackLabel(selectedKokoroVoiceId);
+  const readyCloneModules = researchModules.filter((module) => module.cloneAllowed).length;
+  const readyVoiceEngines = ttsEngines.filter((engine) => engine.supportsVoice).length;
   return (
     <section className="min-h-full min-w-0 overflow-visible">
       <div className="grid min-w-0 gap-3 p-4 xl:p-5">
-        <section className="grid gap-3 rounded-lg border p-3 vs-border vs-raised">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-[var(--vs-text)]">Source Library</h2>
-            <div className="flex shrink-0 items-center gap-2">
-              <span className="vs-muted text-xs">
-                {String(preparedSources.length + bookSources.length)}
-              </span>
-              <button
-                className="h-7 rounded-md border px-2 text-[0.68rem] font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
-                onClick={onCreateSource}
-                type="button"
-              >
-                New
-              </button>
-            </div>
+        <section className="grid min-w-0 gap-3 rounded-lg border p-3 vs-border vs-raised">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <h2 className="min-w-0 text-sm font-semibold text-[var(--vs-text)]">Active Source</h2>
+            <span className="vs-muted text-xs">
+              {String(preparedSources.length + bookSources.length)} managed
+            </span>
           </div>
-          <input
-            className="h-9 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-xs outline-none transition placeholder:text-[var(--vs-muted)] focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
-            onChange={(event) => {
-              setSourceSearch(event.currentTarget.value);
-            }}
-            placeholder="Search sources..."
-            type="search"
-            value={sourceSearch}
-          />
-          <div className="grid gap-2">
-            {visiblePreparedSources.map((source, index) => (
-              <button
-                className={`min-w-0 rounded-md border p-2 text-left transition ${
-                  source.id === selectedPreparedSourceId
-                    ? "border-orange-300 bg-orange-500/10"
-                    : "hover:border-orange-200 vs-border vs-surface"
-                }`}
-                key={`${source.id}-${String(index)}`}
-                onClick={() => {
-                  onSelectPreparedSource(source);
-                }}
-                type="button"
-              >
-                <span
-                  className="block truncate text-sm font-semibold"
-                  title={source.title ?? source.sourceName}
-                >
-                  {source.title ?? source.sourceName}
-                </span>
-                <span className="vs-muted mt-1 block truncate text-xs">
-                  {source.kind.toUpperCase()} · {source.wordCount.toLocaleString()} words
-                </span>
-              </button>
-            ))}
-            {visibleBookSources.map((book, index) => (
-              <button
-                className={`min-w-0 rounded-md border p-2 text-left transition ${
-                  book.id === selectedBookSourceId
-                    ? "border-orange-300 bg-orange-500/10"
-                    : "hover:border-orange-200 vs-border vs-surface"
-                }`}
-                key={`${book.id}-${String(index)}`}
-                onClick={() => {
-                  onSelectBook(book.id);
-                }}
-                type="button"
-              >
-                <span className="block truncate text-sm font-semibold" title={bookSourceName(book)}>
-                  {bookSourceName(book)}
-                </span>
-                <span className="vs-muted mt-1 block truncate text-xs">
-                  {book.kind.toUpperCase()} · {book.wordCount.toLocaleString()} words
-                </span>
-              </button>
-            ))}
-            {preparedSources.length === 0 && bookSources.length === 0 ? (
-              <p className="vs-muted rounded-md border border-dashed p-3 text-xs leading-5 vs-border vs-surface">
-                Text drafts, prepared files, URLs, and books appear here as reusable sources.
-              </p>
-            ) : null}
-            {preparedSources.length + bookSources.length > 0 && !hasSourceResults ? (
-              <p className="vs-muted rounded-md border border-dashed p-3 text-xs leading-5 vs-border vs-surface">
-                No sources match that search.
-              </p>
-            ) : null}
+          <div className="min-w-0 rounded-md border p-3 vs-border vs-surface">
+            <p className="min-w-0 truncate text-sm font-semibold" title={activeSourceLabel}>
+              {activeSourceLabel}
+            </p>
+            <p className="vs-muted mt-1 min-w-0 truncate text-xs" title={activeSourceDetail}>
+              {activeSourceDetail}
+            </p>
+          </div>
+          <div className="grid min-w-0 grid-cols-1 gap-2 2xl:grid-cols-2">
+            <button
+              className="min-h-9 min-w-0 rounded-md border px-2 py-1.5 text-xs font-semibold leading-tight transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-border vs-surface"
+              data-testid="ui-action-project-dashboard-open-rail"
+              data-ui-action-surface="Command Center"
+              onClick={onOpenProjectDashboard}
+              type="button"
+            >
+              Command Center
+            </button>
+            <button
+              className="min-h-9 min-w-0 rounded-md border px-2 py-1.5 text-xs font-semibold leading-tight transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-border vs-surface"
+              onClick={onCreateSource}
+              type="button"
+            >
+              New Source
+            </button>
           </div>
         </section>
 
-        <VoiceProfileDropdown
-          buildingArtifactKey={buildingArtifactKey}
-          isClearingHuggingFaceToken={isClearingHuggingFaceToken}
-          isLoading={isLoadingProfiles}
-          profiles={profiles}
-          researchModules={researchModules}
-          runConfiguration={runConfiguration}
-          savingHuggingFaceTokenKey={savingHuggingFaceTokenKey}
-          selectedKokoroVoiceId={selectedKokoroVoiceId}
-          selectedProfile={selectedProfile}
-          selectedProfileId={selectedProfileId}
-          ttsEngines={ttsEngines}
-          voiceProfileCredentialError={voiceProfileCredentialError}
-          voiceProfileCredentials={voiceProfileCredentials}
-          showArtifactControls={false}
-          showBackendControls={false}
-          showBackendSummary={false}
-          onBuildArtifact={onBuildArtifact}
-          onClearHuggingFaceToken={onClearHuggingFaceToken}
-          onClearSelection={onClearSelection}
-          onDeleteProfile={onDeleteProfile}
-          onRunConfigurationChange={onRunConfigurationChange}
-          onSaveHuggingFaceToken={onSaveHuggingFaceToken}
-          onSelectKokoroVoice={onSelectKokoroVoice}
-          onSelectProfile={onSelectProfile}
-        />
-
-        <SavedVoicesRailPanel
-          entries={voiceLibrary.entries}
-          total={voiceLibrary.total}
-          onSelectProfile={onSelectProfile}
-          onTogglePinnedProfile={onTogglePinnedProfile}
-        />
-
-        <section className="grid gap-3 rounded-lg border p-3 text-xs vs-border vs-raised">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-[var(--vs-text)]">Run / Policy Summary</h2>
+        <section className="grid min-w-0 gap-3 rounded-lg border p-3 vs-border vs-raised">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <h2 className="min-w-0 text-sm font-semibold text-[var(--vs-text)]">Voice Profile</h2>
+            <span className="shrink-0 vs-muted text-xs">
+              {profiles.length.toString()} profile{profiles.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <div className="min-w-0 rounded-md border p-3 vs-border vs-surface">
+            <p className="min-w-0 truncate text-sm font-semibold" title={voiceRuntimeLabel}>
+              {voiceRuntimeLabel}
+            </p>
+            <p className="vs-muted mt-1 min-w-0 truncate text-xs">
+              {selectedProfile
+                ? `${selectedProfile.language} · ${selectedProfile.status}`
+                : `Default Kokoro voice · ${readyVoiceEngines.toString()} voice engines`}
+            </p>
+          </div>
+          <label className="grid min-w-0 gap-1 text-xs font-semibold">
+            <span className="vs-muted">Voice profile</span>
+            <select
+              className="h-9 min-w-0 rounded-md border px-2 text-xs font-semibold vs-border vs-surface"
+              onChange={(event) => {
+                const nextProfileId = event.currentTarget.value;
+                if (nextProfileId) {
+                  onSelectProfile(nextProfileId);
+                } else {
+                  onClearSelection();
+                }
+              }}
+              value={selectedProfileId}
+            >
+              <option value="">Default Kokoro</option>
+              {profiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="grid min-w-0 grid-cols-1 gap-2 2xl:grid-cols-2">
             <button
-              className="rounded border px-2 py-1 font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border vs-surface"
+              className="min-h-9 min-w-0 rounded-md border px-2 py-1.5 text-xs font-semibold leading-tight transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-border vs-surface"
+              data-testid="ui-action-voice-dashboard-open-rail"
+              data-ui-action-surface="Command Center"
+              onClick={onOpenVoiceDashboard}
+              type="button"
+            >
+              Voice Assets
+            </button>
+            <button
+              className="min-h-9 min-w-0 rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-2 py-1.5 text-xs font-semibold leading-tight text-[var(--vs-selected-text)] transition hover:bg-[var(--vs-selected)]"
+              onClick={onCloneVoice}
+              type="button"
+            >
+              Clone Voice
+            </button>
+          </div>
+          <p className="vs-muted text-xs leading-5">
+            {readyCloneModules.toString()} clone module
+            {readyCloneModules === 1 ? "" : "s"} available for profile preparation.
+          </p>
+        </section>
+
+        <section className="grid min-w-0 gap-3 rounded-lg border p-3 text-xs vs-border vs-raised">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <h2 className="min-w-0 text-sm font-semibold text-[var(--vs-text)]">
+              Run / Policy Summary
+            </h2>
+            <button
+              className="min-h-8 shrink-0 rounded border px-2 py-1 font-semibold leading-tight transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-border vs-surface"
               onClick={onInspectSelectedSource}
               type="button"
             >
@@ -6538,13 +12309,6 @@ function NarrationSidebar({
               </optgroup>
             ) : null}
           </select>
-          <button
-            className="h-9 rounded-md border border-orange-300 bg-orange-500/10 text-xs font-semibold text-orange-700 transition hover:bg-orange-500/15"
-            onClick={onCloneVoice}
-            type="button"
-          >
-            Clone Voice
-          </button>
         </section>
       </div>
     </section>
@@ -6556,8 +12320,6 @@ function VoiceCloningVoiceRail({
   isClearingHuggingFaceToken,
   isLoading,
   profiles,
-  pinnedProfileIds,
-  recentProfileIds,
   researchModules,
   runConfiguration,
   savingHuggingFaceTokenKey,
@@ -6571,18 +12333,16 @@ function VoiceCloningVoiceRail({
   onClearHuggingFaceToken,
   onClearSelection,
   onDeleteProfile,
+  onOpenVoiceDashboard,
   onRunConfigurationChange,
   onSaveHuggingFaceToken,
   onSelectKokoroVoice,
   onSelectProfile,
-  onTogglePinnedProfile,
 }: Readonly<{
   buildingArtifactKey: string | null;
   isClearingHuggingFaceToken: boolean;
   isLoading: boolean;
   profiles: VoiceProfile[];
-  pinnedProfileIds: string[];
-  recentProfileIds: string[];
   researchModules: ResearchModuleDiagnostics[];
   runConfiguration: RunConfiguration;
   savingHuggingFaceTokenKey: string | null;
@@ -6596,52 +12356,17 @@ function VoiceCloningVoiceRail({
   onClearHuggingFaceToken: () => void;
   onClearSelection: () => void;
   onDeleteProfile: (id: string) => void;
+  onOpenVoiceDashboard: () => void;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
   onSaveHuggingFaceToken: (profileId: string, targetId: string, token: string) => Promise<void>;
   onSelectKokoroVoice: (voiceId: string) => void;
   onSelectProfile: (id: string) => void;
-  onTogglePinnedProfile: (id: string) => void;
 }>) {
-  const [profileSearch, setProfileSearch] = useState("");
-  const voiceLibrary = buildVoiceLibraryViewModel({
-    limit: profiles.length,
-    pinnedIds: pinnedProfileIds,
-    profiles,
-    recentIds: recentProfileIds,
-    selectedProfileId,
-  });
-  const profileSearchNeedle = profileSearch.trim().toLowerCase();
-  const visibleVoiceEntries = voiceLibrary.entries
-    .filter((entry) => {
-      if (!profileSearchNeedle) {
-        return true;
-      }
-      const profile = entry.profile;
-      return `${profile.name} ${profile.language} ${profile.status}`
-        .toLowerCase()
-        .includes(profileSearchNeedle);
-    })
-    .slice(0, profileSearchNeedle ? 8 : 5);
   return (
     <section className="min-h-full min-w-0 overflow-visible">
       <div className="grid min-w-0 gap-3 p-4 xl:p-5">
-        <section className="grid gap-3 rounded-lg border p-3 vs-border vs-raised">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-[var(--vs-text)]">Voice Profile Library</h2>
-            <span className="vs-muted text-xs">{profiles.length.toString()}</span>
-          </div>
-          <input
-            className="h-9 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-xs outline-none transition placeholder:text-[var(--vs-muted)] focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
-            onChange={(event) => {
-              setProfileSearch(event.currentTarget.value);
-            }}
-            placeholder="Search profiles..."
-            type="search"
-            value={profileSearch}
-          />
-        </section>
         <VoiceProfileDropdown
-          heading="Active Profile"
+          heading="Voice Profile"
           buildingArtifactKey={buildingArtifactKey}
           isClearingHuggingFaceToken={isClearingHuggingFaceToken}
           isLoading={isLoading}
@@ -6662,158 +12387,46 @@ function VoiceCloningVoiceRail({
           onClearHuggingFaceToken={onClearHuggingFaceToken}
           onClearSelection={onClearSelection}
           onDeleteProfile={onDeleteProfile}
+          onOpenVoiceDashboard={onOpenVoiceDashboard}
           onRunConfigurationChange={onRunConfigurationChange}
           onSaveHuggingFaceToken={onSaveHuggingFaceToken}
           onSelectKokoroVoice={onSelectKokoroVoice}
           onSelectProfile={onSelectProfile}
         />
-        <SavedVoicesRailPanel
-          emptyMessage={profileSearchNeedle ? "No saved voices match that search." : undefined}
-          entries={visibleVoiceEntries}
-          total={voiceLibrary.total}
-          onSelectProfile={onSelectProfile}
-          onTogglePinnedProfile={onTogglePinnedProfile}
-        />
       </div>
     </section>
   );
-}
-
-function SavedVoicesRailPanel({
-  emptyMessage = "Created voice profiles will appear here for quick selection.",
-  entries,
-  total,
-  onSelectProfile,
-  onTogglePinnedProfile,
-}: Readonly<{
-  emptyMessage?: string;
-  entries: VoiceLibraryEntry[];
-  total: number;
-  onSelectProfile: (id: string) => void;
-  onTogglePinnedProfile: (id: string) => void;
-}>) {
-  return (
-    <section className="grid gap-2 rounded-lg border p-3 vs-border vs-raised">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-[var(--vs-text)]">Saved Voices</h2>
-        <span className="vs-muted text-xs">{String(total)}</span>
-      </div>
-      <div className="grid gap-2 text-xs">
-        {entries.map((entry) => (
-          <SavedVoiceRailRow
-            entry={entry}
-            key={entry.profile.id}
-            onSelect={onSelectProfile}
-            onTogglePinned={onTogglePinnedProfile}
-          />
-        ))}
-        {entries.length === 0 ? (
-          <p className="vs-muted rounded-md border border-dashed p-3 leading-5 vs-border vs-surface">
-            {emptyMessage}
-          </p>
-        ) : null}
-        {entries.length > 0 && total > entries.length ? (
-          <button
-            className="h-8 rounded-md border text-xs font-semibold transition hover:border-orange-200 hover:bg-orange-50 vs-border vs-surface"
-            type="button"
-          >
-            Browse all
-          </button>
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
-function SavedVoiceRailRow({
-  entry,
-  onSelect,
-  onTogglePinned,
-}: Readonly<{
-  entry: VoiceLibraryEntry;
-  onSelect: (id: string) => void;
-  onTogglePinned: (id: string) => void;
-}>) {
-  const { profile } = entry;
-  const status = voiceLibraryProfileStatus(profile);
-  const pinTitle = savedVoicePinTitle(entry);
-  const pinLabel = savedVoicePinLabel(entry);
-  return (
-    <div
-      className={`grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-md border px-2 py-2 ${
-        entry.selected ? "border-orange-300 bg-orange-50" : "vs-border vs-surface"
-      }`}
-    >
-      <button
-        className="min-w-0 text-left"
-        onClick={() => {
-          onSelect(profile.id);
-        }}
-        type="button"
-      >
-        <span className="block truncate font-semibold text-[var(--vs-text)]" title={profile.name}>
-          {profile.name}
-        </span>
-        <span className="vs-muted mt-0.5 block truncate">
-          {profile.language} · {formatLikenessLabel(profile)}
-        </span>
-      </button>
-      <span className={`rounded px-2 py-1 text-[0.65rem] font-semibold ${status.className}`}>
-        {status.label}
-      </span>
-      <button
-        aria-label={entry.pinned ? `Unpin ${profile.name}` : `Pin ${profile.name}`}
-        className={`grid h-7 w-7 place-items-center rounded border text-xs ${
-          entry.pinned
-            ? "border-orange-300 bg-white text-orange-700"
-            : "hover:border-orange-200 vs-border vs-raised vs-muted"
-        }`}
-        onClick={() => {
-          onTogglePinned(profile.id);
-        }}
-        title={pinTitle}
-        type="button"
-      >
-        {pinLabel}
-      </button>
-    </div>
-  );
-}
-
-function savedVoicePinTitle(entry: VoiceLibraryEntry): string {
-  if (entry.pinned) {
-    return "Pinned";
-  }
-  if (entry.recent) {
-    return "Recent";
-  }
-  return "Pin voice";
-}
-
-function savedVoicePinLabel(entry: VoiceLibraryEntry): string {
-  if (entry.pinned) {
-    return "P";
-  }
-  if (entry.recent) {
-    return "R";
-  }
-  return "+";
 }
 
 function voiceLibraryProfileStatus(profile: VoiceProfile): { label: string; className: string } {
   if (profileHasActiveTarget(profile)) {
-    return { label: "Building", className: "bg-amber-100 text-amber-800" };
+    return {
+      label: "Building",
+      className: "bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]",
+    };
   }
   if (profileHasTargetAttention(profile)) {
-    return { label: "Issue", className: "bg-red-100 text-red-700" };
+    return {
+      label: "Issue",
+      className: "bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]",
+    };
   }
   if (profileHasReadyCloneTarget(profile)) {
-    return { label: "Ready", className: "bg-emerald-100 text-emerald-700" };
+    return {
+      label: "Ready",
+      className: "bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]",
+    };
   }
   if (profile.status === "error") {
-    return { label: "Issue", className: "bg-red-100 text-red-700" };
+    return {
+      label: "Issue",
+      className: "bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]",
+    };
   }
-  return { label: profile.status, className: "bg-zinc-100 text-zinc-600" };
+  return {
+    label: profile.status,
+    className: "bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]",
+  };
 }
 
 function VoiceCloningWorkspace({
@@ -6852,7 +12465,7 @@ function VoiceCloningWorkspace({
   runConfiguration: RunConfiguration;
   source: VoiceProfileSource | null;
   ttsEngines: TTSEngineDiagnostics[];
-  onAnalyze: (file: File) => Promise<void>;
+  onAnalyze: (request: CreateVoiceProfileSourceRequest) => Promise<void>;
   onBuildArtifact: VoiceProfileArtifactBuildAction;
   onCancelSource: (sourceId: string) => Promise<void>;
   onCancelTarget: (profileId: string, targetId: string) => Promise<void>;
@@ -6872,18 +12485,6 @@ function VoiceCloningWorkspace({
         source={source}
         onCancelSource={onCancelSource}
       />
-      <BackendContractReviewPanel
-        activeEngineId={runConfiguration.ttsEngine}
-        buildingArtifactKey={buildingArtifactKey}
-        cancelingTargetKey={cancelingTargetKey}
-        modules={researchModules}
-        profile={activity.activeProfile}
-        runConfiguration={runConfiguration}
-        ttsEngines={ttsEngines}
-        onBuildArtifact={onBuildArtifact}
-        onCancelTarget={onCancelTarget}
-        onRunConfigurationChange={onRunConfigurationChange}
-      />
       <Suspense fallback={<LazySurfaceFallback label="Loading source diagnostics..." />}>
         <VoiceSourceAnalysisPanel
           createCandidateId={createCandidateId}
@@ -6900,6 +12501,18 @@ function VoiceCloningWorkspace({
           onRefreshSourceTranscript={onRefreshSourceTranscript}
         />
       </Suspense>
+      <BackendContractReviewPanel
+        activeEngineId={runConfiguration.ttsEngine}
+        buildingArtifactKey={buildingArtifactKey}
+        cancelingTargetKey={cancelingTargetKey}
+        modules={researchModules}
+        profile={activity.activeProfile}
+        runConfiguration={runConfiguration}
+        ttsEngines={ttsEngines}
+        onBuildArtifact={onBuildArtifact}
+        onCancelTarget={onCancelTarget}
+        onRunConfigurationChange={onRunConfigurationChange}
+      />
     </section>
   );
 }
@@ -6918,19 +12531,23 @@ function VoiceCloningActivityPanel({
   const progress = formatPercentage(voiceCloningProgressRatio(activity.stages));
   const canCancelSource = isVoiceProfileSourceActive(source);
   return (
-    <section className="grid gap-4 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+    <section className="grid gap-4 rounded-lg border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] p-5 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--vs-text-muted)]">
             Voice Cloning Workbench
           </p>
-          <h2 className="mt-2 text-xl font-semibold text-zinc-950">Build a reusable voice</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">{activity.message}</p>
+          <h2 className="mt-2 text-xl font-semibold text-[var(--vs-text-primary)]">
+            Build a reusable voice
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--vs-text-muted)]">
+            {activity.message}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {canCancelSource && source ? (
             <button
-              className="h-9 rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+              className="h-9 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-surface-primary)] px-3 text-xs font-semibold text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)] disabled:opacity-50"
               disabled={isCancelingSource}
               onClick={() => {
                 void onCancelSource(source.id);
@@ -6943,7 +12560,7 @@ function VoiceCloningActivityPanel({
           <ActivityStatusBadge status={activity.status} label={activity.statusLabel} />
         </div>
       </div>
-      <div className="grid gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+      <div className="grid gap-3 rounded-lg border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] p-3">
         <div className="grid gap-2 md:grid-cols-4">
           <ActivityFact label="Elapsed" value={activity.elapsed} detail={activity.eta} />
           <ActivityFact label="Last Update" value={activity.lastUpdate} detail={activity.eta} />
@@ -6954,8 +12571,11 @@ function VoiceCloningActivityPanel({
           />
           <ActivityFact label="Progress" value={progress} detail={activity.detail} />
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-white">
-          <div className="h-full rounded-full bg-orange-500" style={{ width: progress }} />
+        <div className="h-2 overflow-hidden rounded-full bg-[var(--vs-surface-primary)]">
+          <div
+            className="h-full rounded-full bg-[var(--vs-action-primary)]"
+            style={{ width: progress }}
+          />
         </div>
       </div>
       <ol className="grid gap-2 md:grid-cols-4">
@@ -6963,19 +12583,21 @@ function VoiceCloningActivityPanel({
           <li
             className={`rounded-md border p-3 ${
               stage.status === "running"
-                ? "border-orange-300 bg-orange-50"
-                : "border-zinc-200 bg-zinc-50"
+                ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
+                : "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)]"
             }`}
             key={stage.label}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="grid h-6 w-6 place-items-center rounded-full border border-zinc-200 bg-white text-xs font-semibold text-zinc-600">
+              <span className="grid h-6 w-6 place-items-center rounded-full border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] text-xs font-semibold text-[var(--vs-text-muted)]">
                 {String(index + 1)}
               </span>
               <PipelineFooterStage label={stageStatusLabel(stage.status)} status={stage.status} />
             </div>
-            <p className="mt-3 text-sm font-semibold text-zinc-950">{stage.label}</p>
-            <p className="mt-1 min-h-10 break-words text-xs leading-5 text-zinc-500">
+            <p className="mt-3 text-sm font-semibold text-[var(--vs-text-primary)]">
+              {stage.label}
+            </p>
+            <p className="mt-1 min-h-10 break-words text-xs leading-5 text-[var(--vs-text-muted)]">
               {stage.detail}
             </p>
           </li>
@@ -6999,7 +12621,7 @@ function ArtifactBuildTimeoutInput({
       <span className="font-semibold text-[var(--vs-text)]">Artifact build timeout (seconds)</span>
       <input
         aria-invalid={error ? "true" : "false"}
-        className="h-9 min-w-0 rounded-md border px-2 text-sm outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 vs-border vs-surface"
+        className="h-9 min-w-0 rounded-md border px-2 text-sm outline-none focus:border-[var(--vs-selected-border)] focus:ring-2 focus:ring-[var(--vs-focus-ring-soft)] vs-border vs-surface"
         inputMode="numeric"
         onChange={(event) => {
           onInputChange(event.currentTarget.value);
@@ -7008,7 +12630,7 @@ function ArtifactBuildTimeoutInput({
         type="number"
         value={input}
       />
-      <span className={error ? "text-red-700" : "vs-muted"}>
+      <span className={error ? "text-[var(--vs-status-danger)]" : "vs-muted"}>
         {error ?? "Blank uses the server default for this build."}
       </span>
     </label>
@@ -7103,7 +12725,7 @@ function CloneReadinessDiagnostics({
     <div className="grid gap-2 rounded-md border p-3 text-xs vs-border vs-surface">
       <div className="flex items-center justify-between gap-2">
         <p className="font-semibold text-[var(--vs-text)]">Diagnostics</p>
-        <span className="rounded bg-amber-100 px-2 py-1 font-semibold text-amber-800">
+        <span className="rounded bg-[var(--vs-status-warning-bg)] px-2 py-1 font-semibold text-[var(--vs-status-warning)]">
           {issues.length.toString()}
         </span>
       </div>
@@ -7111,8 +12733,8 @@ function CloneReadinessDiagnostics({
         <div
           className={`rounded-md border p-2 ${
             issue.severity === "error"
-              ? "border-red-200 bg-red-50 text-red-800"
-              : "border-amber-200 bg-amber-50 text-amber-900"
+              ? "border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]"
+              : "border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]"
           }`}
           key={issue.key}
         >
@@ -7131,7 +12753,7 @@ function CloneReadinessDiagnostics({
 
 const BACKEND_CONTRACTS = [
   {
-    artifact: "Reference clone",
+    artifact: "Reference WAV + validation sample",
     engineId: "kokoro-clone",
     label: "Kokoro Clone",
     targetId: "kokoro-clone",
@@ -7179,121 +12801,148 @@ function BackendContractReviewPanel({
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
 }>) {
   const artifactBuildTimeout = useArtifactBuildTimeoutState();
+  const contractRows = BACKEND_CONTRACTS.map((contract) => ({
+    contract,
+    summary: backendContractSummary({
+      activeEngineId,
+      buildingArtifactKey,
+      cancelingTargetKey,
+      contract,
+      modules,
+      profile,
+      ttsEngines,
+    }),
+  }));
+  const contractReviewAutoOpen = contractRows.some(({ summary }) =>
+    ["failed", "running", "setup"].includes(summary.status),
+  );
   return (
-    <section className="grid gap-3 rounded-lg border p-4 shadow-sm vs-border vs-surface">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
-            Backend Contract Review
+    <details
+      className="grid gap-3 rounded-lg border p-4 shadow-sm vs-border vs-surface"
+      open={contractReviewAutoOpen || undefined}
+    >
+      <summary className="cursor-pointer list-none">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
+              Backend Contract Review
+            </p>
+            <h3 className="mt-1 text-base font-semibold text-[var(--vs-text)]">
+              Profile targets by narration backend
+            </h3>
+          </div>
+          <p className="max-w-lg text-xs leading-5 vs-muted">
+            Advanced target and artifact readiness for each narration backend.
           </p>
-          <h3 className="mt-1 text-base font-semibold text-[var(--vs-text)]">
-            Profile targets by narration backend
-          </h3>
         </div>
-        <p className="max-w-lg text-xs leading-5 vs-muted">
+      </summary>
+      <div className="mt-3 grid gap-3">
+        <p className="max-w-3xl text-xs leading-5 vs-muted">
           One row per backend. The required target, artifact, readiness, and next action stay
           visible so adding another backend remains a descriptor-level change.
         </p>
-      </div>
-      <ArtifactBuildTimeoutInput
-        error={artifactBuildTimeout.error}
-        input={artifactBuildTimeout.input}
-        onInputChange={artifactBuildTimeout.setInput}
-      />
-      <div className="overflow-x-auto rounded-md border vs-border">
-        <table className="w-full min-w-[720px] border-collapse text-left text-xs">
-          <thead className="bg-[var(--vs-raised)] text-[0.65rem] uppercase tracking-[0.14em] vs-muted">
-            <tr>
-              <th className="px-3 py-2 font-semibold">Backend</th>
-              <th className="px-3 py-2 font-semibold">Voice Source</th>
-              <th className="px-3 py-2 font-semibold">Required Target</th>
-              <th className="px-3 py-2 font-semibold">Artifact</th>
-              <th className="px-3 py-2 font-semibold">Readiness</th>
-              <th className="px-3 py-2 font-semibold">Validation</th>
-              <th className="px-3 py-2 font-semibold">User Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--vs-border)]">
-            {BACKEND_CONTRACTS.map((contract) => {
-              const summary = backendContractSummary({
-                activeEngineId,
-                buildingArtifactKey,
-                cancelingTargetKey,
-                contract,
-                modules,
-                profile,
-                ttsEngines,
-              });
-              const actionBuildsArtifact = backendContractActionBuildsArtifact(summary.status);
-              const timeoutBlocksAction = actionBuildsArtifact && !artifactBuildTimeout.canBuild;
-              return (
-                <tr
-                  className={
-                    contract.engineId === activeEngineId
-                      ? "bg-orange-500/10"
-                      : "bg-[var(--vs-surface)] hover:bg-[var(--vs-raised)]"
-                  }
-                  key={contract.engineId}
-                >
-                  <td className="px-3 py-3 align-middle">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span
-                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${backendContractDotClass(summary.status)}`}
-                      />
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-[var(--vs-text)]">
-                          {contract.label}
-                        </p>
-                        <p className="truncate text-[0.68rem] vs-muted">{summary.engineLabel}</p>
+        <ArtifactBuildTimeoutInput
+          error={artifactBuildTimeout.error}
+          input={artifactBuildTimeout.input}
+          onInputChange={artifactBuildTimeout.setInput}
+        />
+        <div className="overflow-x-auto rounded-md border vs-border">
+          <table className="w-full min-w-[920px] border-collapse text-left text-xs">
+            <thead className="bg-[var(--vs-raised)] text-[0.65rem] uppercase tracking-[0.14em] vs-muted">
+              <tr>
+                <th className="px-3 py-2 font-semibold">Backend</th>
+                <th className="px-3 py-2 font-semibold">Prerequisite</th>
+                <th className="px-3 py-2 font-semibold">Voice Source</th>
+                <th className="px-3 py-2 font-semibold">Required Target</th>
+                <th className="px-3 py-2 font-semibold">Artifact</th>
+                <th className="px-3 py-2 font-semibold">Readiness</th>
+                <th className="px-3 py-2 font-semibold">Validation</th>
+                <th className="px-3 py-2 font-semibold">User Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--vs-border)]">
+              {contractRows.map(({ contract, summary }) => {
+                const actionBuildsArtifact = backendContractActionBuildsArtifact(summary.status);
+                const timeoutBlocksAction = actionBuildsArtifact && !artifactBuildTimeout.canBuild;
+                const disabledReason = timeoutBlocksAction
+                  ? (artifactBuildTimeout.error ??
+                    "Set a valid timeout before preparing this target.")
+                  : summary.disabledReason;
+                return (
+                  <tr
+                    className={
+                      contract.engineId === activeEngineId
+                        ? "bg-[var(--vs-selected)]"
+                        : "bg-[var(--vs-surface)] hover:bg-[var(--vs-raised)]"
+                    }
+                    key={contract.engineId}
+                  >
+                    <td className="px-3 py-3 align-middle">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span
+                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${backendContractDotClass(summary.status)}`}
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-[var(--vs-text)]">
+                            {contract.label}
+                          </p>
+                          <p className="truncate text-[0.68rem] vs-muted">{summary.engineLabel}</p>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-3 py-3 vs-muted">{contract.voiceSource}</td>
-                  <td className="px-3 py-3 vs-muted">{moduleLabel(contract.targetId)}</td>
-                  <td className="px-3 py-3 vs-muted">{summary.artifact}</td>
-                  <td className="px-3 py-3">
-                    <span
-                      className={`inline-flex rounded-md px-2 py-1 font-semibold ${backendContractStatusClass(summary.status)}`}
-                    >
-                      {summary.label}
-                    </span>
-                    <p className="mt-1 max-w-[14rem] truncate text-[0.68rem] vs-muted">
-                      {summary.detail}
-                    </p>
-                  </td>
-                  <td className="px-3 py-3 text-[0.68rem] vs-muted">{summary.validationPercent}</td>
-                  <td className="px-3 py-3">
-                    <button
-                      className={`h-8 min-w-28 rounded-md border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${backendContractActionButtonClass(summary.status)}`}
-                      disabled={!summary.canAct || timeoutBlocksAction}
-                      onClick={() => {
-                        handleBackendContractAction({
-                          contract,
-                          profile,
-                          runConfiguration,
-                          summary,
-                          timeoutSeconds: artifactBuildTimeout.timeoutSeconds,
-                          ttsEngines,
-                          onBuildArtifact,
-                          onCancelTarget,
-                          onRunConfigurationChange,
-                        });
-                      }}
-                      title={
-                        timeoutBlocksAction ? (artifactBuildTimeout.error ?? undefined) : undefined
-                      }
-                      type="button"
-                    >
-                      {summary.actionLabel}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    </td>
+                    <td className="px-3 py-3 vs-muted">{summary.prerequisite}</td>
+                    <td className="px-3 py-3 vs-muted">{contract.voiceSource}</td>
+                    <td className="px-3 py-3 vs-muted">{moduleLabel(contract.targetId)}</td>
+                    <td className="px-3 py-3 vs-muted">{summary.artifact}</td>
+                    <td className="px-3 py-3">
+                      <span
+                        className={`inline-flex rounded-md px-2 py-1 font-semibold ${backendContractStatusClass(summary.status)}`}
+                      >
+                        {summary.label}
+                      </span>
+                      <p className="mt-1 max-w-[14rem] truncate text-[0.68rem] vs-muted">
+                        {summary.detail}
+                      </p>
+                    </td>
+                    <td className="px-3 py-3 text-[0.68rem] vs-muted">
+                      {summary.validationPercent}
+                    </td>
+                    <td className="px-3 py-3">
+                      <button
+                        className={`h-8 min-w-28 rounded-md border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${backendContractActionButtonClass(summary.status)}`}
+                        disabled={!summary.canAct || timeoutBlocksAction}
+                        onClick={() => {
+                          handleBackendContractAction({
+                            contract,
+                            profile,
+                            runConfiguration,
+                            summary,
+                            timeoutSeconds: artifactBuildTimeout.timeoutSeconds,
+                            ttsEngines,
+                            onBuildArtifact,
+                            onCancelTarget,
+                            onRunConfigurationChange,
+                          });
+                        }}
+                        title={disabledReason ?? undefined}
+                        type="button"
+                      >
+                        {summary.actionLabel}
+                      </button>
+                      {disabledReason ? (
+                        <p className="mt-1 max-w-[12rem] text-[0.68rem] leading-4 vs-muted">
+                          {disabledReason}
+                        </p>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </section>
+    </details>
   );
 }
 
@@ -7304,10 +12953,12 @@ interface BackendContractSummary {
   artifact: string;
   canAct: boolean;
   detail: string;
+  disabledReason: string | null;
   engineLabel: string;
-  validationPercent: string;
   label: string;
+  prerequisite: string;
   status: BackendContractStatus;
+  validationPercent: string;
 }
 
 function backendContractSummary({
@@ -7342,13 +12993,13 @@ function backendContractSummary({
   const moduleReady =
     contract.targetId === "kokoro-clone" ||
     (module?.installed === true && researchModuleRuntimeReady(module));
+  const validationFailed = target?.validation?.status === "failed";
   const ready =
     profile !== null &&
+    !validationFailed &&
     (target?.status === "ready" ||
       artifact?.status === "ready" ||
       (contract.targetId === "kokoro-clone" && !target));
-  const validationPercent =
-    typeof target?.validation?.score === "number" ? formatSimilarity(target.validation.score) : "—";
   const status = backendContractReadinessStatus({
     artifactStatus: artifact?.status,
     isBusy,
@@ -7356,6 +13007,7 @@ function backendContractSummary({
     profile,
     ready,
     targetStatus: target?.status,
+    validationFailed,
   });
   return {
     actionLabel: backendContractActionLabel({
@@ -7364,18 +13016,104 @@ function backendContractSummary({
       isCanceling,
       status,
     }),
-    artifact: artifact?.status ?? contract.artifact,
+    artifact: artifact?.status ? `${contract.artifact} · ${artifact.status}` : contract.artifact,
     canAct: backendContractCanAct(status, profile),
     detail:
       target?.error ??
       artifact?.error ??
       target?.validation?.error ??
       (profile ? voiceProfileTargetReadinessText(profile, contract.engineId) : "Select a profile"),
+    disabledReason: backendContractDisabledReason(status, profile),
     engineLabel,
-    validationPercent,
     label: backendContractReadinessLabel(status),
+    prerequisite: backendContractPrerequisite({
+      moduleReady,
+      profile,
+      targetStatus: target?.status,
+      validationFailed,
+    }),
     status,
+    validationPercent: backendContractValidationLabel(target),
   };
+}
+
+function backendContractPrerequisite({
+  moduleReady,
+  profile,
+  targetStatus,
+  validationFailed,
+}: Readonly<{
+  moduleReady: boolean;
+  profile: VoiceProfile | null;
+  targetStatus?: string;
+  validationFailed: boolean;
+}>): string {
+  if (!profile) {
+    return "Create a cloned voice profile";
+  }
+  if (!moduleReady) {
+    return "Complete backend setup";
+  }
+  if (!targetStatus) {
+    return "Prepare target";
+  }
+  if (["queued", "building", "validating"].includes(targetStatus)) {
+    return "Target is working";
+  }
+  if (validationFailed) {
+    return "Review validation";
+  }
+  if (targetStatus === "ready") {
+    return "Target is validated";
+  }
+  if (targetStatus === "failed") {
+    return "Review target issue";
+  }
+  return "Target selected";
+}
+
+function backendContractDisabledReason(
+  status: BackendContractStatus,
+  profile: VoiceProfile | null,
+): string | null {
+  if (!profile) {
+    return "Create a cloned voice profile before preparing backend targets.";
+  }
+  if (status === "setup") {
+    return "Complete backend setup in Settings before preparing this target.";
+  }
+  return null;
+}
+
+function backendContractValidationLabel(
+  target: NonNullable<VoiceProfile["cloneTargets"]>[string] | undefined,
+): string {
+  const validation = target?.validation;
+  if (!validation) {
+    return target?.status === "ready" ? "Ready, no validation detail" : "Waiting";
+  }
+  if (validation.status === "failed") {
+    return typeof validation.score === "number"
+      ? `Failed · ${formatSimilarity(validation.score)}`
+      : "Failed";
+  }
+  if (validation.status === "validating") {
+    return "Validating";
+  }
+  if (validation.status === "cancelled") {
+    return "Cancelled";
+  }
+  const parts = [];
+  if (typeof validation.score === "number") {
+    parts.push(formatSimilarity(validation.score));
+  }
+  if (typeof validation.speakerSimilarity === "number") {
+    parts.push(`speaker ${formatSimilarity(validation.speakerSimilarity)}`);
+  }
+  if (typeof validation.transcriptSimilarity === "number") {
+    parts.push(`transcript ${formatSimilarity(validation.transcriptSimilarity)}`);
+  }
+  return parts.length > 0 ? `Passed · ${parts.join(" · ")}` : validation.status;
 }
 
 function backendContractCanAct(
@@ -7399,6 +13137,7 @@ function backendContractReadinessStatus({
   profile,
   ready,
   targetStatus,
+  validationFailed,
 }: Readonly<{
   artifactStatus?: string;
   isBusy: boolean;
@@ -7406,6 +13145,7 @@ function backendContractReadinessStatus({
   profile: VoiceProfile | null;
   ready: boolean;
   targetStatus?: string;
+  validationFailed: boolean;
 }>): BackendContractStatus {
   if (isBusy) {
     return "running";
@@ -7415,6 +13155,9 @@ function backendContractReadinessStatus({
   }
   if (!moduleReady) {
     return "setup";
+  }
+  if (validationFailed) {
+    return "failed";
   }
   if (ready) {
     return "ready";
@@ -7477,44 +13220,44 @@ function backendContractReadinessLabel(status: BackendContractStatus): string {
 
 function backendContractStatusClass(status: BackendContractStatus): string {
   if (status === "ready") {
-    return "bg-emerald-100 text-emerald-700";
+    return "bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]";
   }
   if (status === "running") {
-    return "bg-orange-100 text-orange-800";
+    return "bg-[var(--vs-selected)] text-[var(--vs-selected-text)]";
   }
   if (status === "failed") {
-    return "bg-red-100 text-red-700";
+    return "bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]";
   }
   if (status === "setup") {
-    return "bg-amber-100 text-amber-800";
+    return "bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]";
   }
-  return "bg-zinc-100 text-zinc-600";
+  return "bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]";
 }
 
 function backendContractDotClass(status: BackendContractStatus): string {
   if (status === "ready") {
-    return "bg-emerald-500";
+    return "bg-[var(--vs-status-success)]";
   }
   if (status === "running") {
-    return "bg-orange-500";
+    return "bg-[var(--vs-action-primary)]";
   }
   if (status === "failed") {
-    return "bg-red-500";
+    return "bg-[var(--vs-status-danger)]";
   }
   if (status === "setup") {
-    return "bg-amber-500";
+    return "bg-[var(--vs-status-warning)]";
   }
-  return "bg-zinc-300";
+  return "bg-[var(--vs-action-disabled-bg)]";
 }
 
 function backendContractActionButtonClass(status: BackendContractStatus): string {
   if (status === "failed") {
-    return "border-red-200 bg-white text-red-700 hover:bg-red-50";
+    return "border-[var(--vs-status-danger-border)] bg-[var(--vs-surface-primary)] text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)]";
   }
   if (status === "running") {
-    return "border-orange-300 bg-white text-orange-800 hover:bg-orange-50";
+    return "border-[var(--vs-selected-border)] bg-[var(--vs-surface-primary)] text-[var(--vs-selected-text)] hover:bg-[var(--vs-selected)]";
   }
-  return "border-zinc-200 bg-white text-zinc-800 hover:border-orange-200 hover:bg-orange-50";
+  return "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] text-[var(--vs-text-secondary)] hover:border-[var(--vs-selected-border)] hover:bg-[var(--vs-selected)]";
 }
 
 function handleBackendContractAction({
@@ -7744,10 +13487,13 @@ function CloneTargetReadinessRow({
       </p>
       {canAct || isSelected ? (
         <button
-          className={`h-8 w-full rounded-md border px-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${cloneTargetActionButtonClass(
+          className={`${compactHitTargetClassName} h-8 w-full rounded-md border px-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${cloneTargetActionButtonClass(
             isBusy,
             isReady,
           )}`}
+          data-hit-target-min={minInteractiveSize}
+          data-testid={`ui-action-clone-target-${moduleId}`}
+          data-ui-action-surface="Voice Cloning"
           disabled={isCanceling || isSelected || timeoutBlocksAction}
           onClick={() => {
             handleCloneTargetReadinessAction({
@@ -7785,12 +13531,12 @@ function cloneReadinessTargetOrder(profile: VoiceProfile): string[] {
 
 function cloneTargetActionButtonClass(isBusy: boolean, isReady: boolean): string {
   if (isBusy) {
-    return "border-red-200 bg-white text-red-600 hover:bg-red-50";
+    return "border-[var(--vs-status-danger-border)] bg-[var(--vs-surface-primary)] text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)]";
   }
   if (isReady) {
-    return "border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50";
+    return "border-[var(--vs-status-success-border)] bg-[var(--vs-surface-primary)] text-[var(--vs-status-success)] hover:bg-[var(--vs-status-success-bg)]";
   }
-  return "border-orange-200 bg-white text-orange-800 hover:bg-orange-50";
+  return "border-[var(--vs-selected-border)] bg-[var(--vs-surface-primary)] text-[var(--vs-selected-text)] hover:bg-[var(--vs-selected)]";
 }
 
 export function handleCloneTargetReadinessAction({
@@ -7935,403 +13681,34 @@ function cloneTargetActionLabel({
 
 function cloneTargetReadinessCardClass(isBusy: boolean, status: string): string {
   if (isBusy) {
-    return "border-orange-300 bg-orange-50";
+    return "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]";
   }
   if (status === "failed") {
-    return "border-red-200 bg-red-50";
+    return "border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)]";
   }
   if (status === "cancelled") {
-    return "border-zinc-300 bg-zinc-50";
+    return "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)]";
   }
   if (status === "ready") {
-    return "border-emerald-200 bg-emerald-50";
+    return "border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)]";
   }
   return "vs-border vs-raised";
 }
 
 function targetStatusClass(status: string): string {
   if (status === "ready") {
-    return "bg-emerald-100 text-emerald-700";
+    return "bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]";
   }
   if (status === "failed") {
-    return "bg-red-100 text-red-700";
+    return "bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]";
   }
   if (status === "cancelled") {
-    return "bg-zinc-100 text-zinc-600";
+    return "bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]";
   }
   if (["queued", "building", "validating"].includes(status)) {
-    return "bg-orange-100 text-orange-700";
+    return "bg-[var(--vs-selected)] text-[var(--vs-selected-text)]";
   }
-  return "bg-zinc-100 text-zinc-600";
-}
-
-function PipelineStatusFooter({
-  activeJobId,
-  canSubmit,
-  hint,
-  isProcessing,
-  job,
-  mode,
-  pipeline,
-  voiceCloningActivity,
-  onCancel,
-  onModeChange,
-  onOpenVoiceCloning,
-  onSubmit,
-}: Readonly<{
-  activeJobId: string | null;
-  canSubmit: boolean;
-  hint: string;
-  isProcessing: boolean;
-  job: VoiceJob | null;
-  mode: ActivityFooterMode;
-  pipeline: PipelineStepState;
-  voiceCloningActivity: VoiceCloningActivitySummary;
-  onCancel: () => void;
-  onModeChange: (mode: ActivityFooterMode) => void;
-  onOpenVoiceCloning: () => void;
-  onSubmit: () => void;
-}>) {
-  const total = job?.retries.totalSegments ?? job?.progress.totalSegments ?? 0;
-  const current = job?.audioReadySegments ?? job?.progress.currentSegment ?? 0;
-  const narrationStatus = resolveNarrationActivityStatus(job, isProcessing);
-  const narrationStages: ActivityStageSummary[] = [
-    { label: "Optimize", status: pipeline.optimization },
-    { label: "Synthesize", status: pipeline.synthesis },
-    { label: "Check", status: pipeline.checker },
-  ];
-  const narrationAction = isProcessing ? (
-    <button
-      className="h-10 rounded-md border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-      disabled={!activeJobId}
-      onClick={onCancel}
-      type="button"
-    >
-      Cancel Run
-    </button>
-  ) : (
-    <button
-      className="h-10 rounded-md px-4 text-sm font-semibold text-white transition disabled:bg-zinc-300 vs-accent-bg"
-      disabled={!canSubmit}
-      onClick={onSubmit}
-      type="button"
-    >
-      Create & Listen
-    </button>
-  );
-  const voiceCloningAction = (
-    <button
-      className={`h-10 rounded-md px-4 text-sm font-semibold transition ${
-        voiceCloningActivity.status === "attention"
-          ? "border border-amber-300 bg-white text-amber-800 hover:bg-amber-50"
-          : "border border-orange-300 bg-orange-500/10 text-orange-700 hover:bg-orange-50"
-      }`}
-      onClick={onOpenVoiceCloning}
-      type="button"
-    >
-      {voiceCloningActivity.actionLabel}
-    </button>
-  );
-  const narrationMessage = narrationActivityMessage(job, hint);
-  const narrationSegmentSummary = total > 0 ? `${String(current)} / ${String(total)}` : "0 / 0";
-  const narrationCompactDetail = `${narrationSegmentSummary} · ${estimateFirstAudioETA(job)}`;
-
-  if (mode === "collapsed") {
-    return (
-      <footer className="z-30 shrink-0 border-t px-3 py-2 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:px-4 vs-border vs-raised">
-        <button
-          className="flex min-h-10 w-full min-w-0 items-center justify-between gap-3 rounded-md border px-3 text-left transition hover:bg-[var(--vs-surface)] vs-border"
-          onClick={() => {
-            onModeChange("compact");
-          }}
-          type="button"
-        >
-          <span className="flex min-w-0 items-center gap-3">
-            <FooterStatusDots
-              narrationStatus={narrationStatus}
-              voiceCloningStatus={voiceCloningActivity.status}
-            />
-            <span className="min-w-0 truncate text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
-              Activity
-            </span>
-            <span className="min-w-0 truncate text-sm font-semibold">
-              Narration {job?.status ?? "Idle"} · Voice Cloning {voiceCloningActivity.statusLabel}
-            </span>
-          </span>
-          <span className="shrink-0 text-xs font-semibold text-orange-700">Expand</span>
-        </button>
-      </footer>
-    );
-  }
-
-  if (mode === "compact") {
-    return (
-      <footer className="z-30 shrink-0 border-t px-3 py-3 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:px-4 vs-border vs-raised">
-        <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-center">
-          <CompactActivityLane
-            action={narrationAction}
-            detail={narrationCompactDetail}
-            message={narrationMessage}
-            stages={narrationStages}
-            status={narrationStatus}
-            statusLabel={job?.status ?? "Idle"}
-            title="Narration"
-          />
-          <CompactActivityLane
-            action={voiceCloningAction}
-            detail={`${voiceCloningActivity.elapsed} · ${voiceCloningActivity.lastUpdate}`}
-            message={voiceCloningActivity.message}
-            stages={voiceCloningActivity.stages}
-            status={voiceCloningActivity.status}
-            statusLabel={voiceCloningActivity.statusLabel}
-            title="Voice Cloning"
-          />
-          <ActivityFooterModeControls mode={mode} onModeChange={onModeChange} />
-        </div>
-      </footer>
-    );
-  }
-
-  return (
-    <footer className="z-30 max-h-[46vh] shrink-0 overflow-y-auto border-t px-3 py-3 shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:max-h-none lg:overflow-visible lg:px-4 vs-border vs-raised">
-      <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <span className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">
-          Activity Footer
-        </span>
-        <ActivityFooterModeControls mode={mode} onModeChange={onModeChange} />
-      </div>
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <ActivityLanePanel
-          action={narrationAction}
-          facts={
-            <>
-              <ActivityFact
-                label="Job Status"
-                value={job?.status ?? "Idle"}
-                detail={activeJobId ?? hint}
-              />
-              <ActivityFact
-                label="Segments"
-                value={total > 0 ? `${String(current)} / ${String(total)}` : "0 / 0"}
-                detail={total > 0 ? formatPercentageRatio(current, total) : "Waiting"}
-              />
-              <ActivityFact
-                label="First Audio ETA"
-                value={estimateFirstAudioETA(job)}
-                detail="until checked audio"
-              />
-              <ActivityFact
-                label="Confidence"
-                value={formatSimilarity(job?.voiceCheck.similarity ?? 0)}
-                detail={job?.voiceCheck.reason ?? "waiting"}
-              />
-            </>
-          }
-          message={narrationMessage}
-          stages={narrationStages}
-          status={narrationStatus}
-          statusLabel={job?.status ?? "Idle"}
-          title="Narration Pipeline"
-        />
-        <ActivityLanePanel
-          action={voiceCloningAction}
-          facts={
-            <>
-              <ActivityFact
-                label="Status"
-                value={voiceCloningActivity.statusLabel}
-                detail={voiceCloningActivity.sourceDetail}
-              />
-              <ActivityFact
-                label="Elapsed"
-                value={voiceCloningActivity.elapsed}
-                detail={voiceCloningActivity.eta}
-              />
-              <ActivityFact
-                label="Last Update"
-                value={voiceCloningActivity.lastUpdate}
-                detail={voiceCloningActivity.eta}
-              />
-              <ActivityFact
-                label="Candidates"
-                value={voiceCloningActivity.candidateDetail}
-                detail={voiceCloningActivity.activeProfile?.name ?? "profile pending"}
-              />
-            </>
-          }
-          message={voiceCloningActivity.message}
-          stages={voiceCloningActivity.stages}
-          status={voiceCloningActivity.status}
-          statusLabel={voiceCloningActivity.statusLabel}
-          title="Voice Cloning"
-        />
-      </div>
-    </footer>
-  );
-}
-
-function ActivityLanePanel({
-  action,
-  facts,
-  message,
-  stages,
-  status,
-  statusLabel,
-  title,
-}: Readonly<{
-  action: ReactNode;
-  facts: ReactNode;
-  message: string;
-  stages: ActivityStageSummary[];
-  status: ActivityStatus;
-  statusLabel: string;
-  title: string;
-}>) {
-  return (
-    <section className="min-w-0 rounded-lg border p-3 vs-border vs-surface">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h2 className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">{title}</h2>
-            <ActivityStatusBadge label={statusLabel} status={status} />
-          </div>
-          <p className="mt-2 truncate text-sm font-medium" title={message}>
-            {message}
-          </p>
-        </div>
-        <div className="shrink-0">{action}</div>
-      </div>
-      <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
-        {stages.map((stage) => (
-          <PipelineFooterStage key={stage.label} label={stage.label} status={stage.status} />
-        ))}
-      </div>
-      <div className="mt-3 grid min-w-0 grid-cols-2 gap-2 text-xs md:grid-cols-4">{facts}</div>
-    </section>
-  );
-}
-
-function ActivityFooterModeControls({
-  mode,
-  onModeChange,
-}: Readonly<{
-  mode: ActivityFooterMode;
-  onModeChange: (mode: ActivityFooterMode) => void;
-}>) {
-  const nextMode = nextActivityFooterMode(mode);
-  const labelByMode: Record<ActivityFooterMode, string> = {
-    collapsed: "Open",
-    compact: "Hide",
-    full: "Less",
-  };
-  const viewLabelByMode: Record<ActivityFooterMode, string> = {
-    collapsed: "Hide",
-    compact: "Slim",
-    full: "Full",
-  };
-  return (
-    <div className="flex w-full shrink-0 flex-wrap items-center gap-1 rounded-md border p-1 vs-border vs-surface sm:w-auto">
-      {(["full", "compact", "collapsed"] as const).map((item) => (
-        <button
-          aria-label={`Show ${item} activity footer`}
-          className={`h-7 min-w-[3.8rem] flex-1 rounded px-2 text-[0.68rem] font-semibold transition sm:flex-none ${
-            mode === item
-              ? "bg-orange-500 text-white"
-              : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
-          }`}
-          key={item}
-          onClick={() => {
-            onModeChange(item);
-          }}
-          type="button"
-        >
-          {viewLabelByMode[item]}
-        </button>
-      ))}
-      <button
-        className="h-7 min-w-[3.8rem] flex-1 rounded border border-orange-300 px-2 text-[0.68rem] font-semibold text-orange-700 transition hover:bg-orange-50 sm:flex-none"
-        onClick={() => {
-          onModeChange(nextMode);
-        }}
-        type="button"
-      >
-        {labelByMode[mode]}
-      </button>
-    </div>
-  );
-}
-
-function CompactActivityLane({
-  action,
-  detail,
-  message,
-  stages,
-  status,
-  statusLabel,
-  title,
-}: Readonly<{
-  action: ReactNode;
-  detail: string;
-  message: string;
-  stages: ActivityStageSummary[];
-  status: ActivityStatus;
-  statusLabel: string;
-  title: string;
-}>) {
-  return (
-    <section className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border p-3 vs-border vs-surface">
-      <div className="min-w-0">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.14em] vs-muted">{title}</h2>
-          <ActivityStatusBadge label={statusLabel} status={status} />
-          <span className="vs-muted min-w-0 truncate text-xs">{detail}</span>
-        </div>
-        <div className="mt-2 flex min-w-0 items-center gap-2">
-          <div className="flex shrink-0 items-center gap-1">
-            {stages.map((stage) => (
-              <span
-                className={`h-2 w-2 rounded-full ${stageDotClass(stage.status)}`}
-                key={stage.label}
-                title={`${stage.label}: ${stageStatusLabel(stage.status)}`}
-              />
-            ))}
-          </div>
-          <p className="min-w-0 truncate text-sm font-medium" title={message}>
-            {message}
-          </p>
-        </div>
-      </div>
-      <div className="shrink-0">{action}</div>
-    </section>
-  );
-}
-
-function FooterStatusDots({
-  narrationStatus,
-  voiceCloningStatus,
-}: Readonly<{ narrationStatus: ActivityStatus; voiceCloningStatus: ActivityStatus }>) {
-  return (
-    <span className="flex shrink-0 items-center gap-1.5">
-      <span className={`h-2.5 w-2.5 rounded-full ${activityDotClass(narrationStatus)}`} />
-      <span className={`h-2.5 w-2.5 rounded-full ${activityDotClass(voiceCloningStatus)}`} />
-    </span>
-  );
-}
-
-function activityDotClass(status: ActivityStatus): string {
-  if (status === "running") {
-    return "bg-orange-500";
-  }
-  if (status === "attention") {
-    return "bg-amber-500";
-  }
-  if (status === "complete") {
-    return "bg-emerald-500";
-  }
-  if (status === "cancelled") {
-    return "bg-zinc-500";
-  }
-  return "bg-zinc-300";
+  return "bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]";
 }
 
 function ActivityStatusBadge({
@@ -8339,11 +13716,15 @@ function ActivityStatusBadge({
   status,
 }: Readonly<{ label: string; status: ActivityStatus }>) {
   const classNameByStatus: Record<ActivityStatus, string> = {
-    attention: "border-amber-300 bg-amber-50 text-amber-800",
-    cancelled: "border-zinc-300 bg-zinc-50 text-zinc-600",
-    complete: "border-emerald-300 bg-emerald-50 text-emerald-700",
-    idle: "border-zinc-200 bg-zinc-50 text-zinc-600",
-    running: "border-orange-300 bg-orange-50 text-orange-700",
+    attention:
+      "border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]",
+    cancelled:
+      "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] text-[var(--vs-text-muted)]",
+    complete:
+      "border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]",
+    idle: "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] text-[var(--vs-text-muted)]",
+    running:
+      "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)]",
   };
   return (
     <span
@@ -8355,18 +13736,22 @@ function ActivityStatusBadge({
 }
 
 function PipelineFooterStage({ label, status }: Readonly<{ label: string; status: StageStatus }>) {
-  let tone = "border-zinc-200 bg-zinc-50 text-zinc-500";
+  let tone =
+    "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] text-[var(--vs-text-muted)]";
   switch (status) {
     case "done": {
-      tone = "border-emerald-300 bg-emerald-50 text-emerald-700";
+      tone =
+        "border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]";
       break;
     }
     case "running": {
-      tone = "border-orange-300 bg-orange-500/10 text-orange-700";
+      tone =
+        "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)]";
       break;
     }
     case "failed": {
-      tone = "border-red-300 bg-red-50 text-red-700";
+      tone =
+        "border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]";
       break;
     }
     default: {
@@ -8424,42 +13809,36 @@ function stageStatusLabel(status: StageStatus): string {
 function stageDotClass(status: StageStatus): string {
   switch (status) {
     case "done": {
-      return "bg-emerald-500";
+      return "bg-[var(--vs-status-success)]";
     }
     case "failed": {
-      return "bg-red-500";
+      return "bg-[var(--vs-status-danger)]";
     }
     case "running": {
-      return "bg-orange-500";
+      return "bg-[var(--vs-action-primary)]";
     }
     default: {
-      return "bg-zinc-300";
+      return "bg-[var(--vs-action-disabled-bg)]";
     }
   }
 }
 
-function resolveNarrationActivityStatus(
-  job: VoiceJob | null,
-  isProcessing: boolean,
-): ActivityStatus {
-  if (job?.status === "failed" || job?.status === "cancelled") {
-    return "attention";
+function narrationSourceSummaryDetail({
+  bookSource,
+  preparedSource,
+  sourceCount,
+}: Readonly<{
+  bookSource: BookSource | undefined;
+  preparedSource: PreparedSource | undefined;
+  sourceCount: number;
+}>): string {
+  if (preparedSource) {
+    return `${preparedSource.kind.toUpperCase()} · ${preparedSource.wordCount.toLocaleString()} words`;
   }
-  if (isProcessing) {
-    return "running";
+  if (bookSource) {
+    return `${bookSource.kind.toUpperCase()} · ${bookSource.wordCount.toLocaleString()} words`;
   }
-  if (job?.status === "completed") {
-    return "complete";
-  }
-  return "idle";
-}
-
-function narrationActivityMessage(job: VoiceJob | null, hint: string): string {
-  const progressMessage = job?.progress.message.trim();
-  if (progressMessage && progressMessage.length > 0) {
-    return progressMessage;
-  }
-  return hint;
+  return `${sourceCount.toString()} managed sources`;
 }
 
 function SidebarFact({ label, value }: Readonly<{ label: string; value: string }>) {
@@ -8473,444 +13852,2136 @@ function SidebarFact({ label, value }: Readonly<{ label: string; value: string }
   );
 }
 
-function SourceTextPanel({
-  bookScopeContent,
-  bookControls,
-  canSubmit,
-  contentMode,
-  customSpeechPolicyProfiles,
-  isPreparingSource,
-  isProcessing,
-  isSpeechPolicyPreviewing,
+function activeBookSourceForWorkbench(
+  sourceMode: SourceMode,
+  selectedBookSource: BookSource | null,
+): BookSource | null {
+  return sourceMode === "book" ? selectedBookSource : null;
+}
+
+function activePreparedSourceForWorkbench(
+  sourceMode: SourceMode,
+  selectedPreparedSource: PreparedSource | null,
+): PreparedSource | null {
+  return sourceMode === "fileUrl" ? selectedPreparedSource : null;
+}
+
+function hasWorkbenchNarrationSource({
+  selectedBookSource,
+  selectedPreparedSource,
+  sourceMode,
+  text,
+}: Readonly<{
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourceMode: SourceMode;
+  text: string;
+}>): boolean {
+  switch (sourceMode) {
+    case "book": {
+      return Boolean(selectedBookSource);
+    }
+    case "fileUrl": {
+      return Boolean(selectedPreparedSource);
+    }
+    case "text": {
+      return text.trim().length > 0;
+    }
+  }
+}
+
+function theatreOpenSignalForWorkbenchStage({
+  blockerId,
+  signal,
+  stage,
+}: Readonly<{ blockerId: string | null; signal: number; stage: WorkspaceStage }>): number {
+  if (stage !== "theatre") {
+    return signal;
+  }
+  if (blockerId && blockerId !== "audioMissing" && blockerId !== "audioStale") {
+    return 0;
+  }
+  return Math.max(1, signal);
+}
+
+/* eslint-disable sonarjs/cognitive-complexity, sonarjs/no-nested-conditional, unicorn/no-nested-ternary, unicorn/prefer-switch */
+function sourceReadinessForWorkbench({
+  selectedBookSource,
+  selectedPreparedSource,
+  sourceMode,
+  text,
+}: Readonly<{
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourceMode: SourceMode;
+  text: string;
+}>): SourceReadiness {
+  if (sourceMode === "book" && selectedBookSource) {
+    return selectedBookSource.sourceReadiness ?? legacyBookSourceReadiness(selectedBookSource);
+  }
+  if (sourceMode === "fileUrl" && selectedPreparedSource) {
+    return (
+      selectedPreparedSource.sourceReadiness ??
+      legacyPreparedSourceReadiness(selectedPreparedSource)
+    );
+  }
+  const hasText = text.trim().length > 0;
+  return {
+    confidence: hasText ? "medium" : "low",
+    detail: hasText
+      ? "Draft text is available locally."
+      : "Choose, paste, or prepare a source before continuing.",
+    sourceType: "draft",
+    state: hasText ? "ready" : "noSource",
+    title: "Draft text",
+  };
+}
+
+function legacyPreparedSourceReadiness(source: PreparedSource): SourceReadiness {
+  if (source.status === "failed") {
+    return {
+      confidence: "low",
+      detail: source.error ?? "Source preparation failed.",
+      failureStage: "structure",
+      retryAction: "retryImport",
+      sourceType: source.kind === "url" ? "webpage" : source.kind === "text" ? "draft" : "document",
+      state: "failed",
+      title: source.title ?? source.sourceName,
+    };
+  }
+  return {
+    confidence: "high",
+    detail: "Source is ready for Review.",
+    sourceType: source.kind === "url" ? "webpage" : source.kind === "text" ? "draft" : "document",
+    state: "ready",
+    title: source.title ?? source.sourceName,
+  };
+}
+
+function legacyBookSourceReadiness(source: BookSource): SourceReadiness {
+  if (source.status === "failed") {
+    return {
+      confidence: "low",
+      detail: source.error ?? "Source extraction failed.",
+      failureStage: "extraction",
+      retryAction: "retryImport",
+      sourceType: source.kind === "html" ? "webpage" : "book",
+      state: "failed",
+      title: source.title ?? source.sourceFile,
+    };
+  }
+  return {
+    confidence: "high",
+    detail: "Source is ready for Review.",
+    sourceType: source.kind === "html" ? "webpage" : "book",
+    state: "ready",
+    title: source.title ?? source.sourceFile,
+  };
+}
+
+function workbenchSourceLifecycleEnvelope({
+  generatedAudioLifecycle,
   job,
-  optimizedText,
-  preparedSources,
   projectId,
+  selectedScopeLabel,
+  selectedBookSource,
+  selectedPreparedSource,
+  sourceMode,
+  surface,
+  text,
+}: Readonly<{
+  generatedAudioLifecycle?: SourceLifecycleEnvelope["generatedAudioState"];
+  job: VoiceJob | null;
+  projectId: string;
+  selectedScopeLabel: string;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourceMode: SourceMode;
+  surface: SourceLifecycleSurface;
+  text: string;
+}>): SourceLifecycleEnvelope {
+  if (sourceMode === "fileUrl" && selectedPreparedSource) {
+    const sourceJob = job?.preparedSourceId === selectedPreparedSource.id ? job : null;
+    const generatedAudioState =
+      generatedAudioLifecycle ??
+      workbenchGeneratedAudioState(sourceJob, selectedPreparedSource.updatedAt);
+    const extractionState = workbenchExtractionState(
+      selectedPreparedSource.status,
+      selectedPreparedSource.blockCount > 0 ||
+        selectedPreparedSource.wordCount > 0 ||
+        Boolean(selectedPreparedSource.text),
+      generatedAudioState,
+      selectedPreparedSource.summary.spokenBlockCount,
+    );
+    const { canonicalState, narrationState } = workbenchLifecycleStates({
+      extractionState,
+      generatedAudioState,
+      narratableCount: selectedPreparedSource.summary.spokenBlockCount,
+      status: selectedPreparedSource.status,
+    });
+    return {
+      adapterKind:
+        selectedPreparedSource.kind === "url"
+          ? "url"
+          : selectedPreparedSource.kind === "text" || selectedPreparedSource.kind === "book"
+            ? selectedPreparedSource.kind
+            : "unknown",
+      canonicalState,
+      extractionState,
+      generatedAudioState,
+      language: "Project default",
+      lastOpenedSurface: surface,
+      narrationState,
+      policyScope:
+        selectedPreparedSource.sourceOwner === "temporary" ||
+        selectedPreparedSource.sourceSpeechPolicyProfile?.trim() ||
+        hasSpeechPolicyOverrides(selectedPreparedSource.sourceSpeechPolicyOverrides ?? {})
+          ? "source"
+          : "project",
+      projectId,
+      selectedScope: selectedScopeLabel,
+      sourceId: selectedPreparedSource.id,
+      sourceKind:
+        selectedPreparedSource.kind === "url"
+          ? "website"
+          : selectedPreparedSource.kind === "text"
+            ? "text"
+            : selectedPreparedSource.kind === "book"
+              ? "book"
+              : "document",
+      sourceOwner: selectedPreparedSource.sourceOwner ?? "project",
+      temporarySourceId: selectedPreparedSource.temporarySourceId,
+      sourceReadiness: sourceReadinessForWorkbench({
+        selectedBookSource: null,
+        selectedPreparedSource,
+        sourceMode,
+        text: "",
+      }),
+      title: selectedPreparedSource.title ?? selectedPreparedSource.sourceName,
+    };
+  }
+  if (sourceMode === "book" && selectedBookSource) {
+    const sourceJob = job?.bookSourceId === selectedBookSource.id ? job : null;
+    const generatedAudioState =
+      generatedAudioLifecycle ??
+      workbenchGeneratedAudioState(sourceJob, selectedBookSource.updatedAt);
+    const narratableCount =
+      selectedBookSource.sections?.filter((section) => section.isNarratable).length ??
+      selectedBookSource.chapters?.filter((chapter) => chapter.isNarratable !== false).length ??
+      selectedBookSource.chapterCount;
+    const extractionState = workbenchExtractionState(
+      selectedBookSource.status,
+      narratableCount > 0 ||
+        selectedBookSource.pageCount > 0 ||
+        selectedBookSource.wordCount > 0 ||
+        Boolean(selectedBookSource.text),
+      generatedAudioState,
+      narratableCount,
+    );
+    const { canonicalState, narrationState } = workbenchLifecycleStates({
+      extractionState,
+      generatedAudioState,
+      narratableCount,
+      status: selectedBookSource.status,
+    });
+    return {
+      adapterKind: selectedBookSource.kind === "image" ? "image" : selectedBookSource.kind,
+      canonicalState,
+      extractionState,
+      generatedAudioState,
+      language: "Project default",
+      lastOpenedSurface: surface,
+      narrationState,
+      policyScope:
+        selectedBookSource.sourceSpeechPolicyProfile?.trim() ||
+        hasSpeechPolicyOverrides(selectedBookSource.sourceSpeechPolicyOverrides ?? {})
+          ? "source"
+          : "project",
+      projectId,
+      selectedScope: selectedScopeLabel,
+      sourceId: selectedBookSource.id,
+      sourceKind: selectedBookSource.kind === "html" ? "website" : "book",
+      sourceOwner: "project",
+      sourceReadiness: sourceReadinessForWorkbench({
+        selectedBookSource,
+        selectedPreparedSource: null,
+        sourceMode,
+        text: "",
+      }),
+      title: bookSourceName(selectedBookSource),
+    };
+  }
+  const generatedAudioState = generatedAudioLifecycle ?? generatedAudioLifecycleFromJob({ job });
+  const hasText = text.trim().length > 0;
+  const extractionState = hasText ? "imported" : "new";
+  const narrationState = hasText ? "previewable" : "new";
+  return {
+    adapterKind: "text",
+    canonicalState:
+      generatedAudioState === "ready"
+        ? "audioReady"
+        : generatedAudioState === "queued" || generatedAudioState === "generating"
+          ? "generating"
+          : narrationState,
+    extractionState,
+    generatedAudioState,
+    language: "Project default",
+    lastOpenedSurface: surface,
+    narrationState,
+    policyScope: "project",
+    projectId,
+    selectedScope: "Draft text",
+    sourceId: "draft",
+    sourceKind: "draft",
+    sourceOwner: "project",
+    sourceReadiness: sourceReadinessForWorkbench({
+      selectedBookSource: null,
+      selectedPreparedSource: null,
+      sourceMode,
+      text,
+    }),
+    title: "Draft text",
+  };
+}
+
+function workbenchGeneratedAudioState(
+  job: VoiceJob | null,
+  sourceUpdatedAt: string,
+): SourceLifecycleEnvelope["generatedAudioState"] {
+  const audioUpdatedAt = job?.completedAt ?? job?.updatedAt;
+  return generatedAudioLifecycleFromJob({
+    job,
+    stale:
+      Boolean(audioUpdatedAt) && Date.parse(sourceUpdatedAt) > Date.parse(audioUpdatedAt ?? ""),
+  });
+}
+
+function workbenchExtractionState(
+  status: string,
+  hasContent: boolean,
+  generatedAudioState: SourceLifecycleEnvelope["generatedAudioState"],
+  narratableCount: number,
+): SourceLifecycleEnvelope["extractionState"] {
+  if (status === "failed") return "failed";
+  if (generatedAudioState === "ready" || narratableCount > 0 || hasContent) return "extracted";
+  return status === "ready" ? "imported" : "extracting";
+}
+
+function workbenchLifecycleStates({
+  extractionState,
+  generatedAudioState,
+  narratableCount,
+  status,
+}: {
+  extractionState: SourceLifecycleEnvelope["extractionState"];
+  generatedAudioState: SourceLifecycleEnvelope["generatedAudioState"];
+  narratableCount: number;
+  status: string;
+}): Pick<SourceLifecycleEnvelope, "canonicalState" | "narrationState"> {
+  let narrationState: SourceLifecycleEnvelope["narrationState"] = "prepared";
+  if (status === "failed") narrationState = "failed";
+  else if (generatedAudioState === "stale" || generatedAudioState === "degraded")
+    narrationState = "stale";
+  else if (generatedAudioState === "ready") narrationState = "audioReady";
+  else if (generatedAudioState === "queued" || generatedAudioState === "generating")
+    narrationState = "generating";
+  else if (status === "ready") narrationState = narratableCount > 0 ? "narratable" : "reviewable";
+  return {
+    canonicalState: narrationState === "prepared" ? extractionState : narrationState,
+    narrationState,
+  };
+}
+/* eslint-enable sonarjs/cognitive-complexity, sonarjs/no-nested-conditional, unicorn/no-nested-ternary, unicorn/prefer-switch */
+
+function workspaceSourceLifecycleSurface(stage: WorkspaceStage): SourceLifecycleSurface {
+  if (stage === "intake") {
+    return "Intake";
+  }
+  if (stage === "review") {
+    return "Review";
+  }
+  if (stage === "preview") {
+    return "Preview";
+  }
+  if (stage === "theatre") {
+    return "Theatre";
+  }
+  return "Teleprompt";
+}
+
+function createAndListenScopeForSource({
   selectedBookScope,
   selectedBookSource,
   selectedPreparedSource,
   sourceMode,
-  speechPolicyError,
-  speechPolicyDefinition,
-  speechPolicyOverrides,
-  speechPolicyProfile,
-  speechPolicyProfiles,
-  sourcePrepError,
-  text,
-  voiceProfileId,
-  onClearSpeechPolicyOverrides,
-  onContentModeChange,
-  onCreateCustomSpeechPolicyProfile,
-  onCreatePreparedAudio,
-  onDeleteCustomSpeechPolicyProfile,
-  onInspectBookSource,
-  onInspectPreparedSource,
-  onOpenPreparedSourceCinema,
-  onOpenTeleprompter,
-  onPrepareFile,
-  onPrepareUrl,
-  onSourceModeChange,
-  onSpeechPolicyOverridesChange,
-  onSpeechPolicyProfileChange,
-  onUpdateCustomSpeechPolicyProfile,
-  onSubmit,
-  onTextChange,
-  onUsePreparedSource,
 }: Readonly<{
-  bookScopeContent: BookSourceScopeContent | null;
-  bookControls: ReactNode;
-  canSubmit: boolean;
-  contentMode: ContentMode;
-  customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
-  isPreparingSource: boolean;
-  isProcessing: boolean;
-  isSpeechPolicyPreviewing: boolean;
-  job: VoiceJob | null;
-  optimizedText: string;
-  preparedSources: PreparedSource[];
-  projectId: string;
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
   sourceMode: SourceMode;
-  speechPolicyError: string | null;
-  speechPolicyDefinition: SpeechPolicyDefinition;
-  speechPolicyOverrides: SpeechPolicyOverrides;
-  speechPolicyProfile: string;
-  speechPolicyProfiles: SpeechPolicyProfile[];
+}>): CreateAndListenScope {
+  if (sourceMode === "book" && selectedBookSource && selectedBookScope?.type !== "book") {
+    return "current-scope";
+  }
+  if (sourceMode === "fileUrl" && selectedPreparedSource?.blocks?.length === 1) {
+    return "selected-block";
+  }
+  return "whole-source";
+}
+
+function defaultWorkspaceInspectorDisplayState(
+  stage: WorkspaceStage,
+  density: WorkspaceLayoutSlotDensity,
+): ContextPanelDisplayState {
+  if (density === "pinned") {
+    return "pinned";
+  }
+  if (stage === "teleprompt" || stage === "theatre" || density === "summary") {
+    return "collapsed";
+  }
+  return "expanded";
+}
+
+type SourceTextPanelBookImportResult = BookSource | undefined;
+type SourceTextPanelPreparationResult = BookSource | PreparedSource | undefined;
+
+function SourceTextPanel({
+  activeReviewPane,
+  activeReviewBlockId,
+  baseReviewBlocks,
+  reviewOpenFocusRequest,
+  bookScopeContent,
+  bookSourceError,
+  bookSources,
+  canSubmit,
+  contentMode,
+  generatedAudioLifecycle,
+  isImportingBookSource,
+  isPreparingSource,
+  isProcessing,
+  job,
+  historyEntries,
+  stageStatus,
+  optimizedText,
+  preparedSources,
+  previewSpeechPlan,
+  reviewBlocks,
+  revisionStatusByBlockId,
+  projectId,
+  selectedBookScope,
+  selectedBookSource,
+  selectedPreparedSource,
+  shortcutPreferences,
+  sourceMode,
+  speechPolicyProfileLabel,
+  sourcePrepError,
+  telepromptStage,
+  text,
+  temporaryReview,
+  temporaryReviewMode,
+  temporaryCinemaDisabledReason,
+  temporaryVoiceOptions,
+  temporaryVoiceSelectionId,
+  voiceProfileId,
+  voiceProfileLabel,
+  voiceProfiles,
+  createAndListenCapabilityReason,
+  createAndListenDisabledReason,
+  createAndListenScope,
+  isPlaybackActive,
+  playbackControls,
+  playbackCursorSec,
+  onAuditionVoice,
+  onTemporaryVoiceChange,
+  onCancelRun,
+  onCreateAndListen,
+  onCreateWithCurrentPlan,
+  onInspectBookSource,
+  onInspectPreparedSource,
+  onOpenCinema,
+  onOpenTheatre,
+  onOpenBookCinema,
+  onOpenVoiceCloning,
+  onOpenPreparedSourceCinema,
+  onImportBookSource,
+  onDiscardTemporarySource,
+  onBookScopeChange,
+  onConfirmBookSourceReadiness,
+  onConfirmPreparedSourceReadiness,
+  onPrepareDraftText,
+  onPrepareFile,
+  onPrepareUrl,
+  providerBackedGenerationBoundary,
+  runConfiguration,
+  selectedProfile,
+  onSelectVoiceProfile,
+  onStageAction,
+  onOpenReviewRepair,
+  onKeepTemporarySource,
+  keepTemporarySourceDisabledReason,
+  onSpeechPolicyProfileChange,
+  onReviewBlockChange,
+  onReviewUserNavigate,
+  onEditedTextByBlockIdChange,
+  onHistoryEntriesChange,
+  onReviewPaneChange,
+  onTemporaryReviewModeChange,
+  onStatusByBlockIdChange,
+  onSubmit,
+  onUseBookSource,
+  onUsePreparedSource,
+  runConfigurationLabel,
+  ttsEngines,
+}: Readonly<{
+  activeReviewPane: ReviewPane;
+  activeReviewBlockId: string | null;
+  baseReviewBlocks: RevisionBlock[];
+  reviewOpenFocusRequest: ReviewOpenFocusRequest | null;
+  bookScopeContent: BookSourceScopeContent | null;
+  bookSourceError: string | null;
+  bookSources: BookSource[];
+  canSubmit: boolean;
+  contentMode: WorkspaceStage;
+  generatedAudioLifecycle: ReturnType<typeof generatedAudioLifecycleFromJob>;
+  stageStatus: WorkspaceStageStatus;
+  isImportingBookSource: boolean;
+  isPreparingSource: boolean;
+  isProcessing: boolean;
+  job: VoiceJob | null;
+  historyEntries: RevisionHistoryEntry[];
+  optimizedText: string;
+  preparedSources: PreparedSource[];
+  previewSpeechPlan: CanonicalPreviewSpeechPlan;
+  reviewBlocks: RevisionBlock[];
+  revisionStatusByBlockId: Record<string, RevisionStatus>;
+  projectId: string;
+  selectedBookScope: BookScope | null;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  shortcutPreferences: ShortcutPreferences;
+  sourceMode: SourceMode;
+  speechPolicyProfileLabel: string;
   sourcePrepError: string | null;
+  telepromptStage: ReactNode;
   text: string;
+  temporaryReview: TemporaryReviewStateAdapter | null;
+  temporaryReviewMode: ReviewMode;
+  temporaryCinemaDisabledReason?: string;
+  temporaryVoiceOptions?: readonly PreviewTemporaryVoiceOption[];
+  temporaryVoiceSelectionId?: string;
   voiceProfileId: string;
-  onClearSpeechPolicyOverrides: () => void;
-  onContentModeChange: (mode: ContentMode) => void;
-  onCreateCustomSpeechPolicyProfile: (
-    name: string,
-    settings: SpeechPolicySettings,
-    baseProfile: string,
-  ) => Promise<void>;
-  onCreatePreparedAudio: (source: PreparedSource) => void;
-  onDeleteCustomSpeechPolicyProfile: (profileId: string) => Promise<void>;
+  voiceProfileLabel: string;
+  voiceProfiles: VoiceProfile[];
+  createAndListenCapabilityReason?: string;
+  createAndListenDisabledReason?: string;
+  createAndListenScope: CreateAndListenScope;
+  isPlaybackActive: boolean;
+  playbackControls: PlaybackController;
+  playbackCursorSec: number;
+  onAuditionVoice: (sampleText: string) => Promise<VoicePreviewAudio>;
+  onTemporaryVoiceChange?: (voiceId: string) => void;
+  onCancelRun: () => void;
+  onCreateAndListen: () => void;
+  onCreateWithCurrentPlan: () => void;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
+  onOpenCinema: () => void;
+  onOpenTheatre: () => void;
+  onOpenBookCinema: (source?: BookSource, scope?: BookScope) => void;
+  onOpenVoiceCloning: () => void;
   onOpenPreparedSourceCinema: (source: PreparedSource) => void;
-  onOpenTeleprompter: () => void;
-  onPrepareFile: (file: File, markdownParseMode: MarkdownParseMode) => Promise<void>;
-  onPrepareUrl: (url: string, markdownParseMode: MarkdownParseMode) => Promise<void>;
-  onSourceModeChange: (mode: SourceMode) => void;
-  onSpeechPolicyOverridesChange: (overrides: SpeechPolicyOverrides) => void;
+  onImportBookSource: (
+    files: File[],
+    options?: BookSourceImportOptions,
+  ) => Promise<SourceTextPanelBookImportResult>;
+  onDiscardTemporarySource: () => void;
+  onBookScopeChange: (scope: BookScope) => void;
+  onConfirmBookSourceReadiness: (
+    source: BookSource,
+    request: SourceReadinessConfirmationRequest,
+  ) => Promise<BookSource>;
+  onConfirmPreparedSourceReadiness: (
+    source: PreparedSource,
+    request: SourceReadinessConfirmationRequest,
+  ) => Promise<PreparedSource>;
+  onPrepareDraftText: (
+    text: string,
+    markdownParseMode: MarkdownParseMode,
+  ) => Promise<PreparedSource | undefined>;
+  onPrepareFile: (
+    file: File,
+    markdownParseMode: MarkdownParseMode,
+    preparationTarget?: IntakePreparationTarget,
+  ) => Promise<SourceTextPanelPreparationResult>;
+  onPrepareUrl: (
+    url: string,
+    markdownParseMode: MarkdownParseMode,
+    preparationTarget?: IntakePreparationTarget,
+  ) => Promise<SourceTextPanelPreparationResult>;
+  providerBackedGenerationBoundary?: boolean;
+  runConfiguration: RunConfiguration;
+  selectedProfile: VoiceProfile | null;
+  onSelectVoiceProfile: (profileId: string) => void;
+  onStageAction: (actionId: WorkspaceStageActionId) => void;
+  onOpenReviewRepair: () => void;
+  onKeepTemporarySource: () => void;
+  keepTemporarySourceDisabledReason?: string;
   onSpeechPolicyProfileChange: (profile: string) => void;
-  onUpdateCustomSpeechPolicyProfile: (
-    profileId: string,
-    name: string,
-    settings: SpeechPolicySettings,
-    baseProfile: string,
-  ) => Promise<void>;
+  onReviewBlockChange: (blockId: string | null) => void;
+  onReviewUserNavigate: (blockId: string) => void;
+  onEditedTextByBlockIdChange: Dispatch<SetStateAction<Record<string, string>>>;
+  onHistoryEntriesChange: Dispatch<SetStateAction<RevisionHistoryEntry[]>>;
+  onReviewPaneChange: (pane: ReviewPane) => void;
+  onTemporaryReviewModeChange: (mode: ReviewMode) => void;
+  onStatusByBlockIdChange: Dispatch<SetStateAction<Record<string, RevisionStatus>>>;
   onSubmit: (event: React.SyntheticEvent<HTMLFormElement>) => void;
-  onTextChange: (text: string) => void;
+  onUseBookSource: (source: BookSource, scope: BookScope) => void;
   onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
+  runConfigurationLabel: string;
+  ttsEngines: TTSEngineDiagnostics[];
 }>) {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [isDragActive, setIsDragActive] = useState(false);
-  const [sourceFileLabel, setSourceFileLabel] = useState<string | null>(null);
-  const [sourceFileError, setSourceFileError] = useState<string | null>(null);
-  const [sourceUrl, setSourceUrl] = useState("");
-  const [markdownParseMode, setMarkdownParseMode] = useState<MarkdownParseMode>("strict");
-  const showSourceIntake = contentMode === "sourceIntake";
+  const showSourceIntake = contentMode === "intake";
+  const activeBookSource = activeBookSourceForWorkbench(sourceMode, selectedBookSource);
+  const activePreparedSource = activePreparedSourceForWorkbench(sourceMode, selectedPreparedSource);
   const sourceIdentity = resolveWorkbenchSourceIdentity({
     contentMode,
+    selectedBookSource: activeBookSource,
+    selectedPreparedSource: activePreparedSource,
+    sourceMode,
+    text,
+  });
+  const scopeTitle = workbenchScopeTitle({
+    selectedBookScope,
+    selectedBookSource: activeBookSource,
+    selectedPreparedSource: activePreparedSource,
+    sourceMode,
+  });
+  const sourceLifecycle = workbenchSourceLifecycleEnvelope({
+    generatedAudioLifecycle,
+    job,
+    projectId,
+    selectedScopeLabel: scopeTitle,
+    selectedBookSource: activeBookSource,
+    selectedPreparedSource: activePreparedSource,
+    sourceMode,
+    surface: workspaceSourceLifecycleSurface(contentMode),
+    text,
+  });
+  const workbenchAudioLifecycle = generatedAudioLifecycle;
+  const canOpenCinema = workbenchAudioLifecycle === "ready" && !temporaryCinemaDisabledReason;
+  const previewGenerationFocus =
+    contentMode === "preview" &&
+    Boolean(
+      job &&
+        (["queued", "optimizing", "synthesizing", "checking", "retrying"].includes(job.status) ||
+          (job.status === "failed" &&
+            job.retriable !== false &&
+            job.terminalReason !== "configuration_failed")),
+    );
+  const stageLabel = workspaceStageMeta(contentMode).label;
+  const showWorkbenchChrome = workspaceStageShowsGlobalChrome(contentMode);
+
+  return (
+    <form
+      className="grid min-w-0 gap-4 rounded-xl border bg-[var(--vs-raised)] p-4 xl:p-5 vs-border"
+      onSubmit={onSubmit}
+    >
+      {showWorkbenchChrome ? (
+        <>
+          <HeaderContextSummary
+            metadata={[
+              { label: "Policy", value: speechPolicyProfileLabel },
+              { label: "Voice", value: voiceProfileLabel },
+              {
+                label: "Next",
+                value: stageStatus.currentTask.primaryLabel ?? stageStatus.currentTask.title,
+              },
+            ]}
+            scopeTitle={scopeTitle}
+            sourceLifecycle={sourceLifecycle}
+            sourceTitle={sourceIdentity.label}
+            stateLabel={stageLabel}
+            surfaceName="Narration Workbench"
+          />
+
+          <WorkbenchStageStepper
+            activeStage={contentMode}
+            generationFocus={previewGenerationFocus}
+            status={stageStatus}
+            onCreateAndListen={onCreateAndListen}
+            onOpenCinema={onOpenCinema}
+            onOpenReviewRepair={onOpenReviewRepair}
+            onStageAction={onStageAction}
+          />
+        </>
+      ) : null}
+
+      {showSourceIntake ? (
+        <Suspense fallback={<LazySurfaceFallback label="Loading intake wizard..." />}>
+          <LazyIntakeWizard
+            bookSourceError={bookSourceError}
+            bookSources={bookSources}
+            bookScopeContent={bookScopeContent}
+            isImportingBookSource={isImportingBookSource}
+            isPreparingSource={isPreparingSource}
+            preparedSources={preparedSources}
+            selectedBookScope={selectedBookScope}
+            selectedBookSource={selectedBookSource}
+            selectedPreparedSource={selectedPreparedSource}
+            selectedVoiceProfileId={voiceProfileId}
+            sourceMode={sourceMode}
+            sourcePrepError={sourcePrepError}
+            text={text}
+            voiceProfileLabel={voiceProfileLabel}
+            voiceProfiles={voiceProfiles}
+            onImportBookFiles={onImportBookSource}
+            onInspectBookSource={onInspectBookSource}
+            onInspectPreparedSource={onInspectPreparedSource}
+            onOpenBookCinema={onOpenBookCinema}
+            onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
+            onOpenVoiceCloning={onOpenVoiceCloning}
+            onConfirmBookSourceReadiness={onConfirmBookSourceReadiness}
+            onConfirmPreparedSourceReadiness={onConfirmPreparedSourceReadiness}
+            onPrepareDraftText={onPrepareDraftText}
+            onPrepareFile={onPrepareFile}
+            onPrepareUrl={onPrepareUrl}
+            providerBackedGenerationBoundary={providerBackedGenerationBoundary}
+            onScopeChange={onBookScopeChange}
+            onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
+            onStageChange={(stage) => {
+              onStageAction(stage === "review" ? "reviewBlocks" : "previewSpeech");
+            }}
+            onUseBookSource={onUseBookSource}
+            onUsePreparedSource={onUsePreparedSource}
+            onVoiceProfileChange={onSelectVoiceProfile}
+          />
+        </Suspense>
+      ) : null}
+      {contentMode === "review" ? (
+        <div className="grid gap-3">
+          <NarrationReviewWorkbench
+            activePane={activeReviewPane}
+            activeBlockId={activeReviewBlockId}
+            baseReviewBlocks={baseReviewBlocks}
+            reviewOpenFocusRequest={reviewOpenFocusRequest}
+            bookScopeContent={bookScopeContent}
+            historyEntries={historyEntries}
+            job={job}
+            generatedAudioLifecycle={generatedAudioLifecycle}
+            reviewBlocks={reviewBlocks}
+            revisionStatusByBlockId={revisionStatusByBlockId}
+            policyProfileLabel={speechPolicyProfileLabel}
+            runConfigurationLabel={runConfigurationLabel}
+            selectedBookScope={selectedBookScope}
+            selectedBookSource={activeBookSource}
+            selectedPreparedSource={activePreparedSource}
+            shortcutPreferences={shortcutPreferences}
+            isPlaybackActive={isPlaybackActive}
+            sourceLifecycle={sourceLifecycle}
+            temporaryReview={temporaryReview}
+            temporaryReviewMode={temporaryReviewMode}
+            text={text}
+            voiceProfileLabel={voiceProfileLabel}
+            playbackControls={playbackControls}
+            playbackCursorSec={playbackCursorSec}
+            onInspectBookSource={onInspectBookSource}
+            onInspectPreparedSource={onInspectPreparedSource}
+            onActiveBlockChange={onReviewBlockChange}
+            onUserNavigate={onReviewUserNavigate}
+            onActivePaneChange={onReviewPaneChange}
+            onDiscardTemporarySource={onDiscardTemporarySource}
+            onEditedTextByBlockIdChange={onEditedTextByBlockIdChange}
+            onHistoryEntriesChange={onHistoryEntriesChange}
+            keepTemporarySourceDisabledReason={keepTemporarySourceDisabledReason}
+            onKeepTemporarySource={onKeepTemporarySource}
+            onPreviewSpeech={() => {
+              onStageAction("previewSpeech");
+            }}
+            onReviewModeChange={onTemporaryReviewModeChange}
+            onStatusByBlockIdChange={onStatusByBlockIdChange}
+          />
+        </div>
+      ) : null}
+      {contentMode === "preview" ? (
+        <NarrationPreviewStage
+          bookScopeContent={bookScopeContent}
+          canCreate={canSubmit && (!isProcessing || canRetryVoiceJob(job))}
+          canOpenCinema={canOpenCinema}
+          generatedAudioLifecycle={generatedAudioLifecycle}
+          job={job}
+          optimizedText={optimizedText}
+          policyProfileLabel={speechPolicyProfileLabel}
+          previewBlocks={reviewBlocks}
+          previewSpeechPlan={previewSpeechPlan}
+          reviewWarningCount={stageStatus.reviewWarningCount}
+          selectedBookScope={selectedBookScope}
+          selectedBookSource={activeBookSource}
+          selectedPreparedSource={activePreparedSource}
+          shortcutPreferences={shortcutPreferences}
+          sourceLifecycle={sourceLifecycle}
+          sourceMode={sourceMode}
+          temporaryCinemaDisabledReason={temporaryCinemaDisabledReason}
+          temporaryVoiceOptions={temporaryVoiceOptions}
+          temporaryVoiceSelectionId={temporaryVoiceSelectionId}
+          text={text}
+          voiceProfileLabel={voiceProfileLabel}
+          runConfigurationLabel={runConfigurationLabel}
+          runConfiguration={runConfiguration}
+          selectedProfile={selectedProfile}
+          ttsEngines={ttsEngines}
+          createAndListenCapabilityReason={createAndListenCapabilityReason}
+          createAndListenDisabledReason={createAndListenDisabledReason}
+          createAndListenScope={createAndListenScope}
+          activeBlockId={activeReviewBlockId}
+          isPlaybackActive={isPlaybackActive}
+          playbackControls={playbackControls}
+          playbackCursorSec={playbackCursorSec}
+          onAuditionVoice={onAuditionVoice}
+          onTemporaryVoiceChange={onTemporaryVoiceChange}
+          onCreateAndListen={onCreateAndListen}
+          onCreateWithCurrentPlan={onCreateWithCurrentPlan}
+          onCancelRun={onCancelRun}
+          onOpenCinema={onOpenCinema}
+          onOpenTheatre={onOpenTheatre}
+          onActiveBlockChange={onReviewBlockChange}
+          onUserNavigate={onReviewUserNavigate}
+          onOpenTeleprompt={() => {
+            onStageAction("openTeleprompt");
+          }}
+        />
+      ) : null}
+      {contentMode === "teleprompt" || contentMode === "theatre" ? telepromptStage : null}
+    </form>
+  );
+}
+
+function WorkbenchStageStepper({
+  activeStage,
+  generationFocus,
+  status,
+  onCreateAndListen,
+  onOpenCinema,
+  onOpenReviewRepair,
+  onStageAction,
+}: Readonly<{
+  activeStage: WorkspaceStage;
+  generationFocus?: boolean;
+  status: WorkspaceStageStatus;
+  onCreateAndListen: () => void;
+  onOpenCinema: () => void;
+  onOpenReviewRepair: () => void;
+  onStageAction: (actionId: WorkspaceStageActionId) => void;
+}>) {
+  const runTaskAction = (actionId: WorkspaceStageActionId | null) => {
+    if (!actionId) {
+      return;
+    }
+    if (actionId === "createAndListen" || actionId === "retryGeneration") {
+      onCreateAndListen();
+      return;
+    }
+    if (actionId === "openCinema") {
+      onOpenCinema();
+      return;
+    }
+    if (actionId === "reviewBlocks" && status.reviewWarningCount > 0) {
+      onOpenReviewRepair();
+      return;
+    }
+    onStageAction(actionId);
+  };
+  const currentTaskActionDisabled = !status.currentTask.primaryAction;
+  return (
+    <section
+      aria-label="Narration stage map"
+      className="grid gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border"
+      data-testid="workspace-stage-stepper"
+    >
+      <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
+            Current task · {status.label}
+          </p>
+          <h3 className="mt-1 text-base font-semibold text-[var(--vs-text)]">
+            {status.currentTask.title}
+          </h3>
+          <p className="mt-1 max-w-3xl text-sm leading-6 vs-muted">{status.currentTask.detail}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusChip tone={status.currentTask.tone}>{status.currentTask.title}</StatusChip>
+          {status.currentTask.primaryLabel ? (
+            <Button
+              disabled={currentTaskActionDisabled}
+              disabledReason={
+                currentTaskActionDisabled ? status.currentTask.disabledReason : undefined
+              }
+              onClick={() => {
+                runTaskAction(status.currentTask.primaryAction);
+              }}
+              size="sm"
+              variant={status.currentTask.tone === "danger" ? "destructive" : "primary"}
+            >
+              {status.currentTask.primaryLabel}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      <div
+        className={cx("gap-2", generationFocus ? "flex flex-wrap" : "grid sm:grid-cols-5")}
+        role="tablist"
+        aria-label="Workbench stages"
+      >
+        {WORKSPACE_STAGES.map((stage) => {
+          const meta = workspaceStageMeta(stage);
+          const readiness = status.readinessByStage[stage];
+          const selected = stage === activeStage;
+          const compactStage = Boolean(generationFocus && !selected);
+          const disabled = !readiness.action;
+          let stageButtonVariant: ButtonVariant = "secondary";
+          if (readiness.state === "failed") {
+            stageButtonVariant = "destructive";
+          }
+          if (selected) {
+            stageButtonVariant = "pinned";
+          }
+          return (
+            <Button
+              align="start"
+              aria-selected={selected}
+              className={cx(
+                "min-w-0 gap-1 px-3 py-2",
+                compactStage
+                  ? "min-h-9 max-w-full flex-row items-center justify-between"
+                  : "flex-col",
+                generationFocus && selected ? "min-w-[18rem] flex-1" : "",
+                compactStage ? "min-w-[10rem] flex-1 sm:flex-none" : "",
+              )}
+              data-workspace-stage-readiness={readiness.state}
+              data-testid={`workspace-stage-${stage}`}
+              disabled={disabled}
+              disabledReason={readiness.disabledReason ?? readiness.detail}
+              key={stage}
+              onClick={() => {
+                runTaskAction(readiness.action);
+              }}
+              role="tab"
+              selected={selected}
+              size="sm"
+              variant={stageButtonVariant}
+            >
+              <span className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="truncate text-sm font-semibold">{meta.label}</span>
+                <StatusChip tone={readiness.tone}>{readiness.label}</StatusChip>
+              </span>
+              {compactStage ? (
+                <span className="sr-only">{readiness.detail}</span>
+              ) : (
+                <span className="line-clamp-2 text-xs font-normal vs-muted">
+                  {readiness.detail}
+                </span>
+              )}
+            </Button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+// eslint-disable-next-line sonarjs/cognitive-complexity
+function NarrationPreviewStage({
+  activeBlockId,
+  bookScopeContent,
+  canCreate,
+  canOpenCinema,
+  generatedAudioLifecycle,
+  job,
+  isPlaybackActive,
+  playbackControls,
+  playbackCursorSec,
+  optimizedText,
+  policyProfileLabel,
+  previewBlocks,
+  previewSpeechPlan,
+  reviewWarningCount,
+  selectedBookScope,
+  selectedBookSource,
+  selectedPreparedSource,
+  shortcutPreferences,
+  sourceLifecycle,
+  sourceMode,
+  temporaryCinemaDisabledReason,
+  temporaryVoiceOptions,
+  temporaryVoiceSelectionId,
+  text,
+  voiceProfileLabel,
+  runConfigurationLabel,
+  runConfiguration,
+  selectedProfile,
+  ttsEngines,
+  createAndListenCapabilityReason,
+  createAndListenDisabledReason: externalCreateAndListenDisabledReason,
+  createAndListenScope,
+  onActiveBlockChange,
+  onUserNavigate,
+  onAuditionVoice,
+  onTemporaryVoiceChange,
+  onCancelRun,
+  onCreateAndListen,
+  onCreateWithCurrentPlan,
+  onOpenCinema,
+  onOpenTheatre,
+  onOpenTeleprompt,
+}: Readonly<{
+  activeBlockId: string | null;
+  bookScopeContent: BookSourceScopeContent | null;
+  canCreate: boolean;
+  canOpenCinema: boolean;
+  generatedAudioLifecycle: ReturnType<typeof generatedAudioLifecycleFromJob>;
+  job: VoiceJob | null;
+  isPlaybackActive: boolean;
+  playbackControls: PlaybackController;
+  playbackCursorSec: number;
+  optimizedText: string;
+  policyProfileLabel: string;
+  previewBlocks: RevisionBlock[];
+  previewSpeechPlan: CanonicalPreviewSpeechPlan;
+  reviewWarningCount: number;
+  selectedBookScope: BookScope | null;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  shortcutPreferences: ShortcutPreferences;
+  sourceLifecycle: SourceLifecycleEnvelope;
+  sourceMode: SourceMode;
+  temporaryCinemaDisabledReason?: string;
+  temporaryVoiceOptions?: readonly PreviewTemporaryVoiceOption[];
+  temporaryVoiceSelectionId?: string;
+  text: string;
+  voiceProfileLabel: string;
+  runConfigurationLabel: string;
+  runConfiguration: RunConfiguration;
+  selectedProfile: VoiceProfile | null;
+  ttsEngines: TTSEngineDiagnostics[];
+  createAndListenCapabilityReason?: string;
+  createAndListenDisabledReason?: string;
+  createAndListenScope: CreateAndListenScope;
+  onActiveBlockChange: (blockId: string | null) => void;
+  onUserNavigate?: (blockId: string) => void;
+  onAuditionVoice: (sampleText: string) => Promise<VoicePreviewAudio>;
+  onTemporaryVoiceChange?: (voiceId: string) => void;
+  onCancelRun: () => void;
+  onCreateAndListen: () => void;
+  onCreateWithCurrentPlan: () => void;
+  onOpenCinema: () => void;
+  onOpenTheatre: () => void;
+  onOpenTeleprompt: () => void;
+}>) {
+  const sourceLabel = narrationReviewSourceLabel(selectedPreparedSource, selectedBookSource);
+  const sourceMeta = narrationReviewSourceMeta({
+    bookScopeContent,
+    selectedBookScope,
+    selectedBookSource,
+    selectedPreparedSource,
+    text,
+  });
+  const scopeTitle = workbenchScopeTitle({
+    selectedBookScope,
+    selectedBookSource,
+    selectedPreparedSource,
+    sourceMode,
+  });
+  const previewText =
+    firstNonEmptyString(
+      selectedPreparedSource?.text,
+      selectedPreparedSource?.speechText,
+      text.trim(),
+    ) ?? "Select or prepare a source to preview spoken output.";
+  const spokenText =
+    firstNonEmptyString(
+      previewSpeechPlan.text,
+      optimizedText,
+      selectedPreparedSource?.speechText,
+      text.trim(),
+    ) ?? "Create audio to generate listener-ready spoken text.";
+  const audioReviewSummary = audioReviewWarningSummary(job);
+  const createDetail = job
+    ? `${job.status} · ${estimateFirstAudioETA(job)}`
+    : "Ready to create checked narration";
+  const selectedPreviewBlockId = selectSpeakableReviewBlockId(previewBlocks, activeBlockId);
+  const selectedPreviewBlock =
+    previewBlocks.find((block) => block.id === selectedPreviewBlockId) ??
+    previewBlocks.at(0) ??
+    null;
+  const selectedPreviewBlockIndex = selectedPreviewBlock
+    ? previewBlocks.findIndex((block) => block.id === selectedPreviewBlock.id)
+    : -1;
+  const hasPreviewSource = hasPreviewStageSource({
+    selectedBookScope,
     selectedBookSource,
     selectedPreparedSource,
     sourceMode,
     text,
   });
-
-  const loadSourceFiles = useCallback(
-    async (files: FileList | File[]) => {
-      if (isProcessing) {
-        return;
-      }
-
-      setSourceFileError(null);
-      const fileArray = [...files].filter((file) =>
-        sourceMode === "fileUrl"
-          ? isSupportedSourcePrepFile(file)
-          : isSupportedSourceTextFile(file),
-      );
-      if (fileArray.length === 0) {
-        setSourceFileError("Drop a text, HTML, PDF, EPUB, CSV, JSON, or log file.");
-        return;
-      }
-
-      try {
-        if (sourceMode === "fileUrl") {
-          await onPrepareFile(fileArray[0], markdownParseMode);
-          setSourceFileLabel(formatSourceTextFileLabel(fileArray));
-          onContentModeChange("review");
+  const hasSpokenPreviewText = previewBlocks.some((block) => revisionBlockIsSpeakable(block));
+  const [visibleSpokenCueBlockId, setVisibleSpokenCueBlockId] = useState<string | null>(
+    selectedPreviewBlock?.id ?? null,
+  );
+  const sourcePreviewRef = useRef<HTMLDivElement | null>(null);
+  const visibleSpokenCueBlock =
+    previewBlocks.find((block) => block.id === visibleSpokenCueBlockId) ?? selectedPreviewBlock;
+  const markdownBlockHighlight = useMemo(
+    () => markdownPreviewBlockHighlight(selectedPreparedSource, visibleSpokenCueBlock),
+    [selectedPreparedSource, visibleSpokenCueBlock],
+  );
+  const previewContent = narrationReviewPreviewContent({
+    blockHighlight: markdownBlockHighlight,
+    bookScopeContent,
+    previewText,
+    selectedBookScope,
+    selectedBookSource,
+    selectedPreparedSource,
+  });
+  useEffect(() => {
+    scrollMarkdownPreviewToBlock(sourcePreviewRef.current, markdownBlockHighlight);
+  }, [markdownBlockHighlight]);
+  const sourcePreparing = sourceLifecycle.extractionState === "extracting";
+  const sourceError =
+    selectedPreparedSource?.error ??
+    selectedBookSource?.error ??
+    (sourceLifecycle.canonicalState === "failed" ? sourceLifecycle.disabledReason : null);
+  const outputFormat = job?.contentType ?? "48kHz - 24bit - WAV";
+  const audioPipeline = resolveAudioGenerationPipelineModel({
+    canCreate,
+    generatedAudioLifecycle,
+    hasSource: hasPreviewSource,
+    hasSpokenText: hasSpokenPreviewText,
+    job,
+    reviewComplete: reviewWarningCount === 0,
+    runtimeReady:
+      generatedAudioLifecycle === "queued" ||
+      generatedAudioLifecycle === "generating" ||
+      !externalCreateAndListenDisabledReason,
+    voiceReady: !createAndListenCapabilityReason,
+  });
+  const readiness = resolvePreviewReadinessModel({
+    audioPipeline,
+    canCreate,
+    createDisabledReason: externalCreateAndListenDisabledReason,
+    generatedAudioLifecycle,
+    hasSource: hasPreviewSource,
+    hasSpokenText: hasSpokenPreviewText,
+    isTemporarySource: selectedPreparedSource?.sourceOwner === "temporary",
+    outputFormat,
+    policyLabel: policyProfileLabel,
+    reviewWarningCount,
+    runLabel: runConfigurationLabel,
+    scopeLabel: scopeTitle,
+    sourceError,
+    sourceLabel,
+    sourcePreparing,
+    temporaryCinemaDisabledReason,
+    voiceCapabilityReason: createAndListenCapabilityReason,
+    voiceLabel: voiceProfileLabel,
+  });
+  const createDisabled = !readiness.canCreate;
+  const createAndListenDisabledReason = readiness.createDisabledReason;
+  const openCinemaDisabledReason = canOpenCinema ? undefined : readiness.cinemaDisabledReason;
+  const generatedAudioReadiness = readiness.rows.find((row) => row.id === "audio");
+  const showGenerationCockpit = previewGenerationNeedsCockpit(audioPipeline);
+  const generationIsActive = isAudioGenerationWorking(audioPipeline.state);
+  const auditionSampleText = previewAuditionSampleText(
+    selectedPreviewBlock?.spokenText ?? spokenText,
+  );
+  const nextRunSummary = useMemo(
+    () =>
+      buildRunPlannerSummary({
+        configuration: runConfiguration,
+        policyLabel: policyProfileLabel,
+        sampleText: auditionSampleText,
+        scopeLabel: scopeTitle,
+        selectedProfile,
+        sourceLabel,
+        ttsEngines,
+        voiceLabel: voiceProfileLabel,
+      }),
+    [
+      auditionSampleText,
+      policyProfileLabel,
+      runConfiguration,
+      scopeTitle,
+      selectedProfile,
+      sourceLabel,
+      ttsEngines,
+      voiceProfileLabel,
+    ],
+  );
+  const retryRunSummary = useMemo(() => {
+    if (
+      !job ||
+      (job.status !== "failed" && job.status !== "cancelled") ||
+      job.retriable === false
+    ) {
+      return null;
+    }
+    const retryPolicyLabel = job.speechPolicyProfile
+      ? speechPolicyProfileLabel(job.speechPolicyProfile)
+      : policyProfileLabel;
+    return buildRunPlannerSummary({
+      configuration: runConfigurationFromVoiceJob(job),
+      policyLabel: retryPolicyLabel,
+      sampleText: auditionSampleText,
+      scopeLabel: scopeTitle,
+      sourceLabel,
+      ttsEngines,
+      voiceLabel: job.voiceProfileName ?? job.voice,
+    });
+  }, [auditionSampleText, job, policyProfileLabel, scopeTitle, sourceLabel, ttsEngines]);
+  const retryPlanDifferences = useMemo(
+    () => (retryRunSummary ? compareRunPlannerSummaries(nextRunSummary, retryRunSummary) : []),
+    [nextRunSummary, retryRunSummary],
+  );
+  const voiceAudition = useVoiceAuditionController({
+    canAudition: readiness.canAudition,
+    playbackControls,
+    sampleText: auditionSampleText,
+    onAuditionVoice,
+  });
+  const previewWaveformBars = useAudioWaveformBars(
+    job ? audioSource(job, { partial: true }) : "",
+    56,
+  );
+  const previewPlaybackAvailable =
+    playbackControls.isAvailable && generatedAudioLifecycle === "ready";
+  const playbackLifecycle = previewPlaybackAvailable ? "ready" : generatedAudioLifecycle;
+  const previewPlaybackDisabledReason = previewPlaybackAvailable
+    ? undefined
+    : (readiness.generatedPlaybackDisabledReason ??
+      playbackActionDisabledReason({ action: "audition", lifecycle: playbackLifecycle }));
+  const previewDurationSec = playbackDurationSec(job);
+  const previewSeekTargetSec = playbackSeekSecondsForRevisionBlock(
+    previewBlocks,
+    selectedPreviewBlock?.id ?? null,
+    job,
+  );
+  const canPreviewJump = Boolean(
+    previewPlaybackAvailable &&
+      previewSeekTargetSec !== null &&
+      (playbackControls.seekTo ?? playbackControls.skipBy),
+  );
+  const previewJumpAlreadyAtTarget =
+    previewSeekTargetSec !== null && Math.abs(previewSeekTargetSec - playbackCursorSec) < 0.25;
+  const nextPreviewBlock = adjacentSpeakableReviewBlock(
+    previewBlocks,
+    selectedPreviewBlockIndex,
+    1,
+  );
+  const previousPreviewBlock = adjacentSpeakableReviewBlock(
+    previewBlocks,
+    selectedPreviewBlockIndex,
+    -1,
+  );
+  const movePreviewBlock = (direction: -1 | 1) => {
+    if (previewBlocks.length === 0 || selectedPreviewBlockIndex < 0) {
+      return;
+    }
+    const nextBlock = adjacentSpeakableReviewBlock(
+      previewBlocks,
+      selectedPreviewBlockIndex,
+      direction,
+    );
+    if (!nextBlock) {
+      return;
+    }
+    onUserNavigate?.(nextBlock.id);
+    onActiveBlockChange(nextBlock.id);
+  };
+  let previewPlaybackStatusLabel = "Ready";
+  if (playbackControls.isPlaying || isPlaybackActive) {
+    previewPlaybackStatusLabel = "Playing";
+  } else if (audioPipeline.canUsePartialAudio && generatedAudioLifecycle !== "ready") {
+    previewPlaybackStatusLabel = "Partial";
+  } else if (canQueueGeneratedAudioPlayback(job) && generatedAudioLifecycle !== "ready") {
+    previewPlaybackStatusLabel = "Queued";
+  }
+  const previewPlaybackToolbar: LocalizedPlaybackToolbarModel = {
+    activeDetail: selectedPreviewBlock
+      ? `${selectedPreviewBlock.index.toString()} of ${Math.max(1, previewBlocks.length).toString()} · ${formatDuration(selectedPreviewBlock.estimatedDurationMs)}`
+      : scopeTitle,
+    activeLabel: selectedPreviewBlock?.label ?? sourceLabel,
+    jumpToAudio: {
+      ariaKeyShortcuts: "Alt+J",
+      shortcutCommandId: "review.jumpToAudio",
+      dataAttributes: previewJumpAlreadyAtTarget
+        ? { "data-ui-noop-reason": "Already at the selected audio cue." }
+        : undefined,
+      disabled: !canPreviewJump,
+      disabledReason:
+        previewPlaybackDisabledReason ??
+        (previewSeekTargetSec === null
+          ? "Audio timing is not available for this block."
+          : "Seeking is unavailable for this audio."),
+      label: "Jump to Audio",
+      onClick: () => {
+        if (!canPreviewJump || previewSeekTargetSec === null) {
           return;
         }
-        const parts = await Promise.all(fileArray.map((file) => file.text()));
-        onTextChange(
-          parts
-            .map((part) => part.trim())
-            .filter(Boolean)
-            .join("\n\n"),
-        );
-        setSourceFileLabel(formatSourceTextFileLabel(fileArray));
-      } catch {
-        setSourceFileError("Unable to read that file locally.");
-      }
+        seekPlaybackToSeconds(playbackControls, previewSeekTargetSec, playbackCursorSec);
+      },
+      testId: "ui-action-preview-local-jump-audio",
     },
-    [isProcessing, markdownParseMode, onContentModeChange, onPrepareFile, onTextChange, sourceMode],
-  );
+    next: {
+      ariaKeyShortcuts: "Alt+ArrowRight",
+      shortcutCommandId: "review.nextBlock",
+      disabled: nextPreviewBlock === null,
+      disabledReason:
+        nextPreviewBlock === null ? "Already at the final block." : "No block is selected.",
+      label: "Next",
+      onClick: () => {
+        movePreviewBlock(1);
+      },
+      testId: "ui-action-preview-local-next",
+    },
+    playPause: {
+      ariaKeyShortcuts: "Space K",
+      shortcutCommandId: "playback.toggle",
+      ariaLabel: playbackControls.isPlaying
+        ? "Pause preview playback"
+        : playbackActionAriaLabel("audition", { lifecycle: playbackLifecycle }),
+      dataAttributes: playbackActionDataAttributes("audition", playbackLifecycle, {
+        primary: true,
+      }),
+      disabled: !previewPlaybackAvailable,
+      disabledReason: previewPlaybackDisabledReason,
+      label: playbackControls.isPlaying ? "Pause" : "Play",
+      primary: true,
+      onClick: () => {
+        if (!previewPlaybackAvailable) {
+          return;
+        }
+        if (playbackControls.isPlaying) {
+          playbackControls.pause();
+          return;
+        }
+        void playbackControls.play();
+      },
+      testId: "ui-action-preview-local-play",
+    },
+    previous: {
+      ariaKeyShortcuts: "Alt+ArrowLeft",
+      shortcutCommandId: "review.previousBlock",
+      disabled: previousPreviewBlock === null,
+      disabledReason: previousPreviewBlock === null ? "Already at the first block." : undefined,
+      label: "Previous",
+      onClick: () => {
+        movePreviewBlock(-1);
+      },
+      testId: "ui-action-preview-local-previous",
+    },
+    progress: {
+      currentLabel: formatPlaybackClockSeconds(playbackCursorSec),
+      durationLabel:
+        previewDurationSec > 0 ? formatPlaybackClockSeconds(previewDurationSec) : "--:--",
+      ratio: playbackProgressRatioForJob(playbackCursorSec, job),
+      waveformBars: previewWaveformBars,
+    },
+    restart: {
+      ariaKeyShortcuts: "Home",
+      shortcutCommandId: "playback.restart",
+      dataAttributes: playbackActionDataAttributes("audition", playbackLifecycle),
+      disabled: !previewPlaybackAvailable,
+      disabledReason: previewPlaybackDisabledReason,
+      label: "Restart",
+      onClick: () => {
+        if (previewPlaybackAvailable) {
+          void playbackControls.restart();
+        }
+      },
+      testId: "ui-action-preview-local-restart",
+    },
+    speed: {
+      ariaKeyShortcuts: "[ ]",
+      shortcutCommandId: "playback.speed",
+      disabled: !playbackControls.setPlaybackRate,
+      disabledReason: playbackSpeedDisabledReason(playbackControls),
+      testId: "ui-action-preview-local-speed",
+      value: playbackControls.playbackRate,
+      onChange: playbackControls.setPlaybackRate,
+    },
+    stage: "preview",
+    statusLabel: previewPlaybackStatusLabel,
+    testId: "localized-preview-playback-toolbar",
+    variant: showGenerationCockpit ? "compact" : "normal",
+  };
 
   return (
-    <form
-      className={`grid min-w-0 gap-4 rounded-xl border bg-[var(--vs-raised)] p-4 xl:p-5 ${
-        isDragActive ? "border-orange-300 ring-2 ring-orange-100" : "vs-border"
-      }`}
-      onSubmit={onSubmit}
-      onDragOver={(event) => {
-        event.preventDefault();
-        if (!isProcessing) {
-          setIsDragActive(true);
-        }
-      }}
-      onDragLeave={() => {
-        setIsDragActive(false);
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        setIsDragActive(false);
-        void loadSourceFiles(event.dataTransfer.files);
-      }}
-    >
-      <div className="flex flex-col gap-1">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">
-            Narration Workbench
-          </p>
-          <label
-            className="mt-1 block text-lg font-semibold text-[var(--vs-text)]"
-            htmlFor="source-text"
-          >
-            Content Workbench
-          </label>
-          <p className="mt-1 text-sm vs-muted">
-            {sourceIdentity.label} · {sourceIdentity.meta}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 rounded-lg border bg-[var(--vs-surface)] p-1 text-sm font-semibold vs-border">
-        {(
-          [
-            ["sourceIntake", "Source Intake"],
-            ["review", "Review"],
-          ] as const
-        ).map(([mode, label]) => (
-          <button
-            className={`rounded-md px-3 py-2 transition ${
-              contentMode === mode
-                ? "bg-[var(--vs-raised)] text-orange-700 shadow-sm"
-                : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
-            }`}
-            key={mode}
-            onClick={() => {
-              onContentModeChange(mode);
-            }}
-            type="button"
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid min-w-0 gap-3 rounded-lg border bg-[var(--vs-raised)] p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center vs-border">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md border text-orange-600 vs-border vs-surface">
-            <SourceKindIcon mode={sourceIdentity.mode} />
-          </span>
-          <div className="min-w-0">
-            <p
-              className="truncate text-sm font-semibold text-[var(--vs-text)]"
-              title={sourceIdentity.label}
-            >
-              {sourceIdentity.label}
-            </p>
-            <p className="mt-1 truncate text-xs vs-muted" title={sourceIdentity.meta}>
-              {sourceIdentity.meta}
-            </p>
-          </div>
-        </div>
-        <div className="grid min-w-0 grid-cols-3 rounded-md border bg-[var(--vs-surface)] p-1 text-xs font-semibold lg:w-[22rem] vs-border">
-          {(
-            [
-              ["text", "Text"],
-              ["book", "Book"],
-              ["fileUrl", "File / URL"],
-            ] as const
-          ).map(([mode, label]) => (
-            <button
-              className={`rounded px-3 py-1.5 transition ${
-                sourceIdentity.mode === mode
-                  ? "bg-orange-500/10 text-orange-700 shadow-sm ring-1 ring-orange-300"
-                  : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
-              }`}
-              key={mode}
-              onClick={() => {
-                onSourceModeChange(mode);
-              }}
-              type="button"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-      {showSourceIntake && sourceMode === "book" ? bookControls : null}
-      {showSourceIntake && sourceMode === "fileUrl" ? (
-        <SourcePrepReview
-          isPreparing={isPreparingSource}
-          isSpeechPolicyPreviewing={isSpeechPolicyPreviewing}
-          customSpeechPolicyProfiles={customSpeechPolicyProfiles}
-          preparedSources={preparedSources}
-          selectedPreparedSource={selectedPreparedSource}
-          showIntakeControls={showSourceIntake}
-          speechPolicyError={speechPolicyError}
-          speechPolicyDefinition={speechPolicyDefinition}
-          speechPolicyOverrides={speechPolicyOverrides}
-          speechPolicyProfile={speechPolicyProfile}
-          speechPolicyProfiles={speechPolicyProfiles}
-          sourceFileError={sourceFileError}
-          sourceFileLabel={sourceFileLabel}
-          markdownParseMode={markdownParseMode}
-          sourcePrepError={sourcePrepError}
-          sourceUrl={sourceUrl}
-          onBrowse={() => {
-            fileInputRef.current?.click();
-          }}
-          onCreatePreparedAudio={onCreatePreparedAudio}
-          onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
-          onCreateCustomSpeechPolicyProfile={onCreateCustomSpeechPolicyProfile}
-          onDeleteCustomSpeechPolicyProfile={onDeleteCustomSpeechPolicyProfile}
-          onInspectPreparedSource={onInspectPreparedSource}
-          onPrepareUrl={() => {
-            if (sourceUrl.trim()) {
-              void onPrepareUrl(sourceUrl.trim(), markdownParseMode);
-              onContentModeChange("review");
-            }
-          }}
-          onClearSpeechPolicyOverrides={onClearSpeechPolicyOverrides}
-          onSpeechPolicyOverridesChange={onSpeechPolicyOverridesChange}
-          onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
-          onUpdateCustomSpeechPolicyProfile={onUpdateCustomSpeechPolicyProfile}
-          onSourceUrlChange={setSourceUrl}
-          onMarkdownParseModeChange={setMarkdownParseMode}
-          onUsePreparedSource={(source) => {
-            onContentModeChange("review");
-            void onUsePreparedSource(source);
-          }}
-        >
-          <input
-            ref={fileInputRef}
-            accept={SOURCE_TEXT_FILE_ACCEPT}
-            className="sr-only"
-            type="file"
-            onChange={(event) => {
-              const file = event.currentTarget.files?.item(0);
-              if (file) {
-                void loadSourceFiles([file]);
-              }
-              event.currentTarget.value = "";
-            }}
-          />
-        </SourcePrepReview>
-      ) : null}
-      {showSourceIntake && sourceMode === "text" ? (
-        <div className="grid gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed bg-[var(--vs-raised)] px-3 py-2 text-xs vs-border">
-            <span className="min-w-0 flex-1 basis-48 truncate" title={sourceFileLabel ?? undefined}>
-              {sourceFileLabel ?? "Drop text or Markdown files here"}
-            </span>
-            <button
-              className="rounded border px-3 py-1.5 font-semibold transition hover:border-orange-300 hover:text-orange-700 disabled:opacity-50 vs-border vs-surface"
-              disabled={isProcessing}
-              onClick={() => {
-                fileInputRef.current?.click();
-              }}
-              type="button"
-            >
-              Browse Text
-            </button>
-            <input
-              ref={fileInputRef}
-              accept={SOURCE_TEXT_FILE_ACCEPT}
-              className="sr-only"
-              multiple
-              type="file"
-              onChange={(event) => {
-                if (event.currentTarget.files) {
-                  void loadSourceFiles(event.currentTarget.files);
-                }
-                event.currentTarget.value = "";
-              }}
-            />
-          </div>
-          {sourceFileError ? <p className="text-xs text-red-700">{sourceFileError}</p> : null}
-          <textarea
-            className="min-h-[240px] w-full resize-none rounded-lg border bg-[var(--vs-raised)] p-4 font-mono text-sm leading-6 outline-none transition read-only:opacity-70 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
-            id="source-text"
-            onChange={(event) => {
-              if (!isProcessing) {
-                onTextChange(event.currentTarget.value);
-              }
-            }}
-            placeholder="Paste the text you want to listen to."
-            readOnly={isProcessing}
-            spellCheck={false}
-            value={text}
-          />
-        </div>
-      ) : null}
-      {contentMode === "review" ? (
-        <div className="grid gap-3">
-          <NarrationReviewWorkbench
-            bookScopeContent={bookScopeContent}
-            job={job}
-            optimizedText={optimizedText}
-            projectId={projectId}
-            selectedBookScope={selectedBookScope}
-            selectedBookSource={selectedBookSource}
-            selectedPreparedSource={selectedPreparedSource}
-            text={text}
-            voiceProfileId={voiceProfileId}
-            onInspectBookSource={onInspectBookSource}
-            onInspectPreparedSource={onInspectPreparedSource}
-            onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
-            onOpenTeleprompter={onOpenTeleprompter}
-          />
-        </div>
-      ) : null}
-      {showSourceIntake && sourceMode !== "fileUrl" ? (
-        <SourceMetadataStrip
-          job={job}
-          selectedBookSource={selectedBookSource}
-          selectedBookScope={selectedBookScope}
-          bookScopeContent={bookScopeContent}
-          selectedPreparedSource={selectedPreparedSource}
-          sourceMode={sourceMode}
-          text={text}
+    <Panel className="grid gap-3 p-4" variant="raised">
+      <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <HeaderContextSummary
+          className="flex-1"
+          metadata={[
+            { label: "Policy", value: policyProfileLabel },
+            { label: "Voice", value: voiceProfileLabel },
+            { label: "Size", value: sourceMeta },
+          ]}
+          scopeTitle={scopeTitle}
+          sourceLifecycle={sourceLifecycle}
+          sourceTitle={sourceLabel}
+          stateLabel={generatedAudioLifecycle === "missing" ? "Source ready" : null}
+          surfaceName="Preview"
         />
-      ) : null}
-      <button className="sr-only" disabled={!canSubmit} type="submit">
-        Create & Listen
-      </button>
-    </form>
+        {showGenerationCockpit ? null : (
+          <PreviewManualReadingPanel
+            compact={false}
+            readiness={readiness}
+            onOpenTeleprompt={onOpenTeleprompt}
+            onOpenTheatre={onOpenTheatre}
+          />
+        )}
+      </div>
+      {showGenerationCockpit ? (
+        <>
+          <PreviewGenerationCockpit
+            audioPipeline={audioPipeline}
+            canCancelRun={generationIsActive && Boolean(job)}
+            canRetryGeneration={readiness.canCreate}
+            createDisabledReason={createAndListenDisabledReason}
+            job={job}
+            reviewWarningCount={reviewWarningCount}
+            onCancelRun={onCancelRun}
+            onRetryGeneration={onCreateAndListen}
+          />
+          <PreviewManualReadingPanel
+            compact
+            readiness={readiness}
+            onOpenTeleprompt={onOpenTeleprompt}
+            onOpenTheatre={onOpenTheatre}
+          />
+          <PreviewGenerationPreflightSummary rows={readiness.rows} />
+          <details className="rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
+            <summary className="cursor-pointer text-sm font-semibold">Next-run plan</summary>
+            <div className="mt-3">
+              <RunPlannerSummaryPanel
+                createWithCurrentPlanDisabled={!readiness.canCreate}
+                createWithCurrentPlanDisabledReason={createAndListenDisabledReason}
+                differences={retryPlanDifferences}
+                retrySummary={retryRunSummary}
+                summary={nextRunSummary}
+                onCreateWithCurrentPlan={retryRunSummary ? onCreateWithCurrentPlan : undefined}
+              />
+            </div>
+          </details>
+        </>
+      ) : (
+        <>
+          <PreviewReadinessChecklist model={readiness} />
+          <PreviewConfirmationStrip model={readiness} />
+          <RunPlannerSummaryPanel
+            createWithCurrentPlanDisabled={!readiness.canCreate}
+            createWithCurrentPlanDisabledReason={createAndListenDisabledReason}
+            differences={retryPlanDifferences}
+            retrySummary={retryRunSummary}
+            summary={nextRunSummary}
+            onCreateWithCurrentPlan={retryRunSummary ? onCreateWithCurrentPlan : undefined}
+          />
+          <section className="grid gap-3 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-semibold">
+                  {readiness.canOpenCinema ? "Audio ready" : "Create full narration"}
+                </h3>
+                <StatusChip tone={job ? "info" : "neutral"}>{createDetail}</StatusChip>
+              </div>
+              <p className="mt-1 text-sm leading-6 vs-muted">
+                {readiness.createHelper}
+                {createDisabled && createAndListenDisabledReason
+                  ? ` ${createAndListenDisabledReason}`
+                  : ""}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+              {readiness.canOpenCinema ? (
+                <Button
+                  {...workspacePlaybackActionDataAttributes("openCinema", generatedAudioLifecycle)}
+                  disabledReason={openCinemaDisabledReason}
+                  data-testid={workspaceStageActionTestId("openCinema")}
+                  disabled={!canOpenCinema}
+                  onClick={onOpenCinema}
+                  size="lg"
+                  variant="primary"
+                >
+                  {workspaceStageActionLabel("openCinema")}
+                </Button>
+              ) : null}
+              <Button
+                {...workspacePlaybackActionDataAttributes(
+                  "createAndListen",
+                  generatedAudioLifecycle,
+                )}
+                {...createAndListenCapabilityAttributes(createAndListenCapabilityReason)}
+                aria-label={createAndListenAriaLabel(createAndListenScope)}
+                data-create-listen-scope={createAndListenScope}
+                disabledReason={createAndListenDisabledReason}
+                data-testid={workspaceStageActionTestId("createAndListen")}
+                disabled={createDisabled}
+                onClick={onCreateAndListen}
+                size="lg"
+                variant={readiness.canOpenCinema ? "secondary" : "primary"}
+              >
+                {readiness.primaryLabel}
+              </Button>
+              {readiness.canOpenCinema ? null : (
+                <Button
+                  {...workspacePlaybackActionDataAttributes("openCinema", generatedAudioLifecycle)}
+                  disabledReason={openCinemaDisabledReason}
+                  data-testid={workspaceStageActionTestId("openCinema")}
+                  disabled={!canOpenCinema}
+                  onClick={onOpenCinema}
+                  size="lg"
+                  variant="secondary"
+                >
+                  {workspaceStageActionLabel("openCinema")}
+                </Button>
+              )}
+            </div>
+            {!readiness.canOpenCinema && openCinemaDisabledReason ? (
+              <p className="text-xs text-[var(--vs-selected-text)] lg:col-span-2">
+                {openCinemaDisabledReason}
+              </p>
+            ) : null}
+          </section>
+        </>
+      )}
+      <div
+        className={cx(
+          "grid gap-3",
+          showGenerationCockpit ? "" : "xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]",
+        )}
+      >
+        {showGenerationCockpit ? (
+          <details className="rounded-lg border bg-[var(--vs-surface)] p-3 vs-border">
+            <summary className="cursor-pointer text-sm font-semibold">Audition voice</summary>
+            <div className="mt-3">
+              <VoiceAuditionPanel
+                sampleText={auditionSampleText}
+                state={voiceAudition}
+                temporaryVoiceOptions={temporaryVoiceOptions}
+                temporaryVoiceSelectionId={temporaryVoiceSelectionId}
+                onTemporaryVoiceChange={onTemporaryVoiceChange}
+                disabledReason={
+                  readiness.canAudition
+                    ? undefined
+                    : readiness.rows.find((row) => row.id === "audition")?.detail
+                }
+              />
+            </div>
+          </details>
+        ) : (
+          <VoiceAuditionPanel
+            sampleText={auditionSampleText}
+            state={voiceAudition}
+            temporaryVoiceOptions={temporaryVoiceOptions}
+            temporaryVoiceSelectionId={temporaryVoiceSelectionId}
+            onTemporaryVoiceChange={onTemporaryVoiceChange}
+            disabledReason={
+              readiness.canAudition
+                ? undefined
+                : readiness.rows.find((row) => row.id === "audition")?.detail
+            }
+          />
+        )}
+        <PreviewGeneratedAudioPanel
+          detail={
+            readiness.generatedPlaybackDisabledReason ??
+            generatedAudioReadiness?.detail ??
+            "Create & Listen will generate playback for this scope."
+          }
+          isTemporarySource={selectedPreparedSource?.sourceOwner === "temporary"}
+          playbackAvailable={previewPlaybackAvailable}
+          status={generatedAudioReadiness?.status ?? "waiting"}
+          summary={previewGeneratedAudioPanelSummary({
+            audioReviewSummary,
+            audioPipeline,
+            generatedAudioLifecycle,
+            playbackAvailable: previewPlaybackAvailable,
+          })}
+          playbackToolbar={
+            <LocalizedPlaybackToolbar
+              model={previewPlaybackToolbar}
+              shortcutPreferences={shortcutPreferences}
+            />
+          }
+        />
+      </div>
+      <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.82fr)]">
+        <div
+          className="max-h-[34rem] overflow-auto rounded-lg border bg-[var(--vs-raised)] p-4 text-sm leading-6 vs-border"
+          ref={sourcePreviewRef}
+        >
+          {previewContent}
+        </div>
+        <div className="grid min-w-0 gap-3">
+          <Panel className="grid gap-3 p-4" variant="raised">
+            <div>
+              <h3 className="text-base font-semibold">Spoken Form</h3>
+              <p className="mt-1 text-xs vs-muted">
+                This is the listener-ready text Create & Listen will turn into audio.
+              </p>
+            </div>
+            <PreviewSpokenCueList
+              blocks={previewBlocks}
+              job={job}
+              playbackCursorSec={playbackCursorSec}
+              selectedBlockIndex={selectedPreviewBlockIndex}
+              selectedFallbackText={spokenText}
+              onVisibleCueChange={setVisibleSpokenCueBlockId}
+            />
+          </Panel>
+        </div>
+      </div>
+    </Panel>
   );
 }
 
-function SourceKindIcon({ mode }: Readonly<{ mode: SourceMode }>) {
-  if (mode === "book") {
-    return (
-      <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
-        <path
-          d="M4.5 5.5A2.5 2.5 0 0 1 7 3h12.5v16H7a2.5 2.5 0 0 0-2.5 2.5v-16Z"
-          stroke="currentColor"
-          strokeLinejoin="round"
-          strokeWidth="1.7"
-        />
-        <path d="M8 7h7M8 10h6" stroke="currentColor" strokeLinecap="round" strokeWidth="1.7" />
-      </svg>
-    );
-  }
-  if (mode === "fileUrl") {
-    return (
-      <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
-        <path
-          d="M7 3.5h7l4 4v13H7v-17Z"
-          stroke="currentColor"
-          strokeLinejoin="round"
-          strokeWidth="1.7"
-        />
-        <path
-          d="M14 3.5v4h4M8.5 13h7M8.5 16h5"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeWidth="1.7"
-        />
-      </svg>
-    );
-  }
+function previewGenerationNeedsCockpit(audioPipeline: AudioGenerationPipelineModel): boolean {
   return (
-    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
-      <path
-        d="M5 6h14M5 12h14M5 18h9"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="1.8"
-      />
-    </svg>
+    isAudioGenerationWorking(audioPipeline.state) ||
+    ((audioPipeline.state === "failed" || audioPipeline.state === "cancelled") &&
+      audioPipeline.canRetryGeneration)
   );
+}
+
+function PreviewGenerationCockpit({
+  audioPipeline,
+  canCancelRun,
+  canRetryGeneration,
+  createDisabledReason,
+  job,
+  reviewWarningCount,
+  onCancelRun,
+  onRetryGeneration,
+}: Readonly<{
+  audioPipeline: AudioGenerationPipelineModel;
+  canCancelRun: boolean;
+  canRetryGeneration: boolean;
+  createDisabledReason?: string;
+  job: VoiceJob | null;
+  reviewWarningCount: number;
+  onCancelRun: () => void;
+  onRetryGeneration: () => void;
+}>) {
+  const totalSegments = Math.max(audioPipeline.totalSegments, audioPipeline.readySegments, 1);
+  const progressRatio = Math.min(1, Math.max(0, audioPipeline.readySegments / totalSegments));
+  const active = isAudioGenerationWorking(audioPipeline.state);
+  const currentSegment = job?.retries.currentSegment ?? job?.progress.currentSegment ?? 0;
+  let heading = "Generation needs retry";
+  if (active) {
+    heading = "Generating full narration";
+  } else if (audioPipeline.state === "cancelled") {
+    heading = "Generation cancelled";
+  }
+  const detail =
+    job?.progress.detail && active
+      ? `${audioPipeline.detail} ${job.progress.detail}`
+      : audioPipeline.detail;
+  return (
+    <Panel
+      as="section"
+      aria-label="Preview generation cockpit"
+      className="grid gap-3 p-3"
+      data-testid="preview-generation-cockpit"
+      variant="workSurface"
+    >
+      <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
+            Preview generation
+          </p>
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+            <h3 className="text-base font-semibold">{heading}</h3>
+            <StatusChip tone={previewGenerationCockpitTone(audioPipeline)}>
+              {audioPipeline.label}
+            </StatusChip>
+          </div>
+          <p className="mt-1 max-w-4xl text-sm leading-6 vs-muted">{detail}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+          {reviewWarningCount > 0 ? (
+            <StatusChip tone="warning">
+              {reviewWarningCount.toString()} review warnings, generation continues
+            </StatusChip>
+          ) : null}
+          {active ? (
+            <Button
+              data-testid="ui-action-preview-cancel-run"
+              disabled={!canCancelRun}
+              disabledReason={canCancelRun ? undefined : "No active generation run to cancel."}
+              onClick={onCancelRun}
+              size="sm"
+              variant="destructive"
+            >
+              Cancel active run
+            </Button>
+          ) : (
+            <Button
+              data-playback-action="retry-generation"
+              data-playback-owner="workspace"
+              data-testid={workspaceStageActionTestId("retryGeneration")}
+              data-ui-action-owner="workspace"
+              disabled={!canRetryGeneration}
+              disabledReason={
+                canRetryGeneration
+                  ? undefined
+                  : (createDisabledReason ?? "Generation cannot be retried yet.")
+              }
+              onClick={onRetryGeneration}
+              size="sm"
+              variant="primary"
+            >
+              Retry full narration
+            </Button>
+          )}
+        </div>
+      </div>
+      <div className="grid gap-2 md:grid-cols-4">
+        <PreviewGenerationFact label="Ready" value={audioPipeline.readySegments.toString()} />
+        <PreviewGenerationFact
+          label={active ? "Current" : "Pending"}
+          value={
+            active ? previewSegmentValue(currentSegment) : audioPipeline.pendingSegments.toString()
+          }
+        />
+        <PreviewGenerationFact label="Total" value={totalSegments.toString()} />
+        <PreviewGenerationFact label="Job" value={job ? shortJobId(job.id) : "None"} />
+      </div>
+      <div className="grid gap-1">
+        <div
+          aria-label={`${audioPipeline.readySegments.toString()} of ${totalSegments.toString()} segments ready`}
+          className="h-2 overflow-hidden rounded-full bg-[var(--vs-border-subtle)]"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={totalSegments}
+          aria-valuenow={audioPipeline.readySegments}
+        >
+          <div
+            className="h-full rounded-full bg-[var(--vs-theatre-accent)]"
+            style={{ width: `${(progressRatio * 100).toFixed(1)}%` }}
+          />
+        </div>
+        <p className="text-xs leading-5 vs-muted">
+          {job?.progress.message ?? audioPipeline.label}
+          {job?.progress.activeStage ? ` · ${job.progress.activeStage}` : ""}
+        </p>
+      </div>
+    </Panel>
+  );
+}
+
+function PreviewGenerationFact({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="min-w-0 rounded-md border bg-[var(--vs-surface-muted)] p-2 vs-border">
+      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold" title={value}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function PreviewManualReadingPanel({
+  compact,
+  readiness,
+  onOpenTeleprompt,
+  onOpenTheatre,
+}: Readonly<{
+  compact: boolean;
+  readiness: PreviewReadinessModel;
+  onOpenTeleprompt: () => void;
+  onOpenTheatre: () => void;
+}>) {
+  return (
+    <section
+      aria-label="Manual reading"
+      className={cx(
+        "grid gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border",
+        compact
+          ? "md:grid-cols-[minmax(10rem,0.7fr)_minmax(0,1fr)_minmax(0,1fr)] md:items-center"
+          : "sm:min-w-64",
+      )}
+      data-testid={compact ? "preview-manual-reading-secondary" : "preview-manual-reading"}
+    >
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold">Manual reading</h3>
+        <p className="mt-1 text-xs leading-5 vs-muted">
+          {compact ? "Secondary while audio generation runs." : readiness.openTelepromptDetail}
+        </p>
+      </div>
+      <Button
+        data-testid={workspaceStageActionTestId("openTeleprompt")}
+        disabled={!readiness.canOpenTeleprompt}
+        disabledReason={readiness.openTelepromptDisabledReason}
+        onClick={onOpenTeleprompt}
+        size="sm"
+        variant="soft"
+      >
+        {workspaceStageActionLabel("openTeleprompt")}
+      </Button>
+      <Button
+        data-testid={workspaceStageActionTestId("openTheatre")}
+        disabled={!readiness.canOpenTheatre}
+        disabledReason={readiness.openTheatreDisabledReason}
+        onClick={onOpenTheatre}
+        size="sm"
+        variant="secondary"
+      >
+        {workspaceStageActionLabel("openTheatre")}
+      </Button>
+      {!compact && readiness.canOpenTheatre && !readiness.canOpenCinema ? (
+        <p className="text-xs leading-5 vs-muted">
+          Theatre opens in reading-only mode until generated audio and timing are ready.
+        </p>
+      ) : null}
+      {!readiness.canOpenTheatre && readiness.openTheatreDisabledReason ? (
+        <p className="text-xs leading-5 text-[var(--vs-selected-text)] md:col-span-3">
+          {readiness.openTheatreDisabledReason}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function PreviewGenerationPreflightSummary({
+  rows,
+}: Readonly<{ rows: readonly PreviewReadinessRow[] }>) {
+  const visibleRows = rows.filter((row) =>
+    ["source", "spoken", "review", "voice", "runtime", "audio"].includes(row.id),
+  );
+  return (
+    <section
+      aria-label="Preview generation preflight summary"
+      className="flex min-w-0 flex-wrap gap-2 rounded-lg border bg-[var(--vs-surface)] p-3 vs-border"
+      data-testid="preview-generation-preflight-summary"
+    >
+      {visibleRows.map((row) => (
+        <span
+          className="inline-flex min-h-9 min-w-0 max-w-full items-center gap-2 rounded-md border bg-[var(--vs-surface-muted)] px-2 py-1 text-xs vs-border"
+          key={row.id}
+          title={row.detail}
+        >
+          <span className="shrink-0 font-semibold">{row.label}</span>
+          <StatusChip tone={previewReadinessStatusTone(row.status)}>
+            {previewReadinessCompactStatus(row)}
+          </StatusChip>
+        </span>
+      ))}
+    </section>
+  );
+}
+
+function previewGeneratedAudioPanelSummary({
+  audioReviewSummary,
+  audioPipeline,
+  generatedAudioLifecycle,
+  playbackAvailable,
+}: Readonly<{
+  audioReviewSummary?: string | null;
+  audioPipeline: AudioGenerationPipelineModel;
+  generatedAudioLifecycle: ReturnType<typeof generatedAudioLifecycleFromJob>;
+  playbackAvailable: boolean;
+}>): string {
+  if (
+    playbackAvailable &&
+    audioPipeline.canUsePartialAudio &&
+    generatedAudioLifecycle !== "ready"
+  ) {
+    return "Ready segments can be previewed while generation continues.";
+  }
+  if (playbackAvailable) {
+    if (audioReviewSummary) {
+      return `${audioReviewSummary} Playback remains available.`;
+    }
+    return "Full narration playback is ready for this scope.";
+  }
+  if (audioPipeline.state === "partialReady") {
+    return "Audio is being prepared. Ready segments are tracked as generation continues.";
+  }
+  if (audioPipeline.state === "queued" || audioPipeline.state === "generating") {
+    return "Audio is being prepared. Playback appears when playable media is available.";
+  }
+  if (audioPipeline.state === "failed" && audioPipeline.readySegments > 0) {
+    return "Ready prefix audio is preserved; retry generation resumes from valid audio.";
+  }
+  return "Generated audio appears here when playable media is available.";
+}
+
+function previewGenerationCockpitTone(audioPipeline: AudioGenerationPipelineModel): StatusChipTone {
+  if (audioPipeline.state === "failed" || audioPipeline.state === "cancelled") {
+    return "warning";
+  }
+  if (audioPipeline.state === "partialReady" || isAudioGenerationWorking(audioPipeline.state)) {
+    return "info";
+  }
+  return "neutral";
+}
+
+function previewReadinessStatusTone(status: PreviewReadinessRow["status"]): StatusChipTone {
+  if (status === "ready") {
+    return "success";
+  }
+  if (status === "working") {
+    return "info";
+  }
+  if (status === "warning") {
+    return "warning";
+  }
+  if (status === "blocked") {
+    return "danger";
+  }
+  return "neutral";
+}
+
+function previewReadinessCompactStatus(row: PreviewReadinessRow): string {
+  if (row.id === "review" && row.status === "warning") {
+    return "Continues";
+  }
+  if (row.status === "ready") {
+    return "Ready";
+  }
+  if (row.status === "working") {
+    return "Working";
+  }
+  if (row.status === "warning") {
+    return "Attention";
+  }
+  if (row.status === "blocked") {
+    return "Blocked";
+  }
+  return "Waiting";
+}
+
+function shortJobId(jobId: string): string {
+  return jobId.length > 12 ? jobId.slice(0, 12) : jobId || "None";
+}
+
+function previewSegmentValue(value: number): string {
+  return value > 0 ? value.toString() : "n/a";
+}
+
+interface VoiceAuditionController {
+  readonly detail: string;
+  readonly label: string;
+  readonly metadata: string;
+  readonly play: () => void;
+  readonly status: "error" | "idle" | "loading" | "playing" | "ready";
+}
+
+function useVoiceAuditionController({
+  canAudition,
+  onAuditionVoice,
+  playbackControls,
+  sampleText,
+}: Readonly<{
+  canAudition: boolean;
+  onAuditionVoice: (sampleText: string) => Promise<VoicePreviewAudio>;
+  playbackControls: PlaybackController;
+  sampleText: string;
+}>): VoiceAuditionController {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+  const [status, setStatus] = useState<VoiceAuditionController["status"]>("idle");
+  const [detail, setDetail] = useState(
+    "Audition the selected spoken block before full generation.",
+  );
+  const [metadata, setMetadata] = useState("");
+
+  const clearAudio = useCallback(() => {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => clearAudio, [clearAudio]);
+
+  const play = useCallback(() => {
+    if (status === "playing") {
+      audioRef.current?.pause();
+      setStatus("ready");
+      setDetail("Audition paused.");
+      return;
+    }
+    if (!canAudition) {
+      setStatus("error");
+      setDetail("Source, spoken form, and voice must be ready before audition.");
+      return;
+    }
+    const cleanSample = sampleText.trim();
+    if (!cleanSample) {
+      setStatus("error");
+      setDetail("This source has no listener-ready text to audition or generate.");
+      return;
+    }
+
+    clearAudio();
+    setStatus("loading");
+    setDetail("Creating a short voice audition...");
+    setMetadata("");
+    if (playbackControls.isPlaying) {
+      playbackControls.pause();
+    }
+    void onAuditionVoice(cleanSample)
+      .then((preview) => {
+        const url = URL.createObjectURL(preview.audio);
+        objectUrlRef.current = url;
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.addEventListener("ended", () => {
+          setStatus("ready");
+          setDetail("Audition complete.");
+        });
+        audio.addEventListener("error", () => {
+          setStatus("error");
+          setDetail("Unable to play the generated audition.");
+        });
+        setMetadata(voicePreviewMetadata(preview));
+        return audio.play();
+      })
+      .then(() => {
+        setStatus("playing");
+        setDetail("Playing selected-block voice audition.");
+      })
+      .catch((caughtError: unknown) => {
+        clearAudio();
+        setStatus("error");
+        setDetail(
+          caughtError instanceof Error ? caughtError.message : "Unable to create voice audition.",
+        );
+      });
+  }, [canAudition, clearAudio, onAuditionVoice, playbackControls, sampleText, status]);
+
+  return {
+    detail,
+    label: status === "playing" ? "Stop audition" : "Audition voice",
+    metadata,
+    play,
+    status,
+  };
+}
+
+function hasPreviewStageSource({
+  selectedBookScope,
+  selectedBookSource,
+  selectedPreparedSource,
+  sourceMode,
+  text,
+}: Readonly<{
+  selectedBookScope: BookScope | null;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourceMode: SourceMode;
+  text: string;
+}>): boolean {
+  if (sourceMode === "book") {
+    return selectedBookSource?.status === "ready" && Boolean(selectedBookScope);
+  }
+  if (sourceMode === "fileUrl") {
+    return selectedPreparedSource?.status === "ready";
+  }
+  return text.trim().length > 0;
+}
+
+function previewAuditionSampleText(value: string): string {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= 36) {
+    return words.join(" ");
+  }
+  return words.slice(0, 36).join(" ");
+}
+
+function voicePreviewMetadata(preview: VoicePreviewAudio): string {
+  return [
+    preview.durationMs ? formatDuration(preview.durationMs) : null,
+    preview.provider || null,
+    preview.voice || null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+interface NarrationPreviewPolicyNote {
+  detail: string;
+  label: string;
+}
+
+function narrationPreviewPolicyNotes({
+  bookScopeContent,
+  policyProfileLabel,
+  scopeTitle,
+  selectedBookSource,
+  selectedPreparedSource,
+  sourceMode,
+  voiceProfileLabel,
+}: Readonly<{
+  bookScopeContent: BookSourceScopeContent | null;
+  policyProfileLabel: string;
+  scopeTitle: string;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourceMode: SourceMode;
+  voiceProfileLabel: string;
+}>): NarrationPreviewPolicyNote[] {
+  if (selectedPreparedSource) {
+    return [
+      {
+        detail: `${selectedPreparedSource.summary.spokenBlockCount.toLocaleString()} spoken blocks and ${selectedPreparedSource.summary.citationSkipCount.toLocaleString()} citation-only items skipped.`,
+        label: "Prepared blocks",
+      },
+      {
+        detail: `${selectedPreparedSource.summary.sentenceSegmentCount.toLocaleString()} sentence-safe segments are queued for ${voiceProfileLabel}.`,
+        label: "Segmentation",
+      },
+      {
+        detail: `${policyProfileLabel} applies to the full prepared source.`,
+        label: "Policy",
+      },
+    ];
+  }
+  if (selectedBookSource) {
+    const blockCount = bookScopeContent?.blocks?.length ?? 0;
+    return [
+      {
+        detail: `${scopeTitle} from ${bookSourceName(selectedBookSource)} is the active narration scope.`,
+        label: "Book scope",
+      },
+      {
+        detail:
+          blockCount > 0
+            ? `${blockCount.toLocaleString()} source blocks are preserved for review and playback.`
+            : "The selected scope will be split into listener-sized blocks during generation.",
+        label: "Blocks",
+      },
+      {
+        detail: `${policyProfileLabel} and ${voiceProfileLabel} stay attached to this scope.`,
+        label: "Policy",
+      },
+    ];
+  }
+  return [
+    {
+      detail: `${sourceMode === "text" ? "Draft text" : scopeTitle} will be narrated with ${voiceProfileLabel}.`,
+      label: "Source",
+    },
+    {
+      detail: `${policyProfileLabel} is applied before audio is generated.`,
+      label: "Policy",
+    },
+    {
+      detail:
+        "Paragraphs are chunked into listener-sized blocks for Review, Teleprompt, and Cinema.",
+      label: "Blocks",
+    },
+  ];
 }
 
 interface WorkbenchSourceIdentity {
@@ -8926,13 +15997,13 @@ function resolveWorkbenchSourceIdentity({
   sourceMode,
   text,
 }: Readonly<{
-  contentMode: ContentMode;
+  contentMode: WorkspaceStage;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
   sourceMode: SourceMode;
   text: string;
 }>): WorkbenchSourceIdentity {
-  if (contentMode === "sourceIntake") {
+  if (contentMode === "intake") {
     return sourceIntakeIdentity(sourceMode, selectedBookSource, selectedPreparedSource, text);
   }
   if (selectedPreparedSource) {
@@ -8995,26 +16066,6 @@ function draftTextIdentity(text: string): WorkbenchSourceIdentity {
   };
 }
 
-function isSupportedSourceTextFile(file: File): boolean {
-  if (file.type.startsWith("text/") || file.type === "application/json") {
-    return true;
-  }
-  const extension = file.name.toLowerCase().split(".").pop() ?? "";
-  return SOURCE_TEXT_FILE_EXTENSIONS.has(extension);
-}
-
-function speakModeClass(mode: string): string {
-  if (mode === "skip") {
-    return "border-amber-200 bg-amber-50 text-amber-700";
-  }
-  if (mode === "summarize") {
-    return "border-blue-200 bg-blue-50 text-blue-700";
-  }
-  return "border-emerald-200 bg-emerald-50 text-emerald-700";
-}
-
-type SourcePrepReviewTab = "blocks" | "preview" | "pronunciation" | "math" | "rules";
-
 function SourcePrepMetric({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <div className="min-w-0 border-l pl-3 first:border-l-0 first:pl-0 vs-border">
@@ -9028,652 +16079,6 @@ function SourcePrepMetric({ label, value }: Readonly<{ label: string; value: str
   );
 }
 
-function MarkdownParseModeControl({
-  mode,
-  onChange,
-}: Readonly<{
-  mode: MarkdownParseMode;
-  onChange: (mode: MarkdownParseMode) => void;
-}>) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs vs-border">
-      <span className="font-semibold text-[var(--vs-text)]">Markdown parser</span>
-      <div className="grid grid-cols-2 rounded-md border p-1 font-semibold vs-border vs-surface">
-        {(["strict", "legacy"] as const).map((item) => (
-          <button
-            className={`rounded px-3 py-1.5 capitalize transition ${
-              mode === item
-                ? "bg-orange-500/10 text-orange-700 shadow-sm ring-1 ring-orange-300"
-                : "vs-muted hover:text-[var(--vs-text)]"
-            }`}
-            key={item}
-            onClick={() => {
-              onChange(item);
-            }}
-            type="button"
-          >
-            {item}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function preparedSourceSummaryLine(source: PreparedSource | null): string {
-  const base = `${String(source?.summary.sentenceSegmentCount ?? 0)} sentence segments · ${String(
-    source?.summary.citationSkipCount ?? 0,
-  )} citations skipped`;
-  if (source?.sourceFormat !== "markdown") {
-    return base;
-  }
-  return `${base} · ${source.markdownParseMode ?? "strict"} markdown`;
-}
-
-function SourcePrepReview({
-  children,
-  customSpeechPolicyProfiles,
-  isPreparing,
-  isSpeechPolicyPreviewing,
-  preparedSources,
-  selectedPreparedSource,
-  showIntakeControls = true,
-  speechPolicyError,
-  speechPolicyDefinition,
-  speechPolicyOverrides,
-  speechPolicyProfile,
-  speechPolicyProfiles,
-  sourceFileError,
-  sourceFileLabel,
-  markdownParseMode,
-  sourcePrepError,
-  sourceUrl,
-  onBrowse,
-  onClearSpeechPolicyOverrides,
-  onCreateCustomSpeechPolicyProfile,
-  onCreatePreparedAudio,
-  onDeleteCustomSpeechPolicyProfile,
-  onInspectPreparedSource,
-  onMarkdownParseModeChange,
-  onOpenPreparedSourceCinema,
-  onPrepareUrl,
-  onSpeechPolicyOverridesChange,
-  onSpeechPolicyProfileChange,
-  onSourceUrlChange,
-  onUpdateCustomSpeechPolicyProfile,
-  onUsePreparedSource,
-}: Readonly<{
-  children: ReactNode;
-  customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
-  isPreparing: boolean;
-  isSpeechPolicyPreviewing: boolean;
-  preparedSources: PreparedSource[];
-  selectedPreparedSource: PreparedSource | null;
-  showIntakeControls?: boolean;
-  speechPolicyError: string | null;
-  speechPolicyDefinition: SpeechPolicyDefinition;
-  speechPolicyOverrides: SpeechPolicyOverrides;
-  speechPolicyProfile: string;
-  speechPolicyProfiles: SpeechPolicyProfile[];
-  sourceFileError: string | null;
-  sourceFileLabel: string | null;
-  markdownParseMode: MarkdownParseMode;
-  sourcePrepError: string | null;
-  sourceUrl: string;
-  onBrowse: () => void;
-  onClearSpeechPolicyOverrides: () => void;
-  onCreateCustomSpeechPolicyProfile: (
-    name: string,
-    settings: SpeechPolicySettings,
-    baseProfile: string,
-  ) => Promise<void>;
-  onCreatePreparedAudio: (source: PreparedSource) => void;
-  onDeleteCustomSpeechPolicyProfile: (profileId: string) => Promise<void>;
-  onInspectPreparedSource: (source: PreparedSource) => void;
-  onMarkdownParseModeChange: (mode: MarkdownParseMode) => void;
-  onOpenPreparedSourceCinema: (source: PreparedSource) => void;
-  onPrepareUrl: () => void;
-  onSpeechPolicyOverridesChange: (overrides: SpeechPolicyOverrides) => void;
-  onSpeechPolicyProfileChange: (profile: string) => void;
-  onSourceUrlChange: (url: string) => void;
-  onUpdateCustomSpeechPolicyProfile: (
-    profileId: string,
-    name: string,
-    settings: SpeechPolicySettings,
-    baseProfile: string,
-  ) => Promise<void>;
-  onUsePreparedSource: (source: PreparedSource) => void;
-}>) {
-  const source = selectedPreparedSource;
-  const intakeError = sourceFileError ?? sourcePrepError;
-  const intakeErrorNode = intakeError ? (
-    <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-      {intakeError}
-    </p>
-  ) : null;
-
-  return (
-    <div className="grid min-w-0 gap-3">
-      {showIntakeControls ? (
-        <div className="grid min-w-0 gap-3 overflow-hidden rounded-lg border bg-[var(--vs-raised)] p-3 vs-border">
-          <div className="grid max-w-full min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
-            <input
-              className="h-10 w-full min-w-0 rounded-md border bg-[var(--vs-raised)] px-3 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
-              onChange={(event) => {
-                onSourceUrlChange(event.currentTarget.value);
-              }}
-              placeholder="Paste a readable web page, raw text, PDF, or EPUB URL"
-              type="url"
-              value={sourceUrl}
-            />
-            <button
-              className="h-10 w-full rounded-md border border-orange-300 bg-orange-500/10 px-4 text-sm font-semibold text-orange-700 transition hover:bg-orange-500/15 disabled:opacity-50 md:w-auto"
-              disabled={isPreparing || sourceUrl.trim().length === 0}
-              onClick={onPrepareUrl}
-              type="button"
-            >
-              {isPreparing ? "Preparing..." : "Fetch & Prepare"}
-            </button>
-          </div>
-          <MarkdownParseModeControl mode={markdownParseMode} onChange={onMarkdownParseModeChange} />
-          <div className="flex max-w-full min-w-0 flex-wrap items-center justify-between gap-2 text-xs vs-muted">
-            <span className="min-w-0 flex-1 truncate" title={sourceFileLabel ?? undefined}>
-              {sourceFileLabel ??
-                "Drop a file here, or browse for text, PDF, EPUB, HTML, CSV, JSON, or logs"}
-            </span>
-            <button
-              className="rounded border bg-[var(--vs-raised)] px-3 py-1.5 font-semibold transition hover:border-orange-300 hover:text-orange-700 disabled:opacity-50 vs-border"
-              disabled={isPreparing}
-              onClick={onBrowse}
-              type="button"
-            >
-              Browse File
-            </button>
-            {children}
-          </div>
-          {intakeErrorNode}
-        </div>
-      ) : (
-        intakeErrorNode
-      )}
-
-      {preparedSources.length > 0 ? (
-        <div className="grid gap-3">
-          <SpeechPolicyControls
-            customProfiles={customSpeechPolicyProfiles}
-            definition={speechPolicyDefinition}
-            isPreviewing={isSpeechPolicyPreviewing}
-            overrides={speechPolicyOverrides}
-            profile={speechPolicyProfile}
-            profiles={speechPolicyProfiles}
-            error={speechPolicyError}
-            onClearOverrides={onClearSpeechPolicyOverrides}
-            onCreateCustomProfile={onCreateCustomSpeechPolicyProfile}
-            onDeleteCustomProfile={onDeleteCustomSpeechPolicyProfile}
-            onOverridesChange={onSpeechPolicyOverridesChange}
-            onProfileChange={onSpeechPolicyProfileChange}
-            onUpdateCustomProfile={onUpdateCustomSpeechPolicyProfile}
-          />
-          <div className="grid gap-2 rounded-lg border bg-[var(--vs-raised)] p-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-center vs-border">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">Prepared</p>
-              <p className="mt-1 text-xs vs-muted">
-                {preparedSources.length.toLocaleString()} reusable source
-                {preparedSources.length === 1 ? "" : "s"}
-              </p>
-            </div>
-            <select
-              className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-semibold outline-none focus:border-orange-400 vs-border"
-              onChange={(event) => {
-                const nextSource = preparedSources.find(
-                  (item) => item.id === event.currentTarget.value,
-                );
-                if (nextSource) {
-                  onUsePreparedSource(nextSource);
-                }
-              }}
-              value={source?.id ?? ""}
-            >
-              {preparedSources.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.title ?? item.sourceName} · {item.kind.toUpperCase()} ·{" "}
-                  {item.wordCount.toLocaleString()} words
-                </option>
-              ))}
-            </select>
-          </div>
-          <PreparedSourceIntakeSummary
-            isPreparing={isPreparing}
-            source={source}
-            onCreatePreparedAudio={onCreatePreparedAudio}
-            onInspectPreparedSource={onInspectPreparedSource}
-            onOpenPreparedSourceCinema={onOpenPreparedSourceCinema}
-          />
-        </div>
-      ) : (
-        <div className="rounded-lg border border-dashed bg-[var(--vs-raised)] p-5 text-sm vs-border">
-          Prepare a file or URL to review headings, skipped citations, and sentence-safe narration
-          blocks before generating audio.
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PreparedSourceIntakeSummary({
-  isPreparing,
-  source,
-  onCreatePreparedAudio,
-  onInspectPreparedSource,
-  onOpenPreparedSourceCinema,
-}: Readonly<{
-  isPreparing: boolean;
-  source: PreparedSource | null;
-  onCreatePreparedAudio: (source: PreparedSource) => void;
-  onInspectPreparedSource: (source: PreparedSource) => void;
-  onOpenPreparedSourceCinema: (source: PreparedSource) => void;
-}>) {
-  if (!source) {
-    return (
-      <div className="rounded-lg border border-dashed bg-[var(--vs-raised)] p-5 text-sm vs-border">
-        Prepare a file or URL to make it available for the Review workbench.
-      </div>
-    );
-  }
-
-  return (
-    <section className="grid min-w-0 gap-3 rounded-lg border bg-[var(--vs-raised)] p-4 vs-border">
-      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">
-            Prepared Source
-          </p>
-          <h3
-            className="mt-1 truncate text-base font-semibold"
-            title={source.title ?? source.sourceName}
-          >
-            {source.title ?? source.sourceName}
-          </h3>
-          <p className="mt-1 text-xs vs-muted">{preparedSourceSummaryLine(source)}</p>
-        </div>
-        <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-          <button
-            className="h-9 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-700 transition hover:bg-orange-500/15"
-            onClick={() => {
-              onOpenPreparedSourceCinema(source);
-            }}
-            type="button"
-          >
-            {preparedSourceCinemaActionLabel(source)}
-          </button>
-          <button
-            className="h-9 rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 vs-border"
-            onClick={() => {
-              onInspectPreparedSource(source);
-            }}
-            type="button"
-          >
-            Inspect structure
-          </button>
-          <button
-            className="h-9 rounded-md bg-orange-600 px-3 text-xs font-semibold text-white shadow-sm shadow-orange-500/20 disabled:opacity-50"
-            disabled={isPreparing}
-            onClick={() => {
-              onCreatePreparedAudio(source);
-            }}
-            type="button"
-          >
-            Create & Listen
-          </button>
-        </div>
-      </div>
-      <dl className="grid gap-3 text-sm sm:grid-cols-5">
-        <SourcePrepMetric label="Blocks" value={String(source.blockCount)} />
-        <SourcePrepMetric label="Speak" value={String(source.summary.spokenBlockCount)} />
-        <SourcePrepMetric label="Segments" value={String(source.summary.sentenceSegmentCount)} />
-        <SourcePrepMetric label="Citations" value={String(source.summary.citationSkipCount)} />
-        <SourcePrepMetric label="Skipped" value={String(source.skippedItems?.length ?? 0)} />
-      </dl>
-    </section>
-  );
-}
-
-function SpeechPolicyControls({
-  customProfiles,
-  definition,
-  error,
-  isPreviewing,
-  overrides,
-  profile,
-  profiles,
-  onClearOverrides,
-  onCreateCustomProfile,
-  onDeleteCustomProfile,
-  onOverridesChange,
-  onProfileChange,
-  onUpdateCustomProfile,
-}: Readonly<{
-  customProfiles: CustomSpeechPolicyProfile[];
-  definition: SpeechPolicyDefinition;
-  error: string | null;
-  isPreviewing: boolean;
-  overrides: SpeechPolicyOverrides;
-  profile: string;
-  profiles: SpeechPolicyProfile[];
-  onClearOverrides: () => void;
-  onCreateCustomProfile: (
-    name: string,
-    settings: SpeechPolicySettings,
-    baseProfile: string,
-  ) => Promise<void>;
-  onDeleteCustomProfile: (profileId: string) => Promise<void>;
-  onOverridesChange: (overrides: SpeechPolicyOverrides) => void;
-  onProfileChange: (profile: string) => void;
-  onUpdateCustomProfile: (
-    profileId: string,
-    name: string,
-    settings: SpeechPolicySettings,
-    baseProfile: string,
-  ) => Promise<void>;
-}>) {
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
-  const [isDefaultsOpen, setIsDefaultsOpen] = useState(false);
-  const [isCustomFormOpen, setIsCustomFormOpen] = useState(false);
-  const activeCustomProfile = customProfiles.find((item) => item.id === profile) ?? null;
-  const [customProfileName, setCustomProfileName] = useState("");
-  const definitionFields =
-    definition.fields.length > 0 ? definition.fields : DEFAULT_SPEECH_POLICY_DEFINITION.fields;
-  const profileOptions = speechPolicyProfileOptions(definition, profiles);
-  const baseSettings = resolveSpeechPolicySettings(profile, profileOptions, customProfiles);
-  const effectiveSettings = applySpeechPolicyOverridesToSettings(baseSettings, overrides);
-  const baseProfile = activeCustomProfile?.baseProfile ?? profile;
-  const customNamePlaceholder = `${speechPolicyProfileDisplayName(profile, customProfiles)} copy`;
-
-  useEffect(() => {
-    setCustomProfileName(activeCustomProfile?.name ?? customNamePlaceholder);
-  }, [activeCustomProfile?.name, customNamePlaceholder]);
-
-  return (
-    <section className="grid gap-3 rounded-lg border bg-[var(--vs-raised)] p-3 vs-border">
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-        <label className="grid min-w-0 gap-1 text-sm font-semibold text-[var(--vs-text)]">
-          <span>Profile</span>
-          <select
-            className="h-10 min-w-0 rounded-md border bg-[var(--vs-surface)] px-3 text-sm font-medium outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 vs-border"
-            onChange={(event) => {
-              onProfileChange(normalizeSpeechPolicyProfile(event.currentTarget.value));
-            }}
-            value={profile}
-          >
-            {profileOptions.map((option) => (
-              <option key={option.name} value={option.name}>
-                {option.label || speechPolicyProfileLabel(option.name)}
-              </option>
-            ))}
-            {customProfiles.length > 0 ? (
-              <optgroup label="Custom profiles">
-                {customProfiles.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-          </select>
-        </label>
-        <div className="flex flex-wrap items-center gap-2 md:justify-end">
-          {isPreviewing ? (
-            <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
-              Updating preview
-            </span>
-          ) : null}
-          <button
-            className="h-9 rounded-md border border-zinc-200 px-3 text-xs font-semibold text-zinc-800 transition hover:border-orange-300 hover:text-orange-700"
-            onClick={() => {
-              setIsAdvancedOpen((current) => !current);
-            }}
-            type="button"
-          >
-            Advanced
-          </button>
-          <button
-            className="h-9 rounded-md border border-zinc-200 px-3 text-xs font-semibold text-zinc-800 transition hover:border-orange-300 hover:text-orange-700"
-            onClick={() => {
-              setIsDefaultsOpen((current) => !current);
-            }}
-            type="button"
-          >
-            Defaults
-          </button>
-          <button
-            className="h-9 rounded-md border border-zinc-200 px-3 text-xs font-semibold text-zinc-800 transition hover:border-orange-300 hover:text-orange-700"
-            onClick={() => {
-              setIsCustomFormOpen((current) => !current);
-            }}
-            type="button"
-          >
-            Save as profile
-          </button>
-          {hasSpeechPolicyOverrides(overrides) ? (
-            <button
-              className="h-9 rounded-md border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-800"
-              onClick={onClearOverrides}
-              type="button"
-            >
-              Clear overrides
-            </button>
-          ) : null}
-        </div>
-      </div>
-      {error ? (
-        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-          {error}
-        </p>
-      ) : null}
-      {isDefaultsOpen ? (
-        <SpeechPolicyDefaultsTable fields={definitionFields} profiles={profileOptions} />
-      ) : null}
-      {isAdvancedOpen ? (
-        <div className="grid gap-3 border-t border-zinc-100 pt-3 sm:grid-cols-2">
-          {definitionFields.map((field) => (
-            <PolicyModeSelect
-              key={field.key}
-              label={field.label}
-              options={field.options}
-              value={overrides[field.key] ?? ""}
-              onChange={(value) => {
-                onOverridesChange(policyOverridesWithField(overrides, field.key, value));
-              }}
-            />
-          ))}
-        </div>
-      ) : null}
-      {isCustomFormOpen ? (
-        <div className="grid gap-3 border-t border-zinc-100 pt-3">
-          <label className="grid gap-1 text-xs font-semibold text-zinc-700">
-            <span>Profile name</span>
-            <input
-              className="h-9 rounded-md border border-zinc-200 bg-zinc-50 px-3 text-sm outline-none focus:border-orange-400"
-              onChange={(event) => {
-                setCustomProfileName(event.currentTarget.value);
-              }}
-              value={customProfileName}
-            />
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <button
-              className="h-9 rounded-md bg-zinc-950 px-3 text-xs font-semibold text-white"
-              onClick={() => {
-                void onCreateCustomProfile(customProfileName, effectiveSettings, baseProfile);
-              }}
-              type="button"
-            >
-              Save new profile
-            </button>
-            {activeCustomProfile ? (
-              <>
-                <button
-                  className="h-9 rounded-md border border-zinc-200 px-3 text-xs font-semibold text-zinc-800"
-                  onClick={() => {
-                    void onUpdateCustomProfile(
-                      activeCustomProfile.id,
-                      customProfileName,
-                      effectiveSettings,
-                      baseProfile,
-                    );
-                  }}
-                  type="button"
-                >
-                  Update selected
-                </button>
-                <button
-                  className="h-9 rounded-md border border-red-200 px-3 text-xs font-semibold text-red-700"
-                  onClick={() => {
-                    void onDeleteCustomProfile(activeCustomProfile.id);
-                  }}
-                  type="button"
-                >
-                  Delete selected
-                </button>
-              </>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-function SpeechPolicyDefaultsTable({
-  fields,
-  profiles,
-}: Readonly<{
-  fields: SpeechPolicyDefinition["fields"];
-  profiles: Pick<SpeechPolicyProfile, "name" | "label" | "settings">[];
-}>) {
-  const headers = ["Profile", "Mode", ...fields.map((field) => field.label)];
-  return (
-    <div className="overflow-x-auto border-t border-zinc-100 pt-3">
-      <table className="min-w-[960px] border-collapse text-left text-xs">
-        <thead className="bg-zinc-50 text-[0.68rem] uppercase tracking-[0.14em] text-zinc-500">
-          <tr>
-            {headers.map((header) => (
-              <th className="border border-zinc-200 px-3 py-2" key={header}>
-                {header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {profiles.map((item) => (
-            <tr key={item.name}>
-              <td className="border border-zinc-200 px-3 py-2 font-semibold">
-                {item.label || speechPolicyProfileLabel(item.name)}
-              </td>
-              <td className="border border-zinc-200 px-3 py-2">
-                {formatPolicyModeLabel(item.settings.mode)}
-              </td>
-              {fields.map((field) => (
-                <td className="border border-zinc-200 px-3 py-2" key={field.key}>
-                  {formatPolicyModeLabel(item.settings[field.key])}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function speechPolicyProfileOptions(
-  definition: SpeechPolicyDefinition,
-  profiles: SpeechPolicyProfile[],
-): SpeechPolicyProfile[] {
-  if (definition.profiles.length > 0) {
-    return definition.profiles;
-  }
-  if (profiles.length > 0) {
-    return profiles;
-  }
-  return SPEECH_POLICY_PROFILE_OPTIONS.map(
-    (name): SpeechPolicyProfile => ({
-      description: "",
-      label: speechPolicyProfileLabel(name),
-      name,
-      settings: { ...BUILT_IN_SPEECH_POLICY_SETTINGS[name] },
-    }),
-  );
-}
-
-function policyOverridesWithField(
-  overrides: SpeechPolicyOverrides,
-  key: SpeechPolicyDefinition["fields"][number]["key"],
-  value: string | undefined,
-): SpeechPolicyOverrides {
-  return compactSpeechPolicyOverrides({
-    ...overrides,
-    [key]: value,
-  });
-}
-
-function PolicyModeSelect({
-  label,
-  options,
-  value,
-  onChange,
-}: Readonly<{
-  label: string;
-  options: SpeechPolicyDefinition["fields"][number]["options"];
-  value: string;
-  onChange: (value: string | undefined) => void;
-}>) {
-  return (
-    <label className="grid gap-1 text-xs font-semibold text-zinc-700">
-      <span>{label}</span>
-      <select
-        className="h-9 min-w-0 rounded-md border border-zinc-200 bg-zinc-50 px-2 text-xs outline-none focus:border-orange-400"
-        onChange={(event) => {
-          onChange(event.currentTarget.value || undefined);
-        }}
-        value={value}
-      >
-        <option value="">Profile default</option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label || formatPolicyModeLabel(option.value)}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function formatPolicyModeLabel(value: string): string {
-  if (value === "rowLinear") {
-    return "Row linear";
-  }
-  if (value === "syntaxAware") {
-    return "Syntax aware";
-  }
-  if (value === "literalsafe") {
-    return "Literal safe";
-  }
-  if (value === "altFirst") {
-    return "Alt first";
-  }
-  if (value === "describeShort") {
-    return "Describe short";
-  }
-  if (value === "describeLong") {
-    return "Describe long";
-  }
-  if (value === "onDemand") {
-    return "On demand";
-  }
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
 function SourcePrepMathPanel({ source }: Readonly<{ source: PreparedSource | null }>) {
   const mathBlocks = (source?.blocks ?? []).filter(
     (block) => block.kind === "math" || Boolean(block.mathPreview),
@@ -9683,7 +16088,7 @@ function SourcePrepMathPanel({ source }: Readonly<{ source: PreparedSource | nul
   }
   if (mathBlocks.length === 0) {
     return (
-      <div className="p-4 text-sm text-zinc-600">
+      <div className="p-4 text-sm text-[var(--vs-text-muted)]">
         <p>No maths blocks were detected in this source.</p>
       </div>
     );
@@ -9692,34 +16097,34 @@ function SourcePrepMathPanel({ source }: Readonly<{ source: PreparedSource | nul
     <div className="grid max-h-[28rem] gap-3 overflow-y-auto p-4 text-sm">
       {mathBlocks.map((block) => (
         <article
-          className="grid gap-3 rounded-md border border-zinc-200 bg-white p-3"
+          className="grid gap-3 rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] p-3"
           key={block.id}
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--vs-text-muted)]">
               {block.kind} · block {block.index.toLocaleString()}
             </p>
             <span
               className={`rounded-full border px-2 py-1 text-[0.68rem] font-semibold ${
                 block.mathPreview?.source === "fallback"
-                  ? "border-amber-200 bg-amber-50 text-amber-700"
-                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  ? "border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]"
+                  : "border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]"
               }`}
             >
               {block.mathPreview?.source ?? "speech policy"}
             </span>
           </div>
-          <div className="rounded-md border border-zinc-100 bg-zinc-50 p-3 font-mono text-xs leading-5 text-zinc-800">
+          <div className="rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] p-3 font-mono text-xs leading-5 text-[var(--vs-text-secondary)]">
             {block.text ?? block.label}
           </div>
-          <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-sm leading-6 text-blue-900">
+          <div className="rounded-md border border-[var(--vs-status-info-border)] bg-[var(--vs-status-info-bg)] p-3 text-sm leading-6 text-[var(--vs-status-info)]">
             {block.mathPreview?.speech ?? block.spokenText ?? "No maths speech available"}
           </div>
           {block.mathPreview?.warnings && block.mathPreview.warnings.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {block.mathPreview.warnings.map((warning) => (
                 <span
-                  className="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700"
+                  className="rounded-full bg-[var(--vs-status-warning-bg)] px-2 py-1 text-xs font-semibold text-[var(--vs-status-warning)]"
                   key={warning}
                 >
                   {warning}
@@ -9739,7 +16144,7 @@ function SourcePrepRulesPanel({ source }: Readonly<{ source: PreparedSource | nu
   }
   return (
     <div className="grid gap-4 p-4 text-sm">
-      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-zinc-200 bg-zinc-200 sm:grid-cols-3">
+      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-border-subtle)] sm:grid-cols-3">
         <SourcePrepMetric label="Headings" value={String(source.summary.headingCount)} />
         <SourcePrepMetric label="Skipped Blocks" value={String(source.summary.skippedBlockCount)} />
         <SourcePrepMetric label="Notes" value={String(source.warnings?.length ?? 0)} />
@@ -9748,7 +16153,7 @@ function SourcePrepRulesPanel({ source }: Readonly<{ source: PreparedSource | nu
         <div className="flex flex-wrap gap-2">
           {source.warnings.map((warning) => (
             <span
-              className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700"
+              className="rounded-full border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-2 py-1 text-xs font-semibold text-[var(--vs-status-warning)]"
               key={warning}
             >
               {warning}
@@ -9757,13 +16162,19 @@ function SourcePrepRulesPanel({ source }: Readonly<{ source: PreparedSource | nu
         </div>
       ) : null}
       {source.skippedItems && source.skippedItems.length > 0 ? (
-        <div className="max-h-56 overflow-y-auto border-t border-zinc-200">
+        <div className="max-h-56 overflow-y-auto border-t border-[var(--vs-border-subtle)]">
           {source.skippedItems.slice(0, 12).map((item) => (
-            <div className="border-b border-zinc-100 py-3 last:border-b-0" key={item.id}>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+            <div
+              className="border-b border-[var(--vs-border-subtle)] py-3 last:border-b-0"
+              key={item.id}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--vs-text-muted)]">
                 {item.kind}
               </p>
-              <p className="mt-1 truncate font-medium text-zinc-900" title={item.reason}>
+              <p
+                className="mt-1 truncate font-medium text-[var(--vs-text-primary)]"
+                title={item.reason}
+              >
                 {item.reason}
               </p>
             </div>
@@ -9772,14 +16183,6 @@ function SourcePrepRulesPanel({ source }: Readonly<{ source: PreparedSource | nu
       ) : null}
     </div>
   );
-}
-
-function isSupportedSourcePrepFile(file: File): boolean {
-  if (isSupportedSourceTextFile(file)) {
-    return true;
-  }
-  const extension = file.name.toLowerCase().split(".").pop() ?? "";
-  return isBookSourceExtension(extension);
 }
 
 function isBookSourceExtension(extension: string): boolean {
@@ -9818,15 +16221,7 @@ function isBookSourceURL(lowerURL: string): boolean {
   ].some((extension) => lowerURL.endsWith(extension));
 }
 
-function formatSourceTextFileLabel(files: File[]): string {
-  if (files.length === 1) {
-    return `${files[0].name} · ${formatBytes(files[0].size)}`;
-  }
-  const totalBytes = files.reduce((total, file) => total + file.size, 0);
-  return `${files.length.toString()} files · ${formatBytes(totalBytes)}`;
-}
-
-function SourceMetadataStrip({
+function workbenchSourceMetrics({
   bookScopeContent,
   job,
   selectedBookScope,
@@ -9842,7 +16237,7 @@ function SourceMetadataStrip({
   selectedPreparedSource: PreparedSource | null;
   sourceMode: SourceMode;
   text: string;
-}>) {
+}>): InspectorFact[] {
   const metadataBookSource = sourceMode === "book" ? selectedBookSource : null;
   const metadataPreparedSource = sourceMode === "fileUrl" ? selectedPreparedSource : null;
   const preparedDurationMs =
@@ -9876,14 +16271,266 @@ function SourceMetadataStrip({
     selectedPreparedSource: metadataPreparedSource,
   });
 
-  return (
-    <dl className="grid gap-3 rounded-lg border bg-[var(--vs-raised)] p-3 text-sm md:grid-cols-4 vs-border">
-      <Metric label="Source Text" value={sourceTextLabel} />
-      <Metric label="Total Segments" value={String(totalSegments)} />
-      <Metric label="Total Duration (est.)" value={formatDuration(durationMs)} />
-      <Metric label="Output Format" value={contentType} />
-    </dl>
-  );
+  return [
+    { label: "Text", value: sourceTextLabel },
+    { label: "Segments", value: String(totalSegments) },
+    { label: "Duration", value: formatDuration(durationMs) },
+    { label: "Format", value: contentType },
+  ];
+}
+
+function workspaceInspectorCueDetail(
+  block: RevisionBlock,
+  totalBlocks: number,
+): WorkspaceInspectorCueDetail {
+  const notes: InspectorNote[] = [
+    block.policyNote
+      ? {
+          detail: block.policyNote,
+          label: "Policy",
+          tone: block.needsAttention ? "warning" : undefined,
+        }
+      : null,
+    ...block.warnings.map((warning) => ({
+      detail: warning,
+      label: "Warning",
+      tone: "warning",
+    })),
+  ].filter(Boolean) as InspectorNote[];
+  return {
+    detail: `${block.index.toString()} of ${Math.max(1, totalBlocks).toString()} · ${formatDuration(block.estimatedDurationMs)}`,
+    facts: [
+      { label: "Cue", value: block.label },
+      {
+        label: "Position",
+        value: `${block.index.toString()} of ${Math.max(1, totalBlocks).toString()}`,
+      },
+      { label: "Source block", value: block.id },
+      { label: "Status", value: REVISION_STATUS_LABELS[block.status] },
+      { label: "Duration", value: formatDuration(block.estimatedDurationMs) },
+      { label: "Source text", value: inspectorTextExcerpt(block.text) },
+      { label: "Spoken form", value: inspectorTextExcerpt(block.spokenText || "No spoken text.") },
+    ],
+    id: block.id,
+    label: block.label,
+    notes,
+    timingLabel: formatDuration(block.estimatedDurationMs),
+  };
+}
+
+function workspaceInspectorJobDetail({
+  audioCurrentnessDetail,
+  audioLifecycleLabel,
+  job,
+  queue,
+}: Readonly<{
+  audioCurrentnessDetail?: string;
+  audioLifecycleLabel: string;
+  job: VoiceJob;
+  queue: {
+    currentSegment: number;
+    generatingCount: number;
+    readyCount: number;
+    totalSegments: number;
+  };
+}>): WorkspaceInspectorJobDetail {
+  const reviewWarningCount = audioReviewWarningCount(job);
+  const reviewWarningTotal = audioReviewWarningTotal(job);
+  const reviewWarningSummary = audioReviewWarningSummary(job);
+  const reviewWarningReasons = audioReviewWarningReasons(job);
+  return {
+    detail:
+      reviewWarningSummary ??
+      firstNonEmptyString(job.error, job.progress.message, job.status) ??
+      job.status,
+    facts: [
+      { label: "Job", value: shortIdentifier(job.id) },
+      { label: "Status", value: job.status },
+      { label: "Lifecycle", value: audioLifecycleLabel },
+      ...(reviewWarningCount > 0
+        ? [
+            {
+              label: "Audio review",
+              tone: "warning" as const,
+              value: reviewWarningCount.toString(),
+            },
+            {
+              label: "Warnings",
+              tone: "warning" as const,
+              value: reviewWarningTotal.toString(),
+            },
+          ]
+        : []),
+      { label: "Current", value: queue.currentSegment > 0 ? String(queue.currentSegment) : "n/a" },
+      { label: "Ready", value: queue.readyCount.toString() },
+      { label: "Generating", value: queue.generatingCount.toString() },
+      { label: "Total", value: queue.totalSegments.toString() },
+      { label: "Voice", value: job.voiceProfileName ?? job.voice },
+      { label: "Provider", value: job.provider },
+    ],
+    id: job.id,
+    label: shortIdentifier(job.id),
+    notes: [
+      reviewWarningSummary
+        ? { detail: reviewWarningSummary, label: "Audio review", tone: "warning" }
+        : null,
+      audioCurrentnessDetail
+        ? { detail: audioCurrentnessDetail, label: "Currentness", tone: "warning" }
+        : null,
+      ...reviewWarningReasons.map((reason) => ({
+        detail: reason,
+        label: "Segment warning",
+        tone: "warning" as const,
+      })),
+      job.error ? { detail: job.error, label: "Error", tone: "warning" } : null,
+      job.progress.detail ? { detail: job.progress.detail, label: "Progress" } : null,
+    ].filter(Boolean) as InspectorNote[],
+    tone: reviewWarningCount > 0 ? "warning" : toneForJobStatus(job.status),
+  };
+}
+
+function inspectorTextExcerpt(value: string): string {
+  const normalized = value.replaceAll(/\s+/g, " ").trim();
+  if (normalized.length <= 96) {
+    return normalized || "n/a";
+  }
+  return `${normalized.slice(0, 93)}...`;
+}
+
+function workspaceInspectorImportConfidence({
+  isImportingBookSource,
+  isPreparingSource,
+  selectedBookSource,
+  selectedPreparedSource,
+  sourcePrepError,
+}: Readonly<{
+  isImportingBookSource: boolean;
+  isPreparingSource: boolean;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourcePrepError: string | null;
+}>): InspectorFact {
+  if (sourcePrepError) {
+    return {
+      detail: sourcePrepError,
+      label: "Confidence",
+      tone: "warning",
+      value: "Needs review",
+    };
+  }
+  if (isImportingBookSource || isPreparingSource) {
+    return {
+      detail: "Import is still running.",
+      label: "Confidence",
+      tone: "info",
+      value: "Detecting",
+    };
+  }
+  if (selectedPreparedSource?.status === "ready" || selectedBookSource?.status === "ready") {
+    return {
+      detail: "Source metadata and speakable blocks are ready.",
+      label: "Confidence",
+      tone: "success",
+      value: "High",
+    };
+  }
+  return {
+    detail: "Draft text uses lightweight local metadata.",
+    label: "Confidence",
+    tone: "neutral",
+    value: "Draft",
+  };
+}
+
+function workspaceInspectorDiagnosticsFacts({
+  backendDetail,
+  job,
+  metrics,
+  metricsError,
+}: Readonly<{
+  backendDetail: string;
+  job: VoiceJob | null;
+  metrics: SystemMetrics | null;
+  metricsError: string | null;
+}>): InspectorFact[] {
+  const gpu = metrics?.gpus?.[0];
+  return [
+    {
+      detail: job?.ttsEngine ?? "Provider resolves when audio is created.",
+      label: "Provider",
+      value: job?.provider ?? "n/a",
+    },
+    {
+      detail: metricsError ?? metrics?.serviceVersion ?? backendDetail,
+      label: "Backend",
+      tone: metricsError ? "warning" : "success",
+      value: metricsError ? "Attention" : "Ready",
+    },
+    {
+      detail: gpu?.name ?? "GPU metrics load when available.",
+      label: "GPU",
+      value: gpu ? `${Math.round(gpu.utilizationGpuPct).toString()}%` : "n/a",
+    },
+    {
+      detail: metrics?.process.runtime ?? "Process metrics load when available.",
+      label: "Process",
+      value: metrics ? formatBytes(metrics.process.rssBytes) : "n/a",
+    },
+  ];
+}
+
+function workspaceInspectorDiagnosticsNotes({
+  profileError,
+  profileSourceDiagnosticsMessage,
+  researchModuleError,
+  ttsEngineError,
+}: Readonly<{
+  profileError: string | null;
+  profileSourceDiagnosticsMessage?: string;
+  researchModuleError: string | null;
+  ttsEngineError: string | null;
+}>): InspectorNote[] {
+  return [
+    profileError ? { detail: profileError, label: "Profile", tone: "warning" } : null,
+    ttsEngineError ? { detail: ttsEngineError, label: "TTS engine", tone: "warning" } : null,
+    researchModuleError
+      ? { detail: researchModuleError, label: "Research modules", tone: "warning" }
+      : null,
+    profileSourceDiagnosticsMessage
+      ? { detail: profileSourceDiagnosticsMessage, label: "Voice setup" }
+      : null,
+  ].filter(Boolean) as InspectorNote[];
+}
+
+function audioLifecycleTone(
+  state: ReturnType<typeof generatedAudioLifecycleFromJob>,
+): StatusChipTone {
+  if (state === "failed" || state === "degraded" || state === "stale") {
+    return "warning";
+  }
+  if (state === "ready") {
+    return "success";
+  }
+  if (state === "queued" || state === "generating") {
+    return "info";
+  }
+  return "neutral";
+}
+
+function toneForJobStatus(status: VoiceJob["status"]): StatusChipTone {
+  if (status === "failed") {
+    return "danger";
+  }
+  if (status === "cancelled") {
+    return "warning";
+  }
+  if (status === "completed") {
+    return "success";
+  }
+  if (status === "queued" || status === "optimizing" || status === "synthesizing") {
+    return "info";
+  }
+  return "neutral";
 }
 
 function sourceMetadataDurationMs({
@@ -9958,20 +16605,22 @@ function ResearchModulesSetupCard({
     return null;
   }
   return (
-    <section className="border-t border-zinc-200 bg-amber-50 px-5 py-3 text-sm text-amber-950">
+    <section className="border-t border-[var(--vs-border-subtle)] bg-[var(--vs-status-warning-bg)] px-5 py-3 text-sm text-[var(--vs-status-warning)]">
       <div className="mx-auto flex max-w-7xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <p className="font-semibold">Optional local research modules are available.</p>
-          <p className="mt-1 break-words text-xs leading-5 text-amber-900">
+          <p className="mt-1 break-words text-xs leading-5 text-[var(--vs-status-warning)]">
             Clone upstreams into ignored .upstreams paths only when you want profile-specific embed
             artifacts. Current Kokoro Clone and Supertonic preset rendering stay available.
           </p>
-          {error ? <p className="mt-2 text-xs font-semibold text-red-700">{error}</p> : null}
+          {error ? (
+            <p className="mt-2 text-xs font-semibold text-[var(--vs-status-danger)]">{error}</p>
+          ) : null}
           {setupModules.length > 0 ? (
             <div className="mt-2 grid gap-2">
               {setupModules.map((module) => (
                 <div
-                  className="rounded border border-amber-200 bg-amber-100/40 p-2 text-xs text-amber-950"
+                  className="rounded border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] p-2 text-xs text-[var(--vs-status-warning)]"
                   key={module.id}
                 >
                   <p className="font-semibold">{module.label} runtime setup needed</p>
@@ -9979,12 +16628,12 @@ function ResearchModulesSetupCard({
                     {module.reason ?? "Install missing runtime dependencies and rerun checks."}
                   </p>
                   {module.setup ? (
-                    <code className="mt-1 block overflow-hidden text-ellipsis rounded border border-current/20 bg-white/80 p-2 font-mono text-[11px]">
+                    <code className="mt-1 block overflow-hidden text-ellipsis rounded border border-current/20 bg-[color-mix(in_srgb,var(--vs-surface-primary)_80%,transparent)] p-2 font-mono text-[11px]">
                       {module.setup}
                     </code>
                   ) : null}
                   {module.setupCommand ? (
-                    <code className="mt-1 block overflow-hidden text-ellipsis rounded border border-current/20 bg-white/80 p-2 font-mono text-[11px]">
+                    <code className="mt-1 block overflow-hidden text-ellipsis rounded border border-current/20 bg-[color-mix(in_srgb,var(--vs-surface-primary)_80%,transparent)] p-2 font-mono text-[11px]">
                       {module.setupCommand}
                     </code>
                   ) : null}
@@ -9996,7 +16645,7 @@ function ResearchModulesSetupCard({
         <div className="flex flex-wrap items-center gap-2">
           {cloneModules.map((module) => (
             <button
-              className="rounded-md border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60"
+              className="rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-surface-primary)] px-3 py-2 text-xs font-semibold text-[var(--vs-status-warning)] hover:bg-[var(--vs-status-warning-bg)] disabled:cursor-wait disabled:opacity-60"
               disabled={!module.cloneAllowed || cloningModuleId === module.id}
               key={module.id}
               onClick={() => {
@@ -10008,7 +16657,7 @@ function ResearchModulesSetupCard({
             </button>
           ))}
           <button
-            className="rounded-md border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+            className="rounded-md border border-[var(--vs-status-warning-border)] px-3 py-2 text-xs font-semibold text-[var(--vs-status-warning)] hover:bg-[var(--vs-status-warning-bg)]"
             onClick={onHide}
             type="button"
           >
@@ -10041,6 +16690,7 @@ function VoiceProfileDropdown({
   onClearHuggingFaceToken,
   onClearSelection,
   onDeleteProfile,
+  onOpenVoiceDashboard,
   onRunConfigurationChange,
   onSaveHuggingFaceToken,
   onSelectKokoroVoice,
@@ -10067,6 +16717,7 @@ function VoiceProfileDropdown({
   onClearHuggingFaceToken: () => void;
   onClearSelection: () => void;
   onDeleteProfile: (id: string) => void;
+  onOpenVoiceDashboard?: () => void;
   onRunConfigurationChange: (configuration: RunConfiguration) => void;
   onSaveHuggingFaceToken: (profileId: string, targetId: string, token: string) => Promise<void>;
   onSelectKokoroVoice: (voiceId: string) => void;
@@ -10094,13 +16745,20 @@ function VoiceProfileDropdown({
       : false;
   const supertonicVoices = selectedEngine?.voices ?? voicePanelSupertonicVoices();
   const supertonicLanguages = voicePanelSupertonicLanguages(selectedEngine);
+  const activeLanguage =
+    runConfiguration.ttsEngine === "supertonic-3"
+      ? (runConfiguration.engineOptions.lang ?? "na")
+      : (selectedProfile?.language ?? "en-US");
+  const effectiveLanguage =
+    activeLanguage === "na" ? (selectedProfile?.language ?? "en-US") : activeLanguage;
+  const orderedKokoroVoicepacks = orderedKokoroVoicepacksForLanguage(effectiveLanguage);
   const activeName = selectedProfile?.name ?? "Default Voice";
   const likenessBadge = selectedProfile ? formatLikenessLabel(selectedProfile) : "Provider voice";
   const activeDetail = selectedProfile
     ? `${selectedProfile.language} · ${formatDuration(
         selectedProfile.referenceDurationMs ?? selectedProfile.durationMs,
       )} reference · ${likenessBadge}`
-    : "Kokoro voicepacks · ready";
+    : `${effectiveLanguage} voicepacks · ready`;
   let kokoroDetailSuffix = "";
   if (runConfiguration.ttsEngine === "supertonic-3") {
     kokoroDetailSuffix = " · kept for Auto/Kokoro runs";
@@ -10166,7 +16824,20 @@ function VoiceProfileDropdown({
     <section className="grid min-w-0 gap-2">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-[var(--vs-text)]">{heading}</h2>
-        <span className="vs-muted shrink-0 text-xs">{String(profiles.length + 1)} voices</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="vs-muted text-xs">{String(profiles.length + 1)} voices</span>
+          {onOpenVoiceDashboard ? (
+            <button
+              className="h-8 rounded-md border px-2 text-xs font-semibold transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-border vs-surface"
+              data-testid="ui-action-voice-dashboard-open-cloning-rail"
+              data-ui-action-surface="Workspace"
+              onClick={onOpenVoiceDashboard}
+              type="button"
+            >
+              Dashboard
+            </button>
+          ) : null}
+        </div>
       </div>
       <div className="min-w-0 rounded-lg border p-3 vs-border vs-raised">
         <button
@@ -10187,7 +16858,7 @@ function VoiceProfileDropdown({
               {activeDetail}
             </p>
           </div>
-          <span className="shrink-0 rounded bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700">
+          <span className="shrink-0 rounded bg-[var(--vs-status-success-bg)] px-2 py-1 text-xs font-medium text-[var(--vs-status-success)]">
             Ready
           </span>
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded border vs-border vs-surface vs-muted">
@@ -10239,7 +16910,7 @@ function VoiceProfileDropdown({
                 ))}
               </select>
               {selectedEngineBlocked ? (
-                <span className="break-words text-xs leading-5 text-amber-700">
+                <span className="break-words text-xs leading-5 text-[var(--vs-status-warning)]">
                   {voiceProfileTargetReadinessText(selectedProfile, runConfiguration.ttsEngine)}
                 </span>
               ) : null}
@@ -10318,9 +16989,10 @@ function VoiceProfileDropdown({
                   onSelectKokoroVoice(event.currentTarget.value);
                 }}
               >
-                {KOKORO_VOICEPACKS.map((voicepack) => (
-                  <option key={voicepack.id} value={voicepack.id}>
-                    {voicepack.name} · {voicepack.locale} · {voicepack.id}
+                {orderedKokoroVoicepacks.map(({ languageMatched, voice }) => (
+                  <option key={voice.id} value={voice.id}>
+                    {voice.name} · {voice.locale} · {voice.id}
+                    {languageMatched ? " · recommended" : ""}
                   </option>
                 ))}
               </select>
@@ -10341,7 +17013,7 @@ function VoiceProfileDropdown({
       )}
       {isLoading ? <p className="vs-muted text-sm">Loading profiles...</p> : null}
       {isOpen ? (
-        <ul className="max-h-80 min-w-0 overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-sm">
+        <ul className="max-h-80 min-w-0 overflow-y-auto rounded-lg border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] shadow-sm">
           <VoiceProfileOption
             detail="Kokoro voicepacks · non-cloned · ready"
             isActive={selectedProfileId === ""}
@@ -10359,6 +17031,7 @@ function VoiceProfileDropdown({
               detail={`${profile.status} · ${profile.language} · ${formatDuration(profile.referenceDurationMs ?? profile.durationMs)}`}
               isActive={profile.id === selectedProfileId}
               key={profile.id}
+              languageMatched={voiceProfileMatchesLanguage(effectiveLanguage, profile)}
               likeness={profile.likeness}
               name={profile.name}
               score={profile.referenceScore}
@@ -10402,7 +17075,7 @@ function VoiceBackendSummary({
     <section className="grid min-w-0 gap-3 rounded-md border p-3 text-xs vs-border vs-raised">
       <div className="flex min-w-0 items-center justify-between gap-3">
         <span className="font-semibold text-[var(--vs-text)]">Backend Summary</span>
-        <span className="rounded px-2 py-1 text-[0.65rem] font-semibold bg-emerald-100 text-emerald-700">
+        <span className="rounded px-2 py-1 text-[0.65rem] font-semibold bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]">
           {selectedEngine?.status ?? "ready"}
         </span>
       </div>
@@ -10441,7 +17114,7 @@ function KokoroRenderModeSelector({
 }>) {
   return (
     <div className="grid min-w-0 gap-2">
-      <span className="font-semibold text-zinc-800">Kokoro render mode</span>
+      <span className="font-semibold text-[var(--vs-text-secondary)]">Kokoro render mode</span>
       <div className="grid gap-2">
         {KOKORO_RENDER_MODE_OPTIONS.map((option) => {
           const readiness = kokoroRenderModeReadiness(option.id, profile, modules);
@@ -10460,7 +17133,9 @@ function KokoroRenderModeSelector({
           return (
             <div
               className={`rounded-md border p-2 ${
-                selected ? "border-orange-300 bg-orange-50" : "border-zinc-200 bg-white"
+                selected
+                  ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
+                  : "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)]"
               }`}
               key={option.id}
             >
@@ -10473,7 +17148,7 @@ function KokoroRenderModeSelector({
                 type="button"
               >
                 <span className="flex min-w-0 items-center justify-between gap-2">
-                  <span className="truncate text-sm font-semibold text-zinc-950">
+                  <span className="truncate text-sm font-semibold text-[var(--vs-text-primary)]">
                     {option.label}
                   </span>
                   <span
@@ -10485,12 +17160,16 @@ function KokoroRenderModeSelector({
                     {readiness.status}
                   </span>
                 </span>
-                <span className="text-xs leading-5 text-zinc-600">{option.detail}</span>
-                <span className="text-xs leading-5 text-zinc-500">{readiness.detail}</span>
+                <span className="text-xs leading-5 text-[var(--vs-text-muted)]">
+                  {option.detail}
+                </span>
+                <span className="text-xs leading-5 text-[var(--vs-text-muted)]">
+                  {readiness.detail}
+                </span>
               </button>
               {canPrepare && profile && targetId ? (
                 <button
-                  className="mt-2 rounded border border-orange-200 bg-white px-2 py-1 text-xs font-semibold text-orange-800 hover:bg-orange-100"
+                  className="mt-2 rounded border border-[var(--vs-selected-border)] bg-[var(--vs-surface-primary)] px-2 py-1 text-xs font-semibold text-[var(--vs-selected-text)] hover:bg-[var(--vs-selected)]"
                   disabled={timeoutBlocksAction}
                   onClick={() => {
                     void onBuildArtifact(profile.id, targetId, artifactBuildTimeout.timeoutSeconds);
@@ -10646,15 +17325,15 @@ function kokoroRenderModeActionLabel(status: string, isBusy: boolean): string {
 
 function kokoroRenderModeStatusClass(status: string, ready: boolean): string {
   if (status === "failed") {
-    return "bg-red-100 text-red-700";
+    return "bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]";
   }
   if (ready && status !== "check needed") {
-    return "bg-emerald-100 text-emerald-700";
+    return "bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]";
   }
   if (status === "check needed") {
-    return "bg-amber-100 text-amber-800";
+    return "bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]";
   }
-  return "bg-zinc-100 text-zinc-600";
+  return "bg-[var(--vs-surface-muted)] text-[var(--vs-text-muted)]";
 }
 
 function VoiceProfileArtifactControls({
@@ -10692,7 +17371,7 @@ function VoiceProfileArtifactControls({
     await onBuildArtifact(profile.id, moduleId, artifactBuildTimeout.timeoutSeconds);
   };
   return (
-    <div className="grid gap-2 rounded-md border border-zinc-200 bg-white p-2">
+    <div className="grid gap-2 rounded-md border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] p-2">
       <div className="flex flex-wrap gap-1">
         <ArtifactChip profile={profile} moduleId="kokoro-clone" label="KokoClone" />
         {PROFILE_ARTIFACT_MODULE_ORDER.map((moduleId) => {
@@ -10761,7 +17440,7 @@ function VoiceProfileArtifactControls({
             const artifactBuildButtonTitle = resolveArtifactBuildButtonTitle();
             return (
               <button
-                className="rounded-md border border-zinc-200 px-2 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
+                className="rounded-md border border-[var(--vs-border-subtle)] px-2 py-2 text-left text-xs font-semibold text-[var(--vs-text-secondary)] hover:bg-[var(--vs-action-secondary-hover)] disabled:cursor-not-allowed disabled:bg-[var(--vs-action-disabled-bg)] disabled:text-[var(--vs-action-disabled-text)]"
                 disabled={!artifactBuildTimeout.canBuild || !canPrepare || isBusy}
                 key={moduleId}
                 onClick={() => {
@@ -10782,8 +17461,8 @@ function VoiceProfileArtifactControls({
             <div
               className={`rounded-md border px-3 py-2 text-xs leading-5 ${
                 issue.severity === "error"
-                  ? "border-red-200 bg-red-50 text-red-800"
-                  : "border-amber-200 bg-amber-50 text-amber-900"
+                  ? "border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]"
+                  : "border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]"
               }`}
               key={issue.key}
             >
@@ -10792,7 +17471,7 @@ function VoiceProfileArtifactControls({
               </p>
               <p>{issue.detail}</p>
               {issue.command ? (
-                <code className="mt-1 block overflow-hidden text-ellipsis rounded border border-current/20 bg-white/70 px-2 py-1 font-mono text-[11px]">
+                <code className="mt-1 block overflow-hidden text-ellipsis rounded border border-current/20 bg-[color-mix(in_srgb,var(--vs-surface-primary)_70%,transparent)] px-2 py-1 font-mono text-[11px]">
                   {issue.command}
                 </code>
               ) : null}
@@ -10838,15 +17517,15 @@ function HuggingFaceTokenPrompt({
   const sourceLabel = huggingFaceCredentialSourceLabel(source);
   const saveLabel = hasConfiguredToken ? "Update token & re-validate" : "Save token & re-validate";
   return (
-    <div className="mt-3 grid gap-2 rounded-md border border-amber-200 bg-white/80 p-2">
-      <p className="text-xs font-semibold text-amber-950">
+    <div className="mt-3 grid gap-2 rounded-md border border-[var(--vs-status-warning-border)] bg-[color-mix(in_srgb,var(--vs-surface-primary)_80%,transparent)] p-2">
+      <p className="text-xs font-semibold text-[var(--vs-status-warning)]">
         Hugging Face access:{" "}
         {hasConfiguredToken ? `Token configured from ${sourceLabel}` : "Token not configured"}
       </p>
       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
         <input
           autoComplete="off"
-          className="min-w-0 rounded-md border border-amber-200 bg-white px-2 py-2 text-xs text-zinc-950 outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100"
+          className="min-w-0 rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-surface-primary)] px-2 py-2 text-xs text-[var(--vs-text-primary)] outline-none focus:border-[var(--vs-selected-border)] focus:ring-2 focus:ring-[var(--vs-focus-ring-soft)]"
           onChange={(event) => {
             setToken(event.currentTarget.value);
           }}
@@ -10855,7 +17534,7 @@ function HuggingFaceTokenPrompt({
           value={token}
         />
         <button
-          className="rounded-md bg-orange-500 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-300"
+          className="rounded-md bg-[var(--vs-action-primary)] px-3 py-2 text-xs font-semibold text-[var(--vs-action-primary-text)] hover:bg-[var(--vs-action-primary-hover)] disabled:cursor-not-allowed disabled:bg-[var(--vs-action-disabled-bg)]"
           disabled={isSaving || token.trim().length === 0}
           onClick={() => {
             const clean = token.trim();
@@ -10874,7 +17553,7 @@ function HuggingFaceTokenPrompt({
       <div className="flex flex-wrap items-center gap-2">
         {hasConfiguredToken ? (
           <button
-            className="rounded border border-amber-300 bg-white px-2 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+            className="rounded border border-[var(--vs-status-warning-border)] bg-[var(--vs-surface-primary)] px-2 py-1 text-xs font-semibold text-[var(--vs-status-warning)] hover:bg-[var(--vs-status-warning-bg)]"
             disabled={isSaving}
             onClick={() => {
               void onRevalidate();
@@ -10886,7 +17565,7 @@ function HuggingFaceTokenPrompt({
         ) : null}
         {source === "local" ? (
           <button
-            className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-400"
+            className="rounded border border-[var(--vs-border-subtle)] bg-[var(--vs-surface-primary)] px-2 py-1 text-xs font-semibold text-[var(--vs-text-secondary)] hover:bg-[var(--vs-action-secondary-hover)] disabled:cursor-not-allowed disabled:text-[var(--vs-action-disabled-text)]"
             disabled={isClearing || isSaving}
             onClick={onClear}
             type="button"
@@ -10895,7 +17574,9 @@ function HuggingFaceTokenPrompt({
           </button>
         ) : null}
       </div>
-      {credentialError ? <p className="text-xs text-red-700">{credentialError}</p> : null}
+      {credentialError ? (
+        <p className="text-xs text-[var(--vs-status-danger)]">{credentialError}</p>
+      ) : null}
     </div>
   );
 }
@@ -11175,15 +17856,15 @@ function artifactChipStatus(
 
 function artifactChipClass(ready: boolean, failed: boolean, cancelled: boolean): string {
   if (ready) {
-    return "border-emerald-300 bg-emerald-50 text-emerald-700";
+    return "border-[var(--vs-status-success-border)] bg-[var(--vs-status-success-bg)] text-[var(--vs-status-success)]";
   }
   if (failed) {
-    return "border-red-300 bg-red-50 text-red-700";
+    return "border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] text-[var(--vs-status-danger)]";
   }
   if (cancelled) {
-    return "border-zinc-300 bg-zinc-50 text-zinc-600";
+    return "border-[var(--vs-border-subtle)] bg-[var(--vs-surface-secondary)] text-[var(--vs-text-muted)]";
   }
-  return "border-amber-300 bg-amber-50 text-amber-800";
+  return "border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] text-[var(--vs-status-warning)]";
 }
 
 function voicePanelEngineOptions(engines: TTSEngineDiagnostics[]): TTSEngineDiagnostics[] {
@@ -11216,6 +17897,34 @@ function voicePanelEngineOptions(engines: TTSEngineDiagnostics[]): TTSEngineDiag
       supportsVoice: true,
     },
   ];
+}
+
+function resolveCreateAndListenCapabilityReason(
+  engineId: string,
+  engines: readonly TTSEngineDiagnostics[],
+): string | undefined {
+  if (engines.length === 0) {
+    return undefined;
+  }
+  const cleanId = engineId.trim().toLowerCase();
+  const engine =
+    engines.find(
+      (item) => item.id === cleanId || (cleanId === "supertonic" && item.id === "supertonic-3"),
+    ) ??
+    engines.find((item) => item.default || item.id === "auto") ??
+    engines[0];
+  if (engine.capabilities ? engine.capabilities.tts : engine.status === "ready") {
+    return undefined;
+  }
+  return `${engine.label || engineId || "Provider"} lacks TTS. Select a ready provider in Settings > Runtime.`;
+}
+
+function createAndListenCapabilityAttributes(reason?: string | null) {
+  return {
+    "data-capability-gated": reason ? "true" : undefined,
+    "data-capability-reason": reason ?? undefined,
+    "data-provider-capability": "tts",
+  } as const;
 }
 
 function findVoicePanelEngine(
@@ -11271,6 +17980,7 @@ function VoiceProfileOption({
   artifactSummary,
   detail,
   isActive,
+  languageMatched = false,
   likeness,
   name,
   score,
@@ -11280,6 +17990,7 @@ function VoiceProfileOption({
   artifactSummary?: ReactNode;
   detail: string;
   isActive: boolean;
+  languageMatched?: boolean;
   likeness?: VoiceProfile["likeness"];
   name: string;
   score?: number;
@@ -11287,15 +17998,25 @@ function VoiceProfileOption({
   onSelect: () => void;
 }>) {
   return (
-    <li className={`border-b border-zinc-200 last:border-b-0 ${isActive ? "bg-orange-50" : ""}`}>
+    <li
+      className={`border-b border-[var(--vs-border-subtle)] last:border-b-0 ${isActive ? "bg-[var(--vs-selected)]" : ""}`}
+    >
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 p-3">
         <button className="min-w-0 text-left" onClick={onSelect} type="button">
-          <span className="block truncate text-sm font-semibold text-zinc-950" title={name}>
+          <span
+            className="block truncate text-sm font-semibold text-[var(--vs-text-primary)]"
+            title={name}
+          >
             {name}
           </span>
-          <span className="mt-1 block truncate text-xs text-zinc-500" title={detail}>
+          <span className="mt-1 block truncate text-xs text-[var(--vs-text-muted)]" title={detail}>
             {detail}
           </span>
+          {languageMatched ? (
+            <span className="mt-1 inline-flex rounded bg-[var(--vs-status-info-bg)] px-2 py-1 text-[0.65rem] font-semibold text-[var(--vs-status-info)]">
+              Language match
+            </span>
+          ) : null}
           {artifactSummary}
         </button>
         <div className="flex shrink-0 items-center gap-2">
@@ -11308,12 +18029,12 @@ function VoiceProfileOption({
             </span>
           ) : null}
           {score ? (
-            <span className="rounded bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-700">
+            <span className="rounded bg-[var(--vs-surface-muted)] px-2 py-1 text-xs font-semibold text-[var(--vs-text-secondary)]">
               {formatSimilarity(score)}
             </span>
           ) : null}
           <button
-            className="h-8 rounded-md border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:bg-zinc-100 disabled:text-zinc-400"
+            className="h-8 rounded-md border border-[var(--vs-border-subtle)] px-3 text-xs font-semibold text-[var(--vs-text-secondary)] hover:bg-[var(--vs-action-secondary-hover)] disabled:bg-[var(--vs-action-disabled-bg)] disabled:text-[var(--vs-action-disabled-text)]"
             disabled={isActive}
             onClick={onSelect}
             type="button"
@@ -11322,7 +18043,7 @@ function VoiceProfileOption({
           </button>
           {onDelete ? (
             <button
-              className="h-8 rounded-md border border-red-200 px-3 text-xs font-semibold text-red-600 hover:bg-red-50"
+              className="h-8 rounded-md border border-[var(--vs-status-danger-border)] px-3 text-xs font-semibold text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)]"
               onClick={onDelete}
               type="button"
             >
@@ -11335,70 +18056,88 @@ function VoiceProfileOption({
   );
 }
 
-interface NarrationReviewBlock {
-  estimatedDurationMs: number;
-  id: string;
-  index: number;
-  kind: string;
-  label: string;
-  segmentCount: number;
-  speakMode: string;
-  spokenText: string;
-  text: string;
-}
-
+// eslint-disable-next-line sonarjs/cognitive-complexity
 function NarrationReviewWorkbench({
+  activePane,
+  activeBlockId,
+  baseReviewBlocks,
+  reviewOpenFocusRequest,
   bookScopeContent,
+  historyEntries,
   job,
+  isPlaybackActive,
   onInspectBookSource,
-  onOpenTeleprompter,
   onInspectPreparedSource,
-  onOpenPreparedSourceCinema,
-  optimizedText,
-  projectId,
+  onActiveBlockChange,
+  onUserNavigate,
+  onActivePaneChange,
+  onDiscardTemporarySource,
+  onEditedTextByBlockIdChange,
+  onHistoryEntriesChange,
+  keepTemporarySourceDisabledReason,
+  onKeepTemporarySource,
+  onPreviewSpeech,
+  onReviewModeChange,
+  onStatusByBlockIdChange,
+  playbackControls,
+  playbackCursorSec,
+  generatedAudioLifecycle,
+  policyProfileLabel,
+  reviewBlocks,
+  revisionStatusByBlockId,
+  runConfigurationLabel,
   selectedBookScope,
   selectedBookSource,
   selectedPreparedSource,
+  shortcutPreferences,
+  sourceLifecycle,
+  temporaryReview,
+  temporaryReviewMode,
   text,
-  voiceProfileId,
+  voiceProfileLabel,
 }: Readonly<{
+  activePane: ReviewPane;
+  activeBlockId: string | null;
+  baseReviewBlocks: RevisionBlock[];
+  reviewOpenFocusRequest: ReviewOpenFocusRequest | null;
   bookScopeContent: BookSourceScopeContent | null;
+  historyEntries: RevisionHistoryEntry[];
   job: VoiceJob | null;
+  isPlaybackActive: boolean;
+  onActiveBlockChange: (blockId: string | null) => void;
+  onUserNavigate?: (blockId: string) => void;
+  onActivePaneChange: (pane: ReviewPane) => void;
+  onDiscardTemporarySource: () => void;
+  onEditedTextByBlockIdChange: Dispatch<SetStateAction<Record<string, string>>>;
+  onHistoryEntriesChange: Dispatch<SetStateAction<RevisionHistoryEntry[]>>;
+  keepTemporarySourceDisabledReason?: string;
+  onKeepTemporarySource: () => void;
   onInspectBookSource: (source: BookSource) => void;
   onInspectPreparedSource: (source: PreparedSource) => void;
-  onOpenPreparedSourceCinema: (source: PreparedSource) => void;
-  onOpenTeleprompter: () => void;
-  optimizedText: string;
-  projectId: string;
+  onPreviewSpeech: () => void;
+  onReviewModeChange: (mode: ReviewMode) => void;
+  onStatusByBlockIdChange: Dispatch<SetStateAction<Record<string, RevisionStatus>>>;
+  playbackControls: PlaybackController;
+  playbackCursorSec: number;
+  policyProfileLabel: string;
+  reviewBlocks: RevisionBlock[];
+  revisionStatusByBlockId: Record<string, RevisionStatus>;
+  runConfigurationLabel: string;
   selectedBookScope: BookScope | null;
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
+  shortcutPreferences: ShortcutPreferences;
+  sourceLifecycle: SourceLifecycleEnvelope;
+  temporaryReview: TemporaryReviewStateAdapter | null;
+  temporaryReviewMode: ReviewMode;
   text: string;
-  voiceProfileId: string;
+  voiceProfileLabel: string;
+  generatedAudioLifecycle: GeneratedAudioLifecycleState;
 }>) {
-  const [reviewTab, setReviewTab] = useState<SourcePrepReviewTab>("blocks");
-  const reviewBlocks = useMemo(
-    () =>
-      buildNarrationReviewBlocks({
-        optimizedText,
-        bookScopeContent,
-        selectedBookScope,
-        selectedBookSource,
-        selectedPreparedSource,
-        text,
-      }),
-    [
-      bookScopeContent,
-      optimizedText,
-      selectedBookScope,
-      selectedBookSource,
-      selectedPreparedSource,
-      text,
-    ],
-  );
-  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const selectedBlockId = selectReviewBlockId(reviewBlocks, activeBlockId);
   const selectedBlock =
-    reviewBlocks.find((block) => block.id === selectedBlockId) ?? reviewBlocks[0];
+    reviewBlocks.find((block) => block.id === selectedBlockId) ??
+    (reviewBlocks.length > 0 ? reviewBlocks[0] : null);
   const sourceLabel = narrationReviewSourceLabel(selectedPreparedSource, selectedBookSource);
   const sourceMeta = narrationReviewSourceMeta({
     bookScopeContent,
@@ -11407,169 +18146,290 @@ function NarrationReviewWorkbench({
     selectedPreparedSource,
     text,
   });
+  let reviewSourceMode: SourceMode = "text";
+  if (selectedPreparedSource) {
+    reviewSourceMode = "fileUrl";
+  } else if (selectedBookSource) {
+    reviewSourceMode = "book";
+  }
+  const scopeTitle = workbenchScopeTitle({
+    selectedBookScope,
+    selectedBookSource,
+    selectedPreparedSource,
+    sourceMode: reviewSourceMode,
+  });
   const validationReason =
     job?.voiceCheck.reason ??
     (job?.pipelineOptions?.asrCheck === false
       ? "Validation was disabled for this run."
       : "Validation appears after synthesis.");
   const validationTranscript = job?.voiceCheck.transcript ?? "";
-  const spokenText =
-    firstNonEmptyString(selectedBlock.spokenText, optimizedText, text.trim()) ??
-    "Submit text to see spoken-form output from the optimization agent.";
-  const previewText =
-    firstNonEmptyString(selectedPreparedSource?.text, selectedBlock.text, text.trim()) ??
-    "Source preview appears after text, book, or file content is selected.";
-  const previewContent = narrationReviewPreviewContent({
-    bookScopeContent,
-    previewText,
-    selectedBookScope,
-    selectedBookSource,
-    selectedPreparedSource,
-  });
-  const mathPanel = narrationReviewMathPanel(selectedPreparedSource);
-  const rulesPanel = narrationReviewRulesPanel(selectedPreparedSource, reviewBlocks, text);
+  const inspectStructure =
+    selectedPreparedSource || selectedBookSource
+      ? () => {
+          if (selectedPreparedSource) {
+            onInspectPreparedSource(selectedPreparedSource);
+            return;
+          }
+          if (selectedBookSource) {
+            onInspectBookSource(selectedBookSource);
+          }
+        }
+      : undefined;
+  const reviewWaveformBars = useAudioWaveformBars(
+    job ? audioSource(job, { partial: true }) : "",
+    56,
+  );
+  const selectedBlockIndex = selectedBlock
+    ? reviewBlocks.findIndex((block) => block.id === selectedBlock.id)
+    : -1;
+  const playbackAvailable = playbackControls.isAvailable && generatedAudioLifecycle === "ready";
+  const playbackLifecycle: GeneratedAudioLifecycleState = playbackAvailable
+    ? "ready"
+    : generatedAudioLifecycle;
+  const reviewPlaybackDisabledReason = playbackAvailable
+    ? undefined
+    : playbackActionDisabledReason({ action: "audition", lifecycle: playbackLifecycle });
+  const reviewSeekTargetSec = playbackSeekSecondsForRevisionBlock(
+    reviewBlocks,
+    selectedBlock?.id ?? null,
+    job,
+  );
+  const canReviewJump = Boolean(
+    playbackAvailable &&
+      reviewSeekTargetSec !== null &&
+      (playbackControls.seekTo ?? playbackControls.skipBy),
+  );
+  const reviewJumpAlreadyAtTarget =
+    reviewSeekTargetSec !== null && Math.abs(reviewSeekTargetSec - playbackCursorSec) < 0.25;
+  const moveReviewBlock = (direction: -1 | 1) => {
+    if (reviewBlocks.length === 0 || selectedBlockIndex < 0) {
+      return;
+    }
+    const nextIndex = Math.max(
+      0,
+      Math.min(reviewBlocks.length - 1, selectedBlockIndex + direction),
+    );
+    const nextBlock = reviewBlocks[nextIndex];
+    onUserNavigate?.(nextBlock.id);
+    onActiveBlockChange(nextBlock.id);
+  };
+  const moveToNextReviewIssue = () => {
+    const nextIssueBlockId = selectNextReviewIssueBlockId(reviewBlocks, selectedBlockId);
+    if (nextIssueBlockId) {
+      onUserNavigate?.(nextIssueBlockId);
+      onActiveBlockChange(nextIssueBlockId);
+    }
+  };
+  const reviewPlaybackToolbar: LocalizedPlaybackToolbarModel = {
+    activeDetail: selectedBlock
+      ? `${selectedBlock.index.toString()} of ${Math.max(1, reviewBlocks.length).toString()} · ${formatDuration(selectedBlock.estimatedDurationMs)}`
+      : scopeTitle,
+    activeLabel: selectedBlock?.label ?? sourceLabel,
+    jumpToAudio: {
+      ariaKeyShortcuts: "Alt+J",
+      shortcutCommandId: "review.jumpToAudio",
+      dataAttributes: reviewJumpAlreadyAtTarget
+        ? { "data-ui-noop-reason": "Already at the selected audio cue." }
+        : undefined,
+      disabled: !canReviewJump,
+      disabledReason:
+        reviewPlaybackDisabledReason ??
+        (reviewSeekTargetSec === null
+          ? "Audio timing is not available for this block."
+          : "Seeking is unavailable for this audio."),
+      label: "Jump to Audio",
+      onClick: () => {
+        if (!canReviewJump || reviewSeekTargetSec === null) {
+          return;
+        }
+        seekPlaybackToSeconds(playbackControls, reviewSeekTargetSec, playbackCursorSec);
+      },
+      testId: "ui-action-review-local-jump-audio",
+    },
+    next: {
+      ariaKeyShortcuts: "Alt+ArrowRight",
+      shortcutCommandId: "review.nextBlock",
+      disabled: selectedBlockIndex < 0 || selectedBlockIndex >= reviewBlocks.length - 1,
+      disabledReason:
+        selectedBlockIndex >= reviewBlocks.length - 1
+          ? "Already at the final block."
+          : "No block is selected.",
+      label: "Next",
+      onClick: () => {
+        moveReviewBlock(1);
+      },
+      testId: "ui-action-review-local-next",
+    },
+    playPause: {
+      ariaKeyShortcuts: "Space K",
+      shortcutCommandId: "playback.toggle",
+      ariaLabel: playbackControls.isPlaying
+        ? "Pause review playback"
+        : playbackActionAriaLabel("audition", { lifecycle: playbackLifecycle }),
+      dataAttributes: playbackActionDataAttributes("audition", playbackLifecycle, {
+        primary: true,
+      }),
+      disabled: !playbackAvailable,
+      disabledReason: reviewPlaybackDisabledReason,
+      label: playbackControls.isPlaying ? "Pause" : "Play",
+      primary: true,
+      onClick: () => {
+        if (!playbackAvailable) {
+          return;
+        }
+        if (playbackControls.isPlaying) {
+          playbackControls.pause();
+          return;
+        }
+        void playbackControls.play();
+      },
+      testId: "ui-action-review-local-play",
+    },
+    previous: {
+      ariaKeyShortcuts: "Alt+ArrowLeft",
+      shortcutCommandId: "review.previousBlock",
+      disabled: selectedBlockIndex <= 0,
+      disabledReason: selectedBlockIndex <= 0 ? "Already at the first block." : undefined,
+      label: "Previous",
+      onClick: () => {
+        moveReviewBlock(-1);
+      },
+      testId: "ui-action-review-local-previous",
+    },
+    progress: {
+      currentLabel: formatPlaybackClockSeconds(playbackCursorSec),
+      durationLabel:
+        playbackDurationSec(job) > 0
+          ? formatPlaybackClockSeconds(playbackDurationSec(job))
+          : "--:--",
+      ratio: playbackProgressRatioForJob(playbackCursorSec, job),
+      waveformBars: reviewWaveformBars,
+    },
+    restart: {
+      ariaKeyShortcuts: "Home",
+      shortcutCommandId: "playback.restart",
+      dataAttributes: playbackActionDataAttributes("audition", playbackLifecycle),
+      disabled: !playbackAvailable,
+      disabledReason: reviewPlaybackDisabledReason,
+      label: "Restart",
+      onClick: () => {
+        if (playbackAvailable) {
+          void playbackControls.restart();
+        }
+      },
+      testId: "ui-action-review-local-restart",
+    },
+    speed: {
+      ariaKeyShortcuts: "[ ]",
+      shortcutCommandId: "playback.speed",
+      disabled: !playbackControls.setPlaybackRate,
+      disabledReason: playbackSpeedDisabledReason(playbackControls),
+      testId: "ui-action-review-local-speed",
+      value: playbackControls.playbackRate,
+      onChange: playbackControls.setPlaybackRate,
+    },
+    stage: "review",
+    statusLabel: playbackControls.isPlaying || isPlaybackActive ? "Playing" : "Ready",
+    testId: "localized-review-playback-toolbar",
+    variant: "compact",
+  };
 
   useEffect(() => {
-    if (!selectedBlockId || !reviewBlocks.some((block) => block.id === selectedBlockId)) {
-      setSelectedBlockId(reviewBlocks[0]?.id ?? null);
+    const nextBlockId = selectReviewBlockId(reviewBlocks, activeBlockId);
+    if (nextBlockId !== activeBlockId) {
+      onActiveBlockChange(nextBlockId);
     }
-  }, [reviewBlocks, selectedBlockId]);
+  }, [activeBlockId, onActiveBlockChange, reviewBlocks]);
 
   return (
-    <section className="grid min-w-0 gap-3 rounded-xl border bg-[var(--vs-raised)] p-4 vs-border">
-      <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 max-w-full">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] vs-muted">
-            Source Review
-          </p>
-          <h2
-            className="mt-1 max-w-full truncate text-lg font-semibold text-[var(--vs-text)]"
-            title={sourceLabel}
-          >
-            {sourceLabel}
-          </h2>
-          <p className="mt-1 text-sm vs-muted">{sourceMeta}</p>
-        </div>
-        <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto">
-          <span
-            className={`rounded-md px-2 py-1 text-xs font-semibold ${
-              optimizedText ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-600"
-            }`}
-          >
-            {optimizedText ? "Optimized" : "Waiting"}
-          </span>
-          <button
-            className="h-9 flex-1 whitespace-nowrap rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-700 sm:flex-none"
-            onClick={onOpenTeleprompter}
-            type="button"
-          >
-            Open Teleprompter
-          </button>
-          {selectedPreparedSource ? (
-            <button
-              className="h-9 flex-1 whitespace-nowrap rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-700 sm:flex-none"
-              onClick={() => {
-                onOpenPreparedSourceCinema(selectedPreparedSource);
-              }}
-              type="button"
-            >
-              {preparedSourceCinemaActionLabel(selectedPreparedSource)}
-            </button>
-          ) : null}
-          {selectedPreparedSource ? (
-            <button
-              className="h-9 flex-1 whitespace-nowrap rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 sm:flex-none vs-border vs-raised"
-              onClick={() => {
-                onInspectPreparedSource(selectedPreparedSource);
-              }}
-              type="button"
-            >
-              Content Structure
-            </button>
-          ) : null}
-          {!selectedPreparedSource && selectedBookSource ? (
-            <button
-              className="h-9 flex-1 whitespace-nowrap rounded-md border px-3 text-xs font-semibold transition hover:border-orange-300 hover:text-orange-700 sm:flex-none vs-border vs-raised"
-              onClick={() => {
-                onInspectBookSource(selectedBookSource);
-              }}
-              type="button"
-            >
-              Content Structure
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="flex gap-2 overflow-x-auto border-b pb-3 text-xs font-semibold vs-border">
-        {(
-          [
-            ["blocks", "Blocks"],
-            ["preview", "Preview"],
-            ["pronunciation", "Pronunciation"],
-            ["math", "Math"],
-            ["rules", "Rules"],
-          ] as const
-        ).map(([tab, label]) => (
-          <button
-            className={`rounded-md px-3 py-1.5 transition ${
-              reviewTab === tab
-                ? "bg-orange-500/10 text-orange-700 ring-1 ring-orange-300"
-                : "vs-muted hover:bg-[var(--vs-raised)] hover:text-[var(--vs-text)]"
-            }`}
-            key={tab}
-            onClick={() => {
-              setReviewTab(tab);
-            }}
-            type="button"
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {reviewTab === "blocks" ? (
-        <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(260px,0.78fr)_minmax(0,1.35fr)]">
-          <NarrationReviewBlockList
-            blocks={reviewBlocks}
-            selectedBlockId={selectedBlock.id}
-            onSelectBlock={setSelectedBlockId}
+    <Panel className="grid gap-3 p-4" variant="raised">
+      <Suspense
+        fallback={
+          <LazySurfaceFallback
+            label="Loading revision panel..."
+            minHeightClassName="min-h-24"
+            surface="revision-panel"
           />
-          <NarrationSpokenScriptPanel
-            block={selectedBlock}
-            spokenText={spokenText}
-            validationReason={validationReason}
-            validationSimilarity={job?.voiceCheck.similarity ?? 0}
-            validationTranscript={validationTranscript}
-          />
-        </div>
-      ) : null}
-      {reviewTab === "preview" ? (
-        <div className="max-h-[34rem] overflow-auto rounded-lg border bg-[var(--vs-raised)] p-4 text-sm leading-6 vs-border">
-          {previewContent}
-        </div>
-      ) : null}
-      {reviewTab === "pronunciation" ? (
-        <div className="overflow-hidden rounded-md border vs-border">
-          <Suspense fallback={<LazySurfaceFallback label="Loading pronunciation..." />}>
-            <PronunciationPanel
-              projectId={projectId}
-              source={selectedPreparedSource}
-              voiceProfileId={voiceProfileId}
-            />
-          </Suspense>
-        </div>
-      ) : null}
-      {reviewTab === "math" ? mathPanel : null}
-      {reviewTab === "rules" ? rulesPanel : null}
-    </section>
+        }
+      >
+        <LazyRevisionPanel
+          activeBlockId={selectedBlock?.id ?? null}
+          baseBlocks={baseReviewBlocks}
+          blocks={reviewBlocks}
+          reviewOpenFocusRequest={reviewOpenFocusRequest}
+          historyEntries={historyEntries}
+          initialTabId={revisionTabForReviewPane(activePane)}
+          onDiscardTemporarySource={temporaryReview ? onDiscardTemporarySource : undefined}
+          policyProfileLabel={policyProfileLabel}
+          reviewMode={temporaryReview ? temporaryReviewMode : "full"}
+          runConfigurationLabel={runConfigurationLabel}
+          scopeLabel={scopeTitle}
+          sourceLifecycle={sourceLifecycle}
+          sourceLabel={sourceLabel}
+          sourceMeta={sourceMeta}
+          statusByBlockId={revisionStatusByBlockId}
+          shortcutPreferences={shortcutPreferences}
+          temporaryReview={temporaryReview}
+          validationReason={validationReason}
+          validationSimilarity={job?.voiceCheck.similarity ?? 0}
+          validationTranscript={validationTranscript}
+          voiceProfileLabel={voiceProfileLabel}
+          playbackToolbar={
+            playbackControls.isAvailable ? (
+              <LocalizedPlaybackToolbar
+                model={reviewPlaybackToolbar}
+                shortcutPreferences={shortcutPreferences}
+              />
+            ) : null
+          }
+          onActiveBlockChange={onActiveBlockChange}
+          onUserNavigate={onUserNavigate}
+          onEditedTextByBlockIdChange={onEditedTextByBlockIdChange}
+          onHistoryEntriesChange={onHistoryEntriesChange}
+          onInspectStructure={inspectStructure}
+          keepTemporarySourceDisabledReason={keepTemporarySourceDisabledReason}
+          onKeepTemporarySource={temporaryReview ? onKeepTemporarySource : undefined}
+          onNextIssue={moveToNextReviewIssue}
+          onPreviewSpeech={onPreviewSpeech}
+          onReviewModeChange={onReviewModeChange}
+          onStatusByBlockIdChange={onStatusByBlockIdChange}
+          onTabChange={(tabId) => {
+            onActivePaneChange(reviewPaneForRevisionTab(tabId));
+          }}
+        />
+      </Suspense>
+    </Panel>
   );
+}
+
+function revisionTabForReviewPane(pane: ReviewPane): RevisionTabId {
+  if (pane === "validation") {
+    return "diagnostics";
+  }
+  if (pane === "blocks") {
+    return "blocks";
+  }
+  return "overview";
+}
+
+function reviewPaneForRevisionTab(tabId: RevisionTabId): ReviewPane {
+  if (tabId === "diagnostics") {
+    return "validation";
+  }
+  if (tabId === "blocks") {
+    return "blocks";
+  }
+  return "script";
 }
 
 function narrationReviewSourceLabel(
   selectedPreparedSource: PreparedSource | null,
   selectedBookSource: BookSource | null,
 ): string {
+  if (selectedPreparedSource?.sourceOwner === "temporary") {
+    return `Temporary source: ${selectedPreparedSource.title ?? selectedPreparedSource.sourceName}`;
+  }
   if (selectedPreparedSource?.title) {
     return selectedPreparedSource.title;
   }
@@ -11606,13 +18466,106 @@ function narrationReviewSourceMeta({
   return `${text.trim().length.toLocaleString()} characters`;
 }
 
+function selectSpeakableReviewBlockId(
+  blocks: readonly RevisionBlock[],
+  selectedBlockId: string | null,
+): string | null {
+  if (
+    selectedBlockId &&
+    blocks.some((block) => block.id === selectedBlockId && revisionBlockIsSpeakable(block))
+  ) {
+    return selectedBlockId;
+  }
+  return blocks.find((block) => revisionBlockIsSpeakable(block))?.id ?? null;
+}
+
+function adjacentSpeakableReviewBlock(
+  blocks: readonly RevisionBlock[],
+  selectedIndex: number,
+  direction: -1 | 1,
+): RevisionBlock | null {
+  if (selectedIndex < 0 || blocks.length === 0) {
+    return null;
+  }
+  let index = selectedIndex + direction;
+  while (index >= 0 && index < blocks.length) {
+    const block = blocks[index];
+    if (revisionBlockIsSpeakable(block)) {
+      return block;
+    }
+    index += direction;
+  }
+  return null;
+}
+
+function markdownPreviewBlockHighlight(
+  source: PreparedSource | null,
+  block: RevisionBlock | null,
+): MarkdownBlockHighlight | undefined {
+  if (!block || source?.renderMode !== "markdown") {
+    return undefined;
+  }
+  const startOffset = block.startOffset;
+  const endOffset = block.endOffset;
+  if (
+    typeof startOffset !== "number" ||
+    typeof endOffset !== "number" ||
+    startOffset < 0 ||
+    endOffset <= startOffset
+  ) {
+    return undefined;
+  }
+  return {
+    blockEndOffset: endOffset,
+    blockStartOffset: startOffset,
+    cueRole: revisionBlockIsSpeakable(block) ? "current" : "skipped",
+    nodeId: block.id,
+    sourceId: source.id,
+    timingState: "estimated",
+  };
+}
+
+function scrollMarkdownPreviewToBlock(
+  container: HTMLDivElement | null,
+  highlight: MarkdownBlockHighlight | undefined,
+) {
+  if (!container || !highlight?.nodeId) {
+    return;
+  }
+  const target =
+    [...container.querySelectorAll<HTMLElement>("[data-readalong-node-id]")].find(
+      (element) => element.dataset.readalongNodeId === highlight.nodeId,
+    ) ?? null;
+  if (!target) {
+    return;
+  }
+  const containerRect = container.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const nextScrollTop =
+    container.scrollTop +
+    targetRect.top -
+    containerRect.top -
+    (containerRect.height - targetRect.height) / 2;
+  const safeTop = Math.max(0, nextScrollTop);
+  if (typeof container.scrollTo === "function") {
+    container.scrollTo({
+      top: safeTop,
+      behavior: "smooth",
+    });
+    return;
+  }
+  container.scrollTop = safeTop;
+}
+
 function narrationReviewPreviewContent({
+  blockHighlight,
   bookScopeContent,
   previewText,
   selectedBookScope,
   selectedBookSource,
   selectedPreparedSource,
 }: Readonly<{
+  blockHighlight?: MarkdownBlockHighlight;
   bookScopeContent: BookSourceScopeContent | null;
   previewText: string;
   selectedBookScope: BookScope | null;
@@ -11622,7 +18575,10 @@ function narrationReviewPreviewContent({
   if (selectedPreparedSource?.renderMode === "markdown" && selectedPreparedSource.text) {
     return (
       <Suspense fallback={<LazySurfaceFallback label="Loading markdown preview..." />}>
-        <MarkdownRenderer className="prose-markdown text-sm leading-6">
+        <MarkdownRenderer
+          blockHighlight={blockHighlight}
+          className="prose-markdown text-sm leading-6"
+        >
           {selectedPreparedSource.text}
         </MarkdownRenderer>
       </Suspense>
@@ -11641,6 +18597,187 @@ function narrationReviewPreviewContent({
   return <p className="whitespace-pre-wrap break-words">{previewText}</p>;
 }
 
+function PreviewSpokenCueList({
+  blocks,
+  job,
+  onVisibleCueChange,
+  playbackCursorSec,
+  selectedBlockIndex,
+  selectedFallbackText,
+}: Readonly<{
+  blocks: readonly RevisionBlock[];
+  job: VoiceJob | null;
+  onVisibleCueChange: (blockId: string | null) => void;
+  playbackCursorSec: number;
+  selectedBlockIndex: number;
+  selectedFallbackText: string;
+}>) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const cueListLayoutKey = blocks.map((block) => block.id).join("\u0000");
+  const updateVisibleCue = useCallback(() => {
+    const container = scrollRef.current;
+    if (!container) {
+      onVisibleCueChange(null);
+      return;
+    }
+    const containerRect = container.getBoundingClientRect();
+    const centerY = containerRect.top + containerRect.height / 2;
+    let bestBlockId: string | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const cue of container.querySelectorAll<HTMLElement>("[data-preview-cue-block-id]")) {
+      const rect = cue.getBoundingClientRect();
+      if (rect.bottom < containerRect.top || rect.top > containerRect.bottom) {
+        continue;
+      }
+      const distance = Math.abs(rect.top + rect.height / 2 - centerY);
+      if (distance < bestDistance) {
+        bestBlockId = cue.dataset.previewCueBlockId ?? null;
+        bestDistance = distance;
+      }
+    }
+    onVisibleCueChange(bestBlockId);
+  }, [onVisibleCueChange]);
+  useEffect(() => {
+    if (cueListLayoutKey === "") {
+      onVisibleCueChange(null);
+      return;
+    }
+    updateVisibleCue();
+  }, [cueListLayoutKey, onVisibleCueChange, updateVisibleCue]);
+  if (blocks.length === 0) {
+    return (
+      <p className="max-h-[20rem] overflow-auto whitespace-pre-wrap break-words rounded-md border bg-[var(--vs-surface)] p-4 font-mono text-sm leading-7 vs-border">
+        {selectedFallbackText}
+      </p>
+    );
+  }
+  const activeIndex = Math.max(0, selectedBlockIndex);
+  return (
+    <div
+      className="max-h-[20rem] overflow-auto rounded-md border bg-[var(--vs-surface)] p-3 font-mono text-sm leading-7 vs-border"
+      data-readalong-timing-state="estimated"
+      data-testid="preview-spoken-cue-list"
+      ref={scrollRef}
+      onScroll={updateVisibleCue}
+    >
+      {blocks.map((block) => {
+        const cueRole = previewCueRole(block, blocks, activeIndex);
+        const activeWordIndex =
+          cueRole === "current"
+            ? previewBlockActiveWordIndex(blocks, block, job, playbackCursorSec)
+            : null;
+        const text = revisionBlockIsSpeakable(block) ? block.spokenText : "";
+        return (
+          <section
+            className={`preview-spoken-cue ${cueRole === "current" ? "font-semibold" : ""}`}
+            data-readalong-cue-role={cueRole}
+            data-readalong-timing-state="estimated"
+            data-preview-cue-block-id={block.id}
+            data-testid={`preview-spoken-cue-${block.id}`}
+            key={block.id}
+          >
+            <div className="mb-1 flex min-w-0 items-center justify-between gap-2 text-[0.68rem] uppercase tracking-[0.14em] vs-muted">
+              <span className="truncate">Cue {block.index.toString()}</span>
+              <span>{cueRole}</span>
+            </div>
+            <p className="m-0 whitespace-pre-wrap break-words">
+              {revisionBlockIsSpeakable(block) ? (
+                <ReadingFollowAlongRenderer
+                  activeWordIndex={activeWordIndex}
+                  cue={{
+                    cueText: text,
+                    spokenText: block.spokenText,
+                    sourceText: block.text,
+                  }}
+                  cueRole={cueRole}
+                  exactWordTiming={false}
+                  mode={job ? "audio-follow" : "reading-only"}
+                  surface="teleprompt"
+                  surfaceKind="spoken"
+                  timingState="estimated"
+                  upcomingWindow={3}
+                />
+              ) : (
+                <span className="vs-muted">Skipped by speech policy.</span>
+              )}
+            </p>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function previewCueRole(
+  block: RevisionBlock,
+  blocks: readonly RevisionBlock[],
+  activeIndex: number,
+): ReadAlongCueRole {
+  if (!revisionBlockIsSpeakable(block)) {
+    return "skipped";
+  }
+  const activeBlock = activePreviewSpeakableBlock(blocks, activeIndex);
+  if (!activeBlock) {
+    return "unavailable";
+  }
+  const speakableBlocks = blocks.filter((item) => revisionBlockIsSpeakable(item));
+  const activeSpeakableIndex = speakableBlocks.findIndex((item) => item.id === activeBlock.id);
+  const blockSpeakableIndex = speakableBlocks.findIndex((item) => item.id === block.id);
+  if (activeSpeakableIndex === -1 || blockSpeakableIndex === -1) {
+    return "unavailable";
+  }
+  if (blockSpeakableIndex === activeSpeakableIndex) {
+    return "current";
+  }
+  if (blockSpeakableIndex === activeSpeakableIndex + 1) {
+    return "next";
+  }
+  if (blockSpeakableIndex < activeSpeakableIndex) {
+    return "previous";
+  }
+  return "unavailable";
+}
+
+function activePreviewSpeakableBlock(
+  blocks: readonly RevisionBlock[],
+  activeIndex: number,
+): RevisionBlock | null {
+  const activeBlock = blocks.at(activeIndex);
+  if (activeBlock && revisionBlockIsSpeakable(activeBlock)) {
+    return activeBlock;
+  }
+  for (let index = Math.max(0, activeIndex); index < blocks.length; index += 1) {
+    const block = blocks[index];
+    if (revisionBlockIsSpeakable(block)) {
+      return block;
+    }
+  }
+  for (let index = Math.min(blocks.length - 1, activeIndex); index >= 0; index -= 1) {
+    const block = blocks[index];
+    if (revisionBlockIsSpeakable(block)) {
+      return block;
+    }
+  }
+  return null;
+}
+
+function previewBlockActiveWordIndex(
+  blocks: readonly RevisionBlock[],
+  block: RevisionBlock,
+  job: VoiceJob | null,
+  playbackCursorSec: number,
+): number | null {
+  const text = revisionBlockIsSpeakable(block) ? block.spokenText : "";
+  if (!text.trim()) {
+    return null;
+  }
+  const startSec = playbackSeekSecondsForRevisionBlock(blocks, block.id, job);
+  const durationSec = Math.max(0.001, block.estimatedDurationMs / 1000);
+  const progress =
+    startSec === null ? 0 : Math.max(0, Math.min(1, (playbackCursorSec - startSec) / durationSec));
+  return pickTeleprompterWordIndex(text, progress);
+}
+
 function bookScopeLabelForReview(scope: BookScope): string {
   if (scope.label?.trim()) {
     return scope.label.trim();
@@ -11654,6 +18791,32 @@ function bookScopeLabelForReview(scope: BookScope): string {
     return start === end ? `Page ${String(start)}` : `Pages ${String(start)}-${String(end)}`;
   }
   return "Full book";
+}
+
+function workbenchScopeTitle({
+  selectedBookScope,
+  selectedBookSource,
+  selectedPreparedSource,
+  sourceMode,
+}: Readonly<{
+  selectedBookScope: BookScope | null;
+  selectedBookSource: BookSource | null;
+  selectedPreparedSource: PreparedSource | null;
+  sourceMode: SourceMode;
+}>): string {
+  if (selectedPreparedSource) {
+    if (
+      selectedPreparedSource.sourceOwner === "temporary" ||
+      selectedPreparedSource.temporarySourceId
+    ) {
+      return "Temporary session";
+    }
+    return "Full source";
+  }
+  if (selectedBookSource) {
+    return selectedBookScope ? bookScopeLabelForReview(selectedBookScope) : "Full book";
+  }
+  return sourceMode === "text" ? "Draft text" : "No source scope";
 }
 
 function narrationReviewMathPanel(selectedPreparedSource: PreparedSource | null): ReactNode {
@@ -11674,7 +18837,7 @@ function narrationReviewMathPanel(selectedPreparedSource: PreparedSource | null)
 
 function narrationReviewRulesPanel(
   selectedPreparedSource: PreparedSource | null,
-  reviewBlocks: NarrationReviewBlock[],
+  reviewBlocks: RevisionBlock[],
   text: string,
 ): ReactNode {
   if (selectedPreparedSource) {
@@ -11685,107 +18848,6 @@ function narrationReviewRulesPanel(
     );
   }
   return <NarrationDraftRulesPanel blocks={reviewBlocks} text={text} />;
-}
-
-function NarrationReviewBlockList({
-  blocks,
-  selectedBlockId,
-  onSelectBlock,
-}: Readonly<{
-  blocks: NarrationReviewBlock[];
-  selectedBlockId: string | null;
-  onSelectBlock: (id: string) => void;
-}>) {
-  return (
-    <section className="min-w-0 overflow-hidden rounded-lg border bg-[var(--vs-raised)] vs-border">
-      <div className="flex items-center justify-between gap-3 border-b bg-[var(--vs-surface)] px-3 py-2 vs-border">
-        <h3 className="text-sm font-semibold">Blocks ({blocks.length.toString()})</h3>
-        <span className="text-xs vs-muted">review order</span>
-      </div>
-      <div className="max-h-[18rem] overflow-y-auto">
-        {blocks.map((block) => (
-          <button
-            className={`grid w-full min-w-0 grid-cols-[2rem_minmax(0,1fr)_auto] gap-2 border-b px-3 py-3 text-left text-sm transition last:border-b-0 vs-border ${
-              selectedBlockId === block.id ? "bg-orange-500/10" : "hover:bg-[var(--vs-raised)]"
-            }`}
-            key={block.id}
-            onClick={() => {
-              onSelectBlock(block.id);
-            }}
-            type="button"
-          >
-            <span className="vs-muted font-semibold">{block.index.toString()}</span>
-            <span className="min-w-0">
-              <span className="block truncate font-semibold" title={block.label}>
-                {block.label}
-              </span>
-              <span className="mt-1 block truncate text-xs vs-muted" title={block.text}>
-                {block.text}
-              </span>
-              <span className="mt-2 block text-xs vs-muted">
-                {block.segmentCount.toString()} segment{block.segmentCount === 1 ? "" : "s"} ·{" "}
-                {formatDuration(block.estimatedDurationMs)}
-              </span>
-            </span>
-            <span
-              className={`h-fit rounded-md border px-2 py-1 text-[0.68rem] font-semibold ${speakModeClass(block.speakMode)}`}
-            >
-              {block.speakMode}
-            </span>
-          </button>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function NarrationSpokenScriptPanel({
-  block,
-  spokenText,
-  validationReason,
-  validationSimilarity,
-  validationTranscript,
-}: Readonly<{
-  block: NarrationReviewBlock | null;
-  spokenText: string;
-  validationReason: string;
-  validationSimilarity: number;
-  validationTranscript: string;
-}>) {
-  return (
-    <section className="grid min-w-0 gap-3 rounded-lg border bg-[var(--vs-raised)] p-4 vs-border">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-base font-semibold">Spoken Script</h3>
-          <p className="mt-1 truncate text-xs vs-muted" title={block?.label}>
-            {block ? `Block ${block.index.toString()} · ${block.kind}` : "Waiting for source"}
-          </p>
-        </div>
-        <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
-          Listener form
-        </span>
-      </div>
-      <p className="max-h-[10rem] min-w-0 overflow-auto whitespace-pre-wrap break-words rounded-md border bg-[var(--vs-surface)] p-4 font-mono text-sm leading-7 vs-border">
-        {spokenText}
-      </p>
-      <div className="grid gap-2 rounded-md border bg-[var(--vs-surface)] p-3 text-xs vs-border">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="font-semibold uppercase tracking-[0.14em] vs-muted">
-            Validation Transcript
-          </p>
-          <span className="font-semibold text-emerald-700">
-            {validationSimilarity ? `Match ${formatSimilarity(validationSimilarity)}` : "Waiting"}
-          </span>
-        </div>
-        <p className="break-words leading-5 vs-muted">{validationReason}</p>
-        {validationTranscript ? (
-          <p className="max-h-16 overflow-auto whitespace-pre-wrap break-words rounded border p-2 font-mono leading-5 vs-border vs-raised">
-            {validationTranscript}
-          </p>
-        ) : null}
-      </div>
-    </section>
-  );
 }
 
 function NarrationReviewEmptyState({ detail, title }: Readonly<{ detail: string; title: string }>) {
@@ -11800,7 +18862,7 @@ function NarrationReviewEmptyState({ detail, title }: Readonly<{ detail: string;
 function NarrationDraftRulesPanel({
   blocks,
   text,
-}: Readonly<{ blocks: NarrationReviewBlock[]; text: string }>) {
+}: Readonly<{ blocks: RevisionBlock[]; text: string }>) {
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
   return (
     <dl className="grid gap-px overflow-hidden rounded-md border text-sm sm:grid-cols-3 vs-border">
@@ -11823,6 +18885,7 @@ function buildNarrationReviewBlocks({
   selectedBookSource,
   selectedPreparedSource,
   text,
+  draftTextBlockLimit,
 }: Readonly<{
   bookScopeContent: BookSourceScopeContent | null;
   optimizedText: string;
@@ -11830,7 +18893,8 @@ function buildNarrationReviewBlocks({
   selectedBookSource: BookSource | null;
   selectedPreparedSource: PreparedSource | null;
   text: string;
-}>): NarrationReviewBlock[] {
+  draftTextBlockLimit?: number | null;
+}>): RevisionBlock[] {
   if (selectedPreparedSource?.blocks && selectedPreparedSource.blocks.length > 0) {
     return selectedPreparedSource.blocks.map((block, index) =>
       narrationBlockToReviewBlock(block, index),
@@ -11847,89 +18911,260 @@ function buildNarrationReviewBlocks({
       bookScopeContent?.text ??
       (selectedBookScope ? bookScopeText(selectedBookSource, selectedBookScope) : "");
     if (scopedBookText.trim()) {
-      return splitNarrationDraftIntoBlocks(scopedBookText.trim()).map((part, index) => ({
-        estimatedDurationMs: estimateNarrationTextDurationMs(part),
-        id: `book-${index.toString()}`,
-        index: index + 1,
-        kind: "body",
-        label: firstWords(part, 8),
-        segmentCount: estimateNarrationSegmentCount(part),
-        speakMode: "speak",
-        spokenText: part,
-        text: part,
-      }));
+      return splitNarrationDraftIntoBlocks(scopedBookText.trim(), draftTextBlockLimit).map(
+        (part, index) => draftTextToRevisionBlock(part, index, "book", "body", "Book scope"),
+      );
     }
   }
 
   const draft = (optimizedText || text).trim();
   if (draft) {
-    return splitNarrationDraftIntoBlocks(draft).map((part, index) => ({
-      estimatedDurationMs: estimateNarrationTextDurationMs(part),
-      id: `draft-${index.toString()}`,
-      index: index + 1,
-      kind: "text",
-      label: firstWords(part, 8),
-      segmentCount: estimateNarrationSegmentCount(part),
-      speakMode: "speak",
-      spokenText: part,
-      text: part,
-    }));
+    return splitNarrationDraftIntoBlocks(draft, draftTextBlockLimit).map((part, index) =>
+      draftTextToRevisionBlock(part, index, "draft", "text", "Draft text"),
+    );
   }
 
   if (selectedBookSource) {
     return [
-      {
-        estimatedDurationMs: 0,
+      emptyRevisionBlock({
         id: `book-${selectedBookSource.id}`,
-        index: 1,
         kind: selectedBookSource.kind,
         label: bookSourceName(selectedBookSource),
-        segmentCount: 0,
-        speakMode: "speak",
+        sourceSection: "Book source",
         spokenText: "Choose a book scope or create audio to review the listener-ready script.",
         text: `${bookSourceName(selectedBookSource)} · ${selectedBookSource.wordCount.toLocaleString()} words`,
-      },
+      }),
     ];
   }
 
   return [
-    {
-      estimatedDurationMs: 0,
+    emptyRevisionBlock({
       id: "empty-draft",
-      index: 1,
       kind: "text",
       label: "Waiting for source",
-      segmentCount: 0,
-      speakMode: "speak",
+      sourceSection: "Draft text",
       spokenText: "Paste text, select a book, or prepare a file/URL to begin review.",
       text: "No source content selected.",
-    },
+    }),
   ];
 }
 
-function narrationBlockToReviewBlock(block: NarrationBlock, index: number): NarrationReviewBlock {
+function narrationBlockToReviewBlock(block: NarrationBlock, index: number): RevisionBlock {
+  const confidence = typeof block.confidence === "number" ? block.confidence : null;
+  const warnings = block.warnings ?? [];
+  const forceSilent = narrationBlockIsNonSpeakingCue(block);
+  const speakMode = forceSilent ? "skip" : block.speakMode;
+  const rawSpokenText = block.spokenText ?? block.text ?? "";
+  const spokenText =
+    forceSilent || rawSpokenText.trim().length === 0
+      ? ""
+      : stripNarrationBlockInlineReferenceTail(block, rawSpokenText);
+  const status = deriveRevisionBlockStatus({
+    confidence,
+    speakMode,
+    warnings,
+  });
+  const sourceSection = narrationBlockSourceSection(block, index);
+  const policyNoteType = narrationBlockRevisionPolicyNoteType(block, forceSilent);
   return {
-    estimatedDurationMs:
-      block.estimatedDurationMs ??
-      estimateNarrationTextDurationMs(block.spokenText ?? block.text ?? ""),
+    confidence,
+    estimatedDurationMs: block.estimatedDurationMs ?? estimateNarrationTextDurationMs(spokenText),
+    endOffset: block.endOffset,
     id: block.id,
     index: index + 1,
     kind: block.kind,
-    label: block.label ?? firstWords(block.spokenText ?? block.text ?? "", 8),
-    segmentCount: block.segments?.length ?? 0,
-    speakMode: block.speakMode,
-    spokenText: block.spokenText ?? block.text ?? "",
+    label: block.label ?? firstWords(firstNonEmptyString(spokenText, block.text, "") ?? "", 8),
+    mathSpeech: block.mathPreview?.speech,
+    needsAttention: status === "needsReview" || warnings.length > 0,
+    normalisationCount: block.normalisations?.length ?? 0,
+    normalisations: block.normalisations ?? [],
+    policyNote:
+      block.speechPolicy.explanation ||
+      `${block.speechPolicy.profile} policy rendered this block as ${block.speechPolicy.mode}.`,
+    policyNoteType,
+    pronunciationCount: block.pronunciations?.length ?? 0,
+    pronunciations: block.pronunciations ?? [],
+    segmentCount: forceSilent ? 0 : (block.segments?.length ?? 0),
+    sourceSection,
+    speakMode,
+    spokenText,
+    startOffset: block.startOffset,
+    status,
     text: block.text ?? block.spokenText ?? block.label ?? "",
+    warnings,
   };
 }
 
-function splitNarrationDraftIntoBlocks(value: string): string[] {
+function narrationBlockIsNonSpeakingCue(block: NarrationBlock): boolean {
+  const speakMode = block.speakMode.trim().toLowerCase();
+  const policyMode = block.speechPolicy.mode.trim().toLowerCase();
+  if (speakMode === "skip" || policyMode === "skip" || policyMode === "ondemand") {
+    return true;
+  }
+  if (narrationBlockLooksLikeReferenceSection(block)) {
+    return true;
+  }
+  if (narrationBlockIsStandaloneArtifactToken(block)) {
+    return true;
+  }
+  if (block.spokenText?.trim()) {
+    return false;
+  }
+  const kind = block.kind.trim().toLowerCase();
+  if (
+    !["artifact_token", "citation", "footnote", "reference", "unknown_inline_marker"].includes(kind)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function narrationBlockIsStandaloneArtifactToken(block: NarrationBlock): boolean {
+  return revisionTextIsStandaloneArtifactToken(block.spokenText ?? block.text ?? block.label ?? "");
+}
+
+function stripNarrationBlockInlineReferenceTail(block: NarrationBlock, spokenText: string): string {
+  if (!narrationBlockHasInlineReferenceEvidence(block)) {
+    return spokenText;
+  }
+  return stripRevisionTrailingReferenceNumberText(spokenText);
+}
+
+function narrationBlockHasInlineReferenceEvidence(block: NarrationBlock): boolean {
+  const warnings = block.warnings ?? [];
+  if (
+    warnings.includes("citation_removed") ||
+    warnings.includes("reference_marker_removed") ||
+    warnings.includes("citation_reference_number_removed")
+  ) {
+    return true;
+  }
+  const inlineArtifacts = block.metadata?.inlineArtifacts;
+  if (!Array.isArray(inlineArtifacts)) {
+    return false;
+  }
+  return inlineArtifacts.some((item) => {
+    if (!item || typeof item !== "object" || !("kind" in item)) {
+      return false;
+    }
+    const artifact = item as Readonly<Record<string, unknown>>;
+    const kind = String(artifact.kind).trim().toLowerCase();
+    return kind === "citation" || kind === "reference" || kind === "footnote";
+  });
+}
+
+function narrationBlockLooksLikeReferenceSection(block: NarrationBlock): boolean {
+  const text = (block.text ?? block.spokenText ?? block.label ?? "").trim();
+  return revisionTextLooksLikeReferenceCueLeak(text);
+}
+
+function narrationBlockRevisionPolicyNoteType(
+  block: NarrationBlock,
+  forceSilent: boolean,
+): RevisionBlock["policyNoteType"] {
+  const policyMode = block.speechPolicy.mode.trim().toLowerCase();
+  if (forceSilent && policyMode === "ondemand") {
+    return "onDemand";
+  }
+  const speechPolicyElement = block.speechPolicy.element ?? "";
+  const policyElement = speechPolicyElement.trim().length > 0 ? speechPolicyElement : block.kind;
+  return normalizeRevisionPolicyNoteType(policyElement);
+}
+
+function draftTextToRevisionBlock(
+  part: string,
+  index: number,
+  idPrefix: string,
+  kind: string,
+  sourceSection: string,
+): RevisionBlock {
+  return {
+    confidence: 1,
+    estimatedDurationMs: estimateNarrationTextDurationMs(part),
+    id: `${idPrefix}-${index.toString()}`,
+    index: index + 1,
+    kind,
+    label: firstWords(part, 8),
+    needsAttention: false,
+    normalisationCount: 0,
+    policyNote: "Draft prose is spoken as written before source-specific policy decisions exist.",
+    policyNoteType: "spoken",
+    pronunciationCount: 0,
+    segmentCount: estimateNarrationSegmentCount(part),
+    sourceSection,
+    speakMode: "speak",
+    spokenText: part,
+    status: "waiting",
+    text: part,
+    warnings: [],
+  };
+}
+
+function emptyRevisionBlock({
+  id,
+  kind,
+  label,
+  sourceSection,
+  spokenText,
+  text,
+}: Readonly<{
+  id: string;
+  kind: string;
+  label: string;
+  sourceSection: string;
+  spokenText: string;
+  text: string;
+}>): RevisionBlock {
+  return {
+    confidence: null,
+    estimatedDurationMs: 0,
+    id,
+    index: 1,
+    kind,
+    label,
+    needsAttention: false,
+    normalisationCount: 0,
+    policyNote: "No source block is ready for speech policy review yet.",
+    policyNoteType: "spoken",
+    pronunciationCount: 0,
+    segmentCount: 0,
+    sourceSection,
+    speakMode: "speak",
+    spokenText,
+    status: "waiting",
+    text,
+    warnings: [],
+  };
+}
+
+function narrationBlockSourceSection(block: NarrationBlock, index: number): string {
+  const metadata = block.metadata ?? {};
+  return (
+    metadataString(metadata, "sectionTitle") ??
+    metadataString(metadata, "section") ??
+    metadataString(metadata, "heading") ??
+    metadataString(metadata, "chapterTitle") ??
+    block.label ??
+    `Block ${String(index + 1)}`
+  );
+}
+
+function metadataString(metadata: Record<string, unknown>, key: string): string | null {
+  const value = metadata[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function splitNarrationDraftIntoBlocks(value: string, maxBlocks?: number | null): string[] {
   const paragraphs = value
     .split(/\n{2,}/)
     .map((part) => part.trim())
     .filter(Boolean);
   const source = paragraphs.length > 0 ? paragraphs : [value];
-  return source.flatMap((part) => chunkLongNarrationText(part, 720)).slice(0, 36);
+  const blocks = source.flatMap((part) => chunkLongNarrationText(part, 720));
+  if (typeof maxBlocks === "number") {
+    return blocks.slice(0, Math.max(0, maxBlocks));
+  }
+  return blocks;
 }
 
 function chunkLongNarrationText(value: string, maxLength: number): string[] {
@@ -11982,8 +19217,7 @@ function estimateNarrationTextDurationMs(value: string): number {
   return Math.max(1200, Math.round(value.trim().split(/\s+/).length * 430));
 }
 
-function AudioPanel({
-  canOpenCinema,
+function PlaybackControllerHost({
   job,
   latestProgress,
   onOpenCinema,
@@ -11992,8 +19226,7 @@ function AudioPanel({
   onPlaybackStateChange,
   onResumeProgress,
 }: Readonly<{
-  canOpenCinema: boolean;
-  job: VoiceJob | null;
+  job: VoiceJob;
   latestProgress: PlaybackProgress | null;
   onOpenCinema: () => void;
   onPlaybackCursorChange?: (cursorSec: number) => void;
@@ -12001,61 +19234,18 @@ function AudioPanel({
   onPlaybackStateChange?: (isPlaying: boolean) => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
 }>) {
-  useEffect(() => {
-    if (!job) {
-      onPlaybackControlsChange?.(null);
-      onPlaybackStateChange?.(false);
-    }
-  }, [job, onPlaybackControlsChange, onPlaybackStateChange]);
-
-  if (!job) {
-    return (
-      <section className="min-w-0 rounded-lg border p-3 shadow-sm vs-raised">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold">Audio Player</h2>
-          <button
-            className="h-8 rounded-md border px-3 text-xs font-semibold transition hover:bg-[var(--vs-surface)] disabled:opacity-40 vs-border"
-            disabled={!canOpenCinema}
-            onClick={onOpenCinema}
-            type="button"
-          >
-            Cinema
-          </button>
-        </div>
-        <div className="mt-3 grid min-h-32 place-items-center rounded-md border border-dashed px-4 py-5 text-center vs-border">
-          <div>
-            <p className="text-sm font-semibold">No audio generated yet</p>
-            <p className="vs-muted mt-2 text-xs">
-              Choose a run mode, then create audio to start buffering playback.
-            </p>
-            {latestProgress ? (
-              <button
-                className="mt-4 inline-flex h-9 items-center rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 transition hover:bg-orange-500/15"
-                onClick={() => {
-                  onResumeProgress(latestProgress);
-                }}
-                type="button"
-              >
-                Continue Listening · {formatPercentage(latestProgress.progress)}
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </section>
-    );
-  }
-
   return (
-    <StreamingAudioPanel
-      job={job}
-      key={job.id}
-      latestProgress={latestProgress}
-      onOpenCinema={onOpenCinema}
-      onPlaybackCursorChange={onPlaybackCursorChange}
-      onPlaybackControlsChange={onPlaybackControlsChange}
-      onPlaybackStateChange={onPlaybackStateChange}
-      onResumeProgress={onResumeProgress}
-    />
+    <div aria-hidden="true" className="hidden">
+      <StreamingAudioPanel
+        job={job}
+        latestProgress={latestProgress}
+        onOpenCinema={onOpenCinema}
+        onPlaybackCursorChange={onPlaybackCursorChange}
+        onPlaybackControlsChange={onPlaybackControlsChange}
+        onPlaybackStateChange={onPlaybackStateChange}
+        onResumeProgress={onResumeProgress}
+      />
+    </div>
   );
 }
 
@@ -12076,9 +19266,8 @@ function StreamingAudioPanel({
   onPlaybackStateChange?: (isPlaying: boolean) => void;
   onResumeProgress: (progress: PlaybackProgress) => void;
 }>) {
-  const readySegments = job.audioReadySegments ?? 0;
   const canPlayCompleted = job.status === "completed";
-  const canPlayArrival = job.status !== "failed";
+  const canPlayArrival = canQueueGeneratedAudioPlayback(job);
   const [playMode, setPlayMode] = useState<AudioPlaybackMode>(() =>
     job.status === "completed" ? "completed" : "arrival",
   );
@@ -12086,7 +19275,7 @@ function StreamingAudioPanel({
   const [panelCursorSec, setPanelCursorSec] = useState(0);
 
   const isModeAvailable: Record<AudioPlaybackMode, boolean> = {
-    arrival: true,
+    arrival: canPlayArrival,
     completed: canPlayCompleted,
   };
   const isPlaybackLocked = isStreamingPlaying;
@@ -12099,14 +19288,14 @@ function StreamingAudioPanel({
   const modeButtonClass = useCallback(
     (mode: AudioPlaybackMode, isAvailable: boolean) => {
       if (playMode === mode) {
-        return "inline-flex h-7 min-w-[3.9rem] items-center justify-center rounded border border-orange-500 bg-orange-500/10 px-2 text-xs font-semibold text-orange-600";
+        return "inline-flex h-7 min-w-0 items-center justify-center rounded border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-2 text-xs font-semibold text-[var(--vs-action-primary)]";
       }
 
       if (!isAvailable) {
-        return "inline-flex h-7 min-w-[3.9rem] items-center justify-center rounded border border-transparent px-2 text-xs font-semibold opacity-40";
+        return "inline-flex h-7 min-w-0 items-center justify-center rounded border border-transparent px-2 text-xs font-semibold opacity-40";
       }
 
-      return "vs-muted inline-flex h-7 min-w-[3.9rem] items-center justify-center rounded border border-transparent px-2 text-xs font-semibold transition hover:bg-[var(--vs-raised)]";
+      return "vs-muted inline-flex h-7 min-w-0 items-center justify-center rounded border border-transparent px-2 text-xs font-semibold transition hover:bg-[var(--vs-raised)]";
     },
     [playMode],
   );
@@ -12158,24 +19347,20 @@ function StreamingAudioPanel({
               {formatDuration(job.durationMs)}
             </p>
           </div>
-          <span className="shrink-0 rounded-full border border-orange-300 bg-orange-500/10 px-2 py-0.5 text-[0.68rem] font-semibold text-orange-600">
-            {job.status}
-          </span>
         </div>
-        <div className="flex min-w-0 items-center justify-between gap-3">
+        <div className="grid min-w-0 gap-2 2xl:grid-cols-[minmax(0,1fr)_auto] 2xl:items-center">
           <p className="vs-muted min-w-0 truncate text-xs">
-            {playModeLabel[playMode]} mode · {String(readySegments)} segment
-            {readySegments === 1 ? "" : "s"} ready
+            {playModeLabel[playMode]} mode · local transport controls
           </p>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="grid min-w-0 grid-cols-1 gap-2 2xl:grid-cols-[auto_minmax(0,1fr)]">
             <button
-              className="h-8 rounded-md border border-orange-300 bg-orange-500/10 px-3 text-xs font-semibold text-orange-600 transition hover:bg-orange-500/15"
+              className="min-h-8 min-w-0 rounded-md border border-[var(--vs-selected-border)] bg-[var(--vs-selected)] px-3 text-xs font-semibold text-[var(--vs-action-primary)] transition hover:bg-[var(--vs-selected)]"
               onClick={onOpenCinema}
               type="button"
             >
               Cinema
             </button>
-            <div className="inline-flex overflow-hidden rounded-md border p-0.5 vs-border">
+            <div className="grid min-w-0 grid-cols-2 overflow-hidden rounded-md border p-0.5 vs-border">
               {(["arrival", "completed"] as const).map((mode) => {
                 const isAvailable = isModeAvailable[mode];
                 return (
@@ -12236,7 +19421,7 @@ function AudioResumeAction({
 }>) {
   return (
     <button
-      className="flex min-w-0 items-center justify-between gap-3 rounded-md bg-orange-500/10 px-3 py-2 text-left text-xs text-orange-700 transition hover:bg-orange-500/15"
+      className="flex min-w-0 items-center justify-between gap-3 rounded-md bg-[var(--vs-selected)] px-3 py-2 text-left text-xs text-[var(--vs-selected-text)] transition hover:bg-[var(--vs-selected)]"
       onClick={() => {
         onResumeProgress(progress);
       }}
@@ -12274,10 +19459,10 @@ function queueBlockClass(
   playing: number,
 ): string {
   if (segmentIndex === playing) {
-    return "bg-orange-600 ring-2 ring-orange-200";
+    return "bg-[var(--vs-action-primary-hover)] ring-2 ring-[var(--vs-focus-ring-soft)]";
   }
   if (segmentIndex <= ready) {
-    return "bg-orange-400";
+    return "bg-[var(--vs-theatre-accent)]";
   }
   if (segmentIndex === generating) {
     return "bg-[var(--vs-generating)]";
@@ -12315,10 +19500,8 @@ function QueueBufferPanel({
   return (
     <section className="mt-3 border-t pt-3 vs-border">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold">Queue</h3>
-        <p className="text-xs font-semibold text-orange-600">
-          {String(ready)} / {String(total)} ready
-        </p>
+        <h3 className="text-sm font-semibold">Buffer Map</h3>
+        <p className="vs-muted text-xs">Visual segment flow</p>
       </div>
       <div
         className="mt-3 grid gap-1.5"
@@ -12339,11 +19522,11 @@ function QueueBufferPanel({
       </div>
       <div className="vs-muted mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-xs">
         <span className="inline-flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-sm bg-orange-600" />
+          <span className="h-2.5 w-2.5 rounded-sm bg-[var(--vs-action-primary-hover)]" />
           Playing
         </span>
         <span className="inline-flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-sm bg-orange-400" />
+          <span className="h-2.5 w-2.5 rounded-sm bg-[var(--vs-theatre-accent)]" />
           Buffered
         </span>
         <span className="inline-flex items-center gap-2">
@@ -12387,7 +19570,8 @@ function WaveformDisplay({
   bars: number[];
   progress: number;
 }>) {
-  const displayBars = bars.length > 0 ? bars : Array.from({ length: 76 }, () => 0);
+  const displayBars =
+    bars.length > 0 ? bars : Array.from({ length: WAVEFORM_DISPLAY_BAR_COUNT }, () => 0);
   const activeIndex = waveformProgressIndex(progress, displayBars.length);
 
   return (
@@ -12398,7 +19582,7 @@ function WaveformDisplay({
       {displayBars.map((height, index) => (
         <span
           aria-hidden="true"
-          className={`w-full rounded-full ${index < activeIndex ? "bg-orange-500" : "bg-[var(--vs-border)]"}`}
+          className={`w-full rounded-full ${index < activeIndex ? "bg-[var(--vs-action-primary)]" : "bg-[var(--vs-border)]"}`}
           data-waveform-bar={index}
           data-waveform-value={height.toFixed(4)}
           key={`waveform-${String(index)}`}
@@ -12533,8 +19717,8 @@ function PlayerStatusLine({
 }>) {
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 overflow-hidden text-xs">
-      <span className="inline-flex min-w-0 items-center gap-2 font-medium text-orange-600">
-        <span className="h-2.5 w-2.5 rounded-sm bg-orange-500" />
+      <span className="inline-flex min-w-0 items-center gap-2 font-medium text-[var(--vs-action-primary)]">
+        <span className="h-2.5 w-2.5 rounded-sm bg-[var(--vs-action-primary)]" />
         {isLive ? "Playing (live)" : "Ready"}
       </span>
       <span className="vs-muted">
@@ -12567,8 +19751,12 @@ function useCompletedWaveformBars(src: string, canPlayCompleted: boolean) {
         }
         const rawAudio = await response.arrayBuffer();
         const decoded = await context.decodeAudioData(rawAudio);
+        const bars = await buildWaveformBarsFromAudioBuffersLazy(
+          [decoded],
+          WAVEFORM_DISPLAY_BAR_COUNT,
+        );
         if (!controller.signal.aborted) {
-          setWaveformBars(buildWaveformBarsFromAudioBuffers([decoded], 76));
+          setWaveformBars(bars);
         }
       } catch {
         if (!controller.signal.aborted) {
@@ -12597,6 +19785,7 @@ function resetUnavailableCompletedAudio({
   setDurationSec,
   setError,
   setIsPlaying,
+  setIsSeeking,
 }: {
   audioRef: WritableRef<HTMLAudioElement | null>;
   isSeekCommitInProgressRef: WritableRef<boolean>;
@@ -12605,6 +19794,7 @@ function resetUnavailableCompletedAudio({
   setDurationSec: (value: number) => void;
   setError: (value: string | null) => void;
   setIsPlaying: (value: boolean) => void;
+  setIsSeeking: (value: boolean) => void;
 }) {
   const audio = audioRef.current;
   if (audio) {
@@ -12617,6 +19807,7 @@ function resetUnavailableCompletedAudio({
   setDurationSec(0);
   isSeekingRef.current = false;
   isSeekCommitInProgressRef.current = false;
+  setIsSeeking(false);
 }
 
 function useCompletedAudioAvailabilityReset({
@@ -12629,6 +19820,7 @@ function useCompletedAudioAvailabilityReset({
   setDurationSec,
   setError,
   setIsPlaying,
+  setIsSeeking,
 }: {
   audioRef: WritableRef<HTMLAudioElement | null>;
   canPlayCompleted: boolean;
@@ -12639,6 +19831,7 @@ function useCompletedAudioAvailabilityReset({
   setDurationSec: (value: number) => void;
   setError: (value: string | null) => void;
   setIsPlaying: (value: boolean) => void;
+  setIsSeeking: (value: boolean) => void;
 }) {
   useEffect(() => {
     if (!canPlayCompleted) {
@@ -12650,6 +19843,7 @@ function useCompletedAudioAvailabilityReset({
         setDurationSec,
         setError,
         setIsPlaying,
+        setIsSeeking,
       });
     }
     onPlaybackStateChange?.(false);
@@ -12663,6 +19857,7 @@ function useCompletedAudioAvailabilityReset({
     setDurationSec,
     setError,
     setIsPlaying,
+    setIsSeeking,
   ]);
 }
 
@@ -12676,6 +19871,7 @@ function useCompletedSeekControls({
   onPlaybackCursorChange,
   seekSliderValueRef,
   setCurrentTimeSec,
+  setIsSeeking,
 }: {
   audioRef: WritableRef<HTMLAudioElement | null>;
   currentTimeRef: WritableRef<number>;
@@ -12686,11 +19882,13 @@ function useCompletedSeekControls({
   onPlaybackCursorChange?: (cursorSec: number) => void;
   seekSliderValueRef: WritableRef<number>;
   setCurrentTimeSec: (value: number) => void;
+  setIsSeeking: (value: boolean) => void;
 }) {
   const handleSeekStart = useCallback(() => {
     isSeekingRef.current = true;
+    setIsSeeking(true);
     seekSliderValueRef.current = currentTimeRef.current;
-  }, [currentTimeRef, isSeekingRef, seekSliderValueRef]);
+  }, [currentTimeRef, isSeekingRef, seekSliderValueRef, setIsSeeking]);
 
   const clampSeekTarget = useCallback(
     (target: number) => {
@@ -12709,12 +19907,26 @@ function useCompletedSeekControls({
       }
 
       const safeTarget = clampSeekTarget(target);
+      isSeekingRef.current = true;
+      setIsSeeking(true);
       currentTimeRef.current = safeTarget;
       setCurrentTimeSec(safeTarget);
       onPlaybackCursorChange?.(safeTarget);
       audio.currentTime = safeTarget;
+      requestAnimationFrame(() => {
+        isSeekingRef.current = false;
+        setIsSeeking(false);
+      });
     },
-    [audioRef, clampSeekTarget, currentTimeRef, onPlaybackCursorChange, setCurrentTimeSec],
+    [
+      audioRef,
+      clampSeekTarget,
+      currentTimeRef,
+      isSeekingRef,
+      onPlaybackCursorChange,
+      setCurrentTimeSec,
+      setIsSeeking,
+    ],
   );
 
   const resolveSeekTarget = useCallback(
@@ -12731,6 +19943,7 @@ function useCompletedSeekControls({
     (value?: number) => {
       if (!isSeekingRef.current && !isSeekCommitInProgressRef.current) {
         isSeekingRef.current = true;
+        setIsSeeking(true);
         seekSliderValueRef.current = currentTimeRef.current;
       }
 
@@ -12746,6 +19959,7 @@ function useCompletedSeekControls({
       requestAnimationFrame(() => {
         isSeekingRef.current = false;
         isSeekCommitInProgressRef.current = false;
+        setIsSeeking(false);
       });
     },
     [
@@ -12756,6 +19970,7 @@ function useCompletedSeekControls({
       resolveSeekTarget,
       seekSliderValueRef,
       setCurrentTimeSec,
+      setIsSeeking,
     ],
   );
 
@@ -12763,6 +19978,7 @@ function useCompletedSeekControls({
     (rawValue: number) => {
       if (!isSeekingRef.current && !isSeekCommitInProgressRef.current) {
         isSeekingRef.current = true;
+        setIsSeeking(true);
         seekSliderValueRef.current = currentTimeRef.current;
       }
 
@@ -12786,6 +20002,7 @@ function useCompletedSeekControls({
       onPlaybackCursorChange,
       seekSliderValueRef,
       setCurrentTimeSec,
+      setIsSeeking,
     ],
   );
 
@@ -12835,7 +20052,7 @@ function useCompletedAudioEventHandlers({
   currentTimeRef,
   isSeekCommitInProgressRef,
   isSeekingRef,
-  onPlaybackCursorChange,
+  onPlaybackCursorSample,
   onPlaybackStateChange,
   setCurrentTimeSec,
   setDurationSec,
@@ -12846,7 +20063,7 @@ function useCompletedAudioEventHandlers({
   currentTimeRef: WritableRef<number>;
   isSeekCommitInProgressRef: WritableRef<boolean>;
   isSeekingRef: WritableRef<boolean>;
-  onPlaybackCursorChange?: (cursorSec: number) => void;
+  onPlaybackCursorSample?: (cursorSec: number, options?: { force?: boolean }) => void;
   onPlaybackStateChange?: (isPlaying: boolean) => void;
   setCurrentTimeSec: (value: number) => void;
   setDurationSec: (value: number) => void;
@@ -12865,9 +20082,9 @@ function useCompletedAudioEventHandlers({
     } else {
       currentTimeRef.current = audio.currentTime;
       setCurrentTimeSec(audio.currentTime);
-      onPlaybackCursorChange?.(audio.currentTime);
+      onPlaybackCursorSample?.(audio.currentTime, { force: true });
     }
-  }, [audioRef, currentTimeRef, onPlaybackCursorChange, setCurrentTimeSec, setDurationSec]);
+  }, [audioRef, currentTimeRef, onPlaybackCursorSample, setCurrentTimeSec, setDurationSec]);
 
   const onTimeUpdate = useCallback(() => {
     const audio = audioRef.current;
@@ -12877,22 +20094,22 @@ function useCompletedAudioEventHandlers({
     const current = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
     currentTimeRef.current = current;
     setCurrentTimeSec(current);
-    onPlaybackCursorChange?.(current);
+    onPlaybackCursorSample?.(current);
   }, [
     audioRef,
     currentTimeRef,
     isSeekCommitInProgressRef,
     isSeekingRef,
-    onPlaybackCursorChange,
+    onPlaybackCursorSample,
     setCurrentTimeSec,
   ]);
 
   const onPlay = useCallback(() => {
     setError(null);
     setIsPlaying(true);
-    onPlaybackCursorChange?.(currentTimeRef.current);
+    onPlaybackCursorSample?.(currentTimeRef.current, { force: true });
     onPlaybackStateChange?.(true);
-  }, [currentTimeRef, onPlaybackCursorChange, onPlaybackStateChange, setError, setIsPlaying]);
+  }, [currentTimeRef, onPlaybackCursorSample, onPlaybackStateChange, setError, setIsPlaying]);
 
   const onPause = useCallback(() => {
     setIsPlaying(false);
@@ -12997,6 +20214,7 @@ function useCompletedPlaybackControllerRegistration({
   audioRef,
   canPlayCompleted,
   isPlaying,
+  isSeeking,
   onPlaybackControlsChange,
   playbackRate,
   playCompletedAudio,
@@ -13008,6 +20226,7 @@ function useCompletedPlaybackControllerRegistration({
   audioRef: WritableRef<HTMLAudioElement | null>;
   canPlayCompleted: boolean;
   isPlaying: boolean;
+  isSeeking: boolean;
   onPlaybackControlsChange?: (controls: PlaybackController | null) => void;
   playbackRate: number;
   playCompletedAudio: () => Promise<void> | void;
@@ -13024,6 +20243,7 @@ function useCompletedPlaybackControllerRegistration({
     onPlaybackControlsChange?.({
       isAvailable: true,
       isPlaying,
+      isSeeking,
       playbackRate,
       pause: () => {
         audioRef.current?.pause();
@@ -13041,6 +20261,7 @@ function useCompletedPlaybackControllerRegistration({
     audioRef,
     canPlayCompleted,
     isPlaying,
+    isSeeking,
     onPlaybackControlsChange,
     playbackRate,
     playCompletedAudio,
@@ -13096,6 +20317,7 @@ function CompletedAudioPlayer({
   const [error, setError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isSeeking, setIsSeeking] = useState(false);
   const [durationSec, setDurationSec] = useState(0);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [volume, setVolume] = useState(1);
@@ -13105,7 +20327,20 @@ function CompletedAudioPlayer({
   const isSeekCommitInProgressRef = useRef(false);
   const currentTimeRef = useRef(0);
   const seekSliderValueRef = useRef(0);
+  const lastPlaybackCursorCommitMsRef = useRef(-Infinity);
   const resolvedDurationSec = Math.max(0, durationSec > 0 ? durationSec : durationMs / 1000);
+  const publishPlaybackCursorSample = useCallback(
+    (cursorSec: number, options: { force?: boolean } = {}) => {
+      const now = typeof performance === "undefined" ? Date.now() : performance.now();
+      if (!options.force && now - lastPlaybackCursorCommitMsRef.current < 250) {
+        return;
+      }
+      lastPlaybackCursorCommitMsRef.current = now;
+      markReadAlongPerformance("react-cursor-commit");
+      onPlaybackCursorChange?.(cursorSec);
+    },
+    [onPlaybackCursorChange],
+  );
 
   useCompletedAudioAvailabilityReset({
     audioRef,
@@ -13117,6 +20352,7 @@ function CompletedAudioPlayer({
     setDurationSec,
     setError,
     setIsPlaying,
+    setIsSeeking,
   });
 
   useEffect(() => {
@@ -13129,7 +20365,7 @@ function CompletedAudioPlayer({
       currentTimeRef,
       isSeekCommitInProgressRef,
       isSeekingRef,
-      onPlaybackCursorChange,
+      onPlaybackCursorSample: publishPlaybackCursorSample,
       onPlaybackStateChange,
       setCurrentTimeSec,
       setDurationSec,
@@ -13172,6 +20408,7 @@ function CompletedAudioPlayer({
     onPlaybackCursorChange,
     seekSliderValueRef,
     setCurrentTimeSec,
+    setIsSeeking,
   });
 
   const handleVolume = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -13195,6 +20432,7 @@ function CompletedAudioPlayer({
     audioRef,
     canPlayCompleted,
     isPlaying,
+    isSeeking,
     onPlaybackControlsChange,
     playbackRate,
     playCompletedAudio,
@@ -13205,6 +20443,12 @@ function CompletedAudioPlayer({
   });
 
   useCompletedAudioElementSource({ audioRef, canPlayCompleted, src, volume });
+  useEffect(() => {
+    if (!canPlayCompleted) {
+      return;
+    }
+    return registerReadAlongAudioElement(job.id, audioRef.current);
+  }, [canPlayCompleted, job.id]);
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.playbackRate = playbackRate;
@@ -13260,13 +20504,13 @@ function CompletedAudioPending({
 }>) {
   return (
     <div className="grid gap-4">
-      <p className="text-sm leading-6 text-zinc-600">
+      <p className="text-sm leading-6 text-[var(--vs-text-muted)]">
         Final audio will appear after every generated segment passes voice checking.
         {job.durationMs > 0
           ? ` Current generated duration: ${formatDuration(job.durationMs)}.`
           : ""}
       </p>
-      {error ? <p className="text-sm text-red-700">{error}</p> : null}
+      {error ? <p className="text-sm text-[var(--vs-status-danger)]">{error}</p> : null}
     </div>
   );
 }
@@ -13382,7 +20626,7 @@ function CompletedAudioReadyView({
       >
         <track kind="captions" />
       </audio>
-      {error ? <p className="text-sm text-red-700">{error}</p> : null}
+      {error ? <p className="text-sm text-[var(--vs-status-danger)]">{error}</p> : null}
       <div className="grid grid-cols-3 gap-2 rounded-md border p-2 text-[0.7rem] vs-surface">
         <span className="truncate" title={formatDuration(durationMs)}>
           {formatDuration(durationMs)}
@@ -13428,7 +20672,7 @@ function CompletedTransportControls({
       </TransportButton>
       <button
         aria-label={isPlaying ? "Pause" : "Play"}
-        className="grid h-11 w-11 place-items-center rounded-full text-lg font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:brightness-95 vs-accent-bg"
+        className="grid h-11 w-11 place-items-center rounded-full text-lg font-semibold text-[var(--vs-action-primary-text)] shadow-lg shadow-[var(--vs-shadow)] transition hover:brightness-95 vs-accent-bg"
         onClick={() => {
           void onPlayToggle();
         }}
@@ -13520,6 +20764,7 @@ function ArrivalAudioPlayerQueue({
 }>) {
   const readySegments = job.audioReadySegments ?? 0;
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isSeeking, setIsSeeking] = useState(false);
   const [isQueued, setIsQueued] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
@@ -13664,6 +20909,7 @@ function ArrivalAudioPlayerQueue({
       playbackSessionCursorRef.current = 0;
       playbackSessionContextRef.current = 0;
       setIsPlaying(false);
+      setIsSeeking(false);
       setIsQueued(false);
       if (notify) {
         onPlaybackStateChange?.(false);
@@ -13867,6 +21113,7 @@ function ArrivalAudioPlayerQueue({
 
   const handleSeekStart = useCallback(() => {
     isScrubbingRef.current = true;
+    setIsSeeking(true);
     seekSliderValueRef.current = cursorSecRef.current;
   }, []);
 
@@ -13884,6 +21131,7 @@ function ArrivalAudioPlayerQueue({
     (rawValue: number) => {
       if (!isScrubbingRef.current && !isSeekCommitInProgressRef.current) {
         isScrubbingRef.current = true;
+        setIsSeeking(true);
         seekSliderValueRef.current = cursorSecRef.current;
       }
 
@@ -13902,6 +21150,7 @@ function ArrivalAudioPlayerQueue({
     (value?: number) => {
       if (!isScrubbingRef.current && !isSeekCommitInProgressRef.current) {
         isScrubbingRef.current = true;
+        setIsSeeking(true);
         seekSliderValueRef.current = cursorSecRef.current;
       }
 
@@ -13920,6 +21169,7 @@ function ArrivalAudioPlayerQueue({
       requestAnimationFrame(() => {
         isScrubbingRef.current = false;
         isSeekCommitInProgressRef.current = false;
+        setIsSeeking(false);
       });
     },
     [commitSeek, publishCursor, resolveSeekTarget],
@@ -13998,8 +21248,12 @@ function ArrivalAudioPlayerQueue({
   const seekTo = useCallback(
     (seconds: number) => {
       const next = clampCursor(seconds);
+      setIsSeeking(true);
       publishCursor(next);
       void commitSeek(next);
+      requestAnimationFrame(() => {
+        setIsSeeking(false);
+      });
     },
     [clampCursor, commitSeek, publishCursor],
   );
@@ -14028,6 +21282,7 @@ function ArrivalAudioPlayerQueue({
     onPlaybackControlsChange?.({
       isAvailable: true,
       isPlaying,
+      isSeeking,
       playbackRate,
       pause: pausePlayback,
       play: beginPlayback,
@@ -14042,6 +21297,7 @@ function ArrivalAudioPlayerQueue({
   }, [
     beginPlayback,
     canPlay,
+    isSeeking,
     isPlaying,
     onPlaybackControlsChange,
     pausePlayback,
@@ -14056,12 +21312,16 @@ function ArrivalAudioPlayerQueue({
     const timeline = getSegmentTimeline();
     const duration = timeline.reduce((total, segment) => total + segment.buffer.duration, 0);
     setBufferedDurationSec(duration);
-    setWaveformBars(
-      buildWaveformBarsFromAudioBuffers(
-        timeline.map((segment) => segment.buffer),
-        76,
-      ),
-    );
+    const buffers = timeline.map((segment) => segment.buffer);
+    if (buffers.length === 0) {
+      setWaveformBars([]);
+      return;
+    }
+    void buildWaveformBarsFromAudioBuffersLazy(buffers, WAVEFORM_DISPLAY_BAR_COUNT)
+      .then(setWaveformBars)
+      .catch(() => {
+        setWaveformBars([]);
+      });
   }, [getSegmentTimeline]);
 
   const arrivalThroughput = useMemo(() => {
@@ -14308,6 +21568,7 @@ function ArrivalAudioPlayerQueue({
     isScrubbingRef.current = false;
     isSeekCommitInProgressRef.current = false;
     setIsPlaying(false);
+    setIsSeeking(false);
     setIsQueued(false);
     cursorSecRef.current = 0;
     setCurrentTimeSec(0);
@@ -14329,7 +21590,7 @@ function ArrivalAudioPlayerQueue({
   const sliderMax =
     totalDurationSec > 0 ? totalDurationSec : Math.max(1, currentTimeSec, cursorSecRef.current);
   const sliderValue = Math.max(0, Math.min(currentTimeSec, sliderMax));
-  const showArrivalPendingMessage = !canPlay;
+  const showArrivalPendingMessage = Math.max(0, readySegments) <= 0;
 
   return (
     <div className="grid gap-3">
@@ -14381,7 +21642,7 @@ function ArrivalAudioPlayerQueue({
           </TransportButton>
           <button
             aria-label={isPlaying ? "Pause" : "Play"}
-            className="grid h-11 w-11 place-items-center rounded-full text-lg font-semibold text-white shadow-lg shadow-orange-500/25 transition hover:brightness-95 vs-accent-bg"
+            className="grid h-11 w-11 place-items-center rounded-full text-lg font-semibold text-[var(--vs-action-primary-text)] shadow-lg shadow-[var(--vs-shadow)] transition hover:brightness-95 vs-accent-bg"
             onClick={() => {
               void handlePlayToggle();
             }}
@@ -14427,12 +21688,12 @@ function ArrivalAudioPlayerQueue({
         </p>
       ) : null}
       {isQueued ? (
-        <p className="text-xs text-zinc-600">
+        <p className="text-xs text-[var(--vs-text-muted)]">
           Playback queued. It will continue as segments arrive.
         </p>
       ) : null}
-      {error ? <p className="text-sm text-red-700">{error}</p> : null}
-      <div className="grid grid-cols-3 gap-3 rounded-md bg-zinc-50 p-3 text-xs text-zinc-600">
+      {error ? <p className="text-sm text-[var(--vs-status-danger)]">{error}</p> : null}
+      <div className="grid grid-cols-3 gap-3 rounded-md bg-[var(--vs-surface-secondary)] p-3 text-xs text-[var(--vs-text-muted)]">
         <span>
           {formatDuration(Math.max(job.durationMs, Math.round(bufferedDurationSec * 1000)))} buffer
         </span>
@@ -14445,380 +21706,4 @@ function ArrivalAudioPlayerQueue({
       </div>
     </div>
   );
-}
-
-function ProgressPanel({ job, now }: Readonly<{ job: VoiceJob; now: number }>) {
-  return (
-    <section className="grid gap-3 border-b border-zinc-200 pb-6">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-zinc-500">
-          Progress
-        </h2>
-        {job.status === "completed" || job.status === "failed" ? null : (
-          <span className="inline-flex h-2.5 w-2.5 animate-pulse bg-amber-500" />
-        )}
-      </div>
-      <div className="grid gap-1 text-sm">
-        <p className="font-medium text-zinc-900">{job.progress.message}</p>
-        <p className="leading-6 text-zinc-600">{job.progress.detail}</p>
-      </div>
-      <dl className="grid grid-cols-2 gap-3 text-sm">
-        <Metric label="Elapsed" value={formatElapsed(job.progress.startedAt, now)} />
-        <Metric label="Current segment" value={formatSegment(job)} />
-      </dl>
-    </section>
-  );
-}
-
-function Metric({ label, value }: Readonly<{ label: string; value: string }>) {
-  return (
-    <div className="border-t pt-3 vs-border">
-      <dt className="text-xs uppercase tracking-[0.14em] vs-muted">{label}</dt>
-      <dd className="mt-1 break-words font-medium text-[var(--vs-text)]">{value}</dd>
-    </div>
-  );
-}
-
-function parseBookCinemaHash(hash: string): ReadingPosition | null {
-  const raw = hash.startsWith("#") ? hash.slice(1) : hash;
-  const params = new URLSearchParams(raw);
-  if (params.get("cinema") !== "book") {
-    return null;
-  }
-  const bookSourceId = params.get("book")?.trim();
-  if (!bookSourceId) {
-    return null;
-  }
-  const parsedWord = Number(params.get("word") ?? "0");
-  return {
-    activeWordIndex: Number.isFinite(parsedWord) ? Math.max(0, Math.round(parsedWord)) : 0,
-    bookSourceId,
-    nodeId: params.get("node") ?? undefined,
-    scopeKey: params.get("scope") ?? undefined,
-  };
-}
-
-function replaceBookCinemaHash(position: ReadingPosition): void {
-  if (!position.bookSourceId || !position.scopeKey) {
-    return;
-  }
-  const params = new URLSearchParams();
-  params.set("cinema", "book");
-  params.set("book", position.bookSourceId);
-  params.set("scope", position.scopeKey);
-  params.set("word", String(Math.max(0, position.activeWordIndex ?? 0)));
-  if (position.nodeId) {
-    params.set("node", position.nodeId);
-  }
-  const nextHash = `#${params.toString()}`;
-  if (globalThis.location.hash !== nextHash) {
-    globalThis.history.replaceState(null, "", nextHash);
-  }
-}
-
-function scopeFromBookScopeKey(book: BookSource, key: string | undefined): BookScope {
-  if (!key) {
-    return resolveDefaultBookScope(book);
-  }
-  if (key === "book") {
-    return { type: "book", label: "Full book" };
-  }
-  const chapter = /^chapter:(\d+)$/.exec(key);
-  if (chapter) {
-    const chapterIndex = Number(chapter[1]);
-    const sourceChapter = book.chapters?.find((item) => item.index === chapterIndex);
-    const sourceSection = book.sections?.find(
-      (item) =>
-        item.chapterIndex === chapterIndex ||
-        (item.kind !== "pages" && item.index + 1 === chapterIndex),
-    );
-    return {
-      type: "chapter",
-      chapterIndex,
-      label: sourceChapter?.title ?? sourceSection?.title ?? `Chapter ${String(chapterIndex)}`,
-    };
-  }
-  const pages = /^pages:(\d+)-(\d+)$/.exec(key);
-  if (pages) {
-    const pageStart = Number(pages[1]);
-    const pageEnd = Number(pages[2]);
-    const sourceSection = book.sections?.find(
-      (item) =>
-        (item.kind === "pages" || item.pageStart !== undefined) &&
-        item.pageStart === pageStart &&
-        (item.pageEnd ?? item.pageStart) === pageEnd,
-    );
-    return {
-      type: "pages",
-      pageStart,
-      pageEnd,
-      label:
-        sourceSection?.title ??
-        (pageStart === pageEnd
-          ? `Page ${String(pageStart)}`
-          : `Pages ${String(pageStart)}-${String(pageEnd)}`),
-    };
-  }
-  return resolveDefaultBookScope(book);
-}
-
-function playbackProgressFromReadingPosition(
-  position: ReadingPosition | null,
-  bookSourceId: string,
-  scopeKey: string,
-  projectId: string,
-): PlaybackProgress | null {
-  if (
-    position?.bookSourceId !== bookSourceId ||
-    position.scopeKey !== scopeKey ||
-    position.activeWordIndex === undefined
-  ) {
-    return null;
-  }
-  const timestamp = new Date(0).toISOString();
-  return {
-    activeWordIndex: position.activeWordIndex,
-    bookScope: bookScopeFromScopeKey(scopeKey),
-    bookSourceId,
-    createdAt: timestamp,
-    currentTimeSec: 0,
-    finished: false,
-    hidden: false,
-    progress: 0,
-    projectId,
-    readingPosition: position,
-    targetId: `hash:${bookSourceId}:${scopeKey}`,
-    updatedAt: timestamp,
-  };
-}
-
-function bookScopeFromScopeKey(scopeKey: string): BookScope | undefined {
-  if (scopeKey === "book") {
-    return { type: "book", label: "Full book" };
-  }
-  const chapter = /^chapter:(\d+)$/.exec(scopeKey);
-  if (chapter) {
-    const chapterIndex = Number(chapter[1]);
-    return {
-      type: "chapter",
-      chapterIndex,
-      label: `Chapter ${String(chapterIndex)}`,
-    };
-  }
-  const pages = /^pages:(\d+)-(\d+)$/.exec(scopeKey);
-  if (pages) {
-    const pageStart = Number(pages[1]);
-    const pageEnd = Number(pages[2]);
-    return {
-      type: "pages",
-      pageStart,
-      pageEnd,
-      label:
-        pageStart === pageEnd
-          ? `Page ${String(pageStart)}`
-          : `Pages ${String(pageStart)}-${String(pageEnd)}`,
-    };
-  }
-  return undefined;
-}
-
-function progressTargetIdForJob(job: VoiceJob): string {
-  if (job.progressTargetId) {
-    return job.progressTargetId;
-  }
-  if (job.bookSourceId && job.bookScope) {
-    return progressTargetIdForBookScope(job.bookSourceId, job.bookScope);
-  }
-  if (job.preparedSourceId) {
-    return `prepared:${job.preparedSourceId}`;
-  }
-  return job.id ? `job:${job.id}` : "";
-}
-
-function progressTargetIdForBookScope(bookSourceId: string, scope: BookScope): string {
-  return `book:${bookSourceId}:${bookScopeKey(scope)}`;
-}
-
-function activeWordIndexForProgress(job: VoiceJob, cursorSec: number): number {
-  const durationSec = job.durationMs > 0 ? job.durationMs / 1000 : 0;
-  const wordCount = job.optimizedText.trim().split(/\s+/).filter(Boolean).length;
-  if (durationSec <= 0 || wordCount <= 0) {
-    return 0;
-  }
-  return Math.max(0, Math.min(wordCount - 1, Math.floor((cursorSec / durationSec) * wordCount)));
-}
-
-function formatSimilarity(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) {
-    return "waiting";
-  }
-
-  return `${Math.round(value * 100).toString()}%`;
-}
-
-function formatLikenessLabel(profile: VoiceProfile): string {
-  if (!profile.likeness) {
-    return "likeness pending";
-  }
-  return `${formatLikenessBadge(profile.likeness)} likeness`;
-}
-
-function formatLikenessBadge(likeness: NonNullable<VoiceProfile["likeness"]>): string {
-  if (likeness.status === "pending") {
-    return "pending";
-  }
-  if (likeness.status === "failed") {
-    return "needs QA";
-  }
-  const score = likeness.score ?? likeness.speakerSimilarity ?? 0;
-  if (score >= 0.82) {
-    return "strong";
-  }
-  if (score >= 0.68) {
-    return "good";
-  }
-  return "weak";
-}
-
-function likenessBadgeClass(likeness: NonNullable<VoiceProfile["likeness"]>): string {
-  if (likeness.status === "pending") {
-    return "bg-zinc-100 text-zinc-600";
-  }
-  if (likeness.status === "failed") {
-    return "bg-amber-100 text-amber-800";
-  }
-  const score = likeness.score ?? likeness.speakerSimilarity ?? 0;
-  if (score >= 0.82) {
-    return "bg-emerald-100 text-emerald-700";
-  }
-  if (score >= 0.68) {
-    return "bg-blue-100 text-blue-700";
-  }
-  return "bg-red-100 text-red-700";
-}
-
-function formatBytes(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) {
-    return "0 B";
-  }
-
-  if (value >= 1024 * 1024 * 1024) {
-    return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-  }
-  if (value >= 1024 * 1024) {
-    return `${(value / (1024 * 1024)).toFixed(2)} MB`;
-  }
-  if (value >= 1024) {
-    return `${(value / 1024).toFixed(1)} KB`;
-  }
-
-  return `${String(Math.round(value))} B`;
-}
-
-function formatPercentage(value: number): string {
-  if (!Number.isFinite(value)) {
-    return "n/a";
-  }
-
-  const ratio = Math.max(0, Math.min(1, value));
-  return `${Math.round(ratio * 100).toString()}%`;
-}
-
-function formatPercentageRatio(value: number, total: number): string {
-  if (!Number.isFinite(value) || !Number.isFinite(total) || total <= 0) {
-    return "0%";
-  }
-  return formatPercentage(value / total);
-}
-
-function formatPace(value: number | null | undefined): string {
-  if (!Number.isFinite(value) || !value || value <= 0) {
-    return "n/a";
-  }
-  if (value >= 100) {
-    return "99x+";
-  }
-  if (value >= 10) {
-    return `${Math.round(value).toString()}x`;
-  }
-  return `${value.toFixed(2)}x`;
-}
-
-function estimateFirstAudioETA(job: VoiceJob | null): string {
-  if (!job) {
-    return "n/a";
-  }
-  if ((job.audioReadySegments ?? 0) > 0) {
-    return "Ready";
-  }
-  const latencies = (job.audioSegmentLatenciesMs ?? []).filter((value) => value > 0);
-  if (latencies.length === 0) {
-    return job.status === "synthesizing" || job.status === "checking" ? "Calculating" : "n/a";
-  }
-  return formatDuration(Math.round(latencies[0]));
-}
-
-function formatSegment(job: VoiceJob): string {
-  const current =
-    job.retries.currentSegment > 0
-      ? job.retries.currentSegment
-      : (job.progress.currentSegment ?? 0);
-  const total =
-    job.retries.totalSegments > 0 ? job.retries.totalSegments : (job.progress.totalSegments ?? 0);
-  if (current > 0 && total > 0) {
-    return `${String(current)}/${String(total)}`;
-  }
-
-  return "waiting";
-}
-
-function formatElapsed(startedAt: string | undefined, now: number): string {
-  if (!startedAt) {
-    return "waiting";
-  }
-
-  const started = Date.parse(startedAt);
-  if (!Number.isFinite(started)) {
-    return "waiting";
-  }
-
-  const elapsedSeconds = Math.max(0, Math.floor((now - started) / 1000));
-  const minutes = Math.floor(elapsedSeconds / 60);
-  const seconds = elapsedSeconds % 60;
-  if (minutes > 0) {
-    return `${String(minutes)}m ${seconds.toString().padStart(2, "0")}s`;
-  }
-
-  return `${String(seconds)}s`;
-}
-
-function formatRelativeTime(timestamp: string | undefined, now: number): string {
-  if (!timestamp) {
-    return "No updates yet";
-  }
-  const parsed = Date.parse(timestamp);
-  if (!Number.isFinite(parsed)) {
-    return "No updates yet";
-  }
-  const elapsedSeconds = Math.max(0, Math.floor((now - parsed) / 1000));
-  if (elapsedSeconds < 5) {
-    return "just now";
-  }
-  if (elapsedSeconds < 60) {
-    return `${String(elapsedSeconds)}s ago`;
-  }
-  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
-  if (elapsedMinutes < 60) {
-    return `${String(elapsedMinutes)}m ago`;
-  }
-  const elapsedHours = Math.floor(elapsedMinutes / 60);
-  return `${String(elapsedHours)}h ago`;
-}
-
-function shortIdentifier(value: string): string {
-  const clean = value.trim();
-  if (clean.length <= 12) {
-    return clean || "pending";
-  }
-  return clean.slice(0, 12);
 }

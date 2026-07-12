@@ -58,18 +58,25 @@ backend/data/**
 backend/model/
 backend/voice/
 backend/model-cache/
+backend/output/
 backend/tmp/
-demo/
+demo/*
+!demo/deep-research-report.md
+!frontend/src/features/demo/
+!frontend/src/features/demo/**
 model/
 voice/
 frontend/.vercel/
 
 # Tool caches
 .cache/
+.codex/
+.agents/
 .turbo/
 .upstreams/
 .playwright-cli/
 .playwright-mcp/
+.learnings-skillpack.json
 
 # Local verification screenshots
 /tts-research-*.png

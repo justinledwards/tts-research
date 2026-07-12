@@ -16,6 +16,7 @@ export type ReaderKeyboardCommand =
   | "seekForward"
   | "speedDown"
   | "speedUp"
+  | "toggleTheatreControls"
   | "togglePlayback";
 
 export interface ReaderAccessibilitySettings {
@@ -34,6 +35,7 @@ export interface ReaderLiveAnnouncementInput {
 }
 
 export const READER_PLAYBACK_RATES = [0.8, 1, 1.25, 1.5] as const;
+export const READER_SEEK_SECONDS = 10;
 
 export const DEFAULT_READER_ACCESSIBILITY_SETTINGS: ReaderAccessibilitySettings = {
   highContrast: false,
@@ -148,6 +150,9 @@ export function readerKeyboardCommandForKey(key: string): ReaderKeyboardCommand 
   }
   if (normalized === "b") {
     return "bookmark";
+  }
+  if (normalized === "t") {
+    return "toggleTheatreControls";
   }
   if (normalized === "Escape") {
     return "close";

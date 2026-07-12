@@ -1,12 +1,23 @@
 import { MARKDOWN_ADAPTER_VERSION, parseMarkdown, snapshotAst } from "./parse.js";
 import { transformMarkdownAst } from "./transform.js";
+import {
+  inlineText,
+  stableFingerprint,
+  stableOrderKeyFromPosition,
+  stableUnitNodeId,
+} from "../shared/ir.js";
 
 export function emitMarkdownAdapter(source, options = {}) {
   const parseResult = parseMarkdown(source, options);
   const transformed = transformMarkdownAst(parseResult.tree, source, {
     parseWarnings: parseResult.warnings,
   });
-  const blocks = transformed.nodes.map((node, index) => semanticNodeToBlock(node, index));
+  const sourceId = options.sourceId ?? "markdown-source";
+  const sourceName = options.sourceName ?? "source.md";
+  const blocks = assignStableMarkdownBlockIdentity(
+    transformed.nodes.map((node, index) => semanticNodeToBlock(node, index)),
+    { sourceId, sourceName },
+  );
   return {
     adapterVersion: MARKDOWN_ADAPTER_VERSION,
     ast: options.includeAst ? snapshotAst(parseResult.tree) : undefined,
@@ -28,6 +39,57 @@ export function emitMarkdownAdapter(source, options = {}) {
     title: transformed.title,
     warnings: transformed.warnings,
   };
+}
+
+function assignStableMarkdownBlockIdentity(blocks, { sourceId, sourceName }) {
+  const usedIds = new Set();
+  let sectionAnchor = "document";
+  return blocks.map((block, index) => {
+    const text = block.text || block.spokenText || block.label || block.kind;
+    const plainText = inlineText(text);
+    const headingAnchor = inlineText(block.label || block.spokenText || block.text);
+    if (block.kind === "heading" || block.kind === "subheading") {
+      sectionAnchor = headingAnchor || sectionAnchor;
+    }
+    const semanticAnchor = [
+      sourceName,
+      block.kind,
+      block.kind === "heading" || block.kind === "subheading" ? headingAnchor : sectionAnchor,
+      plainText,
+    ]
+      .filter(Boolean)
+      .join("|");
+    const nodeId = stableUnitNodeId({
+      anchor: semanticAnchor || block.metadata.astPath,
+      format: "markdown",
+      kind: block.kind,
+      text,
+      usedIds,
+    });
+    const orderKey = stableOrderKeyFromPosition(block.startOffset, index);
+    const locator = markdownLocator(block, index, sourceName);
+    const fingerprint = stableFingerprint({
+      displayText: block.text,
+      format: "markdown",
+      kind: block.kind,
+      locator,
+      nodeId,
+      sourceId,
+      speechText: block.spokenText,
+    });
+    return {
+      ...block,
+      id: nodeId,
+      orderKey,
+      metadata: {
+        ...block.metadata,
+        fingerprint,
+        identityAnchor: semanticAnchor,
+        identityVersion: "stable-unit-identity.v1",
+        orderAnchor: `byte:${String(block.startOffset ?? index)}`,
+      },
+    };
+  });
 }
 
 function semanticNodeToBlock(node, index) {
@@ -56,6 +118,20 @@ function semanticNodeToBlock(node, index) {
   };
 }
 
+function markdownLocator(block, index, sourceName) {
+  return {
+    markdown: {
+      astPath: block.metadata.astPath ?? `/children/${index}`,
+      columnEnd: block.metadata.columnEnd ?? 0,
+      columnStart: block.metadata.columnStart ?? 0,
+      lineEnd: block.metadata.lineEnd ?? 0,
+      lineStart: block.metadata.lineStart ?? 0,
+      path: sourceName,
+    },
+    type: "markdown",
+  };
+}
+
 function emitContentIRDocument(blocks, transformed, options) {
   const sourceId = options.sourceId ?? "markdown-source";
   const sourceName = options.sourceName ?? "source.md";
@@ -74,24 +150,21 @@ function emitContentIRDocument(blocks, transformed, options) {
       metadata: block.metadata,
       nodeId: block.id,
       normalisedText: normalizeText(block.text),
-      orderKey: String(index + 1).padStart(8, "0"),
+      orderKey: block.orderKey,
       parentId: "",
       provenance: {
         format: "markdown",
-        locator: {
-          markdown: {
-            astPath: block.metadata.astPath ?? `/children/${index}`,
-            columnEnd: block.metadata.columnEnd ?? 0,
-            columnStart: block.metadata.columnStart ?? 0,
-            lineEnd: block.metadata.lineEnd ?? 0,
-            lineStart: block.metadata.lineStart ?? 0,
-            path: sourceName,
-          },
-          type: "markdown",
-        },
+        locator: markdownLocator(block, index, sourceName),
         offsets: {
           end: block.endOffset,
           start: block.startOffset,
+        },
+        extraction: {
+          confidence: block.confidence,
+          extractor: "markdown",
+          extractorVersion: MARKDOWN_ADAPTER_VERSION,
+          step: "markdown-ast-to-content-ir",
+          supportTier: "core",
         },
         sourceId,
       },
@@ -145,8 +218,23 @@ function skippedReason(block) {
   if (block.kind === "frontmatter") {
     return "frontmatter kept as metadata";
   }
+  if (block.kind === "artifact_token") {
+    return "raw artifact token kept out of spoken playback";
+  }
+  if (block.kind === "citation") {
+    return "citation marker kept out of spoken playback";
+  }
   if (block.kind === "embedded") {
     return "embedded construct kept as safe fallback";
+  }
+  if (block.kind === "footnote") {
+    return "footnote marker available through citation policy";
+  }
+  if (block.kind === "reference") {
+    return "reference marker available through citation policy";
+  }
+  if (block.kind === "unknown_inline_marker") {
+    return "unknown inline marker kept out of spoken playback";
   }
   if (block.kind === "directive") {
     return "unsupported directive kept as safe fallback";

@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
@@ -45,7 +44,8 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	app.Use(cors.New(cors.Config{
 		AllowOriginsFunc:    corsAllowedOrigin,
 		AllowMethods:        []string{fiber.MethodGet, fiber.MethodPost, fiber.MethodPut, fiber.MethodPatch, fiber.MethodDelete, fiber.MethodOptions},
-		AllowHeaders:        []string{"Origin", "Content-Type", "Accept"},
+		AllowHeaders:        []string{"Origin", "Content-Type", "Accept", "If-Match", "If-None-Match"},
+		ExposeHeaders:       []string{"ETag"},
 		AllowPrivateNetwork: true,
 	}))
 
@@ -228,202 +228,11 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(policy.PublicDefinition())
 	})
 
-	app.Get("/api/projects", func(ctx fiber.Ctx) error {
-		return ctx.JSON(service.ListProjects())
-	})
-
-	app.Post("/api/projects", func(ctx fiber.Ctx) error {
-		var request struct {
-			Name string `json:"name"`
-		}
-		if err := ctx.Bind().Body(&request); err != nil {
-			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
-		}
-		project, err := service.CreateProject(request.Name)
-		if err != nil {
-			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
-		}
-		return ctx.Status(fiber.StatusCreated).JSON(project)
-	})
-
-	app.Patch("/api/projects/:id", func(ctx fiber.Ctx) error {
-		var request struct {
-			Name string `json:"name"`
-		}
-		if err := ctx.Bind().Body(&request); err != nil {
-			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
-		}
-		project, err := service.UpdateProject(ctx.Params("id"), request.Name)
-		if err != nil {
-			return notFound(ctx, err)
-		}
-		return ctx.JSON(project)
-	})
-
-	app.Delete("/api/projects/:id", func(ctx fiber.Ctx) error {
-		err := service.DeleteProject(ctx.Params("id"))
-		if err != nil {
-			if errors.Is(err, pipeline.ErrProjectProtected) {
-				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
-			}
-			return notFound(ctx, err)
-		}
-		return ctx.SendStatus(fiber.StatusNoContent)
-	})
-
-	app.Get("/api/projects/:id/jobs", func(ctx fiber.Ctx) error {
-		jobs, err := service.ListProjectJobs(ctx.Params("id"))
-		if err != nil {
-			return notFound(ctx, err)
-		}
-		return ctx.JSON(jobs)
-	})
-
-	app.Get("/api/projects/:id/storage", func(ctx fiber.Ctx) error {
-		summary, err := service.GetProjectStorageSummary(ctx.Params("id"))
-		if err != nil {
-			return notFound(ctx, err)
-		}
-		return ctx.JSON(summary)
-	})
-
-	app.Get("/api/projects/:id/progress", func(ctx fiber.Ctx) error {
-		progress, err := service.ListProjectProgress(ctx.Params("id"))
-		if err != nil {
-			return notFound(ctx, err)
-		}
-		return ctx.JSON(progress)
-	})
-
-	app.Get("/api/projects/:id/speech-policy", func(ctx fiber.Ctx) error {
-		settings, err := service.GetProjectSpeechPolicy(ctx.Params("id"))
-		if err != nil {
-			return notFound(ctx, err)
-		}
-		return ctx.JSON(settings)
-	})
-
-	app.Patch("/api/projects/:id/speech-policy", func(ctx fiber.Ctx) error {
-		var request struct {
-			Profile string `json:"profile"`
-		}
-		if err := ctx.Bind().Body(&request); err != nil {
-			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
-		}
-		settings, err := service.UpdateProjectSpeechPolicy(ctx.Params("id"), request.Profile)
-		if err != nil {
-			if errors.Is(err, pipeline.ErrSpeechPolicyProfileNotFound) {
-				return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
-			}
-			return notFound(ctx, err)
-		}
-		return ctx.JSON(settings)
-	})
-
-	app.Post("/api/projects/:id/speech-policy/profiles", func(ctx fiber.Ctx) error {
-		var request pipeline.UpsertSpeechPolicyProfileRequest
-		if err := ctx.Bind().Body(&request); err != nil {
-			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
-		}
-		settings, err := service.CreateCustomSpeechPolicyProfile(ctx.Params("id"), request)
-		if err != nil {
-			if errors.Is(err, pipeline.ErrProjectNotFound) {
-				return notFound(ctx, err)
-			}
-			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
-		}
-		return ctx.Status(fiber.StatusCreated).JSON(settings)
-	})
-
-	app.Patch("/api/projects/:id/speech-policy/profiles/:profileId", func(ctx fiber.Ctx) error {
-		var request pipeline.UpsertSpeechPolicyProfileRequest
-		if err := ctx.Bind().Body(&request); err != nil {
-			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
-		}
-		settings, err := service.UpdateCustomSpeechPolicyProfile(ctx.Params("id"), ctx.Params("profileId"), request)
-		if err != nil {
-			if errors.Is(err, pipeline.ErrProjectNotFound) || errors.Is(err, pipeline.ErrSpeechPolicyProfileNotFound) {
-				return notFound(ctx, err)
-			}
-			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
-		}
-		return ctx.JSON(settings)
-	})
-
-	app.Delete("/api/projects/:id/speech-policy/profiles/:profileId", func(ctx fiber.Ctx) error {
-		settings, err := service.DeleteCustomSpeechPolicyProfile(ctx.Params("id"), ctx.Params("profileId"))
-		if err != nil {
-			if errors.Is(err, pipeline.ErrProjectNotFound) || errors.Is(err, pipeline.ErrSpeechPolicyProfileNotFound) {
-				return notFound(ctx, err)
-			}
-			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
-		}
-		return ctx.JSON(settings)
-	})
-
-	app.Get("/api/projects/:id/lexicon", func(ctx fiber.Ctx) error {
-		lex, err := service.GetProjectLexicon(ctx.Params("id"))
-		if err != nil {
-			return notFound(ctx, err)
-		}
-		return ctx.JSON(lex)
-	})
-
-	app.Post("/api/projects/:id/lexicon", func(ctx fiber.Ctx) error {
-		var request pipeline.LexiconUpsertRequest
-		if err := ctx.Bind().Body(&request); err != nil {
-			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
-		}
-		lex, err := service.UpsertProjectLexiconEntry(ctx.Params("id"), request)
-		if err != nil {
-			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
-		}
-		return ctx.Status(fiber.StatusCreated).JSON(lex)
-	})
-
-	app.Patch("/api/projects/:id/lexicon/entries/:entryId", func(ctx fiber.Ctx) error {
-		var request pipeline.LexiconUpsertRequest
-		if err := ctx.Bind().Body(&request); err != nil {
-			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
-		}
-		request.ID = ctx.Params("entryId")
-		lex, err := service.UpsertProjectLexiconEntry(ctx.Params("id"), request)
-		if err != nil {
-			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
-		}
-		return ctx.JSON(lex)
-	})
-
-	app.Delete("/api/projects/:id/lexicon/entries/:entryId", func(ctx fiber.Ctx) error {
-		lex, err := service.DeleteProjectLexiconEntry(ctx.Params("id"), ctx.Params("entryId"))
-		if err != nil {
-			return notFound(ctx, err)
-		}
-		return ctx.JSON(lex)
-	})
-
-	app.Post("/api/projects/:id/lexicon/import", func(ctx fiber.Ctx) error {
-		file, err := openLexiconUpload(ctx)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-		lex, err := service.ImportProjectLexicon(ctx.Params("id"), file)
-		if err != nil {
-			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
-		}
-		return ctx.JSON(lex)
-	})
-
-	app.Get("/api/projects/:id/lexicon/export.pls", func(ctx fiber.Ctx) error {
-		data, err := service.ExportProjectLexiconPLS(ctx.Params("id"))
-		if err != nil {
-			return notFound(ctx, err)
-		}
-		ctx.Set(fiber.HeaderContentType, "application/pls+xml")
-		ctx.Set(fiber.HeaderContentDisposition, `attachment; filename="project-lexicon.pls"`)
-		return ctx.Send(data)
-	})
+	registerProjectRoutes(app, service)
+	registerReaderWorkspaceRoutes(app, service)
+	registerVoiceJobRoutes(app, service)
+	registerTemporarySourceRoutes(app, service)
+	registerSourceManifestRoutes(app, service)
 
 	app.Get("/api/projects/:id/book-sources", func(ctx fiber.Ctx) error {
 		summary := strings.EqualFold(ctx.Query("summary"), "1") ||
@@ -533,6 +342,51 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(source)
 	})
 
+	app.Patch("/api/source-preps/:id", func(ctx fiber.Ctx) error {
+		var request struct {
+			Name string `json:"name"`
+		}
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		source, err := service.RenamePreparedSource(ctx.Params("id"), request.Name)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrPreparedSourceNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(source)
+	})
+
+	app.Delete("/api/source-preps/:id", func(ctx fiber.Ctx) error {
+		if err := service.DeletePreparedSource(ctx.Params("id")); err != nil {
+			if errors.Is(err, pipeline.ErrPreparedSourceNotFound) {
+				return notFound(ctx, err)
+			}
+			if errors.Is(err, pipeline.ErrAssetInUse) {
+				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.SendStatus(fiber.StatusNoContent)
+	})
+
+	app.Post("/api/source-preps/:id/readiness/confirm", func(ctx fiber.Ctx) error {
+		var request pipeline.SourceReadinessConfirmationRequest
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		source, err := service.ConfirmPreparedSourceReadiness(ctx.Params("id"), request)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrPreparedSourceNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(source)
+	})
+
 	app.Post("/api/source-preps/:id/transcript", func(ctx fiber.Ctx) error {
 		source, err := service.RefreshPreparedSourceTranscript(ctx.Context(), ctx.Params("id"))
 		if err != nil {
@@ -614,6 +468,51 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		return ctx.JSON(book)
 	})
 
+	app.Patch("/api/book-sources/:id", func(ctx fiber.Ctx) error {
+		var request struct {
+			Name string `json:"name"`
+		}
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		book, err := service.RenameBookSource(ctx.Params("id"), request.Name)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrBookSourceNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(book)
+	})
+
+	app.Delete("/api/book-sources/:id", func(ctx fiber.Ctx) error {
+		if err := service.DeleteBookSource(ctx.Params("id")); err != nil {
+			if errors.Is(err, pipeline.ErrBookSourceNotFound) {
+				return notFound(ctx, err)
+			}
+			if errors.Is(err, pipeline.ErrAssetInUse) {
+				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.SendStatus(fiber.StatusNoContent)
+	})
+
+	app.Post("/api/book-sources/:id/readiness/confirm", func(ctx fiber.Ctx) error {
+		var request pipeline.SourceReadinessConfirmationRequest
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		book, err := service.ConfirmBookSourceReadiness(ctx.Params("id"), request)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrBookSourceNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(book)
+	})
+
 	app.Get("/api/book-sources/:id/scope", func(ctx fiber.Ctx) error {
 		scope := bookScopeFromQuery(ctx)
 		content, err := service.GetBookSourceScope(ctx.Params("id"), scope)
@@ -682,7 +581,11 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	})
 
 	app.Get("/api/projects/:id/bundle/summary", func(ctx fiber.Ctx) error {
-		summary, err := service.GetProjectBundleSummary(ctx.Params("id"))
+		options, err := bundleExportOptionsFromQuery(ctx)
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		summary, err := service.GetProjectBundleSummary(ctx.Params("id"), options)
 		if err != nil {
 			return notFound(ctx, err)
 		}
@@ -690,7 +593,11 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 	})
 
 	app.Get("/api/projects/:id/bundle", func(ctx fiber.Ctx) error {
-		bundle, filename, err := service.ExportProjectBundle(ctx.Params("id"))
+		options, err := bundleExportOptionsFromQuery(ctx)
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
+		bundle, filename, err := service.ExportProjectBundle(ctx.Params("id"), options)
 		if err != nil {
 			return notFound(ctx, err)
 		}
@@ -734,27 +641,6 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
 		}
 		return ctx.Status(fiber.StatusCreated).JSON(result)
-	})
-
-	app.Post("/api/voice-jobs", func(ctx fiber.Ctx) error {
-		var request pipeline.CreateJobRequest
-		if err := json.Unmarshal(ctx.Body(), &request); err != nil {
-			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
-		}
-		job, err := service.CreateJob(ctx.Context(), request)
-		if err != nil {
-			if errors.Is(err, pipeline.ErrProjectNotFound) {
-				return notFound(ctx, err)
-			}
-			status := fiber.StatusInternalServerError
-			if errors.Is(err, pipeline.ErrEmptyText) || errors.Is(err, pipeline.ErrVoiceNotFound) {
-				status = fiber.StatusBadRequest
-			}
-
-			return ctx.Status(status).JSON(errorResponse(err.Error()))
-		}
-
-		return ctx.Status(fiber.StatusCreated).JSON(job)
 	})
 
 	app.Patch("/api/progress/:targetId", func(ctx fiber.Ctx) error {
@@ -809,156 +695,6 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			return notFound(ctx, err)
 		}
 		return ctx.JSON(session)
-	})
-
-	app.Get("/api/voice-jobs/:id", func(ctx fiber.Ctx) error {
-		includeTiming := ctx.Query("includeTiming") == "1" || strings.EqualFold(ctx.Query("includeTiming"), "true")
-		job, err := service.GetJobWithTiming(ctx.Params("id"), includeTiming)
-		if err != nil {
-			return notFound(ctx, err)
-		}
-
-		return ctx.JSON(job)
-	})
-
-	app.Get("/api/voice-jobs/:id/highlight-map", func(ctx fiber.Ctx) error {
-		payload, err := service.GetHighlightMap(ctx.Params("id"))
-		if err != nil {
-			if errors.Is(err, pipeline.ErrAudioNotReady) {
-				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
-			}
-			return notFound(ctx, err)
-		}
-		return ctx.JSON(payload)
-	})
-
-	app.Get("/api/voice-jobs/:id/speech-plan", func(ctx fiber.Ctx) error {
-		payload, err := service.GetJobSpeechPlan(ctx.Params("id"))
-		if err != nil {
-			return notFound(ctx, err)
-		}
-		return ctx.JSON(payload)
-	})
-
-	app.Get("/api/voice-jobs/:id/timing/fragments", func(ctx fiber.Ctx) error {
-		payload, err := service.GetFragmentTiming(ctx.Params("id"))
-		if err != nil {
-			if errors.Is(err, pipeline.ErrAudioNotReady) {
-				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
-			}
-			return notFound(ctx, err)
-		}
-		return ctx.JSON(payload)
-	})
-
-	app.Get("/api/voice-jobs/:id/timing/tokens", func(ctx fiber.Ctx) error {
-		payload, err := service.GetTokenTiming(ctx.Params("id"))
-		if err != nil {
-			if errors.Is(err, pipeline.ErrAudioNotReady) {
-				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
-			}
-			return notFound(ctx, err)
-		}
-		return ctx.JSON(payload)
-	})
-
-	app.Get("/api/voice-jobs/:id/events", func(ctx fiber.Ctx) error {
-		id := ctx.Params("id")
-		if _, err := service.GetJob(id); err != nil {
-			return notFound(ctx, err)
-		}
-
-		ctx.Set(fiber.HeaderContentType, "text/event-stream")
-		ctx.Set(fiber.HeaderCacheControl, "no-cache")
-		ctx.Set(fiber.HeaderConnection, "keep-alive")
-		ctx.Set("X-Accel-Buffering", "no")
-
-		return ctx.SendStreamWriter(func(writer *bufio.Writer) {
-			ticker := time.NewTicker(1500 * time.Millisecond)
-			defer ticker.Stop()
-
-			for {
-				job, err := service.GetJob(id)
-				if err != nil {
-					_ = writeSSE(writer, "voice-job-error", errorResponse(err.Error()))
-					return
-				}
-
-				if err := writeSSE(writer, "voice-job", job); err != nil {
-					return
-				}
-
-				if job.Status == pipeline.JobStatusCompleted || job.Status == pipeline.JobStatusFailed || job.Status == pipeline.JobStatusCancelled {
-					return
-				}
-
-				<-ticker.C
-			}
-		})
-	})
-
-	app.Post("/api/voice-jobs/:id/cancel", func(ctx fiber.Ctx) error {
-		if err := service.CancelJob(ctx.Params("id")); err != nil {
-			return notFound(ctx, err)
-		}
-
-		return ctx.SendStatus(fiber.StatusNoContent)
-	})
-
-	app.Get("/api/voice-jobs/:id/audio", func(ctx fiber.Ctx) error {
-		audio, contentType, err := service.GetAudio(ctx.Params("id"))
-		if err != nil {
-			if errors.Is(err, pipeline.ErrAudioNotReady) {
-				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
-			}
-
-			return notFound(ctx, err)
-		}
-
-		ctx.Set(fiber.HeaderContentType, contentType)
-		ctx.Set(fiber.HeaderCacheControl, "no-store")
-		ctx.Set("Pragma", "no-cache")
-		ctx.Set("Expires", "0")
-		return ctx.Send(audio)
-	})
-
-	app.Get("/api/voice-jobs/:id/audio/partial", func(ctx fiber.Ctx) error {
-		audio, contentType, err := service.GetPartialAudio(ctx.Params("id"))
-		if err != nil {
-			if errors.Is(err, pipeline.ErrAudioNotReady) {
-				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
-			}
-
-			return notFound(ctx, err)
-		}
-
-		ctx.Set(fiber.HeaderContentType, contentType)
-		ctx.Set(fiber.HeaderCacheControl, "no-store")
-		ctx.Set("Pragma", "no-cache")
-		ctx.Set("Expires", "0")
-		return ctx.Send(audio)
-	})
-
-	app.Get("/api/voice-jobs/:id/audio/segment/:index", func(ctx fiber.Ctx) error {
-		segmentIndex, err := strconv.Atoi(ctx.Params("index"))
-		if err != nil || segmentIndex < 1 {
-			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("segment index must be a positive integer"))
-		}
-
-		audio, contentType, err := service.GetAudioSegment(ctx.Params("id"), segmentIndex)
-		if err != nil {
-			if errors.Is(err, pipeline.ErrAudioNotReady) {
-				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
-			}
-
-			return notFound(ctx, err)
-		}
-
-		ctx.Set(fiber.HeaderContentType, contentType)
-		ctx.Set(fiber.HeaderCacheControl, "no-store")
-		ctx.Set("Pragma", "no-cache")
-		ctx.Set("Expires", "0")
-		return ctx.Send(audio)
 	})
 
 	app.Get("/api/voice-profiles", func(ctx fiber.Ctx) error {
@@ -1046,6 +782,10 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 		if err != nil {
 			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid multipart form data"))
 		}
+		provenance, err := voiceProfileSourceProvenanceFromMultipart(form)
+		if err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse(err.Error()))
+		}
 
 		fileHeaders := form.File["file"]
 		if len(fileHeaders) == 0 {
@@ -1110,11 +850,12 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse("could not finalize upload temp file"))
 		}
 
-		source, err := service.CreateVoiceProfileSource(
+		source, err := service.CreateVoiceProfileSourceWithOptions(
 			ctx.Context(),
 			tempPath,
 			file.Filename,
 			copied,
+			pipeline.CreateVoiceProfileSourceOptions{Provenance: provenance},
 		)
 		if err != nil {
 			if errors.Is(err, pipeline.ErrProfileTooLarge) {
@@ -1335,9 +1076,29 @@ func NewRouter(service *pipeline.Service) *fiber.App {
 
 	app.Delete("/api/voice-profiles/:id", func(ctx fiber.Ctx) error {
 		if err := service.DeleteVoiceProfile(ctx.Params("id")); err != nil {
+			if errors.Is(err, pipeline.ErrAssetInUse) {
+				return ctx.Status(fiber.StatusConflict).JSON(errorResponse(err.Error()))
+			}
 			return notFound(ctx, err)
 		}
 		return ctx.SendStatus(fiber.StatusNoContent)
+	})
+
+	app.Patch("/api/voice-profiles/:id", func(ctx fiber.Ctx) error {
+		var request struct {
+			Name string `json:"name"`
+		}
+		if err := ctx.Bind().Body(&request); err != nil {
+			return ctx.Status(fiber.StatusBadRequest).JSON(errorResponse("invalid JSON body"))
+		}
+		profile, err := service.RenameVoiceProfile(ctx.Params("id"), request.Name)
+		if err != nil {
+			if errors.Is(err, pipeline.ErrProfileNotFound) {
+				return notFound(ctx, err)
+			}
+			return ctx.Status(fiber.StatusInternalServerError).JSON(errorResponse(err.Error()))
+		}
+		return ctx.JSON(profile)
 	})
 
 	app.Post("/api/voice-profiles/:id/targets/:targetId", func(ctx fiber.Ctx) error {
@@ -1521,6 +1282,7 @@ func notFound(ctx fiber.Ctx, err error) error {
 		errors.Is(err, pipeline.ErrBookSourceNotFound) ||
 		errors.Is(err, pipeline.ErrPreparedSourceNotFound) ||
 		errors.Is(err, pipeline.ErrContentIRNotFound) ||
+		errors.Is(err, pipeline.ErrSourceLifecycleNotFound) ||
 		errors.Is(err, pipeline.ErrProgressNotFound) ||
 		errors.Is(err, pipeline.ErrPlaybackSessionNotFound) ||
 		errors.Is(err, pipeline.ErrResearchModuleNotFound) {
@@ -1612,6 +1374,20 @@ func saveUploadedBundle(ctx fiber.Ctx) (string, func(), error) {
 	return tempPath, cleanup, nil
 }
 
+func bundleExportOptionsFromQuery(ctx fiber.Ctx) (pipeline.ProjectBundleExportOptions, error) {
+	options := pipeline.ProjectBundleExportOptions{IncludeGeneratedAudio: true}
+	raw := strings.TrimSpace(ctx.Query("includeGeneratedAudio"))
+	if raw == "" {
+		return options, nil
+	}
+	includeGeneratedAudio, err := strconv.ParseBool(raw)
+	if err != nil {
+		return options, fmt.Errorf("invalid includeGeneratedAudio value")
+	}
+	options.IncludeGeneratedAudio = includeGeneratedAudio
+	return options, nil
+}
+
 func saveUploadedBooks(ctx fiber.Ctx) ([]pipeline.BookSourceUpload, pipeline.BookSourceImportOptions, func(), error) {
 	form, err := ctx.MultipartForm()
 	if err != nil {
@@ -1678,6 +1454,20 @@ func firstFormValue(values []string) string {
 		return ""
 	}
 	return values[0]
+}
+
+func voiceProfileSourceProvenanceFromMultipart(
+	form *multipart.Form,
+) (*pipeline.VoiceProfileProvenance, error) {
+	raw := strings.TrimSpace(firstFormValue(form.Value["provenance"]))
+	if raw == "" {
+		return nil, errors.New("missing voice profile provenance")
+	}
+	var provenance pipeline.VoiceProfileProvenance
+	if err := json.Unmarshal([]byte(raw), &provenance); err != nil {
+		return nil, fmt.Errorf("invalid voice profile provenance JSON: %w", err)
+	}
+	return pipeline.NormalizeVoiceProfileProvenance(&provenance)
 }
 
 func openLexiconUpload(ctx fiber.Ctx) (io.ReadCloser, error) {

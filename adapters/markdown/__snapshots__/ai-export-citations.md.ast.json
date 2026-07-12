@@ -1,0 +1,218 @@
+{
+  "type": "root",
+  "position": {
+    "start": {
+      "line": 1,
+      "column": 1,
+      "offset": 0
+    },
+    "end": {
+      "line": 8,
+      "column": 1,
+      "offset": 189
+    }
+  },
+  "children": [
+    {
+      "type": "heading",
+      "position": {
+        "start": {
+          "line": 1,
+          "column": 1,
+          "offset": 0
+        },
+        "end": {
+          "line": 1,
+          "column": 22,
+          "offset": 21
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "AI Export Citations",
+          "position": {
+            "start": {
+              "line": 1,
+              "column": 3,
+              "offset": 2
+            },
+            "end": {
+              "line": 1,
+              "column": 22,
+              "offset": 21
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "position": {
+        "start": {
+          "line": 3,
+          "column": 1,
+          "offset": 23
+        },
+        "end": {
+          "line": 3,
+          "column": 64,
+          "offset": 86
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "The literature review summary is stable [cite][turn40search10].",
+          "position": {
+            "start": {
+              "line": 3,
+              "column": 1,
+              "offset": 23
+            },
+            "end": {
+              "line": 3,
+              "column": 64,
+              "offset": 86
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "position": {
+        "start": {
+          "line": 5,
+          "column": 1,
+          "offset": 88
+        },
+        "end": {
+          "line": 5,
+          "column": 21,
+          "offset": 108
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "[cite][turn1search0]",
+          "position": {
+            "start": {
+              "line": 5,
+              "column": 1,
+              "offset": 88
+            },
+            "end": {
+              "line": 5,
+              "column": 21,
+              "offset": 108
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "position": {
+        "start": {
+          "line": 7,
+          "column": 1,
+          "offset": 110
+        },
+        "end": {
+          "line": 7,
+          "column": 79,
+          "offset": 188
+        }
+      },
+      "children": [
+        {
+          "type": "text",
+          "value": "The source bundle also carried ",
+          "position": {
+            "start": {
+              "line": 7,
+              "column": 1,
+              "offset": 110
+            },
+            "end": {
+              "line": 7,
+              "column": 32,
+              "offset": 141
+            }
+          }
+        },
+        {
+          "type": "textDirective",
+          "name": "contentReference",
+          "attributes": {
+            "index": "3"
+          },
+          "position": {
+            "start": {
+              "line": 7,
+              "column": 32,
+              "offset": 141
+            },
+            "end": {
+              "line": 7,
+              "column": 69,
+              "offset": 178
+            }
+          },
+          "children": [
+            {
+              "type": "text",
+              "value": "oaicite",
+              "position": {
+                "start": {
+                  "line": 7,
+                  "column": 50,
+                  "offset": 159
+                },
+                "end": {
+                  "line": 7,
+                  "column": 57,
+                  "offset": 166
+                }
+              }
+            },
+            {
+              "type": "textDirective",
+              "name": "3",
+              "position": {
+                "start": {
+                  "line": 7,
+                  "column": 57,
+                  "offset": 166
+                },
+                "end": {
+                  "line": 7,
+                  "column": 59,
+                  "offset": 168
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "value": " metadata.",
+          "position": {
+            "start": {
+              "line": 7,
+              "column": 69,
+              "offset": 178
+            },
+            "end": {
+              "line": 7,
+              "column": 79,
+              "offset": 188
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

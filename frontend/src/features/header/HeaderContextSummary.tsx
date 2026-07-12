@@ -1,0 +1,266 @@
+import type { ReactNode } from "react";
+import { buildHeaderLifecycleSentence, type HeaderLifecycleFact } from "./headerLifecycleSentence";
+import {
+  type SourceLifecycleDescriptor,
+  type SourceLifecycleEnvelope,
+  type SourceLifecycleTone,
+  sourceLifecycleDescriptor,
+} from "../source-lifecycle/sourceLifecycle";
+
+export interface HeaderContextMetadataItem {
+  label: string;
+  value: string;
+}
+
+export interface HeaderContextSummaryProps {
+  className?: string;
+  density?: "compact" | "comfortable";
+  id?: string;
+  icon?: ReactNode;
+  inlineSummary?: boolean;
+  metadata?: HeaderContextMetadataItem[];
+  scopeTitle?: string | null;
+  sourceLifecycleDescriptorOverride?: SourceLifecycleDescriptor | null;
+  sourceLifecycle?: SourceLifecycleEnvelope | null;
+  sourceLifecycleGeneratedAudioLabel?: string | null;
+  sourceTitle: string;
+  stateLabel?: string | null;
+  surfaceName: string;
+  variant?: "bar" | "panel";
+}
+
+export function HeaderContextSummary({
+  className = "",
+  density = "comfortable",
+  id,
+  icon,
+  inlineSummary = true,
+  metadata = [],
+  scopeTitle,
+  sourceLifecycleDescriptorOverride = null,
+  sourceLifecycle = null,
+  sourceLifecycleGeneratedAudioLabel = null,
+  sourceTitle,
+  stateLabel,
+  surfaceName,
+  variant = "panel",
+}: Readonly<HeaderContextSummaryProps>) {
+  const normalizedSourceTitle = nonEmptyLabel(
+    sourceLifecycle?.title ?? sourceTitle,
+    "No source selected",
+  );
+  const normalizedScopeTitle =
+    cleanOptionalLabel(sourceLifecycle?.selectedScope ?? scopeTitle) ?? "Full source";
+  const normalizedStateLabel = cleanOptionalLabel(stateLabel);
+  const lifecycleDescriptor = sourceLifecycle
+    ? (sourceLifecycleDescriptorOverride ??
+      sourceLifecycleDescriptor(sourceLifecycle.canonicalState))
+    : null;
+  const lifecycleSentence = buildHeaderLifecycleSentence({
+    metadata,
+    sourceLifecycle,
+    sourceLifecycleDescriptorOverride: lifecycleDescriptor,
+    sourceLifecycleGeneratedAudioLabel,
+    stateLabel: normalizedStateLabel,
+    surfaceName,
+  });
+  const effectiveMetadata = lifecycleSentence.detailFacts;
+  const ariaLabel = buildHeaderContextAriaLabel({
+    metadata: effectiveMetadata,
+    scopeTitle: normalizedScopeTitle,
+    sourceTitle: normalizedSourceTitle,
+    stateLabel: lifecycleSentence.primaryLabel,
+    surfaceName,
+  });
+  const isBar = variant === "bar";
+  const showEmergencyState = lifecycleSentence.primaryTone === "danger";
+  let textSizeClass = "text-lg";
+  if (density === "compact") {
+    textSizeClass = "text-sm sm:text-base";
+  } else if (isBar) {
+    textSizeClass = "text-base sm:text-lg";
+  }
+
+  return (
+    <section
+      aria-label={ariaLabel}
+      className={`${isBar ? "flex min-w-0 items-center gap-3" : "grid min-w-0 gap-2"} ${className}`}
+      data-source-identity-summary=""
+    >
+      {icon ? <div className="shrink-0">{icon}</div> : null}
+      <div className="min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-2" data-cinema-header-line="state">
+          <p className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-[0.16em] vs-muted">
+            {surfaceName}
+          </p>
+          {showEmergencyState && lifecycleSentence.primaryLabel ? (
+            <span
+              className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.65rem] font-semibold ${sourceLifecycleToneClassName(
+                lifecycleSentence.primaryTone,
+              )}`}
+              data-status-chip=""
+              title={lifecycleSentence.primaryDetail}
+            >
+              {lifecycleSentence.primaryLabel}
+            </span>
+          ) : null}
+        </div>
+        <div className="mt-1 flex min-w-0 items-center gap-2">
+          <h2
+            aria-label={`${surfaceName} source: ${normalizedSourceTitle}`}
+            className={`min-w-0 truncate font-semibold text-[var(--vs-text)] ${textSizeClass}`}
+            data-cinema-header-line="source-title"
+            id={id}
+            title={normalizedSourceTitle}
+          >
+            {normalizedSourceTitle}
+          </h2>
+        </div>
+        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs vs-muted">
+          <span
+            className="inline-flex min-w-0 max-w-full items-center gap-1 truncate"
+            data-cinema-header-line="scope"
+            title={normalizedScopeTitle}
+          >
+            <span className="shrink-0 font-semibold">Scope</span>
+            {normalizedScopeTitle}
+          </span>
+          {inlineSummary && showEmergencyState && lifecycleSentence.visibleSummary ? (
+            <span
+              className="inline-flex min-w-0 max-w-full items-center gap-1 before:text-[var(--vs-muted)] before:content-['·'] sm:max-w-[30rem]"
+              title={lifecycleSentence.visibleSummary}
+            >
+              <span className="sr-only">Lifecycle summary: </span>
+              <span className="min-w-0 truncate">{lifecycleSentence.visibleSummary}</span>
+            </span>
+          ) : null}
+          <HeaderContextPopover
+            metadata={effectiveMetadata}
+            scopeTitle={normalizedScopeTitle}
+            sourceTitle={normalizedSourceTitle}
+            stateLabel={lifecycleSentence.primaryLabel}
+            summary={lifecycleSentence.visibleSummary}
+            surfaceName={surfaceName}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function sourceLifecycleToneClassName(tone: SourceLifecycleTone): string {
+  switch (tone) {
+    case "accent":
+    case "pinned": {
+      return "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)]";
+    }
+    case "danger": {
+      return "border-[var(--vs-danger-border)] bg-[var(--vs-danger-soft)] text-[var(--vs-danger)]";
+    }
+    case "info": {
+      return "border-[var(--vs-status-info-border)] bg-[var(--vs-status-info-bg)] text-[var(--vs-status-info)]";
+    }
+    case "success": {
+      return "border-[var(--vs-success-border)] bg-[var(--vs-success-soft)] text-[var(--vs-success)]";
+    }
+    case "warning": {
+      return "border-[var(--vs-warning-border)] bg-[var(--vs-warning-soft)] text-[var(--vs-warning)]";
+    }
+    case "neutral": {
+      return "vs-border vs-muted";
+    }
+  }
+}
+
+function HeaderContextPopover({
+  metadata,
+  scopeTitle,
+  sourceTitle,
+  stateLabel,
+  summary,
+  surfaceName,
+}: Readonly<{
+  metadata: HeaderLifecycleFact[];
+  scopeTitle: string;
+  sourceTitle: string;
+  stateLabel: string | null;
+  summary: string;
+  surfaceName: string;
+}>) {
+  return (
+    <details className="group relative shrink-0">
+      <summary
+        aria-label={`Show full ${surfaceName} context`}
+        className="grid h-7 w-7 cursor-pointer list-none place-items-center rounded-md border text-[0.68rem] font-semibold transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-border vs-raised [&::-webkit-details-marker]:hidden"
+        title="Show full source and scope"
+      >
+        <InfoIcon />
+      </summary>
+      <div className="absolute left-1/2 z-30 mt-2 w-[min(22rem,86vw)] -translate-x-1/2 rounded-md border bg-[var(--vs-raised)] p-3 text-left text-xs shadow-xl vs-border">
+        <dl className="grid gap-2">
+          <ContextRow label="Surface" value={surfaceName} />
+          <ContextRow label="Source" value={sourceTitle} />
+          <ContextRow label="Scope" value={scopeTitle} />
+          <ContextRow label="Summary" value={summary} />
+          {stateLabel ? <ContextRow label="State" value={stateLabel} /> : null}
+          {metadata.map((item) => (
+            <ContextRow key={`${item.label}-${item.value}`} label={item.label} value={item.value} />
+          ))}
+        </dl>
+      </div>
+    </details>
+  );
+}
+
+function ContextRow({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] gap-2">
+      <dt className="vs-muted">{label}</dt>
+      <dd className="min-w-0 break-words font-semibold text-[var(--vs-text)]">{value}</dd>
+    </div>
+  );
+}
+
+function InfoIcon() {
+  return (
+    <svg aria-hidden="true" className="h-3.5 w-3.5" fill="none" viewBox="0 0 16 16">
+      <circle cx="8" cy="8" r="6.2" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M8 7.2v4" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
+      <path d="M8 4.8h.01" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function nonEmptyLabel(value: string, fallback: string): string {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
+}
+
+function cleanOptionalLabel(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : null;
+}
+
+function buildHeaderContextAriaLabel({
+  metadata,
+  scopeTitle,
+  sourceTitle,
+  stateLabel,
+  surfaceName,
+}: Readonly<{
+  metadata: HeaderContextMetadataItem[];
+  scopeTitle: string;
+  sourceTitle: string;
+  stateLabel: string | null;
+  surfaceName: string;
+}>) {
+  return [
+    surfaceName,
+    `Source ${sourceTitle}`,
+    `Scope ${scopeTitle}`,
+    stateLabel ? `State ${stateLabel}` : null,
+    ...metadata.map((item) => `${item.label} ${item.value}`),
+  ]
+    .filter(Boolean)
+    .join(". ");
+}

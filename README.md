@@ -22,11 +22,20 @@ Provider setup and repo cleanup details live in [docs/runtime-setup.md](docs/run
 ### Fast Resume (local providers, no fallback)
 
 ```sh
-LOCAL_FALLBACK_ON_BOOTSTRAP_FAILURE=0 TTS_PROVIDER=kokoro VOICE_CHECKER_PROVIDER=qwen mise start -- pnpm start:local
+API_PORT=8087 PORT=5174 mise start -- pnpm start:local
 ```
 
 The backend listens on `http://localhost:8080`.
 The frontend listens on `http://localhost:5173`.
+If a development port is busy, use one of the startup port overrides:
+
+```sh
+PORT=5174 mise start -- pnpm start:local          # frontend only
+API_PORT=8081 mise start -- pnpm start:local      # backend only
+PORT_BASE=5300 mise start -- pnpm start:local     # frontend 5300, backend 5301
+```
+
+Explicit `FRONTEND_PORT` and `BACKEND_PORT` still win when set.
 
 The default startup path is self-contained: rules-based optimization, mock TTS, and mock checking.
 That gives you a usable full stack without external providers or model downloads.
@@ -46,11 +55,13 @@ LOCAL_FALLBACK_ON_BOOTSTRAP_FAILURE=0 mise start -- pnpm start:local
 ```
 
 `pnpm start` loads `.env` and `backend/.env` when present, fills local defaults, starts both servers, and stops both when you press `Ctrl-C`.
-Use `pnpm start:local` to run with the local Kokoro + Qwen stack (local model downloads) using the rules optimizer.
-This local startup path also provisions optional KokoClone dependencies required for reference-voice synthesis on first run.
+Use `pnpm start:local` to run the lean local stack: CPU Kokoro TTS, rules optimization, and mock checking by default.
+Use `pnpm start:local-checked` when you explicitly want local Qwen ASR checking; it stays CPU-pinned and does not preload by default.
+Reference-voice/KokoClone and FlashAttention bootstrap are opt-in so normal local startup does not download/build heavy GPU dependencies.
+Kokoro Python import checking is also deferred by default (`KOKORO_IMPORT_CHECK_ON_START=false`) so the API binds before any real synthesis/model work.
 Use `pnpm start:local-bonsai` for Bonsai optimization on macOS.
 Use `pnpm start:mock` for an explicit mock-only mode.
-Reference-voice synthesis requirements are resolved from your KokoClone checkout (`.koko-clone`) and automatically installed when missing, then cached in the active backend environment.
+Reference-voice synthesis requirements are resolved from your KokoClone checkout (`.koko-clone`) only when `KOKORO_REFERENCE_BOOTSTRAP_ON_START=1`, then cached in the isolated clone environment.
 Use `mise setup:supertonic` to install the isolated Supertonic 3 runtime and run a Swedish smoke synthesis in ignored local output.
 Use `mise setup:dramabox` to clone DramaBox as an ignored upstream and report diagnostics; local inference stays gated unless you explicitly opt into heavy dependency install or configure `DRAMABOX_BASE_URL`.
 Use targeted provider flags to avoid installing unnecessary providers for local work:
@@ -63,7 +74,7 @@ TTS_PROVIDER=mock VOICE_CHECKER_PROVIDER=qwen pnpm start
 Equivalent with `mise start`:
 
 ```sh
-TTS_PROVIDER=kokoro VOICE_CHECKER_PROVIDER=qwen LOCAL_FALLBACK_ON_BOOTSTRAP_FAILURE=0 mise start -- pnpm start:local
+TTS_PROVIDER=kokoro VOICE_CHECKER_PROVIDER=qwen LOCAL_FALLBACK_ON_BOOTSTRAP_FAILURE=0 mise start -- pnpm start:local-checked
 ```
 
 ### Tmpfs / shm (Linux)
@@ -97,7 +108,7 @@ export TTS_RESEARCH_TMPFS_HF_CACHE=1
 That moves HF cache directories (if the providers use them) into `${TTS_RESEARCH_TMPFS_ROOT}`.
 
 Python package installs are still required for any local provider and are cached by `uv` after the first successful bootstrap.
-Model files are downloaded separately by the providers (`hexgrad/Kokoro-82M`, `Qwen/Qwen3-ASR-1.7B`) and are usually the largest remaining download.
+Model files are downloaded separately by the providers (`hexgrad/Kokoro-82M`; `Qwen/Qwen3-ASR-1.7B` only when Qwen checking is enabled) and are usually the largest remaining download.
 If local runtime bootstrap runs out of disk or otherwise fails, startup will not keep retrying package downloads and falls back to mock providers unless you set:
 
 ```sh
@@ -117,14 +128,26 @@ export HF_HOME=/dev/shm/tts-research/hf
 
 ```sh
 pnpm check
+pnpm validate:local
 ```
 
-`pnpm check` stays the fast commit-time guard used by Husky. Before merging, run the local
-validation authority:
+`pnpm check` stays the commit-time guard used by Husky. `pnpm validate:local` is now the
+fast local validation lane: format, lint, typecheck, package checks, adapter tests,
+backend tests, frontend tests, Content IR validation, package smoke, and CLI parity.
+
+Run browser QA separately when you are working on UI flows:
+
+```sh
+pnpm validate:local:e2e
+```
+
+That lane starts one mock backend and one Vite server, then reuses them across the browser suites.
+
+Before merging or producing release evidence, run the release lane:
 
 ```sh
 mise doctor
-mise run validate:local
+mise run validate:local:release
 mise run bench:local
 ```
 
@@ -132,12 +155,18 @@ Equivalent pnpm entrypoints are available:
 
 ```sh
 pnpm validate:local
+pnpm validate:local:e2e
+pnpm validate:local:release
 pnpm bench:local
 pnpm e2e:book-cinema
 ```
 
 Validation writes `output/validate-local/latest/summary.json`, `report.md`, `report.html`, and
 per-step logs. Benchmark fixtures and thresholds are checked in under `benches/`.
+
+Use `pnpm local:bloat` to report large ignored runtime, model, and QA artifact directories. Use
+`pnpm local:clean` only when you intentionally want to delete safe generated outputs such as
+`output/`, `backend/output/`, and old generated job audio under `backend/data/jobs/`.
 
 ## Agent Pipeline
 
@@ -183,7 +212,7 @@ If no compatible wheel exists, startup continues with SDPA fallback unless `KOKO
 
 ## Custom Voice Profiles
 
-Create cloned voice profiles in **Voice Studio** from the left rail.
+Create cloned voice profiles in **Voice Studio** from the workspace controls.
 Upload any file containing an audio stream (audio-only or video containers), and the backend normalizes it once for speaker-aware source analysis.
 The review-first source flow uses local pyannote diarization to detect voices, score clean single-speaker spans, build preview clips, and compile bounded reference WAV candidates.
 Users can preview, name, and create one or more profiles from the detected speakers in a single source file.
@@ -229,7 +258,7 @@ export QWEN_ASR_LANGUAGE=English
 The checker accepts common short language codes such as `en`, detects clean cutoffs, retries remaining text up to the configured limit, and merges resumed WAV segments.
 By default the Qwen checker runs as a persistent worker, so every segment is still verified by ASR without reloading the model for every segment.
 
-Kokoro uses `KOKORO_DEVICE` and Qwen uses `QWEN_ASR_DEVICE`. Both default to `auto`, so they prefer CUDA first and then MPS/CPU.
+Kokoro uses `KOKORO_DEVICE` and Qwen uses `QWEN_ASR_DEVICE`. The lean `start:local` and `start:local-checked` entrypoints default both to `cpu` for predictable local startup. Raw `pnpm start` still uses the provider defaults unless you pin them.
 You can pin a platform explicitly when needed.
 
 For NVIDIA GPUs, request CUDA explicitly:

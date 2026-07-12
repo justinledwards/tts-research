@@ -1,0 +1,103 @@
+# Teleprompt Studio
+
+Teleprompt Studio is the dedicated recording surface for the workspace stage model. It can be
+entered from Review or Preview and keeps the active source, active block, scope, voice profile, and
+speech policy profile attached to the session.
+
+## Studio Layout
+
+- The primary presenter path is **Enter Theatre**, which opens a full-window cinematic Teleprompt
+  overlay while preserving the inline Studio underneath for editing and recovery.
+- Teleprompt hides the global workbench header and stage stepper while active; the inline Studio owns
+  a compact source/scope strip and keeps the current cue as the dominant first-viewport object.
+- The nearby playback panel keeps one presenter-first action cluster visible: previous cue, play or
+  pause, restart, next cue, jump to audio, current cue progress, and recording/preview status.
+- Performance mode stays separate from playback. Rehearsal and recording modes remain manual; audio
+  follow and review playback are enabled only when current generated audio and timing are ready.
+- Display presets are available through a secondary disclosure so typography and mirror settings do
+  not compete with cue progression.
+- Secondary workflow actions, source/session facts, cue diagnostics, previous/current/next previews,
+  and the full cue list live in the expandable inspector drawer.
+- The script area restores the last Teleprompt scroll position for the same project and source.
+- Selecting a cue updates the shared workspace active block, so Review, Preview, and Teleprompt
+  keep the same block selection.
+
+## Audio Readiness
+
+Teleprompt defaults to Audio-follow only when current generated audio is ready and playback controls
+are available. Missing, queued, generating, stale, degraded, failed, archived, or controller-loading
+audio defaults to Rehearsal so the selected cue remains readable and manually navigable.
+
+Failed audio shows compact recovery beside the playback/mode controls with **Retry generation** wired
+to the existing generation action. Missing or stale audio keeps rehearsal useful and presents Create &
+Listen or rebuild recovery without crowding the current cue.
+
+## Theatre and Fullscreen
+
+Theatre Mode is the dedicated presenter layout for recording, rehearsal, and long-form narration.
+It hides normal app chrome behind a fixed full-window overlay and shows the current cue at presenter
+scale, next cue preview, script progress, word count, estimated remaining time, source/scope,
+playback status, sync/confidence status, and a minimal escape bar.
+
+The inline **Enter Theatre** action is the only route into Teleprompt Theatre. Command search may open
+Teleprompt Studio, but it must not bypass the inline Theatre transition.
+
+Native fullscreen is requested only from an explicit user action. When the browser or runtime does
+not support native fullscreen, the same Theatre layout remains available as the fallback and the
+control explains why native fullscreen is unavailable.
+
+Theatre exit paths are explicit:
+
+- `Exit theatre`: return to inline Teleprompt without losing cue, scroll, voice, policy, or source.
+- `Back to Review`: persist return memory and return to Review.
+- `Back to Preview`: persist return memory and return to Preview.
+- `Open Cinema`: keep the current generated-audio context and open Cinema.
+
+Operator Preview is an advanced presenter panel inside Theatre that shows cue sync, confidence,
+progress, and playback state without exposing the default inline context panel.
+
+## Accessibility Presets
+
+Teleprompt Studio exposes four top-level presets:
+
+- `Standard`: balanced type and gentle cue highlighting.
+- `Large text`: larger type and line height for reading from farther away.
+- `High contrast`: strong foreground and cue contrast for difficult lighting.
+- `Dyslexic friendly`: wider spacing and a calmer cue treatment.
+
+Mirror mode is a separate toggle for mirrored recording rigs. The default Teleprompt path names the
+cue highlight style in presenter language and does not expose raw timing or intensity values.
+
+## Keyboard Contract
+
+Keyboard shortcuts are active only outside editable controls:
+
+- `Space` or `K`: play or pause.
+- `Left` or `Up`: previous cue.
+- `Right` or `Down`: next cue.
+- `R`: return to Review.
+- `V` or `P`: return to Preview.
+- `C`: Create & Listen.
+
+Theatre adds presenter shortcuts:
+
+- `Esc`: exit fullscreen/theatre and preserve Teleprompt state.
+- `F`: request native fullscreen where supported.
+- `M`: toggle mirror mode.
+- `O`: toggle Operator Preview.
+- `L`: apply Large text.
+- `H`: toggle High contrast.
+
+## Return Memory
+
+Teleprompt writes a project/source snapshot containing source label, active block, selected cue,
+originating stage, return target, scroll position, voice profile, and policy profile. The workspace
+still owns source, voice, policy, and scope state; Teleprompt memory only restores presentation
+context for the same project and source.
+
+## Validation
+
+Local UI validation should enter Teleprompt from Review and Preview, open Theatre, try native
+fullscreen where supported, toggle accessibility presets, toggle mirror mode, move between cues,
+return to both Review and Preview, and confirm the selected source and active block survive every
+transition.

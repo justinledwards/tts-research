@@ -4,14 +4,12 @@ import (
 	"io"
 	"time"
 
-	"github.com/justinedwards/tts-research/backend/internal/alignment"
-	"github.com/justinedwards/tts-research/backend/internal/audio"
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
-	"github.com/justinedwards/tts-research/backend/internal/highlightmap"
 	"github.com/justinedwards/tts-research/backend/internal/lexicon"
 	speechmath "github.com/justinedwards/tts-research/backend/internal/math"
 	"github.com/justinedwards/tts-research/backend/internal/normalise"
 	"github.com/justinedwards/tts-research/backend/internal/policy"
+	"github.com/justinedwards/tts-research/backend/internal/providers"
 )
 
 type JobStatus string
@@ -27,6 +25,99 @@ const (
 	JobStatusCancelled    JobStatus = "cancelled"
 )
 
+type JobPipelinePhase string
+
+const (
+	JobPipelinePhaseSubmit       JobPipelinePhase = "submit"
+	JobPipelinePhaseExtract      JobPipelinePhase = "extract"
+	JobPipelinePhaseStructure    JobPipelinePhase = "structure"
+	JobPipelinePhaseRenderSpoken JobPipelinePhase = "render_spoken_form"
+	JobPipelinePhaseSegment      JobPipelinePhase = "segment"
+	JobPipelinePhaseSynthesize   JobPipelinePhase = "synthesize_segment"
+	JobPipelinePhaseAlign        JobPipelinePhase = "align_segment"
+	JobPipelinePhaseCheck        JobPipelinePhase = "check_segment"
+	JobPipelinePhaseAssemble     JobPipelinePhase = "assemble"
+	JobPipelinePhaseComplete     JobPipelinePhase = "complete"
+)
+
+var allJobPipelinePhases = []JobPipelinePhase{
+	JobPipelinePhaseSubmit,
+	JobPipelinePhaseExtract,
+	JobPipelinePhaseStructure,
+	JobPipelinePhaseRenderSpoken,
+	JobPipelinePhaseSegment,
+	JobPipelinePhaseSynthesize,
+	JobPipelinePhaseAlign,
+	JobPipelinePhaseCheck,
+	JobPipelinePhaseAssemble,
+	JobPipelinePhaseComplete,
+}
+
+var jobPipelinePhaseIndex = map[JobPipelinePhase]int{}
+
+func init() {
+	for index, phase := range allJobPipelinePhases {
+		jobPipelinePhaseIndex[phase] = index
+	}
+}
+
+func ParseJobPipelinePhase(value string) JobPipelinePhase {
+	clean := JobPipelinePhase(value)
+	if _, ok := jobPipelinePhaseIndex[clean]; ok {
+		return clean
+	}
+	return ""
+}
+
+func isKnownJobPipelinePhase(phase JobPipelinePhase) bool {
+	return JobPipelinePhaseSortOrder(phase) >= 0
+}
+
+func IsValidJobPipelinePhase(value string) bool {
+	return ParseJobPipelinePhase(value) != ""
+}
+
+func isJobPipelinePhaseRetryCandidate(retryPhase, failedPhase JobPipelinePhase) bool {
+	retryIndex := JobPipelinePhaseSortOrder(retryPhase)
+	failedIndex := JobPipelinePhaseSortOrder(failedPhase)
+	if retryIndex < 0 || failedIndex < 0 {
+		return false
+	}
+
+	return retryIndex >= failedIndex
+}
+
+func JobPipelinePhaseSortOrder(phase JobPipelinePhase) int {
+	if index, ok := jobPipelinePhaseIndex[phase]; ok {
+		return index
+	}
+	return -1
+}
+
+type JobTerminalReason string
+
+const (
+	JobTerminalReasonUserCancelled       JobTerminalReason = "user_cancelled"
+	JobTerminalReasonSystemCancelled     JobTerminalReason = "system_cancelled"
+	JobTerminalReasonProviderFailed      JobTerminalReason = "provider_failed"
+	JobTerminalReasonProviderTimeout     JobTerminalReason = "provider_timeout"
+	JobTerminalReasonValidationFailed    JobTerminalReason = "validation_failed"
+	JobTerminalReasonSuperseded          JobTerminalReason = "superseded"
+	JobTerminalReasonMetadataFailed      JobTerminalReason = "metadata_failed"
+	JobTerminalReasonConfigurationFailed JobTerminalReason = "configuration_failed"
+)
+
+type JobFailureKind string
+
+const (
+	JobFailureKindSource       JobFailureKind = "source"
+	JobFailureKindVoice        JobFailureKind = "voice"
+	JobFailureKindEngine       JobFailureKind = "engine"
+	JobFailureKindBackend      JobFailureKind = "backend"
+	JobFailureKindCancellation JobFailureKind = "cancellation"
+	JobFailureKindQueue        JobFailureKind = "queue"
+)
+
 type StageStatus string
 
 const (
@@ -38,11 +129,13 @@ const (
 
 type CreateJobRequest struct {
 	Text                  string                   `json:"text"`
+	SpeechText            string                   `json:"speechText,omitempty"`
 	VoiceID               string                   `json:"voiceId,omitempty"`
 	ProjectID             string                   `json:"projectId,omitempty"`
 	BookSourceID          string                   `json:"bookSourceId,omitempty"`
 	BookScope             *BookScope               `json:"bookScope,omitempty"`
 	PreparedSourceID      string                   `json:"preparedSourceId,omitempty"`
+	TemporarySourceID     string                   `json:"temporarySourceId,omitempty"`
 	SelectedBlockIDs      []string                 `json:"selectedBlockIds,omitempty"`
 	SourceKind            string                   `json:"sourceKind,omitempty"`
 	ProgressTargetID      string                   `json:"progressTargetId,omitempty"`
@@ -60,6 +153,10 @@ type CreateJobRequest struct {
 	SpeechPolicyOverrides policy.Overrides         `json:"speechPolicyOverrides,omitempty"`
 	Locale                string                   `json:"locale,omitempty"`
 	SpeechRenderApplied   bool                     `json:"speechRenderApplied,omitempty"`
+}
+
+type RetryVoiceJobRequest struct {
+	Phase JobPipelinePhase `json:"phase,omitempty"`
 }
 
 type VoiceKind string
@@ -122,6 +219,187 @@ const (
 	PreparedSourceStatusFailed PreparedSourceStatus = "failed"
 )
 
+type SourceOwner string
+
+const (
+	SourceOwnerProject   SourceOwner = "project"
+	SourceOwnerTemporary SourceOwner = "temporary"
+)
+
+type TemporarySourceLifecycleState string
+
+const (
+	TemporarySourceStateCreated       TemporarySourceLifecycleState = "created"
+	TemporarySourceStateImporting     TemporarySourceLifecycleState = "importing"
+	TemporarySourceStateExtracted     TemporarySourceLifecycleState = "extracted"
+	TemporarySourceStateNeedsMetadata TemporarySourceLifecycleState = "needs_metadata"
+	TemporarySourceStateReviewable    TemporarySourceLifecycleState = "reviewable"
+	TemporarySourceStatePreviewable   TemporarySourceLifecycleState = "previewable"
+	TemporarySourceStateGenerating    TemporarySourceLifecycleState = "generating"
+	TemporarySourceStateAudioReady    TemporarySourceLifecycleState = "audio_ready"
+	TemporarySourceStateStale         TemporarySourceLifecycleState = "stale"
+	TemporarySourceStateFailed        TemporarySourceLifecycleState = "failed"
+	TemporarySourceStatePromoted      TemporarySourceLifecycleState = "promoted"
+	TemporarySourceStateExpired       TemporarySourceLifecycleState = "expired"
+	TemporarySourceStateDiscarded     TemporarySourceLifecycleState = "discarded"
+)
+
+type TemporarySourcePromotionStatus string
+
+const (
+	TemporarySourceNotPromoted     TemporarySourcePromotionStatus = "notPromoted"
+	TemporarySourcePromoted        TemporarySourcePromotionStatus = "promoted"
+	TemporarySourcePromotionFailed TemporarySourcePromotionStatus = "promotionFailed"
+)
+
+type TemporarySourceFailureCode string
+
+const (
+	TemporarySourceFailureUnsafeURL           TemporarySourceFailureCode = "unsafe_url"
+	TemporarySourceFailureFetchFailed         TemporarySourceFailureCode = "fetch_failed"
+	TemporarySourceFailureExtractionFailed    TemporarySourceFailureCode = "extraction_failed"
+	TemporarySourceFailureUnsupportedFile     TemporarySourceFailureCode = "unsupported_file"
+	TemporarySourceFailureFileTooLarge        TemporarySourceFailureCode = "file_too_large"
+	TemporarySourceFailureMetadataRequired    TemporarySourceFailureCode = "metadata_required"
+	TemporarySourceFailureSourceNotReady      TemporarySourceFailureCode = "source_not_ready"
+	TemporarySourceFailureGenerationFailed    TemporarySourceFailureCode = "generation_failed"
+	TemporarySourceFailureProviderUnavailable TemporarySourceFailureCode = "provider_unavailable"
+	TemporarySourceFailureAlignmentFailed     TemporarySourceFailureCode = "alignment_failed"
+	TemporarySourceFailureExpired             TemporarySourceFailureCode = "expired"
+	TemporarySourceFailureDiscarded           TemporarySourceFailureCode = "discarded"
+	TemporarySourceFailureCleanupFailed       TemporarySourceFailureCode = "cleanup_failed"
+	TemporarySourceFailurePromotionFailed     TemporarySourceFailureCode = "promotion_failed"
+)
+
+type SourceArtifactScope string
+
+const (
+	SourceArtifactScopeProject   SourceArtifactScope = "project"
+	SourceArtifactScopeTemporary SourceArtifactScope = "temporary"
+)
+
+type SourceArtifactKind string
+
+const (
+	SourceArtifactKindExtraction     SourceArtifactKind = "extraction"
+	SourceArtifactKindReview         SourceArtifactKind = "review"
+	SourceArtifactKindPreviewAudio   SourceArtifactKind = "previewAudio"
+	SourceArtifactKindGeneratedAudio SourceArtifactKind = "generatedAudio"
+	SourceArtifactKindTiming         SourceArtifactKind = "timing"
+	SourceArtifactKindValidation     SourceArtifactKind = "validation"
+	SourceArtifactKindBookmark       SourceArtifactKind = "bookmark"
+	SourceArtifactKindProgress       SourceArtifactKind = "progress"
+)
+
+type SourceArtifactRef struct {
+	ID        string              `json:"id"`
+	Scope     SourceArtifactScope `json:"scope"`
+	Kind      SourceArtifactKind  `json:"kind"`
+	URL       string              `json:"url,omitempty"`
+	Bytes     int64               `json:"bytes,omitempty"`
+	CreatedAt time.Time           `json:"createdAt"`
+	ExpiresAt *time.Time          `json:"expiresAt,omitempty"`
+}
+
+type TemporarySourceCleanupAction string
+
+const (
+	TemporarySourceCleanupDiscardNow         TemporarySourceCleanupAction = "discardNow"
+	TemporarySourceCleanupExtendSession      TemporarySourceCleanupAction = "extendSession"
+	TemporarySourceCleanupRemoveAudioOnly    TemporarySourceCleanupAction = "removeGeneratedAudioOnly"
+	TemporarySourceCleanupRemoveAllArtifacts TemporarySourceCleanupAction = "removeAllTemporaryArtifacts"
+)
+
+type TemporarySourceCleanupRequest struct {
+	Action        TemporarySourceCleanupAction `json:"action"`
+	ExtendByHours int                          `json:"extendByHours,omitempty"`
+}
+
+type TemporarySourceCleanupResult struct {
+	TemporarySourceID string                        `json:"temporarySourceId"`
+	Action            TemporarySourceCleanupAction  `json:"action"`
+	Status            TemporarySourceLifecycleState `json:"status"`
+	RemovedBytes      int64                         `json:"removedBytes,omitempty"`
+	ExpiresAt         *time.Time                    `json:"expiresAt,omitempty"`
+	Message           string                        `json:"message,omitempty"`
+	Source            *TemporarySourceSession       `json:"source,omitempty"`
+}
+
+type TemporaryStorageUsageSummary struct {
+	TotalBytes        int64                          `json:"totalBytes"`
+	SourceBytes       int64                          `json:"sourceBytes"`
+	ArtifactBytes     int64                          `json:"artifactBytes"`
+	AudioBytes        int64                          `json:"audioBytes"`
+	ProgressBytes     int64                          `json:"progressBytes"`
+	ArtifactTypeBytes map[string]int64               `json:"artifactTypeBytes,omitempty"`
+	TemporaryCount    int                            `json:"temporaryCount"`
+	ExpiredCount      int                            `json:"expiredCount"`
+	GeneratingCount   int                            `json:"generatingCount"`
+	Sessions          []TemporaryStorageUsageSession `json:"sessions"`
+	UpdatedAt         time.Time                      `json:"updatedAt"`
+}
+
+type TemporaryStorageUsageSession struct {
+	TemporarySourceID string                        `json:"temporarySourceId"`
+	Title             string                        `json:"title,omitempty"`
+	Status            TemporarySourceLifecycleState `json:"status"`
+	Bytes             int64                         `json:"bytes"`
+	AudioBytes        int64                         `json:"audioBytes,omitempty"`
+	ArtifactBytes     int64                         `json:"artifactBytes,omitempty"`
+	SourceBytes       int64                         `json:"sourceBytes,omitempty"`
+	ProgressBytes     int64                         `json:"progressBytes,omitempty"`
+	ArtifactTypeBytes map[string]int64              `json:"artifactTypeBytes,omitempty"`
+	ExpiresAt         time.Time                     `json:"expiresAt"`
+	LastAccessedAt    time.Time                     `json:"lastAccessedAt"`
+}
+
+type SourceReadinessState string
+
+const (
+	SourceReadinessStateNoSource      SourceReadinessState = "noSource"
+	SourceReadinessStateImporting     SourceReadinessState = "importing"
+	SourceReadinessStateNeedsMetadata SourceReadinessState = "needsMetadata"
+	SourceReadinessStateReady         SourceReadinessState = "ready"
+	SourceReadinessStateFailed        SourceReadinessState = "failed"
+	SourceReadinessStateUnsupported   SourceReadinessState = "unsupported"
+	SourceReadinessStateStale         SourceReadinessState = "stale"
+)
+
+type SourceReadinessFailureStage string
+
+const (
+	SourceReadinessFailureFile              SourceReadinessFailureStage = "file"
+	SourceReadinessFailureExtraction        SourceReadinessFailureStage = "extraction"
+	SourceReadinessFailureStructure         SourceReadinessFailureStage = "structure"
+	SourceReadinessFailurePolicyPreparation SourceReadinessFailureStage = "policyPreparation"
+)
+
+type SourceReadiness struct {
+	State           SourceReadinessState        `json:"state"`
+	Title           string                      `json:"title,omitempty"`
+	SourceType      string                      `json:"sourceType,omitempty"`
+	Language        string                      `json:"language,omitempty"`
+	StructureLabel  string                      `json:"structureLabel,omitempty"`
+	Confidence      string                      `json:"confidence,omitempty"`
+	ConfirmedFields []string                    `json:"confirmedFields,omitempty"`
+	PreparedAt      *time.Time                  `json:"preparedAt,omitempty"`
+	StaleReason     string                      `json:"staleReason,omitempty"`
+	FailureStage    SourceReadinessFailureStage `json:"failureStage,omitempty"`
+	RetryAction     string                      `json:"retryAction,omitempty"`
+	Detail          string                      `json:"detail"`
+}
+
+type SourceReadinessConfirmationRequest struct {
+	Title               string     `json:"title,omitempty"`
+	SourceType          string     `json:"sourceType,omitempty"`
+	Language            string     `json:"language,omitempty"`
+	StructureChoice     string     `json:"structureChoice,omitempty"`
+	StructureLabel      string     `json:"structureLabel,omitempty"`
+	Scope               *BookScope `json:"scope,omitempty"`
+	SpeechPolicyProfile string     `json:"speechPolicyProfile,omitempty"`
+	VoiceProfileID      string     `json:"voiceProfileId,omitempty"`
+}
+
 type NarrationBlockKind string
 
 const (
@@ -135,6 +413,10 @@ const (
 	NarrationBlockKindImage       NarrationBlockKind = "image"
 	NarrationBlockKindCaption     NarrationBlockKind = "caption"
 	NarrationBlockKindCitation    NarrationBlockKind = "citation"
+	NarrationBlockKindFootnote    NarrationBlockKind = "footnote"
+	NarrationBlockKindReference   NarrationBlockKind = "reference"
+	NarrationBlockKindArtifact    NarrationBlockKind = "artifact_token"
+	NarrationBlockKindUnknownMark NarrationBlockKind = "unknown_inline_marker"
 	NarrationBlockKindList        NarrationBlockKind = "list"
 	NarrationBlockKindFrontmatter NarrationBlockKind = "frontmatter"
 	NarrationBlockKindAdmonition  NarrationBlockKind = "admonition"
@@ -212,7 +494,10 @@ type TranscriptMetadata struct {
 type PreparedSource struct {
 	ID                          string                `json:"id"`
 	ProjectID                   string                `json:"projectId"`
+	SourceOwner                 SourceOwner           `json:"sourceOwner,omitempty"`
+	TemporarySourceID           string                `json:"temporarySourceId,omitempty"`
 	Status                      PreparedSourceStatus  `json:"status"`
+	SourceReadiness             *SourceReadiness      `json:"sourceReadiness,omitempty"`
 	Kind                        PreparedSourceKind    `json:"kind"`
 	SourceName                  string                `json:"sourceName"`
 	SourceURL                   string                `json:"sourceUrl,omitempty"`
@@ -249,13 +534,14 @@ type PreparedSource struct {
 }
 
 type CreatePreparedSourceRequest struct {
-	Kind              PreparedSourceKind `json:"kind"`
-	Text              string             `json:"text,omitempty"`
-	URL               string             `json:"url,omitempty"`
-	SourceName        string             `json:"sourceName,omitempty"`
-	SourceContentType string             `json:"sourceContentType,omitempty"`
-	SourceBytes       int64              `json:"sourceBytes,omitempty"`
-	MarkdownParseMode string             `json:"markdownParseMode,omitempty"`
+	Kind                  PreparedSourceKind `json:"kind"`
+	Text                  string             `json:"text,omitempty"`
+	URL                   string             `json:"url,omitempty"`
+	SourceName            string             `json:"sourceName,omitempty"`
+	SourceContentType     string             `json:"sourceContentType,omitempty"`
+	SourceBytes           int64              `json:"sourceBytes,omitempty"`
+	MarkdownParseMode     string             `json:"markdownParseMode,omitempty"`
+	HTMLContainerSelector string             `json:"htmlContainerSelector,omitempty"`
 }
 
 type SpeechPolicyPreviewRequest struct {
@@ -409,7 +695,10 @@ type BookSourceSection struct {
 type BookSource struct {
 	ID                          string                `json:"id"`
 	ProjectID                   string                `json:"projectId"`
+	SourceOwner                 SourceOwner           `json:"sourceOwner,omitempty"`
+	TemporarySourceID           string                `json:"temporarySourceId,omitempty"`
 	Status                      BookSourceStatus      `json:"status"`
+	SourceReadiness             *SourceReadiness      `json:"sourceReadiness,omitempty"`
 	Kind                        BookSourceKind        `json:"kind"`
 	SourceFile                  string                `json:"sourceFile"`
 	SourceBytes                 int64                 `json:"sourceBytes"`
@@ -519,6 +808,62 @@ type BookSourceScopeContent struct {
 	Warnings             []string              `json:"warnings,omitempty"`
 }
 
+type TemporarySourceSession struct {
+	ID                          string                         `json:"id"`
+	TemporarySourceID           string                         `json:"temporarySourceId"`
+	Scope                       SourceArtifactScope            `json:"scope"`
+	SourceOwner                 SourceOwner                    `json:"sourceOwner"`
+	ProjectID                   string                         `json:"projectId,omitempty"`
+	Status                      TemporarySourceLifecycleState  `json:"status"`
+	PromotionStatus             TemporarySourcePromotionStatus `json:"promotionStatus"`
+	PromotedProjectID           string                         `json:"promotedProjectId,omitempty"`
+	PromotedSourceID            string                         `json:"promotedSourceId,omitempty"`
+	Kind                        string                         `json:"kind"`
+	SourceReadiness             *SourceReadiness               `json:"sourceReadiness,omitempty"`
+	SourceName                  string                         `json:"sourceName"`
+	SourceURL                   string                         `json:"sourceUrl,omitempty"`
+	SourceContentType           string                         `json:"sourceContentType,omitempty"`
+	SourceBytes                 int64                          `json:"sourceBytes,omitempty"`
+	Title                       string                         `json:"title,omitempty"`
+	Text                        string                         `json:"text,omitempty"`
+	SpeechText                  string                         `json:"speechText,omitempty"`
+	WordCount                   int                            `json:"wordCount"`
+	BlockCount                  int                            `json:"blockCount,omitempty"`
+	SegmentCount                int                            `json:"segmentCount,omitempty"`
+	Summary                     *PreparedSourceSummary         `json:"summary,omitempty"`
+	Blocks                      []NarrationBlock               `json:"blocks,omitempty"`
+	SkippedItems                []SkippedSourceItem            `json:"skippedItems,omitempty"`
+	ReviewNotes                 []string                       `json:"reviewNotes,omitempty"`
+	Metadata                    map[string]any                 `json:"metadata,omitempty"`
+	Artifacts                   []SourceArtifactRef            `json:"artifacts"`
+	Bookmarks                   []ProgressBookmark             `json:"bookmarks,omitempty"`
+	PlaybackProgress            *PlaybackProgress              `json:"playbackProgress,omitempty"`
+	SourceSpeechPolicyProfile   string                         `json:"sourceSpeechPolicyProfile,omitempty"`
+	SourceSpeechPolicyOverrides policy.Overrides               `json:"sourceSpeechPolicyOverrides,omitempty"`
+	Warnings                    []string                       `json:"warnings,omitempty"`
+	Error                       string                         `json:"error,omitempty"`
+	FailureCode                 TemporarySourceFailureCode     `json:"failureCode,omitempty"`
+	CreatedAt                   time.Time                      `json:"createdAt"`
+	LastAccessedAt              time.Time                      `json:"lastAccessedAt"`
+	ExpiresAt                   time.Time                      `json:"expiresAt"`
+	UpdatedAt                   time.Time                      `json:"updatedAt"`
+}
+
+type ProjectSourceEnvelope struct {
+	SourceOwner       SourceOwner `json:"sourceOwner"`
+	ProjectID         string      `json:"projectId"`
+	TemporarySourceID string      `json:"temporarySourceId,omitempty"`
+	Source            any         `json:"source"`
+}
+
+type TemporarySourceEnvelope struct {
+	SourceOwner       SourceOwner            `json:"sourceOwner"`
+	Scope             SourceArtifactScope    `json:"scope"`
+	ProjectID         string                 `json:"projectId,omitempty"`
+	TemporarySourceID string                 `json:"temporarySourceId"`
+	Source            TemporarySourceSession `json:"source"`
+}
+
 type TTSEngineVoice struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -527,24 +872,25 @@ type TTSEngineVoice struct {
 }
 
 type TTSEngineDiagnostics struct {
-	ID                string            `json:"id"`
-	Label             string            `json:"label"`
-	Status            string            `json:"status"`
-	Default           bool              `json:"default"`
-	Local             bool              `json:"local"`
-	Experimental      bool              `json:"experimental"`
-	SupportsVoice     bool              `json:"supportsVoice"`
-	SupportsReference bool              `json:"supportsReference"`
-	SupportsArtifacts bool              `json:"supportsProfileArtifacts"`
-	SupportsSwedish   bool              `json:"supportsSwedish"`
-	SupportsSSML      bool              `json:"supportsSSML"`
-	Languages         []string          `json:"languages,omitempty"`
-	Voices            []TTSEngineVoice  `json:"voices,omitempty"`
-	EstimatedVRAM     string            `json:"estimatedVram,omitempty"`
-	ModelCache        string            `json:"modelCache,omitempty"`
-	Reason            string            `json:"reason,omitempty"`
-	Setup             string            `json:"setup,omitempty"`
-	Metadata          map[string]string `json:"metadata,omitempty"`
+	ID                string                  `json:"id"`
+	Label             string                  `json:"label"`
+	Status            string                  `json:"status"`
+	Default           bool                    `json:"default"`
+	Local             bool                    `json:"local"`
+	Experimental      bool                    `json:"experimental"`
+	SupportsVoice     bool                    `json:"supportsVoice"`
+	SupportsReference bool                    `json:"supportsReference"`
+	SupportsArtifacts bool                    `json:"supportsProfileArtifacts"`
+	SupportsSwedish   bool                    `json:"supportsSwedish"`
+	SupportsSSML      bool                    `json:"supportsSSML"`
+	Capabilities      providers.CapabilitySet `json:"capabilities"`
+	Languages         []string                `json:"languages,omitempty"`
+	Voices            []TTSEngineVoice        `json:"voices,omitempty"`
+	EstimatedVRAM     string                  `json:"estimatedVram,omitempty"`
+	ModelCache        string                  `json:"modelCache,omitempty"`
+	Reason            string                  `json:"reason,omitempty"`
+	Setup             string                  `json:"setup,omitempty"`
+	Metadata          map[string]string       `json:"metadata,omitempty"`
 }
 
 type ResearchModuleDiagnostics struct {
@@ -568,24 +914,56 @@ type ResearchModuleDiagnostics struct {
 type ProjectBundleContentItem struct {
 	Key            string `json:"key"`
 	Label          string `json:"label"`
+	Detail         string `json:"detail,omitempty"`
 	Included       bool   `json:"included"`
 	Required       bool   `json:"required"`
 	EstimatedBytes int64  `json:"estimatedBytes,omitempty"`
 }
 
+type ProjectBundleConflict struct {
+	Key         string             `json:"key"`
+	Label       string             `json:"label"`
+	Detail      string             `json:"detail"`
+	Severity    string             `json:"severity"`
+	Blocking    bool               `json:"blocking"`
+	Resolutions []BundleImportMode `json:"resolutions,omitempty"`
+}
+
+type ProjectBundleDependency struct {
+	Key             string `json:"key"`
+	Label           string `json:"label"`
+	Detail          string `json:"detail"`
+	Status          string `json:"status"`
+	CurrentVersion  string `json:"currentVersion,omitempty"`
+	RequiredVersion string `json:"requiredVersion,omitempty"`
+	Missing         bool   `json:"missing,omitempty"`
+}
+
+type ProjectBundleValidationItem struct {
+	Key      string `json:"key"`
+	Label    string `json:"label"`
+	Detail   string `json:"detail"`
+	Status   string `json:"status"`
+	Blocking bool   `json:"blocking,omitempty"`
+}
+
 type ProjectBundleSummary struct {
-	ProjectID      string                     `json:"projectId"`
-	ProjectName    string                     `json:"projectName"`
-	Version        string                     `json:"version"`
-	FileName       string                     `json:"fileName"`
-	EstimatedBytes int64                      `json:"estimatedBytes"`
-	ChapterCount   int                        `json:"chapterCount"`
-	ProfileCount   int                        `json:"profileCount"`
-	GeneratedAudio int                        `json:"generatedAudio"`
-	DurationMS     int                        `json:"durationMs"`
-	Contents       []ProjectBundleContentItem `json:"contents"`
-	Warnings       []string                   `json:"warnings,omitempty"`
-	CreatedAt      time.Time                  `json:"createdAt"`
+	ProjectID              string                     `json:"projectId"`
+	ProjectName            string                     `json:"projectName"`
+	Version                string                     `json:"version"`
+	FileName               string                     `json:"fileName"`
+	EstimatedBytes         int64                      `json:"estimatedBytes"`
+	ChapterCount           int                        `json:"chapterCount"`
+	ProfileCount           int                        `json:"profileCount"`
+	GeneratedAudio         int                        `json:"generatedAudio"`
+	GeneratedAudioIncluded bool                       `json:"generatedAudioIncluded"`
+	OmittedGeneratedAudio  int                        `json:"omittedGeneratedAudio,omitempty"`
+	OmittedGeneratedBytes  int64                      `json:"omittedGeneratedBytes,omitempty"`
+	DurationMS             int                        `json:"durationMs"`
+	Contents               []ProjectBundleContentItem `json:"contents"`
+	Excluded               []ProjectBundleContentItem `json:"excluded,omitempty"`
+	Warnings               []string                   `json:"warnings,omitempty"`
+	CreatedAt              time.Time                  `json:"createdAt"`
 }
 
 type ProjectBundleFile struct {
@@ -596,17 +974,22 @@ type ProjectBundleFile struct {
 }
 
 type ProjectBundleManifest struct {
-	Version          string               `json:"version"`
-	CreatedAt        time.Time            `json:"createdAt"`
-	AppVersion       string               `json:"appVersion"`
-	Project          VoiceProject         `json:"project"`
-	Jobs             []VoiceJob           `json:"jobs"`
-	Profiles         []VoiceProfile       `json:"profiles"`
-	Books            []BookSource         `json:"books,omitempty"`
-	Files            []ProjectBundleFile  `json:"files"`
-	ProviderVersions map[string]string    `json:"providerVersions,omitempty"`
-	Quality          ProjectBundleQuality `json:"quality"`
-	Hashes           map[string]string    `json:"hashes,omitempty"`
+	Version                string                     `json:"version"`
+	CreatedAt              time.Time                  `json:"createdAt"`
+	AppVersion             string                     `json:"appVersion"`
+	Project                VoiceProject               `json:"project"`
+	Jobs                   []VoiceJob                 `json:"jobs"`
+	Profiles               []VoiceProfile             `json:"profiles"`
+	Books                  []BookSource               `json:"books,omitempty"`
+	Files                  []ProjectBundleFile        `json:"files"`
+	ProviderVersions       map[string]string          `json:"providerVersions,omitempty"`
+	Quality                ProjectBundleQuality       `json:"quality"`
+	Hashes                 map[string]string          `json:"hashes,omitempty"`
+	Contents               []ProjectBundleContentItem `json:"contents,omitempty"`
+	Excluded               []ProjectBundleContentItem `json:"excluded,omitempty"`
+	GeneratedAudioIncluded bool                       `json:"generatedAudioIncluded"`
+	OmittedGeneratedAudio  int                        `json:"omittedGeneratedAudio,omitempty"`
+	OmittedGeneratedBytes  int64                      `json:"omittedGeneratedBytes,omitempty"`
 }
 
 type ProjectBundleQuality struct {
@@ -618,18 +1001,25 @@ type ProjectBundleQuality struct {
 }
 
 type ProjectBundlePreview struct {
-	Valid          bool                   `json:"valid"`
-	Version        string                 `json:"version,omitempty"`
-	ProjectName    string                 `json:"projectName,omitempty"`
-	ChapterCount   int                    `json:"chapterCount,omitempty"`
-	ProfileCount   int                    `json:"profileCount,omitempty"`
-	GeneratedAudio int                    `json:"generatedAudio,omitempty"`
-	EstimatedBytes int64                  `json:"estimatedBytes,omitempty"`
-	Quality        ProjectBundleQuality   `json:"quality"`
-	Compatibility  []string               `json:"compatibility"`
-	Warnings       []string               `json:"warnings,omitempty"`
-	Errors         []string               `json:"errors,omitempty"`
-	Manifest       *ProjectBundleManifest `json:"manifest,omitempty"`
+	Valid                bool                          `json:"valid"`
+	Version              string                        `json:"version,omitempty"`
+	ProjectName          string                        `json:"projectName,omitempty"`
+	ChapterCount         int                           `json:"chapterCount,omitempty"`
+	ProfileCount         int                           `json:"profileCount,omitempty"`
+	GeneratedAudio       int                           `json:"generatedAudio,omitempty"`
+	EstimatedBytes       int64                         `json:"estimatedBytes,omitempty"`
+	Quality              ProjectBundleQuality          `json:"quality"`
+	Compatibility        []string                      `json:"compatibility"`
+	Warnings             []string                      `json:"warnings,omitempty"`
+	Errors               []string                      `json:"errors,omitempty"`
+	Manifest             *ProjectBundleManifest        `json:"manifest,omitempty"`
+	Contents             []ProjectBundleContentItem    `json:"contents,omitempty"`
+	Excluded             []ProjectBundleContentItem    `json:"excluded,omitempty"`
+	Conflicts            []ProjectBundleConflict       `json:"conflicts,omitempty"`
+	Dependencies         []ProjectBundleDependency     `json:"dependencies,omitempty"`
+	Validation           []ProjectBundleValidationItem `json:"validation,omitempty"`
+	AvailableImportModes []BundleImportMode            `json:"availableImportModes,omitempty"`
+	RecommendedMode      BundleImportMode              `json:"recommendedMode,omitempty"`
 }
 
 type BundleImportMode string
@@ -662,50 +1052,270 @@ type ProgressBookmark struct {
 }
 
 type ReadingPosition struct {
-	BookSourceID    string                     `json:"bookSourceId,omitempty"`
-	ScopeKey        string                     `json:"scopeKey,omitempty"`
-	ActiveWordIndex int                        `json:"activeWordIndex,omitempty"`
-	NodeID          string                     `json:"nodeId,omitempty"`
-	Locator         *contentir.Locator         `json:"locator,omitempty"`
-	LocatorEnvelope *contentir.LocatorEnvelope `json:"locatorEnvelope,omitempty"`
-	TextQuote       string                     `json:"textQuote,omitempty"`
+	BookSourceID      string                     `json:"bookSourceId,omitempty"`
+	TemporarySourceID string                     `json:"temporarySourceId,omitempty"`
+	ScopeKey          string                     `json:"scopeKey,omitempty"`
+	ActiveWordIndex   int                        `json:"activeWordIndex,omitempty"`
+	NodeID            string                     `json:"nodeId,omitempty"`
+	Locator           *contentir.Locator         `json:"locator,omitempty"`
+	LocatorEnvelope   *contentir.LocatorEnvelope `json:"locatorEnvelope,omitempty"`
+	TextQuote         string                     `json:"textQuote,omitempty"`
 }
 
 type PlaybackProgress struct {
-	TargetID         string             `json:"targetId"`
-	ProjectID        string             `json:"projectId"`
-	JobID            string             `json:"jobId,omitempty"`
-	BookSourceID     string             `json:"bookSourceId,omitempty"`
-	PreparedSourceID string             `json:"preparedSourceId,omitempty"`
-	BookScope        *BookScope         `json:"bookScope,omitempty"`
-	CurrentTimeSec   float64            `json:"currentTimeSec"`
-	Progress         float64            `json:"progress"`
-	ActiveWordIndex  int                `json:"activeWordIndex,omitempty"`
-	ReadingPosition  *ReadingPosition   `json:"readingPosition,omitempty"`
-	Finished         bool               `json:"finished"`
-	Hidden           bool               `json:"hidden"`
-	Bookmarks        []ProgressBookmark `json:"bookmarks,omitempty"`
-	StartedAt        *time.Time         `json:"startedAt,omitempty"`
-	FinishedAt       *time.Time         `json:"finishedAt,omitempty"`
-	CreatedAt        time.Time          `json:"createdAt"`
-	UpdatedAt        time.Time          `json:"updatedAt"`
+	TargetID          string             `json:"targetId"`
+	ProjectID         string             `json:"projectId,omitempty"`
+	JobID             string             `json:"jobId,omitempty"`
+	BookSourceID      string             `json:"bookSourceId,omitempty"`
+	PreparedSourceID  string             `json:"preparedSourceId,omitempty"`
+	TemporarySourceID string             `json:"temporarySourceId,omitempty"`
+	BookScope         *BookScope         `json:"bookScope,omitempty"`
+	CurrentTimeSec    float64            `json:"currentTimeSec"`
+	Progress          float64            `json:"progress"`
+	ActiveWordIndex   int                `json:"activeWordIndex,omitempty"`
+	ReadingPosition   *ReadingPosition   `json:"readingPosition,omitempty"`
+	Finished          bool               `json:"finished"`
+	Hidden            bool               `json:"hidden"`
+	Bookmarks         []ProgressBookmark `json:"bookmarks,omitempty"`
+	StartedAt         *time.Time         `json:"startedAt,omitempty"`
+	FinishedAt        *time.Time         `json:"finishedAt,omitempty"`
+	CreatedAt         time.Time          `json:"createdAt"`
+	UpdatedAt         time.Time          `json:"updatedAt"`
 }
 
 type PlaybackProgressUpdate struct {
-	TargetID         string            `json:"targetId,omitempty"`
-	ProjectID        string            `json:"projectId,omitempty"`
-	JobID            string            `json:"jobId,omitempty"`
-	BookSourceID     string            `json:"bookSourceId,omitempty"`
-	PreparedSourceID string            `json:"preparedSourceId,omitempty"`
-	BookScope        *BookScope        `json:"bookScope,omitempty"`
-	CurrentTimeSec   float64           `json:"currentTimeSec"`
-	DurationSec      float64           `json:"durationSec,omitempty"`
-	Progress         float64           `json:"progress,omitempty"`
-	ActiveWordIndex  int               `json:"activeWordIndex,omitempty"`
-	ReadingPosition  *ReadingPosition  `json:"readingPosition,omitempty"`
-	Finished         bool              `json:"finished,omitempty"`
-	Hidden           *bool             `json:"hidden,omitempty"`
-	AddBookmark      *ProgressBookmark `json:"addBookmark,omitempty"`
+	TargetID          string            `json:"targetId,omitempty"`
+	ProjectID         string            `json:"projectId,omitempty"`
+	JobID             string            `json:"jobId,omitempty"`
+	BookSourceID      string            `json:"bookSourceId,omitempty"`
+	PreparedSourceID  string            `json:"preparedSourceId,omitempty"`
+	TemporarySourceID string            `json:"temporarySourceId,omitempty"`
+	BookScope         *BookScope        `json:"bookScope,omitempty"`
+	CurrentTimeSec    float64           `json:"currentTimeSec"`
+	DurationSec       float64           `json:"durationSec,omitempty"`
+	Progress          float64           `json:"progress,omitempty"`
+	ActiveWordIndex   int               `json:"activeWordIndex,omitempty"`
+	ReadingPosition   *ReadingPosition  `json:"readingPosition,omitempty"`
+	Finished          bool              `json:"finished,omitempty"`
+	Hidden            *bool             `json:"hidden,omitempty"`
+	AddBookmark       *ProgressBookmark `json:"addBookmark,omitempty"`
+}
+
+type DurableProgressKind string
+
+const (
+	DurableProgressKindResume    DurableProgressKind = "resume"
+	DurableProgressKindBookmark  DurableProgressKind = "bookmark"
+	DurableProgressKindHighlight DurableProgressKind = "highlight"
+)
+
+type DurableProgressState string
+
+const (
+	DurableProgressStateCurrent              DurableProgressState = "current"
+	DurableProgressStateDegraded             DurableProgressState = "degraded"
+	DurableProgressStateStale                DurableProgressState = "stale"
+	DurableProgressStateSuperseded           DurableProgressState = "superseded"
+	DurableProgressStateFailed               DurableProgressState = "failed"
+	DurableProgressStateInterruptedRetriable DurableProgressState = "interrupted_retriable"
+	DurableProgressStateRemapped             DurableProgressState = "remapped"
+)
+
+type DurableProgressPosition struct {
+	UnitID          string `json:"unitId"`
+	SegmentID       string `json:"segmentId,omitempty"`
+	ActiveWordIndex int    `json:"activeWordIndex,omitempty"`
+	AudioOffsetMS   int    `json:"audioOffsetMs,omitempty"`
+	TextQuote       string `json:"textQuote,omitempty"`
+}
+
+type DurableProgress struct {
+	SchemaVersion       string                    `json:"schemaVersion"`
+	ProgressID          string                    `json:"progressId"`
+	SourceID            string                    `json:"sourceId"`
+	ReadalongManifestID string                    `json:"readalongManifestId"`
+	SourceRevisionID    string                    `json:"sourceRevisionId"`
+	AudioArtifactID     string                    `json:"audioArtifactId,omitempty"`
+	Kind                DurableProgressKind       `json:"kind"`
+	State               DurableProgressState      `json:"state"`
+	UpdatedAt           time.Time                 `json:"updatedAt"`
+	Canonical           bool                      `json:"canonical"`
+	LocatorEnvelope     contentir.LocatorEnvelope `json:"locatorEnvelope"`
+	Position            DurableProgressPosition   `json:"position"`
+	Metadata            map[string]any            `json:"metadata,omitempty"`
+}
+
+type ResumeDecision string
+
+const (
+	ResumeDecisionAutoResumeCurrent  ResumeDecision = "auto_resume_current"
+	ResumeDecisionAutoResumeDegraded ResumeDecision = "auto_resume_degraded"
+	ResumeDecisionResumeAudioOnly    ResumeDecision = "resume_audio_only"
+	ResumeDecisionResumeSourceOnly   ResumeDecision = "resume_source_only"
+	ResumeDecisionOfferRetry         ResumeDecision = "offer_retry"
+	ResumeDecisionOfferOldVsRepaired ResumeDecision = "offer_old_vs_repaired"
+	ResumeDecisionAutoResumeRemapped ResumeDecision = "auto_resume_remapped"
+	ResumeDecisionBlockedFailed      ResumeDecision = "blocked_failed"
+)
+
+type ResumeResolution struct {
+	SchemaVersion               string                    `json:"schemaVersion"`
+	ResolutionID                string                    `json:"resolutionId"`
+	ProgressID                  string                    `json:"progressId"`
+	SourceID                    string                    `json:"sourceId"`
+	RequestedAt                 time.Time                 `json:"requestedAt"`
+	Decision                    ResumeDecision            `json:"decision"`
+	Reason                      string                    `json:"reason"`
+	ResolvedReadalongManifestID string                    `json:"resolvedReadalongManifestId"`
+	ResolvedLocatorEnvelope     contentir.LocatorEnvelope `json:"resolvedLocatorEnvelope"`
+	RevisionMapID               string                    `json:"revisionMapId,omitempty"`
+	StaleProgressID             string                    `json:"staleProgressId,omitempty"`
+	RetryArtifactID             string                    `json:"retryArtifactId,omitempty"`
+	Offers                      []string                  `json:"offers,omitempty"`
+	Metadata                    map[string]any            `json:"metadata,omitempty"`
+}
+
+type ResumeResolutionRequest struct {
+	ProgressID            string
+	SourceID              string
+	SourceRevisionID      string
+	ReadalongManifestID   string
+	Kind                  DurableProgressKind
+	RequestedAt           time.Time
+	AudioArtifacts        []ResumeAudioArtifactEvidence
+	SyncFidelityDecisions []SyncFidelityDecision
+	RevisionMaps          []RevisionMap
+}
+
+type ResumeAudioArtifactEvidence struct {
+	ArtifactID          string                      `json:"artifactId"`
+	SourceID            string                      `json:"sourceId"`
+	SourceRevisionID    string                      `json:"sourceRevisionId"`
+	ReadalongManifestID string                      `json:"readalongManifestId"`
+	UnitID              string                      `json:"unitId,omitempty"`
+	SegmentID           string                      `json:"segmentId,omitempty"`
+	CompatibilityKey    string                      `json:"compatibilityKey,omitempty"`
+	State               AudioArtifactState          `json:"state"`
+	Retry               *AudioArtifactRetryMetadata `json:"retry,omitempty"`
+}
+
+type RepairOverlayOperation string
+
+const (
+	RepairOverlayOperationReplaceText   RepairOverlayOperation = "replace_text"
+	RepairOverlayOperationInsertText    RepairOverlayOperation = "insert_text"
+	RepairOverlayOperationDeleteText    RepairOverlayOperation = "delete_text"
+	RepairOverlayOperationMarkBlocked   RepairOverlayOperation = "mark_blocked"
+	RepairOverlayOperationMetadataPatch RepairOverlayOperation = "metadata_patch"
+)
+
+type RepairOverlayChange struct {
+	ChangeID   string                 `json:"changeId"`
+	Operation  RepairOverlayOperation `json:"op"`
+	UnitID     string                 `json:"unitId"`
+	Locator    *contentir.Locator     `json:"locator,omitempty"`
+	BeforeText string                 `json:"beforeText,omitempty"`
+	AfterText  string                 `json:"afterText,omitempty"`
+	Reason     string                 `json:"reason"`
+}
+
+type RepairOverlay struct {
+	SchemaVersion    string                `json:"schemaVersion"`
+	OverlayID        string                `json:"overlayId"`
+	SourceID         string                `json:"sourceId"`
+	SourceRevisionID string                `json:"sourceRevisionId"`
+	TargetRevisionID string                `json:"targetRevisionId"`
+	CreatedAt        time.Time             `json:"createdAt"`
+	CreatedBy        string                `json:"createdBy,omitempty"`
+	Immutable        bool                  `json:"immutable"`
+	Changes          []RepairOverlayChange `json:"changes"`
+	Summary          string                `json:"summary"`
+	Metadata         map[string]any        `json:"metadata,omitempty"`
+}
+
+type RepairOverlayAffectedArtifact struct {
+	ArtifactID          string             `json:"artifactId"`
+	ArtifactKind        string             `json:"artifactKind"`
+	SourceID            string             `json:"sourceId"`
+	SourceRevisionID    string             `json:"sourceRevisionId"`
+	ReadalongManifestID string             `json:"readalongManifestId"`
+	UnitID              string             `json:"unitId"`
+	SegmentID           string             `json:"segmentId,omitempty"`
+	PreviousState       AudioArtifactState `json:"previousState"`
+	NewState            AudioArtifactState `json:"newState"`
+	Reason              string             `json:"reason"`
+}
+
+type RepairOverlayApplicationRequest struct {
+	Overlay                   RepairOverlay
+	RepairedSource            SourceLifecyclePersistRequest
+	ReadingUnitManifest       ReadingUnitManifest
+	ReadalongManifest         ReadalongManifest
+	RevisionMap               RevisionMap
+	FromReadingUnitManifestID string
+	FromReadalongManifestID   string
+	AudioArtifacts            []ResumeAudioArtifactEvidence
+	HighlightMapIDs           []string
+}
+
+type RepairOverlayApplication struct {
+	Overlay                 RepairOverlay                   `json:"overlay"`
+	SourceRevision          SourceRevision                  `json:"sourceRevision"`
+	ReadingUnitManifest     ReadingUnitManifest             `json:"readingUnitManifest"`
+	ReadalongManifest       ReadalongManifest               `json:"readalongManifest"`
+	RevisionMap             RevisionMap                     `json:"revisionMap"`
+	StaleAudioArtifacts     []RepairOverlayAffectedArtifact `json:"staleAudioArtifacts,omitempty"`
+	PreservedAudioArtifacts []ResumeAudioArtifactEvidence   `json:"preservedAudioArtifacts,omitempty"`
+	StaleHighlightArtifacts []RepairOverlayAffectedArtifact `json:"staleHighlightArtifacts,omitempty"`
+	PreservedHighlightIDs   []string                        `json:"preservedHighlightIds,omitempty"`
+	SupersededProgress      []DurableProgress               `json:"supersededProgress,omitempty"`
+}
+
+type RevisionMapCause string
+
+const (
+	RevisionMapCauseRepairOverlay        RevisionMapCause = "repair_overlay"
+	RevisionMapCauseExtractionCorrection RevisionMapCause = "extraction_correction"
+	RevisionMapCausePromotion            RevisionMapCause = "promotion"
+)
+
+type RevisionMapUnitMapping struct {
+	FromUnitID string  `json:"fromUnitId"`
+	ToUnitID   string  `json:"toUnitId"`
+	Confidence float64 `json:"confidence"`
+	Status     string  `json:"status,omitempty"`
+}
+
+type RevisionMapProgressMapping struct {
+	FromProgressID string  `json:"fromProgressId"`
+	ToProgressID   string  `json:"toProgressId"`
+	Confidence     float64 `json:"confidence"`
+}
+
+type RevisionMapLocatorMapping struct {
+	FromLocator         *contentir.Locator         `json:"fromLocator,omitempty"`
+	ToLocator           *contentir.Locator         `json:"toLocator,omitempty"`
+	FromLocatorEnvelope *contentir.LocatorEnvelope `json:"fromLocatorEnvelope,omitempty"`
+	ToLocatorEnvelope   *contentir.LocatorEnvelope `json:"toLocatorEnvelope,omitempty"`
+	Confidence          float64                    `json:"confidence"`
+	Status              string                     `json:"status,omitempty"`
+	TextQuote           string                     `json:"textQuote,omitempty"`
+}
+
+type RevisionMap struct {
+	SchemaVersion        string                       `json:"schemaVersion"`
+	RevisionMapID        string                       `json:"revisionMapId"`
+	SourceID             string                       `json:"sourceId"`
+	FromSourceRevisionID string                       `json:"fromSourceRevisionId"`
+	ToSourceRevisionID   string                       `json:"toSourceRevisionId"`
+	GeneratedAt          time.Time                    `json:"generatedAt"`
+	Cause                RevisionMapCause             `json:"cause"`
+	OverlayID            string                       `json:"overlayId,omitempty"`
+	Confidence           float64                      `json:"confidence"`
+	UnitMappings         []RevisionMapUnitMapping     `json:"unitMappings"`
+	LocatorMappings      []RevisionMapLocatorMapping  `json:"locatorMappings,omitempty"`
+	ProgressMappings     []RevisionMapProgressMapping `json:"progressMappings,omitempty"`
+	Metadata             map[string]any               `json:"metadata,omitempty"`
 }
 
 type PlaybackSessionStatus string
@@ -716,433 +1326,19 @@ const (
 )
 
 type PlaybackSession struct {
-	ID               string                `json:"id"`
-	TargetID         string                `json:"targetId"`
-	ProjectID        string                `json:"projectId"`
-	JobID            string                `json:"jobId,omitempty"`
-	BookSourceID     string                `json:"bookSourceId,omitempty"`
-	PreparedSourceID string                `json:"preparedSourceId,omitempty"`
-	BookScope        *BookScope            `json:"bookScope,omitempty"`
-	CurrentTimeSec   float64               `json:"currentTimeSec"`
-	ActiveWordIndex  int                   `json:"activeWordIndex,omitempty"`
-	ReadingPosition  *ReadingPosition      `json:"readingPosition,omitempty"`
-	Status           PlaybackSessionStatus `json:"status"`
-	StartedAt        time.Time             `json:"startedAt"`
-	UpdatedAt        time.Time             `json:"updatedAt"`
-	ClosedAt         *time.Time            `json:"closedAt,omitempty"`
-}
-
-type RunMode string
-
-const (
-	RunModeDraftPreview  RunMode = "draftPreview"
-	RunModeFastCreate    RunMode = "fastCreate"
-	RunModeCheckedMaster RunMode = "checkedMaster"
-	RunModePublishMaster RunMode = "publishMaster"
-)
-
-type PerformanceMode string
-
-const (
-	PerformanceModeBalanced   PerformanceMode = "balanced"
-	PerformanceModeThroughput PerformanceMode = "throughput"
-	PerformanceModeQuality    PerformanceMode = "quality"
-)
-
-type CreateJobPipelineOptions struct {
-	TextPreprocess  *bool `json:"textPreprocess,omitempty"`
-	VoiceClone      *bool `json:"voiceClone,omitempty"`
-	ASRCheck        *bool `json:"asrCheck,omitempty"`
-	AutoRetry       *bool `json:"autoRetry,omitempty"`
-	ArrivalPlayback *bool `json:"arrivalPlayback,omitempty"`
-	QualityReport   *bool `json:"qualityReport,omitempty"`
-}
-
-type PipelineOptions struct {
-	TextPreprocess  bool `json:"textPreprocess"`
-	VoiceClone      bool `json:"voiceClone"`
-	ASRCheck        bool `json:"asrCheck"`
-	AutoRetry       bool `json:"autoRetry"`
-	ArrivalPlayback bool `json:"arrivalPlayback"`
-	QualityReport   bool `json:"qualityReport"`
-}
-
-type JobQualityReport struct {
-	Enabled              bool    `json:"enabled"`
-	PreprocessChangedPct float64 `json:"preprocessChangedPct"`
-	RetryCount           int     `json:"retryCount"`
-	AverageSimilarity    float64 `json:"averageSimilarity"`
-	AverageLatencyMS     int     `json:"averageLatencyMs"`
-	SegmentCount         int     `json:"segmentCount"`
-	ReferenceProfile     bool    `json:"referenceProfile"`
-	Reason               string  `json:"reason"`
-}
-
-type JobSegment struct {
-	Index      int     `json:"index"`
-	Text       string  `json:"text"`
-	Status     string  `json:"status,omitempty"`
-	Attempts   int     `json:"attempts,omitempty"`
-	DurationMS int     `json:"durationMs,omitempty"`
-	LatencyMS  int     `json:"latencyMs,omitempty"`
-	Similarity float64 `json:"similarity,omitempty"`
-	Reason     string  `json:"reason,omitempty"`
-}
-
-type VoiceProfileStatus string
-
-const (
-	VoiceProfileStatusReady   VoiceProfileStatus = "ready"
-	VoiceProfileStatusError   VoiceProfileStatus = "error"
-	VoiceProfileStatusPending VoiceProfileStatus = "pending"
-)
-
-type VoiceProfileSourceStatus string
-
-const (
-	VoiceProfileSourceStatusQueued      VoiceProfileSourceStatus = "queued"
-	VoiceProfileSourceStatusNormalizing VoiceProfileSourceStatus = "normalizing"
-	VoiceProfileSourceStatusAnalyzing   VoiceProfileSourceStatus = "analyzing"
-	VoiceProfileSourceStatusScoring     VoiceProfileSourceStatus = "scoring"
-	VoiceProfileSourceStatusReady       VoiceProfileSourceStatus = "ready"
-	VoiceProfileSourceStatusFailed      VoiceProfileSourceStatus = "failed"
-	VoiceProfileSourceStatusCancelled   VoiceProfileSourceStatus = "cancelled"
-)
-
-type VoiceProfileReferenceSpan struct {
-	StartMS    int     `json:"startMs"`
-	EndMS      int     `json:"endMs"`
-	DurationMS int     `json:"durationMs"`
-	Score      float64 `json:"score"`
-}
-
-type VoiceProfileQualityMetrics struct {
-	CleanSpeech             float64 `json:"cleanSpeech"`
-	SingleSpeakerConfidence float64 `json:"singleSpeakerConfidence"`
-	UsableDurationMS        int     `json:"usableDurationMs"`
-	ClippingRisk            float64 `json:"clippingRisk"`
-	NoiseRisk               float64 `json:"noiseRisk"`
-	NoiseRiskBefore         float64 `json:"noiseRiskBefore,omitempty"`
-	NoiseRiskAfter          float64 `json:"noiseRiskAfter,omitempty"`
-	SilenceRatio            float64 `json:"silenceRatio"`
-	SourceCoverage          float64 `json:"sourceCoverage"`
-}
-
-type VoiceProfileDenoiseMetadata struct {
-	Provider        string   `json:"provider"`
-	Strength        string   `json:"strength"`
-	Applied         bool     `json:"applied"`
-	RawAudio        string   `json:"rawAudio,omitempty"`
-	CleanAudio      string   `json:"cleanAudio,omitempty"`
-	RawPath         string   `json:"rawPath,omitempty"`
-	CleanPath       string   `json:"cleanPath,omitempty"`
-	NoiseRiskBefore float64  `json:"noiseRiskBefore,omitempty"`
-	NoiseRiskAfter  float64  `json:"noiseRiskAfter,omitempty"`
-	SNRBeforeDB     float64  `json:"snrBeforeDb,omitempty"`
-	SNRAfterDB      float64  `json:"snrAfterDb,omitempty"`
-	Warnings        []string `json:"warnings,omitempty"`
-	Reason          string   `json:"reason,omitempty"`
-}
-
-type VoiceProfileLikeness struct {
-	Status            string     `json:"status"`
-	Score             float64    `json:"score,omitempty"`
-	SpeakerSimilarity float64    `json:"speakerSimilarity,omitempty"`
-	EmbeddingModel    string     `json:"embeddingModel,omitempty"`
-	CalibrationText   string     `json:"calibrationText,omitempty"`
-	MeasuredAt        *time.Time `json:"measuredAt,omitempty"`
-	Reason            string     `json:"reason,omitempty"`
-}
-
-type VoiceProfileTargetStatus string
-
-const (
-	VoiceProfileTargetStatusSelected   VoiceProfileTargetStatus = "selected"
-	VoiceProfileTargetStatusQueued     VoiceProfileTargetStatus = "queued"
-	VoiceProfileTargetStatusBuilding   VoiceProfileTargetStatus = "building"
-	VoiceProfileTargetStatusValidating VoiceProfileTargetStatus = "validating"
-	VoiceProfileTargetStatusReady      VoiceProfileTargetStatus = "ready"
-	VoiceProfileTargetStatusFailed     VoiceProfileTargetStatus = "failed"
-	VoiceProfileTargetStatusCancelled  VoiceProfileTargetStatus = "cancelled"
-)
-
-type VoiceProfileTargetValidation struct {
-	Status               VoiceProfileTargetStatus `json:"status"`
-	Score                float64                  `json:"score,omitempty"`
-	SpeakerSimilarity    float64                  `json:"speakerSimilarity,omitempty"`
-	TranscriptSimilarity float64                  `json:"transcriptSimilarity,omitempty"`
-	GeneratedAudio       string                   `json:"generatedAudio,omitempty"`
-	GeneratedPath        string                   `json:"generatedPath,omitempty"`
-	ExpectedTranscript   string                   `json:"expectedTranscript,omitempty"`
-	ASRTranscript        string                   `json:"asrTranscript,omitempty"`
-	Provider             string                   `json:"provider,omitempty"`
-	Model                string                   `json:"model,omitempty"`
-	MeasuredAt           *time.Time               `json:"measuredAt,omitempty"`
-	Error                string                   `json:"error,omitempty"`
-}
-
-type VoiceProfileTarget struct {
-	ID         string                        `json:"id"`
-	Label      string                        `json:"label,omitempty"`
-	EngineID   string                        `json:"engineId,omitempty"`
-	ModuleID   string                        `json:"moduleId,omitempty"`
-	Status     VoiceProfileTargetStatus      `json:"status"`
-	Selected   bool                          `json:"selected"`
-	Validation *VoiceProfileTargetValidation `json:"validation,omitempty"`
-	CreatedAt  time.Time                     `json:"createdAt"`
-	UpdatedAt  time.Time                     `json:"updatedAt"`
-	Error      string                        `json:"error,omitempty"`
-	Metadata   map[string]string             `json:"metadata,omitempty"`
-}
-
-type VoiceProfileCloneArtifactStatus string
-
-const (
-	VoiceProfileCloneArtifactStatusPending   VoiceProfileCloneArtifactStatus = "pending"
-	VoiceProfileCloneArtifactStatusBuilding  VoiceProfileCloneArtifactStatus = "building"
-	VoiceProfileCloneArtifactStatusReady     VoiceProfileCloneArtifactStatus = "ready"
-	VoiceProfileCloneArtifactStatusFailed    VoiceProfileCloneArtifactStatus = "failed"
-	VoiceProfileCloneArtifactStatusCancelled VoiceProfileCloneArtifactStatus = "cancelled"
-)
-
-type VoiceProfileCloneArtifact struct {
-	ModuleID     string                          `json:"moduleId"`
-	EngineID     string                          `json:"engineId,omitempty"`
-	Kind         string                          `json:"kind,omitempty"`
-	Status       VoiceProfileCloneArtifactStatus `json:"status"`
-	File         string                          `json:"file,omitempty"`
-	Path         string                          `json:"path,omitempty"`
-	Loss         float64                         `json:"loss,omitempty"`
-	Score        float64                         `json:"score,omitempty"`
-	Steps        int                             `json:"steps,omitempty"`
-	BaseStyle    string                          `json:"baseStyle,omitempty"`
-	UpstreamRef  string                          `json:"upstreamRef,omitempty"`
-	ModelVersion string                          `json:"modelVersion,omitempty"`
-	Metadata     map[string]string               `json:"metadata,omitempty"`
-	CreatedAt    time.Time                       `json:"createdAt"`
-	UpdatedAt    time.Time                       `json:"updatedAt"`
-	Error        string                          `json:"error,omitempty"`
-}
-
-type VoiceProfileCandidate struct {
-	ID                      string                       `json:"id"`
-	SpeakerID               string                       `json:"speakerId"`
-	SuggestedName           string                       `json:"suggestedName"`
-	Status                  string                       `json:"status"`
-	Rank                    int                          `json:"rank,omitempty"`
-	Recommended             bool                         `json:"recommended,omitempty"`
-	Suitability             string                       `json:"suitability,omitempty"`
-	Warnings                []string                     `json:"warnings,omitempty"`
-	Reason                  string                       `json:"reason,omitempty"`
-	PreviewAudio            string                       `json:"previewAudio,omitempty"`
-	PreviewPath             string                       `json:"previewPath,omitempty"`
-	RawPreviewAudio         string                       `json:"rawPreviewAudio,omitempty"`
-	RawPreviewPath          string                       `json:"rawPreviewPath,omitempty"`
-	CleanPreviewAudio       string                       `json:"cleanPreviewAudio,omitempty"`
-	CleanPreviewPath        string                       `json:"cleanPreviewPath,omitempty"`
-	ReferenceAudio          string                       `json:"referenceAudio,omitempty"`
-	ReferencePath           string                       `json:"referencePath,omitempty"`
-	ReferenceDurationMS     int                          `json:"referenceDurationMs"`
-	ReferenceVersion        string                       `json:"referenceVersion"`
-	ReferenceSampleStrategy string                       `json:"referenceSampleStrategy"`
-	StrategyVersion         string                       `json:"strategyVersion"`
-	ModelVersion            string                       `json:"modelVersion,omitempty"`
-	Score                   float64                      `json:"score"`
-	TotalSpeechDurationMS   int                          `json:"totalSpeechDurationMs"`
-	ReferenceSpanCount      int                          `json:"referenceSpanCount,omitempty"`
-	Spans                   []VoiceProfileReferenceSpan  `json:"spans"`
-	QualityMetrics          VoiceProfileQualityMetrics   `json:"qualityMetrics"`
-	Denoise                 *VoiceProfileDenoiseMetadata `json:"denoise,omitempty"`
-	TranscriptMetadata      *TranscriptMetadata          `json:"transcriptMetadata,omitempty"`
-	Transcript              string                       `json:"transcript,omitempty"`
-	TranscriptGeneratedAt   *time.Time                   `json:"transcriptGeneratedAt,omitempty"`
-	TranscriptModel         string                       `json:"transcriptModel,omitempty"`
-	TranscriptError         string                       `json:"transcriptError,omitempty"`
-	TranscriptConfidence    float64                      `json:"transcriptConfidence,omitempty"`
-	CreatedAt               time.Time                    `json:"createdAt"`
-	UpdatedAt               time.Time                    `json:"updatedAt"`
-}
-
-type VoiceProfileSourceStage struct {
-	Name   string `json:"name"`
-	Status string `json:"status"`
-	Detail string `json:"detail,omitempty"`
-}
-
-type VoiceProfileSource struct {
-	ID                    string                       `json:"id"`
-	Status                VoiceProfileSourceStatus     `json:"status"`
-	SourceFile            string                       `json:"sourceFile"`
-	SourceBytes           int64                        `json:"sourceBytes"`
-	SourceDurationMS      int                          `json:"sourceDurationMs,omitempty"`
-	NormalizedAudio       string                       `json:"normalizedAudio,omitempty"`
-	NormalizedPath        string                       `json:"normalizedPath,omitempty"`
-	CleanedAudio          string                       `json:"cleanedAudio,omitempty"`
-	CleanedPath           string                       `json:"cleanedPath,omitempty"`
-	Denoise               *VoiceProfileDenoiseMetadata `json:"denoise,omitempty"`
-	AudioFormat           string                       `json:"audioFormat"`
-	ProgressMessage       string                       `json:"progressMessage"`
-	ProgressDetail        string                       `json:"progressDetail,omitempty"`
-	Error                 string                       `json:"error,omitempty"`
-	Stages                []VoiceProfileSourceStage    `json:"stages"`
-	Candidates            []VoiceProfileCandidate      `json:"candidates"`
-	TranscriptMetadata    *TranscriptMetadata          `json:"transcriptMetadata,omitempty"`
-	Transcript            string                       `json:"transcript,omitempty"`
-	TranscriptGeneratedAt *time.Time                   `json:"transcriptGeneratedAt,omitempty"`
-	TranscriptModel       string                       `json:"transcriptModel,omitempty"`
-	TranscriptError       string                       `json:"transcriptError,omitempty"`
-	TranscriptConfidence  float64                      `json:"transcriptConfidence,omitempty"`
-	StrategyVersion       string                       `json:"strategyVersion"`
-	ModelVersion          string                       `json:"modelVersion,omitempty"`
-	CreatedAt             time.Time                    `json:"createdAt"`
-	UpdatedAt             time.Time                    `json:"updatedAt"`
-}
-
-type VoiceProfile struct {
-	ID                      string                               `json:"id"`
-	Name                    string                               `json:"name"`
-	Language                string                               `json:"language"`
-	SourceFile              string                               `json:"sourceFile"`
-	SourceBytes             int64                                `json:"sourceBytes"`
-	SourceID                string                               `json:"sourceId,omitempty"`
-	SpeakerID               string                               `json:"speakerId,omitempty"`
-	SpeakerName             string                               `json:"speakerName,omitempty"`
-	SourceDurationMS        int                                  `json:"sourceDurationMs,omitempty"`
-	ReferenceAudio          string                               `json:"referenceAudio"`
-	ReferencePath           string                               `json:"referencePath"`
-	ReferenceDurationMS     int                                  `json:"referenceDurationMs,omitempty"`
-	ReferenceTrimmed        bool                                 `json:"referenceTrimmed"`
-	ReferenceSampleStrategy string                               `json:"referenceSampleStrategy,omitempty"`
-	ReferenceVersion        string                               `json:"referenceVersion,omitempty"`
-	ReferenceScore          float64                              `json:"referenceScore,omitempty"`
-	ReferenceSpans          []VoiceProfileReferenceSpan          `json:"referenceSpans,omitempty"`
-	QualityMetrics          *VoiceProfileQualityMetrics          `json:"qualityMetrics,omitempty"`
-	Denoise                 *VoiceProfileDenoiseMetadata         `json:"denoise,omitempty"`
-	Likeness                *VoiceProfileLikeness                `json:"likeness,omitempty"`
-	CloneTargets            map[string]VoiceProfileTarget        `json:"cloneTargets,omitempty"`
-	CloneArtifacts          map[string]VoiceProfileCloneArtifact `json:"cloneArtifacts,omitempty"`
-	AudioFormat             string                               `json:"audioFormat"`
-	Status                  VoiceProfileStatus                   `json:"status"`
-	Error                   string                               `json:"error,omitempty"`
-	DurationMS              int                                  `json:"durationMs"`
-	CreatedAt               time.Time                            `json:"createdAt"`
-	UpdatedAt               time.Time                            `json:"updatedAt"`
-	ReferenceSamples        string                               `json:"referenceSamples,omitempty"`
-}
-
-type RetryMetadata struct {
-	MaxRetries      int `json:"maxRetries"`
-	Attempts        int `json:"attempts"`
-	SegmentAttempts int `json:"segmentAttempts"`
-	CurrentSegment  int `json:"currentSegment"`
-	TotalSegments   int `json:"totalSegments"`
-}
-
-type PipelineStages struct {
-	Optimization StageStatus `json:"optimization"`
-	Synthesis    StageStatus `json:"synthesis"`
-	Checker      StageStatus `json:"checker"`
-}
-
-type VoiceCheck struct {
-	Complete    bool    `json:"complete"`
-	Transcript  string  `json:"transcript"`
-	ResumeText  string  `json:"resumeText,omitempty"`
-	NeedsResume bool    `json:"needsResume"`
-	Reason      string  `json:"reason"`
-	Provider    string  `json:"provider"`
-	Similarity  float64 `json:"similarity"`
-}
-
-type JobProgress struct {
-	Message        string     `json:"message"`
-	Detail         string     `json:"detail"`
-	ActiveStage    string     `json:"activeStage"`
-	CurrentSegment int        `json:"currentSegment,omitempty"`
-	TotalSegments  int        `json:"totalSegments,omitempty"`
-	StartedAt      *time.Time `json:"startedAt,omitempty"`
-}
-
-type AlignmentOptions struct {
-	Enabled          bool                     `json:"enabled"`
-	Preferred        []alignment.TimingSource `json:"preferred,omitempty"`
-	MFABin           string                   `json:"mfaBin,omitempty"`
-	MFADictionary    string                   `json:"mfaDictionary,omitempty"`
-	MFAAcousticModel string                   `json:"mfaAcousticModel,omitempty"`
-	AeneasPython     string                   `json:"aeneasPython,omitempty"`
-	GentleURL        string                   `json:"gentleUrl,omitempty"`
-	TimeoutSeconds   int                      `json:"timeoutSeconds,omitempty"`
-}
-
-type TimingArtifacts struct {
-	Status            string                            `json:"status"`
-	Summary           highlightmap.Summary              `json:"summary"`
-	HighlightMapURL   string                            `json:"highlightMapUrl,omitempty"`
-	FragmentTimingURL string                            `json:"fragmentTimingUrl,omitempty"`
-	TokenTimingURL    string                            `json:"tokenTimingUrl,omitempty"`
-	FragmentTiming    *alignment.FragmentTimingArtifact `json:"fragmentTiming,omitempty"`
-	TokenTiming       *alignment.TokenTimingArtifact    `json:"tokenTiming,omitempty"`
-}
-
-type VoiceJob struct {
-	ID                      string            `json:"id"`
-	ProjectID               string            `json:"projectId"`
-	BookSourceID            string            `json:"bookSourceId,omitempty"`
-	BookScope               *BookScope        `json:"bookScope,omitempty"`
-	PreparedSourceID        string            `json:"preparedSourceId,omitempty"`
-	SelectedBlockIDs        []string          `json:"selectedBlockIds,omitempty"`
-	SourceKind              string            `json:"sourceKind,omitempty"`
-	ProgressTargetID        string            `json:"progressTargetId,omitempty"`
-	SpeechPolicyProfile     string            `json:"speechPolicyProfile,omitempty"`
-	SpeechPolicyOverrides   policy.Overrides  `json:"speechPolicyOverrides,omitempty"`
-	Locale                  string            `json:"locale,omitempty"`
-	SpeechRenderApplied     bool              `json:"speechRenderApplied,omitempty"`
-	Status                  JobStatus         `json:"status"`
-	Stages                  PipelineStages    `json:"stages"`
-	AdaptiveMode            bool              `json:"adaptiveMode"`
-	RunMode                 RunMode           `json:"runMode"`
-	PerformanceMode         PerformanceMode   `json:"performanceMode"`
-	PipelineOptions         PipelineOptions   `json:"pipelineOptions"`
-	VoiceProfileID          string            `json:"voiceProfileId,omitempty"`
-	VoiceProfileName        string            `json:"voiceProfileName,omitempty"`
-	VoiceProfileLanguage    string            `json:"voiceProfileLanguage,omitempty"`
-	VoiceID                 string            `json:"voiceId,omitempty"`
-	TTSEngine               string            `json:"ttsEngine,omitempty"`
-	EngineOptions           map[string]string `json:"engineOptions,omitempty"`
-	TTSVoice                string            `json:"ttsVoice,omitempty"`
-	TTSLanguage             string            `json:"ttsLanguage,omitempty"`
-	InputText               string            `json:"inputText"`
-	OptimizedText           string            `json:"optimizedText"`
-	Segments                []JobSegment      `json:"segments,omitempty"`
-	SegmentationWarnings    []string          `json:"segmentationWarnings,omitempty"`
-	Optimizer               string            `json:"optimizer"`
-	AudioURL                string            `json:"audioUrl"`
-	AudioPartialURL         string            `json:"audioPartialUrl,omitempty"`
-	AudioPath               string            `json:"audioPath,omitempty"`
-	AudioReadySegments      int               `json:"audioReadySegments,omitempty"`
-	AudioSegmentDurationsMS []int             `json:"audioSegmentDurationsMs,omitempty"`
-	AudioSegmentLatenciesMS []int             `json:"audioSegmentLatenciesMs,omitempty"`
-	Timing                  *TimingArtifacts  `json:"timing,omitempty"`
-	ContentType             string            `json:"contentType"`
-	DurationMS              int               `json:"durationMs"`
-	Provider                string            `json:"provider"`
-	Voice                   string            `json:"voice"`
-	Retries                 RetryMetadata     `json:"retries"`
-	VoiceCheck              VoiceCheck        `json:"voiceCheck"`
-	QualityReport           *JobQualityReport `json:"qualityReport,omitempty"`
-	Progress                JobProgress       `json:"progress"`
-	Error                   string            `json:"error,omitempty"`
-	CreatedAt               time.Time         `json:"createdAt"`
-	UpdatedAt               time.Time         `json:"updatedAt"`
-	CompletedAt             *time.Time        `json:"completedAt,omitempty"`
-}
-
-type storedJob struct {
-	VoiceJob
-	audio              []byte
-	audioSegments      [][]byte
-	audioPartialPCM    []byte
-	audioPartialSpec   audio.WAVSpec
-	audioPartialReady  bool
-	nativeTimingEvents []alignment.NativeTimingEvent
+	ID                string                `json:"id"`
+	TargetID          string                `json:"targetId"`
+	ProjectID         string                `json:"projectId,omitempty"`
+	JobID             string                `json:"jobId,omitempty"`
+	BookSourceID      string                `json:"bookSourceId,omitempty"`
+	PreparedSourceID  string                `json:"preparedSourceId,omitempty"`
+	TemporarySourceID string                `json:"temporarySourceId,omitempty"`
+	BookScope         *BookScope            `json:"bookScope,omitempty"`
+	CurrentTimeSec    float64               `json:"currentTimeSec"`
+	ActiveWordIndex   int                   `json:"activeWordIndex,omitempty"`
+	ReadingPosition   *ReadingPosition      `json:"readingPosition,omitempty"`
+	Status            PlaybackSessionStatus `json:"status"`
+	StartedAt         time.Time             `json:"startedAt"`
+	UpdatedAt         time.Time             `json:"updatedAt"`
+	ClosedAt          *time.Time            `json:"closedAt,omitempty"`
 }

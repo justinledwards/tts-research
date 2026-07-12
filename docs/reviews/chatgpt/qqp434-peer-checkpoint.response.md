@@ -1,0 +1,14 @@
+PEER REQUEST_CHANGES
+
+Release-blocking: remapped resume does not actually resolve the locator. backend/internal/pipeline/models.go:1220-1232 models RevisionMap with unit/progress mappings only, omitting contract locatorMappings from packages/schema/schemas/revision-map.v1.schema.json:81-93. backend/internal/pipeline/progress.go:371-382 returns auto_resume_remapped but sets ResolvedLocatorEnvelope to the stale progress.LocatorEnvelope; mapStaleProgress at progress.go:760-781 only checks unit mappings. The contract fixtures show why this matters: stale progress has old locator columnEnd: 22 in fixtures/contracts/readalong-stale.durable-progress.v1.json:19-30, the revision map has toLocator.columnEnd: 28 in fixtures/contracts/readalong-repair.revision-map.v1.json:25-50, and the expected resume resolution uses the remapped locator in fixtures/contracts/readalong-remapped.resume-resolution.v1.json:10-28.
+
+Release-blocking: stale/superseded progress can bypass the revision-map decision path. backend/internal/pipeline/progress.go:366-369 treats same manifest/revision as current before checking stale/superseded at progress.go:371; the docs require stale/superseded progress to resolve through RevisionMap before auto-resume or old-vs-repaired choice (docs/contracts/readalong-sidecars.md:43, docs/architecture/source-reader-flow-invariants.md:149).
+
+Canonical durability repair: appears sufficient for the targeted durability failure modes. PersistDurableProgress serializes canonical replacement under service.mu, demotes prior canonicals before writing the new canonical, preserves in-memory old canonical on write failure, and reloadDurableProgress validates records, skips invalid/corrupt records, demotes duplicate canonicals, and promotes a deterministic zero-canonical winner by newest UpdatedAt then highest ProgressID.
+
+Resume-resolution honesty/in-scope: current/degraded/audio-only/source-only/retry/failed paths appear in scope and mostly honest. Remapped/stale/superseded behavior is not yet honest because auto_resume_remapped can return a stale locator, and stale/superseded records can be processed as current if the resolved manifest matches.
+
+Non-blocking follow-ups: add regressions that load/use contract-style locatorMappings and assert ResolvedLocatorEnvelope equals the mapped toLocator; add stale/superseded same-manifest tests; consider surfacing/logging reload reconciliation write errors. I could not independently rerun the Go gate in this container because the local Go toolchain attempted to download go1.26.3 and outbound network is unavailable.
+Source: https://chatgpt.com/g/g-p-6a4c3396e3948191a15f9959895179d7-tts-research/c/6a4e3aad-a7e4-83eb-809e-867849e0108f
+Archive: /tmp/tts-research-qqp434-peer-20260708T115354Z.zip
+Archive-SHA256: 0e74de9659732ba80c854bc046972740a36ce8d43358e2e64479e111e88bfb97

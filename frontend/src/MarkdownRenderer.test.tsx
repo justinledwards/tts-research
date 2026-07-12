@@ -43,15 +43,156 @@ describe("Markdown rendering helpers", () => {
     expect(markup).toContain(">world</span>");
   });
 
+  it("can render stable word anchors for smooth Markdown cursor motion", () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownRenderer
+        wordHighlight={{
+          activeWordIndex: 8,
+          activeWordOffset: 1,
+          blockEndOffset: 18,
+          blockStartOffset: 0,
+          blockWordStartIndex: 7,
+          renderWordAnchors: true,
+        }}
+      >
+        {"First second third"}
+      </MarkdownRenderer>,
+    );
+
+    expect(markup).toContain('data-readalong-word-index="7"');
+    expect(markup).toContain('data-readalong-word-index="8"');
+    expect(markup).toContain('data-readalong-word-index="9"');
+    expect(markup).toContain('aria-current="true"');
+    expect(markup).toContain('data-readalong-dom-active="true"');
+    expect(markup).toContain("markdown-cinema-word-active");
+    expect(markup).toContain("readalong-word-role--idle");
+  });
+
+  it("renders stable word anchors without active-state classes", () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownRenderer
+        wordAnchors={{
+          blockEndOffset: 18,
+          blockStartOffset: 0,
+          blockWordStartIndex: 20,
+        }}
+      >
+        {"First second third"}
+      </MarkdownRenderer>,
+    );
+
+    expect(markup).toContain('data-readalong-word-index="20"');
+    expect(markup).toContain('data-readalong-word-index="21"');
+    expect(markup).toContain('data-readalong-word-index="22"');
+    expect(markup).toContain("markdown-cinema-word");
+    expect(markup).toContain("readalong-word-role--idle");
+    expect(markup).not.toContain("markdown-cinema-word-active");
+    expect(markup).not.toContain('aria-current="true"');
+  });
+
+  it("mirrors Teleprompter word cue states for Markdown Render parity", () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownRenderer
+        wordHighlight={{
+          activeWordIndex: 8,
+          activeWordOffset: 1,
+          blockEndOffset: 18,
+          blockStartOffset: 0,
+          blockWordStartIndex: 7,
+          renderWordAnchors: true,
+          wordStates: new Map([
+            [7, { intensity: 0.2, state: "spoken", wordRole: "recent" }],
+            [8, { intensity: 1, state: "active", wordRole: "active" }],
+            [9, { intensity: 0.18, state: "upcoming", wordRole: "upcoming" }],
+          ]),
+        }}
+      >
+        {"First second third"}
+      </MarkdownRenderer>,
+    );
+
+    expect(markup).toContain("teleprompter-word--spoken");
+    expect(markup).toContain("teleprompter-word--active");
+    expect(markup).toContain("teleprompter-word--upcoming");
+    expect(markup).toContain('data-effect="spark"');
+    expect(markup).toContain("--teleprompter-intensity:1");
+    expect(markup).toContain("readalong-word-role--recent");
+    expect(markup).toContain("readalong-word-role--upcoming");
+  });
+
   it("marks an active generated block without wrapping individual words", () => {
     const markup = renderToStaticMarkup(
-      <MarkdownRenderer blockHighlight={{ blockEndOffset: 30, blockStartOffset: 0 }}>
+      <MarkdownRenderer
+        blockHighlight={{ blockEndOffset: 30, blockStartOffset: 0, nodeId: "block-1" }}
+      >
         {"| One | Two |\n|---|---|\n| A | B |"}
       </MarkdownRenderer>,
     );
 
     expect(markup).toContain("markdown-cinema-block-active");
+    expect(markup).toContain('data-readalong-node-id="block-1"');
     expect(markup).not.toContain("markdown-cinema-word-active");
+  });
+
+  it("keeps skipped Markdown blocks from consuming the active paragraph word offset", () => {
+    const paragraph = "Spoken paragraph after skipped code.";
+    const source = [
+      "```ts",
+      "const skipped = true;",
+      "```",
+      "",
+      paragraph,
+      "",
+      "| Silent | Table |",
+      "| --- | --- |",
+      "| not | spoken |",
+    ].join("\n");
+    const blockStartOffset = source.indexOf(paragraph);
+    const blockEndOffset = blockStartOffset + paragraph.length;
+    const markup = renderToStaticMarkup(
+      <MarkdownRenderer
+        wordHighlight={{
+          activeWordOffset: 1,
+          blockEndOffset,
+          blockStartOffset,
+          nodeId: "spoken-paragraph",
+          renderWordAnchors: true,
+        }}
+      >
+        {source}
+      </MarkdownRenderer>,
+    );
+
+    expect(markup).toContain('data-readalong-node-id="spoken-paragraph"');
+    expect(markup).toContain(">paragraph</span>");
+    expect(markup).toContain("markdown-cinema-word-active");
+    expect(markup).toContain("const skipped = true;");
+    expect(markup).toContain("<table>");
+    expect(markup).not.toContain(">const</span>");
+    expect(markup).not.toContain(">Silent</span>");
+  });
+
+  it("skips citation chips while assigning word offsets inside the spoken paragraph", () => {
+    const source = "Claim [cite][turn40search10] stays aligned.";
+    const markup = renderToStaticMarkup(
+      <MarkdownRenderer
+        artifactRendering="document-cinema"
+        wordHighlight={{
+          activeWordOffset: 1,
+          blockEndOffset: source.length,
+          blockStartOffset: 0,
+          nodeId: "citation-paragraph",
+          renderWordAnchors: true,
+        }}
+      >
+        {source}
+      </MarkdownRenderer>,
+    );
+
+    expect(markup).toContain(">stays</span>");
+    expect(markup).toContain("markdown-cinema-word-active");
+    expect(markup).toContain('data-speech-mode="skip"');
+    expect(markup).not.toContain("[cite]");
   });
 
   it("maps active teleprompter word indexes back to prepared-source blocks", () => {
@@ -75,6 +216,36 @@ describe("Markdown rendering helpers", () => {
     expect(markup).toContain('<a target="_blank"');
     expect(markup).toContain('rel="noopener noreferrer"');
     expect(markup).toContain('href="/docs/example"');
+  });
+
+  it("renders document citation artifacts as speech-safe chips", () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownRenderer artifactRendering="document-cinema">
+        {"Claim [cite][turn40search10] and :contentReference[oaicite:3]{index=3}."}
+      </MarkdownRenderer>,
+    );
+
+    expect(markup).toContain("document-inline-artifact--citation");
+    expect(markup).toContain("document-inline-artifact--artifact_token");
+    expect(markup).toContain('data-speech-mode="skip"');
+    expect(markup).toContain('data-speech-behavior="on-demand"');
+    expect(markup).toContain("Available on demand");
+    expect(markup).toContain("Copy citation");
+    expect(markup).toContain('href="#prepared-source-policy-notes"');
+    expect(markup).not.toContain("[cite]");
+    expect(markup).not.toContain(":contentReference");
+  });
+
+  it("keeps document links and code spans visually classified", () => {
+    const markup = renderToStaticMarkup(
+      <MarkdownRenderer artifactRendering="document-cinema">
+        {"Use [`voice_id`](https://example.com/docs) with `tts.run`."}
+      </MarkdownRenderer>,
+    );
+
+    expect(markup).toContain("document-inline-artifact-link");
+    expect(markup).toContain("document-inline-artifact-code");
+    expect(markup).toContain("tts.run");
   });
 });
 

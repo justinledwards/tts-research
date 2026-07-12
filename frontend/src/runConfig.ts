@@ -3,8 +3,14 @@ import type {
   PerformanceMode,
   PipelineOptions,
   RunMode,
+  SpeechPolicyOverrides,
   VoiceJob,
 } from "./types";
+import {
+  compactSpeechPolicyOverrides,
+  hasSpeechPolicyOverrides,
+  normalizeSpeechPolicyProfile,
+} from "./speechPolicy";
 
 export const RUN_CONFIG_STORAGE_KEY = "tts-run-config-v1";
 
@@ -180,6 +186,31 @@ export function buildCreateVoiceJobRequest(
     request.voiceProfileId = selectedVoiceProfileId;
   }
   return request;
+}
+
+export interface SpeechPolicyVoiceJobRequestOptions {
+  readonly speechPolicyOverrides?: SpeechPolicyOverrides | null;
+  readonly speechPolicyProfile?: string | null;
+}
+
+export function applySpeechPolicyToCreateVoiceJobRequest(
+  request: CreateVoiceJobRequest,
+  options: SpeechPolicyVoiceJobRequestOptions,
+): CreateVoiceJobRequest {
+  const next: CreateVoiceJobRequest = { ...request };
+  if (options.speechPolicyProfile == null) {
+    delete next.speechPolicyProfile;
+  } else {
+    next.speechPolicyProfile = normalizeSpeechPolicyProfile(options.speechPolicyProfile);
+  }
+
+  const overrides = compactSpeechPolicyOverrides(options.speechPolicyOverrides ?? {});
+  if (hasSpeechPolicyOverrides(overrides)) {
+    next.speechPolicyOverrides = overrides;
+  } else {
+    delete next.speechPolicyOverrides;
+  }
+  return next;
 }
 
 export function kokoroRenderModeForConfiguration(

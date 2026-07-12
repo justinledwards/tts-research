@@ -1,0 +1,785 @@
+{
+  "schemaVersion": "tts-research.reader-first-release-contract.v2",
+  "status": "peer_approved_rfa_01_completed_rfa_02_in_progress_product_mutation_started_frontend_scope_pending_commit",
+  "planPath": "docs/plans/2026-07-10-reader-first-release-reset.md",
+  "ownerDecision": {
+    "authority": "acting_product_owner",
+    "decision": "replace_pending_rsp_with_rfa_01_through_rfa_20",
+    "repositoryStrategy": "continue_in_current_repository",
+    "newRepositoryAuthorized": false,
+    "peerApprovalRequired": true,
+    "peerResponseDisposition": "all_nine_blockers_repaired_for_independent_resubmission"
+  },
+  "authorization": {
+    "ownerAccepted": true,
+    "peerApproved": true,
+    "linearCreationAuthorized": true,
+    "productImplementationAuthorized": true,
+    "graphUnblockedIssues": ["RFA-02"],
+    "authorizedIssues": ["RFA-02"]
+  },
+  "customerRequirements": [
+    {
+      "id": "cross-browser-server-authority",
+      "statement": "A clean browser restores project, source revision, run, media, fidelity, and paused progress from server authority.",
+      "issues": ["RFA-02", "RFA-11", "RFA-19", "RFA-20"]
+    },
+    {
+      "id": "instant-progressive-readalong",
+      "statement": "Reading opens immediately and first playable audio plus trustworthy highlighting arrive segment by segment during narration.",
+      "issues": [
+        "RFA-06",
+        "RFA-07",
+        "RFA-08",
+        "RFA-09",
+        "RFA-10",
+        "RFA-12",
+        "RFA-13",
+        "RFA-14",
+        "RFA-15",
+        "RFA-20"
+      ]
+    },
+    {
+      "id": "structure-aware-narration",
+      "statement": "Headings and structural units retain identity and are narrated as isolated units with explicit pause semantics.",
+      "issues": ["RFA-04", "RFA-05", "RFA-20"]
+    },
+    {
+      "id": "no-preview-in-narration",
+      "statement": "Preview/Audition is restricted to voice comparison and cloning and cannot accept a narration run identity.",
+      "issues": ["RFA-16", "RFA-20"]
+    },
+    {
+      "id": "truthful-lightweight-completion",
+      "statement": "Completed compatible audio remains playable without false rebuild/system-critical status and without full-book media or timing ingestion.",
+      "issues": ["RFA-03", "RFA-09", "RFA-13", "RFA-15", "RFA-17", "RFA-18", "RFA-20"]
+    },
+    {
+      "id": "best-in-class-rebalance",
+      "statement": "Domain stores, server authorities, bounded payloads, lazy boundaries, and release evidence replace App-owned implicit lifecycle formulas.",
+      "issues": ["RFA-01", "RFA-18", "RFA-19", "RFA-20"]
+    }
+  ],
+  "serverAuthority": {
+    "restorationSnapshotFields": [
+      "schemaVersion",
+      "projectId",
+      "projectRevision",
+      "sourceId",
+      "sourceRevisionId",
+      "sourceContentHash",
+      "runId",
+      "runCompatibilityKey",
+      "mediaManifestVersion",
+      "timingRevision",
+      "syncFidelity",
+      "readerLocator",
+      "playbackCursorMs",
+      "playbackRate",
+      "followPreference",
+      "updatedAt"
+    ],
+    "browserStorageRole": "disposable_cache_and_preferences_only",
+    "missingBrowserStorageMayBreakRestore": false,
+    "restoreAutoplay": false,
+    "legacySelectionFallback": "latest_compatible_completed_run_then_ready_source",
+    "workspaceMutationsRequireRevisionPrecondition": true,
+    "summaryActionsRequireDetailHydration": true,
+    "artifactCompatibilityAuthority": "server",
+    "snapshotSchemaVersion": "reader_workspace_snapshot.v1",
+    "snapshotWritePolicy": "write_v1_only_after_read_migration",
+    "snapshotReadPolicy": [
+      "v1_direct",
+      "v0_server_snapshot_migrate_to_v1",
+      "no_snapshot_server_selection_fallback"
+    ],
+    "legacySnapshotMigration": {
+      "v0Fields": [
+        "projectId",
+        "sourceId",
+        "runId",
+        "readerLocator",
+        "playbackCursorMs",
+        "updatedAt"
+      ],
+      "deriveOnlyFromServerFacts": [
+        "projectRevision",
+        "sourceRevisionId",
+        "sourceContentHash",
+        "runCompatibilityKey",
+        "mediaManifestVersion",
+        "timingRevision",
+        "syncFidelity"
+      ],
+      "missingCompatibilityResult": "restore_readable_source_without_autoplay_or_rebuild_demand",
+      "writeback": "conditional_v1_write_with_project_revision_precondition",
+      "failure": "explicit_snapshot_incompatible_never_silent_drop"
+    },
+    "legacyBrowserStateTransition": {
+      "allowed": "one_time_best_effort_import_only_when_no_server_snapshot_exists",
+      "serverSnapshotAlwaysWins": true,
+      "importRequiresIdentityCompatibility": true,
+      "importMayTriggerPlayback": false,
+      "retirementEvidencePath": "docs/evidence/reader-first/RFA-11/legacy-browser-import-removal.json"
+    },
+    "concurrentBrowserConflictPolicy": "reject_stale_revision_return_current_snapshot_and_retry_token",
+    "frontendRestorationIntegration": {
+      "authoritativeRead": "server_get_exact_source_revision_run_locator_cursor_rate_follow",
+      "cleanBrowserSelectionSeam": "?projectId",
+      "restorePlaybackState": "paused_in_both_read_modes_no_autoplay",
+      "localWorkspaceStorage": "cleanup_only_non_authoritative_never_put_candidate",
+      "presentationPreferencesRemainLocal": true,
+      "etagStorage": "memory_only",
+      "writeScheduling": "serialized_and_coalesced_if_match",
+      "preconditionFailure": "412_current_snapshot_wins_explicit_current_intent_retry_at_most_once",
+      "browserCompatibilityInference": false,
+      "browserRebuildInference": false,
+      "frontendMayRedesignBackendOrSchema": false
+    }
+  },
+  "structureContract": {
+    "unitRoles": [
+      "title",
+      "partHeading",
+      "chapterHeading",
+      "sectionHeading",
+      "paragraph",
+      "listItem",
+      "caption",
+      "footnote",
+      "table",
+      "code",
+      "omittedOrDegraded"
+    ],
+    "headingStandaloneSpeechUnit": true,
+    "pauseMetadataOutOfBandFromHighlightText": true,
+    "pdfEvidence": [
+      "embeddedOutline",
+      "fontAndLayout",
+      "spacing",
+      "numberingPatterns",
+      "repeatedHeaderFooterSuppression",
+      "readingOrder",
+      "confidence"
+    ],
+    "lowConfidenceSilentlyPromoted": false,
+    "representation": "revision_bound_structure_overlay_referencing_content_ir_node_ids",
+    "documentZones": ["frontMatter", "body", "backMatter"],
+    "narrationDispositions": ["speak", "skip", "onDemand", "reviewRequired"],
+    "realScannedPdfOcrRequired": true,
+    "canonicalPlanner": "ordered_structure_aware_speech_units",
+    "flattenedStringPlannerMayRemainAuthoritative": false,
+    "reviewRequiredMayAutoNarrate": false,
+    "ocrReviewRequiredPolicy": {
+      "triggers": [
+        "confidence_below_0.85",
+        "missing_expected_heading_text",
+        "conflicting_reading_order",
+        "unresolved_region_role"
+      ],
+      "unresolvedReaderBehavior": "render_source_region_and_pause_narration_at_boundary",
+      "resolutionCreatesNewOverlayRevision": true,
+      "allowedResolvedDispositions": ["speak", "skip", "onDemand"],
+      "requiredAuditFields": [
+        "sourceNodeId",
+        "sourceEvidence",
+        "sourceOverlayRevision",
+        "reviewedOverlayRevision",
+        "reviewerId",
+        "resolvedRole",
+        "resolvedDisposition",
+        "resolvedAt"
+      ]
+    },
+    "scannedPdfFixture": {
+      "path": "fixtures/pdf/scanned_fixture.pdf",
+      "sha256": "25eeaa49a696c8d5f0fca7b80ec9ec11ebd6450c33f7a279a26555b0e56a5500",
+      "bytes": 84284,
+      "rasterOnly": true,
+      "expectedOverlayPath": "fixtures/pdf/scanned_fixture.expected-overlay.json",
+      "expectedOverlaySha256": "783a5d48857303fc8c7f7a67fd3b5e5e5e06deb87469724ef3d76a15e1a9ca06",
+      "observedOcrPath": "fixtures/pdf/scanned_fixture.ocr.txt",
+      "observedOcrSha256": "fbed95e0ddf91100b02ffc1978147df53a2c2f7a0da6a8ed23e67ba5b7f09f78"
+    }
+  },
+  "timingContract": {
+    "sourcePriority": [
+      "trustedProviderNative",
+      "qwen3SegmentForcedAlignment",
+      "phraseHeuristic",
+      "none"
+    ],
+    "forcedAlignmentUnit": "immutable_audio_segment",
+    "forcedAlignmentConcurrentWithNarration": true,
+    "forcedAlignmentMayWaitForFinalAssembly": false,
+    "maxAlignerInputSeconds": 12,
+    "timingPublishedIndependentlyFromAudio": true,
+    "trustedWordGates": [
+      "sourceRevisionMatch",
+      "normalizationMapMatch",
+      "artifactCompatibility",
+      "timingRevision",
+      "tokenCoverage",
+      "monotonicity",
+      "durationBounds",
+      "confidence",
+      "drift"
+    ],
+    "heuristicMayClaimTrustedWord": false,
+    "segmentTimingDocumentsWindowable": true,
+    "playedCuesMayMoveBackward": false,
+    "rendererMayHardCodeTrusted": false,
+    "consumedCueWatermark": {
+      "field": "playbackCursorMs",
+      "advanceRule": "monotonic_after_audio_clock_confirmation",
+      "persistedBy": "server_workspace_snapshot",
+      "scope": "runId_plus_mediaManifestVersion"
+    },
+    "consumedCueImmutability": {
+      "protectedFields": [
+        "cueId",
+        "wordIdentity",
+        "order",
+        "startMs",
+        "endMs",
+        "segmentIndex",
+        "sourceLocator"
+      ],
+      "mayDelete": false,
+      "mayReorder": false,
+      "mayReplace": false,
+      "mayMoveForward": false,
+      "mayMoveBackward": false,
+      "laterRevisionPolicy": "apply_only_to_unconsumed_cues_after_watermark",
+      "conflictPolicy": "retain_consumed_revision_and_record_timing_conflict"
+    },
+    "baselineFidelityClaim": {
+      "source": "phraseHeuristic",
+      "confidence": 0.625,
+      "trustedWordAllowed": false,
+      "readerMode": "phrase_or_audio_only"
+    }
+  },
+  "mediaContract": {
+    "canonicalPlaybackArtifact": "immutable_segments",
+    "firstSegmentTargetSeconds": [4, 8],
+    "normalHardMaximumSeconds": 12,
+    "finalAssemblyRequiredForPlayback": false,
+    "fullBookFetchAllowedForNormalPlayback": false,
+    "segmentDeliveryBounded": true,
+    "retainedFinalRouteRequiresByteRanges": true,
+    "onlyContiguousCompatiblePrefixAutoPlayable": true,
+    "normalDecodedBufferSeconds": [15, 45],
+    "immutableCacheValidatorsRequired": true,
+    "maxConcurrentSegmentRequests": 4,
+    "normalLookaheadSeconds": [30, 60],
+    "maxBackBufferSeconds": 60,
+    "seekAbortsObsoleteRequests": true,
+    "fullAudioDecodeForWaveformAllowed": false,
+    "serverProducedWaveformEnvelope": true,
+    "compressedGaplessTarget": "fragmented_mp4_aac_with_opus_webm_where_supported",
+    "completedRequiresDurablePromotionOutOfTmpfs": true,
+    "artifactMissingIsExplicitState": true,
+    "nominalConcurrentSegmentRequests": [2, 4],
+    "constrainedConcurrencyException": {
+      "minimum": 1,
+      "allowedSignals": [
+        "saveData",
+        "effectiveType_2g",
+        "deviceMemory_below_2gb",
+        "active_manifest_has_one_remaining_segment"
+      ],
+      "mustEmitReasonCode": true,
+      "mayExceedMaximum": false
+    },
+    "readerRequiresVersionedManifest": true,
+    "manifestCapableReaderMayFallbackToFullAudio": false,
+    "finalAudioRoutePolicy": {
+      "allowedCallers": ["explicit_user_export", "legacy_client_without_manifest_capability"],
+      "readerFallbackAllowed": false,
+      "rangeRequired": true,
+      "acceptRanges": "bytes",
+      "satisfiableStatus": 206,
+      "unsatisfiableStatus": 416,
+      "contentRangeRequired": true,
+      "fullResponseStatus": 200
+    },
+    "compressedDeliveryProfiles": [
+      {
+        "id": "fmp4-aac",
+        "container": "fragmented_mp4",
+        "codec": "aac-lc",
+        "requiredFor": ["safari", "ios_webkit"]
+      },
+      {
+        "id": "webm-opus",
+        "container": "webm",
+        "codec": "opus",
+        "requiredFor": ["chromium", "firefox"]
+      }
+    ],
+    "durableArtifactMigration": {
+      "trigger": "startup_and_pre_completed_read",
+      "candidateRoots": ["legacy_tmpfs", "legacy_scratch", "durable_media_store"],
+      "verifyBeforePromotion": [
+        "checksum",
+        "byteLength",
+        "decodable_segment_header",
+        "manifest_compatibility_key"
+      ],
+      "promotion": "copy_fsync_atomic_rename_then_commit_metadata",
+      "validArtifactMayBecomeArtifactMissing": false,
+      "failure": "retain_prior_metadata_emit_artifact_migration_failed_never_mark_completed",
+      "backfillEvidencePath": "docs/evidence/reader-first/RFA-06/completed-artifact-backfill.json"
+    },
+    "boundedAuditionClipWaveformDecodeException": {
+      "allowed": true,
+      "allowedSurfaces": ["voice_comparison", "voice_cloning"],
+      "requiredIdentity": "AuditionSessionId",
+      "forbiddenIdentities": ["VoiceJob", "narration_runId"],
+      "maxDurationSeconds": 30,
+      "maxBytes": 5242880,
+      "overLimitBehavior": "server_waveform_envelope_or_no_waveform"
+    }
+  },
+  "playbackContract": {
+    "owner": "Cinema PlaybackSessionController",
+    "maxControllersPerRun": 1,
+    "maxAudioOwnersPerRun": 1,
+    "appendCapable": true,
+    "terminalCompletionMayRemount": false,
+    "readingAvailableWithoutAudio": true,
+    "previewMayOwnNarrationRun": false,
+    "playedBuffersEvicted": true,
+    "normalCompletedJobMayFanOutAllSegmentRequests": false
+  },
+  "healthContract": {
+    "independentFacts": [
+      "runExecution",
+      "mediaPlayability",
+      "artifactCompatibility",
+      "syncFidelity",
+      "providerCapability",
+      "systemDiagnostics"
+    ],
+    "optionalCapabilityAbsenceMayBeCritical": false,
+    "missingLegacyIdentityMayDemandRebuild": false,
+    "rebuildRequiresExplicitIncompatibilityEvidence": true,
+    "finalAssemblyFailureInvalidatesSegments": false,
+    "stageOrAudioBlockerMaySetSystemCritical": false,
+    "systemCriticalRequires": [
+      "backendUnavailable",
+      "corruptState",
+      "durableStorageFailure",
+      "unrecoverableInvariantViolation"
+    ],
+    "artifactLossState": "artifact_missing",
+    "systemCriticalAuthority": "backend_health_evidence_only",
+    "frontendMayInferSystemCritical": false,
+    "backendEvidenceSchema": {
+      "requiredFields": [
+        "reasonCode",
+        "sourceSubsystem",
+        "observedAt",
+        "expiresAt",
+        "correlationId",
+        "clearCondition"
+      ],
+      "allowedReasonCodes": [
+        "backendUnavailable",
+        "corruptState",
+        "durableStorageFailure",
+        "unrecoverableInvariantViolation"
+      ],
+      "maxEvidenceAgeSeconds": 30,
+      "expiredEvidenceBehavior": "unknown_not_critical",
+      "clearRequiresBackendEvidence": true
+    },
+    "domainBlockersRemainLocal": [
+      "runExecution",
+      "mediaPlayability",
+      "artifactCompatibility",
+      "syncFidelity",
+      "providerCapability"
+    ]
+  },
+  "performanceContract": {
+    "releaseBlocking": true,
+    "missingResultIsPass": false,
+    "discardedWarmupRuns": 1,
+    "minimumMeasuredRuns": 10,
+    "budgets": [
+      {
+        "id": "cleanBrowserRestore",
+        "p95Max": 500,
+        "unit": "ms"
+      },
+      {
+        "id": "residentCinemaOpen",
+        "p95Max": 100,
+        "unit": "ms"
+      },
+      {
+        "id": "narrateAcknowledgement",
+        "p95Max": 100,
+        "unit": "ms"
+      },
+      {
+        "id": "warmFirstPlayable",
+        "p95Max": 3,
+        "unit": "s"
+      },
+      {
+        "id": "commitToTransport",
+        "p95Max": 250,
+        "unit": "ms"
+      },
+      {
+        "id": "segmentTimingPublication",
+        "p95Max": 2000,
+        "unit": "ms",
+        "additionalGate": "p95 <= 1.5x segment duration"
+      },
+      {
+        "id": "trustedWordDrift",
+        "p95Max": 150,
+        "unit": "ms",
+        "additionalGate": "zero wrong-word identity on canonical fixtures"
+      },
+      {
+        "id": "mainThreadLongTasks",
+        "p95Max": 0,
+        "unit": "count",
+        "additionalGate": "zero app-caused tasks >=50ms in 60-second session"
+      },
+      {
+        "id": "normalPlaybackFullBookFetches",
+        "p95Max": 0,
+        "unit": "count"
+      },
+      {
+        "id": "falseCriticalOrRebuild",
+        "p95Max": 0,
+        "unit": "count"
+      },
+      {
+        "id": "segmentRequestsInFlight",
+        "p95Max": 4,
+        "unit": "count"
+      },
+      {
+        "id": "bufferedMediaWindow",
+        "p95Max": 60,
+        "unit": "s"
+      },
+      {
+        "id": "normalPlaybackFullWaveformDecodes",
+        "p95Max": 0,
+        "unit": "count"
+      },
+      {
+        "id": "initialWorkspaceSnapshotBytes",
+        "p95Max": 262144,
+        "unit": "bytes",
+        "profiles": ["desktop-cold", "webkit-cold"]
+      },
+      {
+        "id": "initialWorkspaceBootstrap",
+        "p95Max": 1500,
+        "unit": "ms",
+        "profiles": ["desktop-cold", "webkit-cold"]
+      },
+      {
+        "id": "serverHydrationAudioBytes",
+        "p95Max": 0,
+        "unit": "bytes",
+        "additionalGate": "normal summary/detail hydration never loads media payload bytes"
+      }
+    ],
+    "targetProfiles": [
+      {
+        "id": "desktop-cold",
+        "browser": "Chromium stable",
+        "logicalCores": 4,
+        "memoryGiB": 8,
+        "networkMbps": 10,
+        "rttMs": 40,
+        "cache": "cold"
+      },
+      {
+        "id": "desktop-warm",
+        "browser": "Chromium stable",
+        "logicalCores": 4,
+        "memoryGiB": 8,
+        "networkMbps": 10,
+        "rttMs": 40,
+        "cache": "warm"
+      },
+      {
+        "id": "webkit-cold",
+        "browser": "WebKit stable",
+        "logicalCores": 4,
+        "memoryGiB": 8,
+        "networkMbps": 10,
+        "rttMs": 40,
+        "cache": "cold"
+      }
+    ],
+    "measurementRule": "minimum_measured_runs_per_profile_after_one_discarded_warmup"
+  },
+  "currentBaseline": {
+    "projectId": "caa8154de9707018",
+    "sourceId": "0df436ee32183f4f",
+    "runId": "2f752faaa77ec7b1",
+    "segmentsReady": 1680,
+    "segmentsTotal": 1680,
+    "failedSegments": 0,
+    "finalAudioBytes": 1325127644,
+    "projectStorageBytes": 2893758885,
+    "timingSource": "heuristic",
+    "timingConfidence": 0.625,
+    "cleanBrowserRestore": "fail",
+    "normalRangeSupport": "fail",
+    "customerJourney": "fail"
+  },
+  "auditEvidence": {
+    "reviewHead": "e97ff6f4932f4429939f1c278e1d4b8361ac6688",
+    "reconciled": true,
+    "mutationsByReviewers": false,
+    "reviews": [
+      {
+        "id": "server-state-restoration-and-health",
+        "path": "docs/reviews/reader-first-audits/server-state-restoration-and-health.md",
+        "sha256": "99e65dad1cbdc7f0d85df6dcdbdf3d6fc81d8f9d4ab48c147037f9dc17025f1c"
+      },
+      {
+        "id": "progressive-media-timing-and-browser",
+        "path": "docs/reviews/reader-first-audits/progressive-media-timing-and-browser.md",
+        "sha256": "34602c38493ad171cf00e0ecd988281ff13f183640b0d686de3450d8383eb0e4"
+      },
+      {
+        "id": "structure-preprocessing-and-ui",
+        "path": "docs/reviews/reader-first-audits/structure-preprocessing-and-ui.md",
+        "sha256": "88de3250519ead829fb0edcb18e719881bc18761ced38031051d073df2c265f4"
+      },
+      {
+        "id": "source-scope-ownership-v5",
+        "path": "docs/reviews/reader-first-audits/source-scope-ownership-v5.md",
+        "sha256": "6150e3ead4604e209e4e0084b7149e985c3650cdc94470f7f17500f80349b140"
+      },
+      {
+        "id": "reader-first-release-self-audit-v6",
+        "path": "docs/reviews/reader-first-release-self-audit-v6.md",
+        "sha256": "ff6e0c98c1e9e139cf7ff5f2cdce1a9cb391256444dc0f58bfab7c0602ed9430"
+      }
+    ]
+  },
+  "peerReviewHistory": [
+    {
+      "round": 1,
+      "verdict": "request_changes",
+      "responsePath": "docs/reviews/chatgpt-reader-first-release-response-v1.md",
+      "sha256": "e6e99204ccf699715c7e2bafadef66abe50c9efd4278a43dbddf831d74c0f039",
+      "blockingFindingCount": 9,
+      "linearCreationPermitted": false,
+      "productImplementationPermitted": false,
+      "repairsRequired": [
+        "semantic-validator-closure",
+        "per-issue-execution-schema",
+        "snapshot-migration",
+        "request-concurrency-envelope",
+        "durable-artifact-backfill",
+        "manifest-reader-and-range-semantics",
+        "consumed-cue-immutability",
+        "real-scanned-ocr-adjudication",
+        "backend-health-and-provenance"
+      ],
+      "repairEvidencePath": "docs/reviews/reader-first-release-peer-repair-v2.md",
+      "repairEvidenceSha256": "394390409f0ce245c7d982d73c4080f3e0c7e8e16099df44ece7cb79a73ee805"
+    },
+    {
+      "round": 2,
+      "verdict": "request_changes",
+      "responsePath": "docs/reviews/chatgpt-reader-first-release-response-v2.md",
+      "responseSha256": "78ec9a3910ccc3758ecf8d4fb9a756e599da323e6abccaa2760eae7a229e73b2",
+      "linearCreationPermitted": false,
+      "productImplementationPermitted": false,
+      "blockingFindings": 10,
+      "repairEvidencePath": "docs/reviews/reader-first-release-peer-repair-v3.md",
+      "repairEvidenceSha256": "0d53d996bc60fb927330e6ad4968c94ae2b5d30f742c26f08c522c245468700c"
+    },
+    {
+      "round": "reader-first-release-v3",
+      "verdict": "request_changes",
+      "responsePath": "docs/reviews/chatgpt-reader-first-release-response-v3.md",
+      "responseSha256": "47029af8866a7f4fcc16f872ce7ed95a165707540943ae7bcbdd3fb16a5869d8",
+      "blockingFindings": 8,
+      "linearCreationPermitted": false,
+      "productImplementationPermitted": false,
+      "repairEvidencePath": "docs/reviews/reader-first-release-peer-repair-v4.md",
+      "repairEvidenceSha256": "09c713b9e62dfb5a4406f493eb8b3e9d5e9db7fe979915e5225e8d1a73959ef8"
+    },
+    {
+      "round": "reader-first-release-v4",
+      "verdict": "request_changes",
+      "responsePath": "docs/reviews/chatgpt-reader-first-release-response-v4.md",
+      "responseSha256": "047ac056b40a5d8ebf57741d8c911ded142167971382b360c99025c6e63accec",
+      "blockingFindings": 3,
+      "linearCreationPermitted": false,
+      "productImplementationPermitted": false,
+      "repairEvidencePath": "docs/reviews/reader-first-release-peer-repair-v5.md",
+      "repairEvidenceSha256": "303097594cb66865d714df933b59faf02d23e93ca48c81287b1a62b8ff83aedc"
+    },
+    {
+      "round": "reader-first-release-v6",
+      "verdict": "request_changes",
+      "responsePath": "docs/reviews/chatgpt-reader-first-release-response-v6.md",
+      "responseSha256": "c2ced797a0f916d6b1eb152538c5e2f1e5bc4d06cfb7a9b55c05cc7169e8a75c",
+      "blockingFindings": 2,
+      "linearCreationPermitted": false,
+      "productImplementationPermitted": false,
+      "repairEvidencePath": "docs/reviews/reader-first-release-peer-repair-v7.md",
+      "repairEvidenceSha256": "e3376691cfe578ad656a7578e3915a8ee7fc532d6dc9a35e17d8979158afe18a"
+    },
+    {
+      "round": "reader-first-release-v7",
+      "verdict": "request_changes",
+      "responsePath": "docs/reviews/chatgpt-reader-first-release-response-v7.md",
+      "responseSha256": "e838c60cc28d1bbdd8fd4f4b6aa286560a61190c0b04e9eda4a598a33f039b01",
+      "blockingFindings": 1,
+      "linearCreationPermitted": false,
+      "productImplementationPermitted": false,
+      "repairEvidencePath": "docs/reviews/reader-first-release-peer-repair-v8.md",
+      "repairEvidenceSha256": "67d6c37947731f4f33822753fcede456cce0686cac030ec1437a960eb0e8597a"
+    },
+    {
+      "round": "reader-first-release-v8",
+      "verdict": "approved",
+      "responsePath": "docs/reviews/chatgpt-reader-first-release-response-v8.md",
+      "responseSha256": "db77ea725ec44d7916c12ff243554a5b7ae34975e2b2ad61d283a6fb221bfe01",
+      "archiveSha256": "b91a683ac8c94bd44ca618b53b275cbe93c2d55d8a5cac1b11e6d9d1aeafc7de",
+      "linearCreationPermitted": true,
+      "productImplementationPermitted": true,
+      "graphUnblockedIssues": ["RFA-01"],
+      "parentApprovalPath": "docs/reviews/reader-first-release-peer-approval-v8.json",
+      "parentApprovalSha256": "29710a3b5af4fc21be5091b454a57fc7c2b14d363a9fc46706e403e901e7ecef"
+    }
+  ],
+  "linearTargetEvidence": {
+    "path": "docs/project-management/linear/tts-research-reader-first-linear-provenance.json",
+    "sha256": "523be92d4064d5ff0a16149cb6d113dbfe66058c7983fa3f88839de5592dbc98",
+    "teamId": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+    "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+    "activeUnarchived": 20,
+    "cap": 20,
+    "hasNextPage": false
+  },
+  "evidenceManifestContract": {
+    "schemaVersion": "tts-research.reader-first-evidence-manifest.v1",
+    "requiredFields": [
+      "issueId",
+      "acceptanceProbeId",
+      "command",
+      "commitOrArchiveSha256",
+      "fixtureSha256s",
+      "measurementProfile",
+      "toolVersions",
+      "operatingSystem",
+      "hardwareProfile",
+      "rawOutputPath",
+      "result",
+      "reviewer",
+      "observedAt"
+    ],
+    "resultEnum": ["pass", "fail", "blocked"],
+    "immutable": true,
+    "supersessionOnly": true
+  },
+  "liveLinearManifest": {
+    "path": "docs/project-management/linear/tts-research-reader-first-release-batch.manifest.json",
+    "sha256": "8999920d9453a3b1294f36b91158fbd2b383ead0f3eaae40f406b1f02333b3fb",
+    "issueCount": 20,
+    "relationCount": 65,
+    "verifiedAt": "2026-07-11T10:22:20Z"
+  },
+  "parentAuthorization": {
+    "path": "docs/reviews/reader-first-rfa02-parent-authorization.json",
+    "sha256": "41fa61517142af7c1ad5d2e9204aaaa4fa7c3020d21443df311a4532a329d265"
+  },
+  "currentExecutionAuthorization": {
+    "path": "docs/reviews/reader-first-rfa02-frontend-scope-authorization.json",
+    "sha256": "f957869b774e0978c42e67e5a0017b9ed1c7fb4d292ece20219ed6a16b118bc3"
+  },
+  "previousExecutionAuthorization": {
+    "path": "docs/reviews/reader-first-rfa02-start-scope-authorization.json",
+    "sha256": "14463389f0b9b686e194deaec3f7bb27616e32c2f09c48615259bf86748ea07c"
+  },
+  "flowRegistry": {
+    "path": "docs/flows/manifest.json",
+    "sha256": "4f789e39e9c0e12e6c67abed73492b4139aebe4b16786123324d567b5ae0b28d",
+    "officialRendererCommand": "node scripts/validate-flow-registry.mjs --write",
+    "artifacts": [
+      {
+        "path": "docs/flows/manifest.json",
+        "sha256": "4f789e39e9c0e12e6c67abed73492b4139aebe4b16786123324d567b5ae0b28d"
+      },
+      {
+        "path": "docs/flows/README.md",
+        "sha256": "f99e1fd689e755a4f036aaeae9bf1dc4cf17316ed877c62ed282cbd05cb97fa4"
+      },
+      {
+        "path": "docs/flows/application-ux.md",
+        "sha256": "2d4dfe18678c1d59e541d87ebdeae3f60c2dbc1ecd212d15f12f673955ee1d6c"
+      },
+      {
+        "path": "docs/flows/coverage-report.json",
+        "sha256": "d6045a1386d99f0a4c98f039fd138421e6ed395af2c97c6f152a5fb092823691"
+      }
+    ],
+    "directHttpRoutesObserved": 125,
+    "ownerFlowId": "APP-NAV-001",
+    "routes": ["GET /api/projects/:id/reader-workspace", "PUT /api/projects/:id/reader-workspace"]
+  },
+  "implementationState": {
+    "localId": "RFA-02",
+    "productMutationPerformed": true,
+    "frontendProductMutationPerformed": false,
+    "frontendAuthorizationEffectiveOnlyAfterGovernanceTransitionReviewedAndCommitted": true
+  },
+  "crossRegistryRouteOwnership": {
+    "frozenBicArtifacts": [
+      {
+        "path": "docs/project-management/linear/tts-research-best-in-class-batch-draft.json",
+        "sha256": "1ae22003178761e60de4661d763f239a2c22e3ca4624e14a29d155b50eb264c0"
+      },
+      {
+        "path": "docs/project-management/linear/tts-research-best-in-class-batch-draft.md",
+        "sha256": "589d54b0534091bb2442d5d84a1c93df3a36d719c9a04c37e0dfa5e306187e7c"
+      }
+    ],
+    "validatorArtifacts": [
+      {
+        "path": "scripts/validate-linear-batch.mjs",
+        "sha256": "7ea517a9d05c67f430c84a8bd8567bc973af3c8fae4600e8ff040c1f1a695a99"
+      },
+      {
+        "path": "scripts/validate-linear-batch.test.mjs",
+        "sha256": "1486bfa3fc78b94483ea42b00efb94d08148d651de808b057637d5aa39d4c36f"
+      }
+    ],
+    "postFreezeRouteAllowlist": [
+      "GET /api/projects/:id/reader-workspace",
+      "PUT /api/projects/:id/reader-workspace"
+    ],
+    "ownerFlowId": "APP-NAV-001",
+    "semantics": {
+      "frozenAssignmentsRemainUnique": true,
+      "allowlistIsExact": true,
+      "allowlistIsDisjointFromFrozenAssignments": true,
+      "allowlistedRoutesExistExactlyOnceUnderOwnerFlow": true,
+      "frozenAssignmentsPlusAllowlistEqualCurrentCanonicalRouteInventoryExactlyOnce": true,
+      "flowIdsAndStateSymbolsRemainExactUnchanged": true
+    }
+  }
+}

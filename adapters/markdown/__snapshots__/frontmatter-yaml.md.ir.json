@@ -4,7 +4,7 @@
     {
       "confidence": 0.95,
       "endOffset": 63,
-      "id": "block-0001",
+      "id": "markdown-frontmatter-frontmatter-yamlmdfrontmatterdocument-title-frontmatter-title-speaker-narrator-draft-false-86b3f9f3fcc4",
       "index": 1,
       "kind": "frontmatter",
       "label": "YAML frontmatter",
@@ -22,18 +22,23 @@
         "columnStart": 1,
         "lineEnd": 5,
         "lineStart": 1,
-        "sourceSlice": "---\ntitle: Frontmatter Title\nspeaker: narrator\ndraft: false\n---"
+        "sourceSlice": "---\ntitle: Frontmatter Title\nspeaker: narrator\ndraft: false\n---",
+        "fingerprint": "5fb7bce64f0e48fc288afee241b29bcc",
+        "identityAnchor": "frontmatter-yaml.md|frontmatter|document|--- title: Frontmatter Title speaker: narrator draft: false ---",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:0"
       },
       "speakMode": "skip",
       "spokenText": "",
       "startOffset": 0,
       "text": "---\ntitle: Frontmatter Title\nspeaker: narrator\ndraft: false\n---",
-      "warnings": ["frontmatter_metadata"]
+      "warnings": ["frontmatter_metadata"],
+      "orderKey": "000000001024"
     },
     {
       "confidence": 0.98,
       "endOffset": 84,
-      "id": "block-0002",
+      "id": "markdown-heading-frontmatter-yamlmdheadingfrontmatter-title-frontmatter-title-9884f793b34f",
       "index": 2,
       "kind": "heading",
       "label": "Frontmatter Title",
@@ -44,18 +49,23 @@
         "columnStart": 1,
         "lineEnd": 7,
         "lineStart": 7,
-        "sourceSlice": "# Frontmatter Title"
+        "sourceSlice": "# Frontmatter Title",
+        "fingerprint": "21aa1841312eb5e82d991a2976b2879e",
+        "identityAnchor": "frontmatter-yaml.md|heading|Frontmatter Title|# Frontmatter Title",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:65"
       },
       "speakMode": "speak",
       "spokenText": "Frontmatter Title",
       "startOffset": 65,
       "text": "# Frontmatter Title",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000067585"
     },
     {
       "confidence": 0.98,
       "endOffset": 134,
-      "id": "block-0003",
+      "id": "markdown-body-frontmatter-yamlmdbodyfrontmatter-titlethe-yaml-metadata-should-not-be-spoken-as-prose-b1f7e7bf53dd",
       "index": 3,
       "kind": "body",
       "label": "The YAML metadata should not be spoken as",
@@ -66,13 +76,18 @@
         "columnStart": 1,
         "lineEnd": 9,
         "lineStart": 9,
-        "sourceSlice": "The YAML metadata should not be spoken as prose."
+        "sourceSlice": "The YAML metadata should not be spoken as prose.",
+        "fingerprint": "8d41b6961f3ab0329aacd003cda67e41",
+        "identityAnchor": "frontmatter-yaml.md|body|Frontmatter Title|The YAML metadata should not be spoken as prose.",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:86"
       },
       "speakMode": "speak",
       "spokenText": "The YAML metadata should not be spoken as prose.",
       "startOffset": 86,
       "text": "The YAML metadata should not be spoken as prose.",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000089090"
     }
   ],
   "document": {
@@ -121,11 +136,15 @@
           "columnStart": 1,
           "lineEnd": 5,
           "lineStart": 1,
-          "sourceSlice": "---\ntitle: Frontmatter Title\nspeaker: narrator\ndraft: false\n---"
+          "sourceSlice": "---\ntitle: Frontmatter Title\nspeaker: narrator\ndraft: false\n---",
+          "fingerprint": "5fb7bce64f0e48fc288afee241b29bcc",
+          "identityAnchor": "frontmatter-yaml.md|frontmatter|document|--- title: Frontmatter Title speaker: narrator draft: false ---",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:0"
         },
-        "nodeId": "block-0001",
+        "nodeId": "markdown-frontmatter-frontmatter-yamlmdfrontmatterdocument-title-frontmatter-title-speaker-narrator-draft-false-86b3f9f3fcc4",
         "normalisedText": "--- title: Frontmatter Title speaker: narrator draft: false ---",
-        "orderKey": "00000001",
+        "orderKey": "000000001024",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -143,6 +162,13 @@
           "offsets": {
             "end": 63,
             "start": 0
+          },
+          "extraction": {
+            "confidence": 0.95,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "frontmatter-yaml"
         },
@@ -185,11 +211,15 @@
           "columnStart": 1,
           "lineEnd": 7,
           "lineStart": 7,
-          "sourceSlice": "# Frontmatter Title"
+          "sourceSlice": "# Frontmatter Title",
+          "fingerprint": "21aa1841312eb5e82d991a2976b2879e",
+          "identityAnchor": "frontmatter-yaml.md|heading|Frontmatter Title|# Frontmatter Title",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:65"
         },
-        "nodeId": "block-0002",
+        "nodeId": "markdown-heading-frontmatter-yamlmdheadingfrontmatter-title-frontmatter-title-9884f793b34f",
         "normalisedText": "# Frontmatter Title",
-        "orderKey": "00000002",
+        "orderKey": "000000067585",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -207,6 +237,13 @@
           "offsets": {
             "end": 84,
             "start": 65
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "frontmatter-yaml"
         },
@@ -249,11 +286,15 @@
           "columnStart": 1,
           "lineEnd": 9,
           "lineStart": 9,
-          "sourceSlice": "The YAML metadata should not be spoken as prose."
+          "sourceSlice": "The YAML metadata should not be spoken as prose.",
+          "fingerprint": "8d41b6961f3ab0329aacd003cda67e41",
+          "identityAnchor": "frontmatter-yaml.md|body|Frontmatter Title|The YAML metadata should not be spoken as prose.",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:86"
         },
-        "nodeId": "block-0003",
+        "nodeId": "markdown-body-frontmatter-yamlmdbodyfrontmatter-titlethe-yaml-metadata-should-not-be-spoken-as-prose-b1f7e7bf53dd",
         "normalisedText": "The YAML metadata should not be spoken as prose.",
-        "orderKey": "00000003",
+        "orderKey": "000000089090",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -271,6 +312,13 @@
           "offsets": {
             "end": 134,
             "start": 86
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "frontmatter-yaml"
         },
@@ -331,7 +379,7 @@
   "parseMode": "strict",
   "skippedItems": [
     {
-      "id": "block-0001",
+      "id": "markdown-frontmatter-frontmatter-yamlmdfrontmatterdocument-title-frontmatter-title-speaker-narrator-draft-false-86b3f9f3fcc4",
       "kind": "frontmatter",
       "offset": 0,
       "reason": "frontmatter kept as metadata",

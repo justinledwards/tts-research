@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "source-revision.v1",
+  "revisionId": "sr-ql-001",
+  "sourceId": "quicklisten-temp-001",
+  "createdAt": "2026-05-17T00:58:00Z",
+  "revisionOrdinal": 1,
+  "revisionState": "current",
+  "contentHash": "sha256:quicklisten-temp",
+  "rawArtifact": {
+    "artifactId": "raw-ql-001",
+    "uri": "memory://quicklisten/001",
+    "sha256": "sha256:quicklisten-temp",
+    "contentType": "text/markdown",
+    "byteLength": 31
+  }
+}

@@ -4,7 +4,7 @@
     {
       "confidence": 0.98,
       "endOffset": 21,
-      "id": "block-0001",
+      "id": "markdown-heading-mdx-mystmdheadingembedded-constructs-embedded-constructs-8638f954f1df",
       "index": 1,
       "kind": "heading",
       "label": "Embedded Constructs",
@@ -15,21 +15,26 @@
         "columnStart": 1,
         "lineEnd": 1,
         "lineStart": 1,
-        "sourceSlice": "# Embedded Constructs"
+        "sourceSlice": "# Embedded Constructs",
+        "fingerprint": "341493c1d64b8c365be8064522c40c25",
+        "identityAnchor": "mdx-myst.md|heading|Embedded Constructs|# Embedded Constructs",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:0"
       },
       "speakMode": "speak",
       "spokenText": "Embedded Constructs",
       "startOffset": 0,
       "text": "# Embedded Constructs",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000001024"
     },
     {
       "confidence": 0.98,
       "endOffset": 80,
-      "id": "block-0002",
+      "id": "markdown-body-mdx-mystmdbodyembedded-constructsthe-chart-below-is-interactive-chart-datarevenue-acef9dddd310",
       "index": 2,
       "kind": "body",
-      "label": "The chart below is interactive: .",
+      "label": "The chart below is interactive:.",
       "language": "",
       "metadata": {
         "astPath": "/children/1",
@@ -37,18 +42,23 @@
         "columnStart": 1,
         "lineEnd": 3,
         "lineStart": 3,
-        "sourceSlice": "The chart below is interactive: <Chart data=\"revenue\" />."
+        "sourceSlice": "The chart below is interactive: <Chart data=\"revenue\" />.",
+        "fingerprint": "28f4186db2e6957b36fc9f28d88778c8",
+        "identityAnchor": "mdx-myst.md|body|Embedded Constructs|The chart below is interactive: <Chart data=\"revenue\" />.",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:23"
       },
       "speakMode": "speak",
-      "spokenText": "The chart below is interactive: .",
+      "spokenText": "The chart below is interactive:.",
       "startOffset": 23,
       "text": "The chart below is interactive: <Chart data=\"revenue\" />.",
-      "warnings": ["embedded_fallback"]
+      "warnings": ["embedded_fallback"],
+      "orderKey": "000000024577"
     },
     {
       "confidence": 0.72,
       "endOffset": 79,
-      "id": "block-0003",
+      "id": "markdown-embedded-mdx-mystmdembeddedembedded-constructschart-datarevenue-cc5367c21607",
       "index": 3,
       "kind": "embedded",
       "label": "MDX embedded Chart",
@@ -61,18 +71,23 @@
         "columnStart": 33,
         "lineEnd": 3,
         "lineStart": 3,
-        "sourceSlice": "<Chart data=\"revenue\" />"
+        "sourceSlice": "<Chart data=\"revenue\" />",
+        "fingerprint": "faabd8e13f6c8012a780b891bb3cb2ba",
+        "identityAnchor": "mdx-myst.md|embedded|Embedded Constructs|<Chart data=\"revenue\" />",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:55"
       },
       "speakMode": "skip",
       "spokenText": "",
       "startOffset": 55,
       "text": "<Chart data=\"revenue\" />",
-      "warnings": ["embedded_fallback"]
+      "warnings": ["embedded_fallback"],
+      "orderKey": "000000057346"
     },
     {
       "confidence": 0.72,
       "endOffset": 106,
-      "id": "block-0004",
+      "id": "markdown-embedded-mdx-mystmdembeddedembedded-constructsexport-const-answer-42-707721f944a6",
       "index": 4,
       "kind": "embedded",
       "label": "MDX embedded mdxjsEsm",
@@ -85,18 +100,23 @@
         "columnStart": 1,
         "lineEnd": 5,
         "lineStart": 5,
-        "sourceSlice": "export const answer = 42"
+        "sourceSlice": "export const answer = 42",
+        "fingerprint": "7e9eb40b76e6197f5b60617f17862a12",
+        "identityAnchor": "mdx-myst.md|embedded|Embedded Constructs|export const answer = 42",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:82"
       },
       "speakMode": "skip",
       "spokenText": "",
       "startOffset": 82,
       "text": "export const answer = 42",
-      "warnings": ["embedded_fallback"]
+      "warnings": ["embedded_fallback"],
+      "orderKey": "000000084995"
     },
     {
       "confidence": 0.98,
       "endOffset": 174,
-      "id": "block-0005",
+      "id": "markdown-admonition-mdx-mystmdadmonitionembedded-constructswarning-keep-this-myst-warning-as-spoken-callout-content-ed2fb7107b3f",
       "index": 5,
       "kind": "admonition",
       "label": "Warning",
@@ -110,40 +130,63 @@
         "columnStart": 1,
         "lineEnd": 9,
         "lineStart": 7,
-        "sourceSlice": "```{warning}\nKeep this MyST warning as spoken callout content.\n```"
+        "sourceSlice": "```{warning}\nKeep this MyST warning as spoken callout content.\n```",
+        "fingerprint": "ef6e49dda85ab98c018eb3e0616c2186",
+        "identityAnchor": "mdx-myst.md|admonition|Embedded Constructs|```{warning} Keep this MyST warning as spoken callout content. ```",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:108"
       },
       "speakMode": "speak",
       "spokenText": "Keep this MyST warning as spoken callout content.",
       "startOffset": 108,
       "text": "```{warning}\nKeep this MyST warning as spoken callout content.\n```",
-      "warnings": ["admonition_directive"]
+      "warnings": ["admonition_directive"],
+      "orderKey": "000000111620"
     },
     {
       "confidence": 0.98,
       "endOffset": 240,
-      "id": "block-0006",
+      "id": "markdown-body-mdx-mystmdbodyembedded-constructsuse-downloadthe-workbook-filesreportxlsx-when-available-f45d2a4e2965",
       "index": 6,
       "kind": "body",
       "label": "Use the workbook <files/report.xlsx> when available.",
       "language": "",
       "metadata": {
+        "inlineArtifacts": [
+          {
+            "endOffset": 224,
+            "identifier": "",
+            "kind": "code",
+            "markerType": "markdown_code_span",
+            "raw": "`the workbook <files/report.xlsx>`",
+            "speechText": "the workbook <files/report.xlsx>",
+            "startOffset": 190,
+            "url": "",
+            "visualLabel": "code"
+          }
+        ],
         "astPath": "/children/4",
         "columnEnd": 65,
         "columnStart": 1,
         "lineEnd": 11,
         "lineStart": 11,
-        "sourceSlice": "Use {download}`the workbook <files/report.xlsx>` when available."
+        "sourceSlice": "Use {download}`the workbook <files/report.xlsx>` when available.",
+        "fingerprint": "ea58aff0c0660d8dcfb7086065c5671e",
+        "identityAnchor": "mdx-myst.md|body|Embedded Constructs|Use {download}`the workbook <files/report.xlsx>` when available.",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:176"
       },
       "speakMode": "speak",
       "spokenText": "Use the workbook <files/report.xlsx> when available.",
       "startOffset": 176,
       "text": "Use {download}`the workbook <files/report.xlsx>` when available.",
-      "warnings": ["embedded_fallback"]
+      "warnings": ["embedded_fallback", "inline_code_policy"],
+      "orderKey": "000000181253"
     },
     {
       "confidence": 0.72,
       "endOffset": 190,
-      "id": "block-0007",
+      "id": "markdown-embedded-mdx-mystmdembeddedembedded-constructsdownload-83adda081af5",
       "index": 7,
       "kind": "embedded",
       "label": "MDX embedded mdxTextExpression",
@@ -156,18 +199,23 @@
         "columnStart": 5,
         "lineEnd": 11,
         "lineStart": 11,
-        "sourceSlice": "{download}"
+        "sourceSlice": "{download}",
+        "fingerprint": "6305d42b41cb272c1670716b35d8dc27",
+        "identityAnchor": "mdx-myst.md|embedded|Embedded Constructs|{download}",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:180"
       },
       "speakMode": "skip",
       "spokenText": "",
       "startOffset": 180,
       "text": "{download}",
-      "warnings": ["embedded_fallback"]
+      "warnings": ["embedded_fallback"],
+      "orderKey": "000000185350"
     },
     {
       "confidence": 0.72,
       "endOffset": 224,
-      "id": "block-0008",
+      "id": "markdown-embedded-mdx-mystmdembeddedembedded-constructsdownloadthe-workbook-filesreportxlsx-7ab1a20ced5f",
       "index": 8,
       "kind": "embedded",
       "label": "MYST embedded download",
@@ -179,13 +227,18 @@
         "astPath": "/children/4/myst-role/0",
         "columnEnd": 49,
         "columnStart": 5,
-        "sourceSlice": "{download}`the workbook <files/report.xlsx>`"
+        "sourceSlice": "{download}`the workbook <files/report.xlsx>`",
+        "fingerprint": "b0a1a86995d29027842b57b6f07d9dc2",
+        "identityAnchor": "mdx-myst.md|embedded|Embedded Constructs|{download}`the workbook <files/report.xlsx>`",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:180"
       },
       "speakMode": "skip",
       "spokenText": "",
       "startOffset": 180,
       "text": "{download}`the workbook <files/report.xlsx>`",
-      "warnings": ["embedded_fallback"]
+      "warnings": ["embedded_fallback"],
+      "orderKey": "000000185351"
     }
   ],
   "document": {
@@ -217,11 +270,15 @@
           "columnStart": 1,
           "lineEnd": 1,
           "lineStart": 1,
-          "sourceSlice": "# Embedded Constructs"
+          "sourceSlice": "# Embedded Constructs",
+          "fingerprint": "341493c1d64b8c365be8064522c40c25",
+          "identityAnchor": "mdx-myst.md|heading|Embedded Constructs|# Embedded Constructs",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:0"
         },
-        "nodeId": "block-0001",
+        "nodeId": "markdown-heading-mdx-mystmdheadingembedded-constructs-embedded-constructs-8638f954f1df",
         "normalisedText": "# Embedded Constructs",
-        "orderKey": "00000001",
+        "orderKey": "000000001024",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -239,6 +296,13 @@
           "offsets": {
             "end": 21,
             "start": 0
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "mdx-myst"
         },
@@ -281,11 +345,15 @@
           "columnStart": 1,
           "lineEnd": 3,
           "lineStart": 3,
-          "sourceSlice": "The chart below is interactive: <Chart data=\"revenue\" />."
+          "sourceSlice": "The chart below is interactive: <Chart data=\"revenue\" />.",
+          "fingerprint": "28f4186db2e6957b36fc9f28d88778c8",
+          "identityAnchor": "mdx-myst.md|body|Embedded Constructs|The chart below is interactive: <Chart data=\"revenue\" />.",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:23"
         },
-        "nodeId": "block-0002",
+        "nodeId": "markdown-body-mdx-mystmdbodyembedded-constructsthe-chart-below-is-interactive-chart-datarevenue-acef9dddd310",
         "normalisedText": "The chart below is interactive: <Chart data=\"revenue\" />.",
-        "orderKey": "00000002",
+        "orderKey": "000000024577",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -303,6 +371,13 @@
           "offsets": {
             "end": 80,
             "start": 23
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "mdx-myst"
         },
@@ -325,7 +400,7 @@
             "profile": "Enterprise"
           }
         },
-        "speechText": "The chart below is interactive: .",
+        "speechText": "The chart below is interactive:.",
         "ui": {
           "highlightUnitHint": "node",
           "progressionHint": "linear"
@@ -347,11 +422,15 @@
           "columnStart": 33,
           "lineEnd": 3,
           "lineStart": 3,
-          "sourceSlice": "<Chart data=\"revenue\" />"
+          "sourceSlice": "<Chart data=\"revenue\" />",
+          "fingerprint": "faabd8e13f6c8012a780b891bb3cb2ba",
+          "identityAnchor": "mdx-myst.md|embedded|Embedded Constructs|<Chart data=\"revenue\" />",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:55"
         },
-        "nodeId": "block-0003",
+        "nodeId": "markdown-embedded-mdx-mystmdembeddedembedded-constructschart-datarevenue-cc5367c21607",
         "normalisedText": "<Chart data=\"revenue\" />",
-        "orderKey": "00000003",
+        "orderKey": "000000057346",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -369,6 +448,13 @@
           "offsets": {
             "end": 79,
             "start": 55
+          },
+          "extraction": {
+            "confidence": 0.72,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "mdx-myst"
         },
@@ -413,11 +499,15 @@
           "columnStart": 1,
           "lineEnd": 5,
           "lineStart": 5,
-          "sourceSlice": "export const answer = 42"
+          "sourceSlice": "export const answer = 42",
+          "fingerprint": "7e9eb40b76e6197f5b60617f17862a12",
+          "identityAnchor": "mdx-myst.md|embedded|Embedded Constructs|export const answer = 42",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:82"
         },
-        "nodeId": "block-0004",
+        "nodeId": "markdown-embedded-mdx-mystmdembeddedembedded-constructsexport-const-answer-42-707721f944a6",
         "normalisedText": "export const answer = 42",
-        "orderKey": "00000004",
+        "orderKey": "000000084995",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -435,6 +525,13 @@
           "offsets": {
             "end": 106,
             "start": 82
+          },
+          "extraction": {
+            "confidence": 0.72,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "mdx-myst"
         },
@@ -480,11 +577,15 @@
           "columnStart": 1,
           "lineEnd": 9,
           "lineStart": 7,
-          "sourceSlice": "```{warning}\nKeep this MyST warning as spoken callout content.\n```"
+          "sourceSlice": "```{warning}\nKeep this MyST warning as spoken callout content.\n```",
+          "fingerprint": "ef6e49dda85ab98c018eb3e0616c2186",
+          "identityAnchor": "mdx-myst.md|admonition|Embedded Constructs|```{warning} Keep this MyST warning as spoken callout content. ```",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:108"
         },
-        "nodeId": "block-0005",
+        "nodeId": "markdown-admonition-mdx-mystmdadmonitionembedded-constructswarning-keep-this-myst-warning-as-spoken-callout-content-ed2fb7107b3f",
         "normalisedText": "```{warning} Keep this MyST warning as spoken callout content. ```",
-        "orderKey": "00000005",
+        "orderKey": "000000111620",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -502,6 +603,13 @@
           "offsets": {
             "end": 174,
             "start": 108
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "mdx-myst"
         },
@@ -539,16 +647,33 @@
         "kind": "body",
         "lang": "und",
         "metadata": {
+          "inlineArtifacts": [
+            {
+              "endOffset": 224,
+              "identifier": "",
+              "kind": "code",
+              "markerType": "markdown_code_span",
+              "raw": "`the workbook <files/report.xlsx>`",
+              "speechText": "the workbook <files/report.xlsx>",
+              "startOffset": 190,
+              "url": "",
+              "visualLabel": "code"
+            }
+          ],
           "astPath": "/children/4",
           "columnEnd": 65,
           "columnStart": 1,
           "lineEnd": 11,
           "lineStart": 11,
-          "sourceSlice": "Use {download}`the workbook <files/report.xlsx>` when available."
+          "sourceSlice": "Use {download}`the workbook <files/report.xlsx>` when available.",
+          "fingerprint": "ea58aff0c0660d8dcfb7086065c5671e",
+          "identityAnchor": "mdx-myst.md|body|Embedded Constructs|Use {download}`the workbook <files/report.xlsx>` when available.",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:176"
         },
-        "nodeId": "block-0006",
+        "nodeId": "markdown-body-mdx-mystmdbodyembedded-constructsuse-downloadthe-workbook-filesreportxlsx-when-available-f45d2a4e2965",
         "normalisedText": "Use {download}`the workbook <files/report.xlsx>` when available.",
-        "orderKey": "00000006",
+        "orderKey": "000000181253",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -566,6 +691,13 @@
           "offsets": {
             "end": 240,
             "start": 176
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "mdx-myst"
         },
@@ -593,7 +725,7 @@
           "highlightUnitHint": "node",
           "progressionHint": "linear"
         },
-        "warnings": ["embedded_fallback"]
+        "warnings": ["embedded_fallback", "inline_code_policy"]
       },
       {
         "adapterVersion": "markdown-adapter-v2",
@@ -610,11 +742,15 @@
           "columnStart": 5,
           "lineEnd": 11,
           "lineStart": 11,
-          "sourceSlice": "{download}"
+          "sourceSlice": "{download}",
+          "fingerprint": "6305d42b41cb272c1670716b35d8dc27",
+          "identityAnchor": "mdx-myst.md|embedded|Embedded Constructs|{download}",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:180"
         },
-        "nodeId": "block-0007",
+        "nodeId": "markdown-embedded-mdx-mystmdembeddedembedded-constructsdownload-83adda081af5",
         "normalisedText": "{download}",
-        "orderKey": "00000007",
+        "orderKey": "000000185350",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -632,6 +768,13 @@
           "offsets": {
             "end": 190,
             "start": 180
+          },
+          "extraction": {
+            "confidence": 0.72,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "mdx-myst"
         },
@@ -675,11 +818,15 @@
           "astPath": "/children/4/myst-role/0",
           "columnEnd": 49,
           "columnStart": 5,
-          "sourceSlice": "{download}`the workbook <files/report.xlsx>`"
+          "sourceSlice": "{download}`the workbook <files/report.xlsx>`",
+          "fingerprint": "b0a1a86995d29027842b57b6f07d9dc2",
+          "identityAnchor": "mdx-myst.md|embedded|Embedded Constructs|{download}`the workbook <files/report.xlsx>`",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:180"
         },
-        "nodeId": "block-0008",
+        "nodeId": "markdown-embedded-mdx-mystmdembeddedembedded-constructsdownloadthe-workbook-filesreportxlsx-7ab1a20ced5f",
         "normalisedText": "{download}`the workbook <files/report.xlsx>`",
-        "orderKey": "00000008",
+        "orderKey": "000000185351",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -697,6 +844,13 @@
           "offsets": {
             "end": 224,
             "start": 180
+          },
+          "extraction": {
+            "confidence": 0.72,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "mdx-myst"
         },
@@ -747,28 +901,28 @@
   "parseMode": "strict",
   "skippedItems": [
     {
-      "id": "block-0003",
+      "id": "markdown-embedded-mdx-mystmdembeddedembedded-constructschart-datarevenue-cc5367c21607",
       "kind": "embedded",
       "offset": 55,
       "reason": "embedded construct kept as safe fallback",
       "text": "<Chart data=\"revenue\" />"
     },
     {
-      "id": "block-0004",
+      "id": "markdown-embedded-mdx-mystmdembeddedembedded-constructsexport-const-answer-42-707721f944a6",
       "kind": "embedded",
       "offset": 82,
       "reason": "embedded construct kept as safe fallback",
       "text": "export const answer = 42"
     },
     {
-      "id": "block-0007",
+      "id": "markdown-embedded-mdx-mystmdembeddedembedded-constructsdownload-83adda081af5",
       "kind": "embedded",
       "offset": 180,
       "reason": "embedded construct kept as safe fallback",
       "text": "{download}"
     },
     {
-      "id": "block-0008",
+      "id": "markdown-embedded-mdx-mystmdembeddedembedded-constructsdownloadthe-workbook-filesreportxlsx-7ab1a20ced5f",
       "kind": "embedded",
       "offset": 180,
       "reason": "embedded construct kept as safe fallback",

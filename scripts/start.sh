@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT_DIR/scripts/start-port-env.sh"
 
 load_env_file() {
   local file_path="$1"
@@ -703,12 +704,14 @@ cleanup() {
 
 trap cleanup EXIT INT TERM HUP QUIT
 
+[[ -n "${BACKEND_PORT:-}" ]] && START_EXPLICIT_BACKEND_PORT=1
+[[ -n "${FRONTEND_PORT:-}" ]] && START_EXPLICIT_FRONTEND_PORT=1
+[[ -n "${VITE_API_BASE_URL:-}" ]] && START_EXPLICIT_VITE_API_BASE_URL=1
+
 load_env_file "$ROOT_DIR/.env"
 load_env_file "$ROOT_DIR/backend/.env"
 
-export BACKEND_PORT="${BACKEND_PORT:-8080}"
-export FRONTEND_PORT="${FRONTEND_PORT:-5173}"
-export VITE_API_BASE_URL="${VITE_API_BASE_URL:-http://localhost:${BACKEND_PORT}}"
+resolve_start_ports
 export VOICE_OPTIMIZER_PROVIDER="${VOICE_OPTIMIZER_PROVIDER:-rules}"
 export BONSAI_MODEL="${BONSAI_MODEL:-prism-ml/Bonsai-8B-mlx-1bit}"
 export BONSAI_PYTHON_PATH="${BONSAI_PYTHON_PATH:-./.venv-bonsai/bin/python}"
@@ -762,7 +765,7 @@ export SUPERTONIC_MODEL_DIR="${SUPERTONIC_MODEL_DIR:-./model-cache/supertonic}"
 export SUPERTONIC_AUTO_DOWNLOAD="${SUPERTONIC_AUTO_DOWNLOAD:-false}"
 export SUPERTONIC_DEFAULT_VOICE="${SUPERTONIC_DEFAULT_VOICE:-M1}"
 export SUPERTONIC_DEFAULT_LANG="${SUPERTONIC_DEFAULT_LANG:-sv}"
-export SUPERTONIC_TIMEOUT_SECONDS="${SUPERTONIC_TIMEOUT_SECONDS:-180}"
+export SUPERTONIC_TIMEOUT_SECONDS="${SUPERTONIC_TIMEOUT_SECONDS:-3600}"
 export DRAMABOX_BASE_URL="${DRAMABOX_BASE_URL:-}"
 export SCENEMA_AUDIO_BASE_URL="${SCENEMA_AUDIO_BASE_URL:-}"
 export VOICE_BOOK_PDF_ENABLE_PYTHON_FALLBACK="${VOICE_BOOK_PDF_ENABLE_PYTHON_FALLBACK:-1}"
@@ -802,7 +805,7 @@ export QWEN_ASR_MAX_NEW_TOKENS="${QWEN_ASR_MAX_NEW_TOKENS:-256}"
 if [[ "${KOKOCLONE_PYTHON_PATH}" != /* ]]; then
   export KOKOCLONE_PYTHON_PATH="${ROOT_DIR}/${KOKOCLONE_PYTHON_PATH}"
 fi
-export QWEN_ASR_TIMEOUT_SECONDS="${QWEN_ASR_TIMEOUT_SECONDS:-600}"
+export QWEN_ASR_TIMEOUT_SECONDS="${QWEN_ASR_TIMEOUT_SECONDS:-3600}"
 
 require_command bash
 if ! command -v mise >/dev/null 2>&1; then
@@ -835,7 +838,7 @@ if [[ "${SKIP_BOOTSTRAP:-0}" != "1" ]]; then
     fi
 
     if tts_uses_kokoro; then
-      if ! ensure_kokoro_clone_python_env; then
+      if [[ "${KOKORO_REFERENCE_BOOTSTRAP_ON_START:-0}" == "1" ]] && ! ensure_kokoro_clone_python_env; then
         fallback_to_mock_tts || true
         if local_fallback_enabled; then
           echo "Continuing with mock providers after clone Python bootstrap failure."
@@ -845,7 +848,7 @@ if [[ "${SKIP_BOOTSTRAP:-0}" != "1" ]]; then
         fi
       fi
 
-      if ! ensure_kokoro_reference_dependencies; then
+      if [[ "${KOKORO_REFERENCE_BOOTSTRAP_ON_START:-0}" == "1" ]] && ! ensure_kokoro_reference_dependencies; then
         fallback_to_mock_tts || true
         if local_fallback_enabled; then
           echo "Continuing with mock providers after reference dependency bootstrap failure."

@@ -1,5 +1,11 @@
 import type { NarrationBlock, PreparedSource } from "./types";
 
+function narrationBlockIsSpeakable(block: NarrationBlock): boolean {
+  const speakMode = block.speakMode.trim().toLowerCase();
+  const policyMode = block.speechPolicy.mode.trim().toLowerCase();
+  return speakMode !== "skip" && policyMode !== "skip" && policyMode !== "ondemand";
+}
+
 export interface PreparedSourceActiveWord {
   blockEndOffset: number;
   blockId: string;
@@ -34,7 +40,7 @@ export function resolvePreparedSourceActiveWord(
   let lastSpeakableBlock: PreparedSourceActiveWord | null = null;
 
   for (const block of source.blocks ?? []) {
-    if (block.speakMode === "skip") {
+    if (!narrationBlockIsSpeakable(block)) {
       continue;
     }
 

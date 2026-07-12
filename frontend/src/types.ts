@@ -1,4 +1,11 @@
 import type { ContentIRLocator, LocatorEnvelope } from "./content-ir";
+import type {
+  CustomSpeechPolicyProfile,
+  SpeechPolicyDecision,
+  SpeechPolicyOverrides,
+} from "./types/speechPolicyTypes";
+
+export * from "./types/speechPolicyTypes";
 
 export type JobStatus =
   | "queued"
@@ -10,15 +17,29 @@ export type JobStatus =
   | "failed"
   | "cancelled";
 
+export type JobTerminalReason =
+  | "user_cancelled"
+  | "system_cancelled"
+  | "provider_failed"
+  | "provider_timeout"
+  | "validation_failed"
+  | "superseded"
+  | "metadata_failed"
+  | "configuration_failed";
+
+export type JobFailureKind = "source" | "voice" | "engine" | "backend" | "cancellation" | "queue";
+
 export type StageStatus = "waiting" | "running" | "done" | "failed";
 
 export interface CreateVoiceJobRequest {
   text: string;
+  speechText?: string;
   voiceId?: string;
   projectId?: string;
   bookSourceId?: string;
   bookScope?: BookScope;
   preparedSourceId?: string;
+  temporarySourceId?: string;
   selectedBlockIds?: string[];
   sourceKind?: string;
   progressTargetId?: string;
@@ -49,126 +70,6 @@ export interface VoiceProject {
   speechPolicyProfiles?: CustomSpeechPolicyProfile[];
   createdAt: string;
   updatedAt: string;
-}
-
-export type BuiltInSpeechPolicyProfileName =
-  | "Education"
-  | "Accessibility"
-  | "TechnicalDocs"
-  | "LanguageLearning"
-  | "Enterprise";
-
-export type SpeechPolicyMode =
-  | "speak"
-  | "skip"
-  | "summarise"
-  | "literal"
-  | "spell"
-  | "describeShort"
-  | "describeLong"
-  | "onDemand"
-  | "interactive";
-
-export type SpeechPolicyTableMode = "skip" | "summary" | "rowLinear" | "interactive";
-export type SpeechPolicyTableHeaderMode = "none" | "column" | "rowAndColumn";
-export type SpeechPolicyCodeMode = "skip" | "summary" | "syntaxAware" | "literal";
-export type SpeechPolicyMathMode = "skip" | "semantic" | "literalsafe";
-export type SpeechPolicyFootnoteMode = "skip" | "inline" | "endnote" | "onDemand";
-export type SpeechPolicyImageMode = "skip" | "altFirst" | "describeShort" | "describeLong";
-export type SpeechPolicyCaptionMode = "skip" | "speak" | "onDemand";
-export type SpeechPolicyCitationMode = "skip" | "inline" | "endnote" | "onDemand";
-export type SpeechPolicyListMarkerMode = "omit" | "announce";
-export type SpeechPolicyAdmonitionMode = "skip" | "speak" | "summarise";
-export type SpeechPolicyQuoteMode = "skip" | "speak" | "summarise";
-
-export interface SpeechPolicySettings {
-  mode: SpeechPolicyMode;
-  tableMode: SpeechPolicyTableMode;
-  tableHeaderMode: SpeechPolicyTableHeaderMode;
-  codeMode: SpeechPolicyCodeMode;
-  mathMode: SpeechPolicyMathMode;
-  footnoteMode: SpeechPolicyFootnoteMode;
-  imageMode: SpeechPolicyImageMode;
-  captionMode: SpeechPolicyCaptionMode;
-  citationMode: SpeechPolicyCitationMode;
-  listMarkerMode: SpeechPolicyListMarkerMode;
-  admonitionMode: SpeechPolicyAdmonitionMode;
-  quoteMode: SpeechPolicyQuoteMode;
-}
-
-export interface SpeechPolicyOverrides {
-  mode?: SpeechPolicyMode;
-  tableMode?: SpeechPolicyTableMode;
-  tableHeaderMode?: SpeechPolicyTableHeaderMode;
-  codeMode?: SpeechPolicyCodeMode;
-  mathMode?: SpeechPolicyMathMode;
-  footnoteMode?: SpeechPolicyFootnoteMode;
-  imageMode?: SpeechPolicyImageMode;
-  captionMode?: SpeechPolicyCaptionMode;
-  citationMode?: SpeechPolicyCitationMode;
-  listMarkerMode?: SpeechPolicyListMarkerMode;
-  admonitionMode?: SpeechPolicyAdmonitionMode;
-  quoteMode?: SpeechPolicyQuoteMode;
-}
-
-export interface SourceSpeechPolicyUpdateRequest {
-  profile?: string;
-  overrides?: SpeechPolicyOverrides;
-  clear?: boolean;
-}
-
-export interface SpeechPolicyProfile {
-  name: string;
-  label: string;
-  description: string;
-  settings: SpeechPolicySettings;
-}
-
-export interface SpeechPolicyDefinitionOption {
-  value: string;
-  label: string;
-}
-
-export interface SpeechPolicyDefinitionField {
-  key: keyof SpeechPolicyOverrides;
-  label: string;
-  description: string;
-  options: SpeechPolicyDefinitionOption[];
-}
-
-export interface SpeechPolicyDefinition {
-  fields: SpeechPolicyDefinitionField[];
-  profiles: SpeechPolicyProfile[];
-}
-
-export interface CustomSpeechPolicyProfile {
-  id: string;
-  name: string;
-  baseProfile?: string;
-  settings: SpeechPolicySettings;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ProjectSpeechPolicy {
-  projectId: string;
-  profile: string;
-  settings: SpeechPolicySettings;
-  customProfiles?: CustomSpeechPolicyProfile[];
-}
-
-export interface UpsertSpeechPolicyProfileRequest {
-  name: string;
-  baseProfile?: string;
-  settings: SpeechPolicySettings;
-}
-
-export interface SpeechPolicyDecision {
-  profile: string;
-  element?: string;
-  elementMode?: string;
-  mode: string;
-  explanation: string;
 }
 
 export type VoiceKind = "native" | "clone";
@@ -213,6 +114,151 @@ export interface ProjectStorageSummary {
 }
 
 export type BookSourceStatus = "ready" | "failed";
+
+export type SourceOwner = "project" | "temporary";
+
+export type TemporarySourceLifecycleState =
+  | "created"
+  | "importing"
+  | "extracted"
+  | "needs_metadata"
+  | "reviewable"
+  | "previewable"
+  | "generating"
+  | "audio_ready"
+  | "stale"
+  | "failed"
+  | "promoted"
+  | "expired"
+  | "discarded";
+
+export type TemporarySourcePromotionStatus = "notPromoted" | "promoted" | "promotionFailed";
+
+export type TemporarySourceFailureCode =
+  | "unsafe_url"
+  | "fetch_failed"
+  | "extraction_failed"
+  | "unsupported_file"
+  | "file_too_large"
+  | "metadata_required"
+  | "source_not_ready"
+  | "generation_failed"
+  | "provider_unavailable"
+  | "alignment_failed"
+  | "expired"
+  | "discarded"
+  | "cleanup_failed"
+  | "promotion_failed";
+
+export type SourceArtifactScope = "project" | "temporary";
+
+export interface SourceArtifactRef {
+  id: string;
+  scope: SourceArtifactScope;
+  kind:
+    | "extraction"
+    | "review"
+    | "previewAudio"
+    | "generatedAudio"
+    | "timing"
+    | "validation"
+    | "bookmark"
+    | "progress";
+  url?: string;
+  bytes?: number;
+  createdAt: string;
+  expiresAt?: string;
+}
+
+export type TemporarySourceCleanupAction =
+  | "discardNow"
+  | "extendSession"
+  | "removeGeneratedAudioOnly"
+  | "removeAllTemporaryArtifacts";
+
+export interface TemporarySourceCleanupRequest {
+  action: TemporarySourceCleanupAction;
+  extendByHours?: number;
+}
+
+export interface TemporarySourceCleanupResult {
+  temporarySourceId: string;
+  action: TemporarySourceCleanupAction;
+  status: TemporarySourceLifecycleState;
+  removedBytes?: number;
+  expiresAt?: string;
+  message?: string;
+  source?: TemporarySourceSession;
+}
+
+export interface TemporaryStorageUsageSession {
+  temporarySourceId: string;
+  title?: string;
+  status: TemporarySourceLifecycleState;
+  bytes: number;
+  audioBytes?: number;
+  artifactBytes?: number;
+  sourceBytes?: number;
+  progressBytes?: number;
+  artifactTypeBytes?: Record<string, number>;
+  expiresAt: string;
+  lastAccessedAt: string;
+}
+
+export interface TemporaryStorageUsageSummary {
+  totalBytes: number;
+  sourceBytes: number;
+  artifactBytes: number;
+  audioBytes: number;
+  progressBytes: number;
+  artifactTypeBytes?: Record<string, number>;
+  temporaryCount: number;
+  expiredCount: number;
+  generatingCount: number;
+  sessions: TemporaryStorageUsageSession[];
+  updatedAt: string;
+}
+
+export type SourceReadinessState =
+  | "noSource"
+  | "importing"
+  | "needsMetadata"
+  | "ready"
+  | "failed"
+  | "unsupported"
+  | "stale";
+
+export type SourceReadinessFailureStage = "file" | "extraction" | "structure" | "policyPreparation";
+
+export interface SourceReadiness {
+  state: SourceReadinessState;
+  title?: string;
+  sourceType?: string;
+  language?: string;
+  structureLabel?: string;
+  confidence?: string;
+  confirmedFields?: string[];
+  preparedAt?: string;
+  staleReason?: string;
+  failureStage?: SourceReadinessFailureStage;
+  retryAction?: string;
+  detail: string;
+}
+
+export interface SourceReadinessConfirmationRequest {
+  title?: string;
+  sourceType?: string;
+  language?: string;
+  structureChoice?: string;
+  structureLabel?: string;
+  scope?: BookScope;
+  speechPolicyProfile?: string;
+  voiceProfileId?: string;
+}
+
+export interface RenameAssetRequest {
+  name: string;
+}
 
 export type BookSourceKind = "pdf" | "epub" | "docx" | "html" | "markdown" | "image";
 
@@ -277,7 +323,10 @@ export interface BookSourceSection {
 export interface BookSource {
   id: string;
   projectId: string;
+  sourceOwner?: SourceOwner;
+  temporarySourceId?: string;
   status: BookSourceStatus;
+  sourceReadiness?: SourceReadiness;
   kind: BookSourceKind;
   sourceFile: string;
   sourceBytes: number;
@@ -309,6 +358,8 @@ export interface IngestionDiagnostics {
   confidence?: number;
   importProfile?: string;
   pdfTableMode?: string;
+  temporaryExpiresAt?: string;
+  temporaryStatus?: TemporarySourceLifecycleState;
   extractorChain?: ExtractorChainStep[];
   warnings?: string[];
 }
@@ -395,6 +446,10 @@ export type NarrationBlockKind =
   | "image"
   | "caption"
   | "citation"
+  | "footnote"
+  | "reference"
+  | "artifact_token"
+  | "unknown_inline_marker"
   | "list"
   | "frontmatter"
   | "admonition"
@@ -505,7 +560,10 @@ export interface TranscriptMetadata {
 export interface PreparedSource {
   id: string;
   projectId: string;
+  sourceOwner?: SourceOwner;
+  temporarySourceId?: string;
   status: PreparedSourceStatus;
+  sourceReadiness?: SourceReadiness;
   kind: PreparedSourceKind;
   sourceName: string;
   sourceUrl?: string;
@@ -541,6 +599,41 @@ export interface PreparedSource {
   updatedAt: string;
 }
 
+export interface WebsiteExtractionContainerCandidate {
+  selector: string;
+  label: string;
+  reason: string;
+  wordCount: number;
+  linkDensity: number;
+  score: number;
+}
+
+export interface WebsiteExtractionSkippedBlock {
+  kind: string;
+  selector: string;
+  reason: string;
+  text: string;
+  wordCount: number;
+}
+
+export type WebsiteExtractionConfidence = "high" | "medium" | "low";
+
+export interface WebsiteExtractionQuality {
+  articleCandidateCount: number;
+  chosenContainer: string;
+  readableTextRatio: number;
+  chromeTextRatio: number;
+  linkDensity: number;
+  headingDepth: number;
+  skippedBlockCount: number;
+  narrationBlockCount: number;
+  extractionConfidence: WebsiteExtractionConfidence;
+  extractionConfidenceScore?: number;
+  articleUncertain?: boolean;
+  alternateContainers?: WebsiteExtractionContainerCandidate[];
+  skippedBlocks?: WebsiteExtractionSkippedBlock[];
+}
+
 export interface CreatePreparedSourceRequest {
   kind: PreparedSourceKind;
   text?: string;
@@ -549,7 +642,113 @@ export interface CreatePreparedSourceRequest {
   sourceContentType?: string;
   sourceBytes?: number;
   markdownParseMode?: MarkdownParseMode;
+  htmlContainerSelector?: string;
 }
+
+export interface CreateTemporarySourceRequest extends CreatePreparedSourceRequest {
+  localPath?: string;
+}
+
+export interface TemporarySourcePromotionRequest {
+  projectId: string;
+  createProjectName?: string;
+  title?: string;
+  sourceType?: string;
+  language?: string;
+  scope?: string;
+  structureChoice?: string;
+  structureLabel?: string;
+  speechPolicyProfile?: string;
+  voiceProfileId?: string;
+  conflictResolution?: "error" | "keepBoth";
+  keep?: TemporarySourcePromotionKeep;
+  preserveGeneratedArtifacts?: boolean;
+  manifest?: TemporarySourcePromotionManifest;
+}
+
+export interface TemporarySourcePromotionKeep {
+  extractedSource?: boolean;
+  reviewEdits?: boolean;
+  lexiconOverrides?: boolean;
+  policySourcePin?: boolean;
+  generatedAudio?: boolean;
+  timingMaps?: boolean;
+  bookmarks?: boolean;
+  progress?: boolean;
+  diagnosticsReport?: boolean;
+}
+
+export interface TemporarySourcePromotionManifest {
+  temporarySourceId: string;
+  projectId: string;
+  sourceId?: string;
+  title: string;
+  sourceType?: string;
+  language?: string;
+  scope?: string;
+  keep: TemporarySourcePromotionKeep;
+  storageImpactBytes?: number;
+  warnings?: string[];
+  createdAt?: string;
+}
+
+export interface TemporarySourceSession {
+  id: string;
+  temporarySourceId: string;
+  scope: "temporary";
+  sourceOwner: "temporary";
+  projectId?: string;
+  status: TemporarySourceLifecycleState;
+  promotionStatus: TemporarySourcePromotionStatus;
+  promotedProjectId?: string;
+  promotedSourceId?: string;
+  kind: PreparedSourceKind | BookSourceKind;
+  sourceReadiness?: SourceReadiness;
+  sourceName: string;
+  sourceUrl?: string;
+  sourceContentType?: string;
+  sourceBytes?: number;
+  title?: string;
+  text?: string;
+  speechText?: string;
+  wordCount: number;
+  blockCount?: number;
+  segmentCount?: number;
+  summary?: PreparedSourceSummary;
+  blocks?: NarrationBlock[];
+  skippedItems?: SkippedSourceItem[];
+  reviewNotes?: string[];
+  metadata?: Record<string, unknown>;
+  artifacts: SourceArtifactRef[];
+  bookmarks?: ProgressBookmark[];
+  playbackProgress?: PlaybackProgress;
+  sourceSpeechPolicyProfile?: string;
+  sourceSpeechPolicyOverrides?: SpeechPolicyOverrides;
+  warnings?: string[];
+  error?: string;
+  failureCode?: TemporarySourceFailureCode;
+  createdAt: string;
+  lastAccessedAt: string;
+  expiresAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectSourceEnvelope {
+  sourceOwner: "project";
+  projectId: string;
+  temporarySourceId?: never;
+  source: BookSource | PreparedSource;
+}
+
+export interface TemporarySourceEnvelope {
+  sourceOwner: "temporary";
+  scope: "temporary";
+  projectId?: never;
+  temporarySourceId: string;
+  source: TemporarySourceSession;
+}
+
+export type SourceEnvelope = ProjectSourceEnvelope | TemporarySourceEnvelope;
 
 export interface ProgressBookmark {
   id: string;
@@ -562,6 +761,7 @@ export interface ProgressBookmark {
 
 export interface ReadingPosition {
   bookSourceId?: string;
+  temporarySourceId?: string;
   scopeKey?: string;
   activeWordIndex?: number;
   nodeId?: string;
@@ -572,10 +772,11 @@ export interface ReadingPosition {
 
 export interface PlaybackProgress {
   targetId: string;
-  projectId: string;
+  projectId?: string;
   jobId?: string;
   bookSourceId?: string;
   preparedSourceId?: string;
+  temporarySourceId?: string;
   bookScope?: BookScope;
   currentTimeSec: number;
   progress: number;
@@ -596,6 +797,7 @@ export interface PlaybackProgressUpdate {
   jobId?: string;
   bookSourceId?: string;
   preparedSourceId?: string;
+  temporarySourceId?: string;
   bookScope?: BookScope;
   currentTimeSec: number;
   durationSec?: number;
@@ -610,10 +812,11 @@ export interface PlaybackProgressUpdate {
 export interface PlaybackSession {
   id: string;
   targetId: string;
-  projectId: string;
+  projectId?: string;
   jobId?: string;
   bookSourceId?: string;
   preparedSourceId?: string;
+  temporarySourceId?: string;
   bookScope?: BookScope;
   currentTimeSec: number;
   activeWordIndex?: number;
@@ -629,6 +832,26 @@ export interface TTSEngineVoice {
   name: string;
   gender?: string;
   description?: string;
+}
+
+export interface ProviderCapabilitySet {
+  tts: boolean;
+  mockTts: boolean;
+  streaming: boolean;
+  wordTiming: boolean;
+  phraseTiming: boolean;
+  ssml: boolean;
+  ssmlMarks: boolean;
+  phonemeOverrides: boolean;
+  voiceCloning: boolean;
+  voicePreview: boolean;
+  cancelJob: boolean;
+  retryJob: boolean;
+  alignment: boolean;
+  alignmentSupported: boolean;
+  alignmentRequiredForWordHighlight: boolean;
+  abComparison: boolean;
+  localOnly: boolean;
 }
 
 export interface TTSEngineDiagnostics {
@@ -649,6 +872,7 @@ export interface TTSEngineDiagnostics {
   modelCache?: string;
   reason?: string;
   setup?: string;
+  capabilities?: ProviderCapabilitySet;
   metadata?: Record<string, string>;
 }
 
@@ -721,9 +945,37 @@ export type ThemeName = "light" | "dark" | "dawn" | "night" | "papery";
 export interface ProjectBundleContentItem {
   key: string;
   label: string;
+  detail?: string;
   included: boolean;
   required: boolean;
   estimatedBytes?: number;
+}
+
+export interface ProjectBundleConflict {
+  key: string;
+  label: string;
+  detail: string;
+  severity: string;
+  blocking: boolean;
+  resolutions?: BundleImportMode[];
+}
+
+export interface ProjectBundleDependency {
+  key: string;
+  label: string;
+  detail: string;
+  status: string;
+  currentVersion?: string;
+  requiredVersion?: string;
+  missing?: boolean;
+}
+
+export interface ProjectBundleValidationItem {
+  key: string;
+  label: string;
+  detail: string;
+  status: string;
+  blocking?: boolean;
 }
 
 export interface ProjectBundleQuality {
@@ -753,6 +1005,11 @@ export interface ProjectBundleManifest {
   providerVersions?: Record<string, string>;
   quality: ProjectBundleQuality;
   hashes?: Record<string, string>;
+  contents?: ProjectBundleContentItem[];
+  excluded?: ProjectBundleContentItem[];
+  generatedAudioIncluded?: boolean;
+  omittedGeneratedAudio?: number;
+  omittedGeneratedBytes?: number;
 }
 
 export interface ProjectBundleSummary {
@@ -764,8 +1021,12 @@ export interface ProjectBundleSummary {
   chapterCount: number;
   profileCount: number;
   generatedAudio: number;
+  generatedAudioIncluded: boolean;
+  omittedGeneratedAudio?: number;
+  omittedGeneratedBytes?: number;
   durationMs: number;
   contents: ProjectBundleContentItem[];
+  excluded?: ProjectBundleContentItem[];
   warnings?: string[];
   createdAt: string;
 }
@@ -783,6 +1044,13 @@ export interface ProjectBundlePreview {
   warnings?: string[];
   errors?: string[];
   manifest?: ProjectBundleManifest;
+  contents?: ProjectBundleContentItem[];
+  excluded?: ProjectBundleContentItem[];
+  conflicts?: ProjectBundleConflict[];
+  dependencies?: ProjectBundleDependency[];
+  validation?: ProjectBundleValidationItem[];
+  availableImportModes?: BundleImportMode[];
+  recommendedMode?: BundleImportMode;
 }
 
 export type BundleImportMode = "copy" | "merge" | "replace";
@@ -806,12 +1074,36 @@ export interface PipelineOptions {
 export interface JobSegment {
   index: number;
   text: string;
-  status?: "pending" | "running" | "checking" | "ready" | "failed";
+  status?: "pending" | "running" | "checking" | "retrying" | "ready" | "failed" | "skipped";
+  audioUrl?: string;
+  timingStatus?: "pending" | "checking" | "ready" | "failed";
+  timingConfidence?: "word" | "phrase" | "unavailable";
   attempts?: number;
   durationMs?: number;
   latencyMs?: number;
   similarity?: number;
   reason?: string;
+  reusedFromJobId?: string;
+  warnings?: string[];
+}
+
+export interface PartialAudioSegmentManifest {
+  index: number;
+  status: "pending" | "running" | "checking" | "retrying" | "ready" | "failed" | "skipped";
+  audioUrl?: string;
+  durationMs?: number;
+  timingAvailable: boolean;
+  timingConfidence: "word" | "phrase" | "unavailable";
+}
+
+export interface PartialAudioManifest {
+  status: "pending" | "partialReady" | "ready";
+  audioUrl?: string;
+  readySegments: number;
+  totalSegments: number;
+  firstPlayableAt?: string;
+  completeEnough: boolean;
+  segments?: PartialAudioSegmentManifest[];
 }
 
 export type VoiceProfileStatus = "ready" | "error" | "pending";
@@ -837,6 +1129,7 @@ export interface VoiceProfile {
   qualityMetrics?: VoiceProfileQualityMetrics;
   denoise?: VoiceProfileDenoiseMetadata;
   likeness?: VoiceProfileLikeness;
+  provenance?: VoiceProfileProvenance;
   cloneTargets?: Record<string, VoiceProfileTarget>;
   cloneArtifacts?: Record<string, VoiceProfileCloneArtifact>;
   audioFormat: string;
@@ -963,6 +1256,20 @@ export interface VoiceProfileDenoiseMetadata {
   reason?: string;
 }
 
+export interface VoiceProfileProvenance {
+  sourceType: string;
+  rightsBasis: string;
+  consentStatus: string;
+  allowedUse: string;
+  retentionPolicy: string;
+  speakerName?: string;
+  sourceOwner?: string;
+  sourceUri?: string;
+  consentDocumentLabel?: string;
+  notes?: string;
+  collectedAt?: string;
+}
+
 export interface VoiceProfileLikeness {
   status: "pending" | "ready" | "failed";
   score?: number;
@@ -1035,6 +1342,7 @@ export interface VoiceProfileSource {
   transcriptModel?: string;
   transcriptError?: string;
   transcriptConfidence?: number;
+  provenance?: VoiceProfileProvenance;
   strategyVersion: string;
   modelVersion?: string;
   createdAt: string;
@@ -1055,6 +1363,7 @@ export interface VoiceProfileSourceDiagnostics {
 
 export interface CreateVoiceProfileSourceRequest {
   file: File;
+  provenance?: VoiceProfileProvenance;
 }
 
 export interface CreateVoiceProfileFromCandidateRequest {
@@ -1273,10 +1582,56 @@ export interface TimingArtifacts {
   status: string;
   summary: HighlightMapSummary;
   highlightMapUrl?: string;
+  highlightMapV2Url?: string;
   fragmentTimingUrl?: string;
   tokenTimingUrl?: string;
+  alignmentQualityUrl?: string;
   fragmentTiming?: FragmentTimingArtifact;
   tokenTiming?: TokenTimingArtifact;
+  alignmentQuality?: AlignmentQualityReport;
+}
+
+export type AlignmentMode =
+  | "off"
+  | "provider-only"
+  | "provider-plus-validation"
+  | "local-forced-alignment"
+  | "local-forced-alignment-required"
+  | "heuristic-fallback";
+
+export type AlignmentQuality = "exact" | "good" | "phrase-only" | "degraded" | "unavailable";
+
+export interface AlignmentStageReport {
+  id: string;
+  status: string;
+  detail?: string;
+}
+
+export interface AlignmentQualityReport {
+  schemaVersion: "alignment-quality.v1";
+  mode: AlignmentMode;
+  quality: AlignmentQuality;
+  primaryLevel: "word" | "phrase" | "sentence" | "block";
+  timingSource: TimingSource;
+  timingSourceV2:
+    | "provider-word"
+    | "provider-mark"
+    | "forced-alignment"
+    | "phrase-estimate"
+    | "heuristic";
+  wordTimingReliable: boolean;
+  providerTimingAvailable: boolean;
+  forcedAlignmentAvailable: boolean;
+  usedProviderTiming: boolean;
+  usedForcedAlignment: boolean;
+  fallbackReason?: string;
+  confidence: TimingConfidence;
+  drift: DriftStats;
+  fragmentCount: number;
+  tokenCount: number;
+  durationMs: number;
+  alignmentWarnings?: string[];
+  stages?: AlignmentStageReport[];
 }
 
 export interface VoiceJob {
@@ -1285,6 +1640,7 @@ export interface VoiceJob {
   bookSourceId?: string;
   bookScope?: BookScope;
   preparedSourceId?: string;
+  temporarySourceId?: string;
   selectedBlockIds?: string[];
   sourceKind?: string;
   progressTargetId?: string;
@@ -1303,6 +1659,8 @@ export interface VoiceJob {
   optimizer: string;
   audioUrl: string;
   audioPartialUrl?: string;
+  partialAudioManifest?: PartialAudioManifest;
+  firstPlayableAt?: string;
   audioPath?: string;
   audioReadySegments?: number;
   audioSegmentDurationsMs?: number[];
@@ -1315,6 +1673,7 @@ export interface VoiceJob {
   voiceId?: string;
   ttsVoice?: string;
   ttsLanguage?: string;
+  voiceProfileId?: string;
   voiceProfileName?: string;
   ttsEngine?: string;
   engineOptions?: Partial<Record<string, string>>;
@@ -1323,6 +1682,11 @@ export interface VoiceJob {
   qualityReport?: JobQualityReport;
   progress: JobProgress;
   error?: string;
+  terminalReason?: JobTerminalReason;
+  failureKind?: JobFailureKind;
+  retriable?: boolean;
+  retryOfJobId?: string;
+  reusedReadySegments?: number;
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
@@ -1335,6 +1699,8 @@ export interface JobQualityReport {
   averageSimilarity: number;
   averageLatencyMs: number;
   segmentCount: number;
+  warningCount?: number;
+  unverifiedSegmentCount?: number;
   referenceProfile: boolean;
   reason: string;
 }

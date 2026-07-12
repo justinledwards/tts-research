@@ -3,6 +3,10 @@
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import {
+  evaluateReadAlongSyncFixtures,
+  loadReadAlongSyncFixtures,
+} from "../readalong-sync-evidence.mjs";
 import { loadBenchmarkConfig, runAlignmentBenchmark, runMarkdownBenchmark } from "./benchmarks.mjs";
 import { createRunContext, finalizeRun, runCallbackStep } from "./reporting.mjs";
 
@@ -29,6 +33,27 @@ await runCallbackStep(
     command: "markdown adapter benchmark",
   },
   () => runMarkdownBenchmark({ rootDir, manifest, thresholds }),
+);
+
+await runCallbackStep(
+  context,
+  {
+    id: "readalong-sync-benchmark",
+    title: "Read-along Sync Benchmark",
+    command: "read-along sync benchmark",
+  },
+  async () => {
+    const fixtureSet = await loadReadAlongSyncFixtures(rootDir, manifest.readAlongSync);
+    const result = evaluateReadAlongSyncFixtures({
+      fixtures: fixtureSet.fixtures,
+      thresholds: thresholds.readAlongSync,
+    });
+    return {
+      metrics: result.metrics,
+      output: `Read-along sync benchmark ${result.status}`,
+      thresholds: result.comparisons,
+    };
+  },
 );
 
 const summary = await finalizeRun(context);

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SPEECH_POLICY_DEFINITION } from "../../speechPolicy";
 import {
   policyScopeChips,
+  policyScopeSummary,
   sessionSpeechPolicyRequest,
   sourcePolicyUpdateRequest,
   speechPolicyProfileOptions,
@@ -23,6 +24,20 @@ describe("policy scope model", () => {
       ["source", true, "Accessibility · 1 field"],
       ["session", true, "1 field"],
     ]);
+
+    expect(
+      policyScopeSummary({
+        projectProfile: "Enterprise",
+        resolvedProfile: "Accessibility",
+        sessionOverrides: { codeMode: "literal" },
+        sourceOverrides: { quoteMode: "summarise" },
+        sourceProfile: "Accessibility",
+      }),
+    ).toMatchObject({
+      compactLabel: "Accessibility · Source + Session",
+      currentProfileLabel: "Accessibility",
+      ownershipLabel: "Source + Session",
+    });
   });
 
   it("omits empty session policy payloads so project profile stays project scoped", () => {

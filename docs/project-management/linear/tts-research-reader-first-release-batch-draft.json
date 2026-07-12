@@ -1,0 +1,2519 @@
+{
+  "schemaVersion": "tts-research.reader-first-linear-batch.v2",
+  "status": "peer_approved_rfa_01_completed_rfa_02_in_progress_product_mutation_started_frontend_scope_pending_commit",
+  "architectureContractPath": "docs/architecture/reader-first-release-contract-v2.json",
+  "planPath": "docs/plans/2026-07-10-reader-first-release-reset.md",
+  "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+  "teamId": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+  "replacementFor": [
+    "docs/project-management/linear/tts-research-responsive-architecture-batch-draft.json",
+    "docs/project-management/linear/tts-research-responsive-architecture-batch-draft.md"
+  ],
+  "provenancePolicy": "BIC and RSP packets remain frozen provenance and are not rewritten or deleted.",
+  "issueCount": 20,
+  "issueIdRange": "RFA-01..RFA-20",
+  "authorization": {
+    "ownerAccepted": true,
+    "peerApproved": true,
+    "linearCreationAuthorized": true,
+    "productImplementationAuthorized": true,
+    "graphUnblockedIssues": ["RFA-02"],
+    "authorizedIssues": ["RFA-02"]
+  },
+  "capacitySnapshot": {
+    "checkedAt": "2026-07-11T09:25:28Z",
+    "activeUnarchived": 20,
+    "cap": 20,
+    "availableSlots": 0,
+    "pagesRead": 1,
+    "hasNextPage": false,
+    "provenancePath": "docs/project-management/linear/tts-research-reader-first-linear-provenance.json"
+  },
+  "creationPlan": {
+    "eligibleForLinearCreation": [],
+    "eligibleForProductImplementation": ["RFA-02"],
+    "newIssuesCreatedNow": 20,
+    "linearMutationPerformed": true,
+    "productMutationPerformed": true,
+    "frontendProductMutationPerformed": false,
+    "frontendAuthorizationEffectiveOnlyAfterGovernanceTransitionReviewedAndCommitted": true
+  },
+  "dag": {
+    "RFA-01": [],
+    "RFA-02": ["RFA-01"],
+    "RFA-03": ["RFA-01"],
+    "RFA-04": ["RFA-01"],
+    "RFA-05": ["RFA-04"],
+    "RFA-06": ["RFA-02", "RFA-05"],
+    "RFA-07": ["RFA-01", "RFA-05"],
+    "RFA-08": ["RFA-06", "RFA-07"],
+    "RFA-09": ["RFA-06", "RFA-07"],
+    "RFA-10": ["RFA-01", "RFA-06", "RFA-09"],
+    "RFA-11": ["RFA-02", "RFA-03"],
+    "RFA-12": ["RFA-06", "RFA-09", "RFA-10"],
+    "RFA-13": ["RFA-09", "RFA-12"],
+    "RFA-14": ["RFA-11", "RFA-12", "RFA-13"],
+    "RFA-15": ["RFA-07", "RFA-08", "RFA-09", "RFA-13", "RFA-14"],
+    "RFA-16": ["RFA-14"],
+    "RFA-17": ["RFA-02", "RFA-09", "RFA-12"],
+    "RFA-18": ["RFA-03", "RFA-11", "RFA-12", "RFA-13", "RFA-16", "RFA-17"],
+    "RFA-19": [
+      "RFA-02",
+      "RFA-10",
+      "RFA-11",
+      "RFA-12",
+      "RFA-13",
+      "RFA-14",
+      "RFA-15",
+      "RFA-17",
+      "RFA-18"
+    ],
+    "RFA-20": [
+      "RFA-04",
+      "RFA-05",
+      "RFA-06",
+      "RFA-07",
+      "RFA-08",
+      "RFA-09",
+      "RFA-10",
+      "RFA-11",
+      "RFA-12",
+      "RFA-13",
+      "RFA-14",
+      "RFA-15",
+      "RFA-16",
+      "RFA-17",
+      "RFA-18",
+      "RFA-19"
+    ]
+  },
+  "issues": [
+    {
+      "localId": "RFA-01",
+      "title": "Freeze Reader-First lifecycle, identity, UX, and performance contract",
+      "objective": "Create canonical fail-closed contracts, validators, baseline evidence, and ownership map before product mutation",
+      "dependencies": [],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-01-AC01",
+          "assertion": "All six owner requirements map to at least one implementation issue and RFA-20.",
+          "verificationCommand": "node --test scripts/validate-reader-first-release.test.mjs",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-01/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-01-AC02",
+          "assertion": "Negative fixtures reject browser authority, final-only alignment, monolithic normal playback, multiple audio owners, narration Preview binding, and inferred rebuild/critical status.",
+          "verificationCommand": "node scripts/validate-reader-first-release.mjs",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-01/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_01.state_changed",
+          "reader_first.rfa_01.verified",
+          "reader_first.rfa_01.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "contractHash",
+          "packetHash",
+          "validatorHash",
+          "authorizationState"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-01/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "disable_rfa_01_new_behavior_keep_prior_compatible_state",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-01/rollback.json"
+      },
+      "performanceBudgetIds": [],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "completed_linear_done",
+      "linear": {
+        "id": "8b4741fd-2cf8-4a91-be53-173daddbb1f5",
+        "identifier": "QQP-613",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-613/rfa-01-freeze-reader-first-lifecycle-identity-ux-and-performance",
+        "state": "Done",
+        "stateType": "completed",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Release Architecture",
+      "inScope": {
+        "paths": ["docs/architecture", "docs/plans", "scripts/validate-reader-first-release.mjs"],
+        "symbols": [
+          "validateReaderFirstRelease",
+          "renderPacketMarkdown",
+          "Reader-First canonical hash bindings"
+        ]
+      },
+      "nonGoals": [
+        "No production implementation",
+        "No Linear mutation",
+        "No inferred Peer approval"
+      ],
+      "verificationCommands": [
+        "node --test scripts/validate-reader-first-release.test.mjs",
+        "node scripts/validate-reader-first-release.mjs"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-01/verification.json",
+        "docs/evidence/reader-first/RFA-01/rollback.json"
+      ],
+      "legacyRemovalOwned": []
+    },
+    {
+      "localId": "RFA-02",
+      "title": "Add server-authoritative project restoration snapshot and durable paused progress",
+      "objective": "Persist and return one bounded authoritative resume projection for every project",
+      "dependencies": ["RFA-01"],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-02-AC01",
+          "assertion": "A clean browser selected by ?projectId restores the server-authoritative exact source revision, exact run, reader locator, playback cursor, playback rate, and follow preference without localStorage authority.",
+          "verificationCommand": "pnpm --dir frontend exec vitest run src/api.test.ts src/projectState.test.ts src/readerWorkspace.test.ts",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-02/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-02-AC02",
+          "assertion": "Both read modes restore paused with no autoplay; invalid checkpoints degrade to readable source state.",
+          "verificationCommand": "pnpm --dir frontend exec vitest run src/api.test.ts src/projectState.test.ts src/readerWorkspace.test.ts",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-02/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-02-AC03",
+          "assertion": "Legacy projects select the latest compatible completed run, then a ready source, from server evidence when no saved workspace exists.",
+          "verificationCommand": "cd backend && go test ./internal/httpapi -run 'Snapshot|Workspace|Restore|Revision'",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-02/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-02-AC04",
+          "assertion": "ETags remain in memory; writes are serialized and coalesced with If-Match; on 412 the current server snapshot wins and explicit current intent retries at most once.",
+          "verificationCommand": "node scripts/e2e-reader-first-continuity.mjs --case legacy-snapshot-migration",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-02/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_02.state_changed",
+          "reader_first.rfa_02.verified",
+          "reader_first.rfa_02.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "snapshotSchemaVersion",
+          "readMode",
+          "writeMode",
+          "snapshotRevision",
+          "importSource",
+          "conflictOutcome"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-02/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "disable_v1_writes_keep_v0_v1_reads_never_restore_browser_authority",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-02/rollback.json"
+      },
+      "performanceBudgetIds": [
+        "cleanBrowserRestore",
+        "falseCriticalOrRebuild",
+        "initialWorkspaceSnapshotBytes",
+        "initialWorkspaceBootstrap"
+      ],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": true,
+      "dependencyUnblocked": true,
+      "status": "in_progress_product_mutation_started_frontend_scope_pending_commit",
+      "linear": {
+        "id": "bcc7a896-6150-438d-9718-81c4dcf211fd",
+        "identifier": "QQP-614",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-614/rfa-02-add-server-authoritative-project-restoration-snapshot-and",
+        "state": "In Progress",
+        "stateType": "started",
+        "stateId": "8952b964-26ec-474c-838b-de6ecc3facb3",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Backend Workspace State and Frontend Restoration Integration",
+      "inScope": {
+        "paths": [
+          "backend/internal/httpapi",
+          "packages/schema",
+          "backend/data",
+          "scripts/e2e-reader-first-continuity.mjs",
+          "backend/internal/contentir/schema",
+          "backend/internal/pipeline",
+          "scripts/generate-contract-types-templates.mjs",
+          "packages/sdk-py/src/voice_studio_sdk/schema_files",
+          "fixtures/contracts/schema-snapshots",
+          "docs/contracts/schema-bundle.v1.json",
+          "docs/flows/manifest.json",
+          "frontend/src/App.tsx",
+          "frontend/src/api.ts",
+          "frontend/src/api.test.ts",
+          "frontend/src/projectState.ts",
+          "frontend/src/projectState.test.ts",
+          "frontend/src/readerWorkspace.ts",
+          "frontend/src/readerWorkspace.test.ts",
+          "docs/flows/README.md",
+          "docs/flows/application-ux.md",
+          "docs/flows/coverage-report.json",
+          "scripts/validate-linear-batch.mjs",
+          "scripts/validate-linear-batch.test.mjs"
+        ],
+        "symbols": [
+          "ReaderWorkspaceSnapshot",
+          "GET/PUT project reader-workspace",
+          "snapshot v0-to-v1 migrator",
+          "canonical ReaderWorkspaceSnapshot schema generation",
+          "minimum server-derived source-revision/run-compatibility read projection",
+          "server GET snapshot authority for exact source revision, exact run, reader locator, playback cursor, playback rate, and follow preference",
+          "?projectId clean-browser deterministic selection seam",
+          "paused restore in both read modes with no autoplay",
+          "legacy and project local workspace keys cleanup-only and non-authoritative",
+          "in-memory workspace ETag",
+          "serialized and coalesced If-Match workspace writes",
+          "412 current snapshot wins with at most one explicit-current-intent retry"
+        ]
+      },
+      "nonGoals": [
+        "No audio delivery or generation behavior changes",
+        "No automatic playback on restore",
+        "No browser-provided compatibility or browser authority",
+        "No browser compatibility or rebuild inference",
+        "No backend or schema redesign by the frontend lane",
+        "No presentation preference removal"
+      ],
+      "verificationCommands": [
+        "cd backend && go test ./internal/httpapi -run 'Snapshot|Workspace|Restore|Revision'",
+        "node scripts/e2e-reader-first-continuity.mjs --case legacy-snapshot-migration",
+        "pnpm --dir frontend exec vitest run src/api.test.ts src/projectState.test.ts src/readerWorkspace.test.ts",
+        "pnpm validate:flows"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-02/verification.json",
+        "docs/evidence/reader-first/RFA-02/rollback.json"
+      ],
+      "legacyRemovalOwned": [],
+      "productMutationPerformed": true,
+      "frontendProductMutationPerformed": false,
+      "frontendAuthorizationEffectiveOnlyAfterGovernanceTransitionReviewedAndCommitted": true
+    },
+    {
+      "localId": "RFA-03",
+      "title": "Add bounded source and job summaries with on-demand detail hydration",
+      "objective": "Remove full source, block, segment, download, and timing payloads from bootstrap/list calls",
+      "dependencies": ["RFA-01"],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-03-AC01",
+          "assertion": "Canonical project bootstrap stays within byte and latency budgets.",
+          "verificationCommand": "cd backend && go test ./internal/httpapi -run 'Summary|Hydrat|Bootstrap'",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-03/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-03-AC02",
+          "assertion": "Selecting a ready summary fetches authoritative detail and never rejects it for omitted summary text.",
+          "verificationCommand": "node scripts/measure-reader-first-bootstrap.mjs --profiles desktop-cold,webkit-cold",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-03/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_03.state_changed",
+          "reader_first.rfa_03.verified",
+          "reader_first.rfa_03.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "summaryBytes",
+          "bootstrapLatencyMs",
+          "sourceRevisionId",
+          "queryCount"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-03/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "disable_rfa_03_new_behavior_keep_prior_compatible_state",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-03/rollback.json"
+      },
+      "performanceBudgetIds": [
+        "initialWorkspaceSnapshotBytes",
+        "initialWorkspaceBootstrap",
+        "serverHydrationAudioBytes"
+      ],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "f1eb77d9-5a27-4a1e-9be9-af350a4846db",
+        "identifier": "QQP-615",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-615/rfa-03-add-bounded-source-and-job-summaries-with-on-demand-detail",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Backend API Projection",
+      "inScope": {
+        "paths": [
+          "backend/internal/httpapi",
+          "packages/schema",
+          "packages/sdk-ts",
+          "scripts/measure-reader-first-bootstrap.mjs"
+        ],
+        "symbols": ["ProjectSummary", "SourceSummary", "RunSummary", "detail hydration endpoints"]
+      },
+      "nonGoals": [
+        "No Reader UI redesign",
+        "No media payload hydration",
+        "No mutation of run state"
+      ],
+      "verificationCommands": [
+        "cd backend && go test ./internal/httpapi -run 'Summary|Hydrat|Bootstrap'",
+        "node scripts/measure-reader-first-bootstrap.mjs --profiles desktop-cold,webkit-cold"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-03/verification.json",
+        "docs/evidence/reader-first/RFA-03/rollback.json"
+      ],
+      "legacyRemovalOwned": []
+    },
+    {
+      "localId": "RFA-04",
+      "title": "Define stable structural document IR and PDF heading/layout evidence",
+      "objective": "Represent headings, body, lists, captions, footnotes, tables, code, order, provenance, and confidence explicitly",
+      "dependencies": ["RFA-01"],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-04-AC01",
+          "assertion": "Design for the Real World headings are detected against reviewed fixture truth.",
+          "verificationCommand": "cd backend && go test ./internal/sourceprep ./internal/contentir",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-04/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-04-AC02",
+          "assertion": "The verifier reproduces the raster properties and fixture hash, matches OCR output to scanned_fixture.ocr.txt and the produced overlay to reviewed expected-overlay truth, and unresolved reviewRequired nodes pause automatic Reader narration at their boundary. ",
+          "verificationCommand": "node scripts/verify-reader-first-scan-fixture.mjs --fixture fixtures/pdf/scanned_fixture.pdf --expected fixtures/pdf/scanned_fixture.expected-overlay.json",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-04/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-04-AC03",
+          "assertion": "A revision-bound structure overlay represents front/body/back matter, hierarchy, disposition, confidence, reasons, and source locators.",
+          "verificationCommand": "cd backend && go test ./internal/sourceprep ./internal/contentir",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-04/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-04-AC04",
+          "assertion": "Resolving each reviewRequired node creates a new audited overlay revision with exactly sourceNodeId, sourceEvidence, sourceOverlayRevision, reviewedOverlayRevision, reviewerId, resolvedRole, resolvedDisposition, and resolvedAt; unresolved low-confidence structure is never flattened or auto-narrated.",
+          "verificationCommand": "node scripts/verify-reader-first-scan-fixture.mjs --fixture fixtures/pdf/scanned_fixture.pdf --expected fixtures/pdf/scanned_fixture.expected-overlay.json",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-04/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_04.state_changed",
+          "reader_first.rfa_04.verified",
+          "reader_first.rfa_04.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "fixtureHash",
+          "ocrTranscriptHash",
+          "overlayRevision",
+          "confidence",
+          "reviewDisposition",
+          "sourceNodeId",
+          "sourceEvidence",
+          "sourceOverlayRevision",
+          "reviewedOverlayRevision",
+          "reviewerId",
+          "resolvedRole",
+          "resolvedDisposition",
+          "resolvedAt"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-04/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "disable_rfa_04_new_behavior_keep_prior_compatible_state",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-04/rollback.json"
+      },
+      "performanceBudgetIds": [],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "f3c22211-4ecd-41b2-a7d6-2590bc1de155",
+        "identifier": "QQP-616",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-616/rfa-04-define-stable-structural-document-ir-and-pdf-headinglayout",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Document Structure",
+      "inScope": {
+        "paths": [
+          "adapters/pdf",
+          "backend/internal/sourceprep",
+          "backend/internal/contentir",
+          "fixtures/pdf",
+          "scripts/verify-reader-first-scan-fixture.mjs"
+        ],
+        "symbols": ["StructureOverlay", "StructureNode", "PDF OCR reviewRequired resolver"]
+      },
+      "nonGoals": [
+        "No speech synthesis changes",
+        "No silent correction of uncertain OCR",
+        "No global document rewrite"
+      ],
+      "verificationCommands": [
+        "cd backend && go test ./internal/sourceprep ./internal/contentir",
+        "node scripts/verify-reader-first-scan-fixture.mjs --fixture fixtures/pdf/scanned_fixture.pdf --expected fixtures/pdf/scanned_fixture.expected-overlay.json"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-04/verification.json",
+        "docs/evidence/reader-first/RFA-04/rollback.json"
+      ],
+      "legacyRemovalOwned": []
+    },
+    {
+      "localId": "RFA-05",
+      "title": "Generate structure-aware speech plans with isolated heading units and pause semantics",
+      "objective": "Bind each speech unit to structural source identity and preserve heading boundaries",
+      "dependencies": ["RFA-04"],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-05-AC01",
+          "assertion": "Every heading is a standalone speech-plan unit with level/role identity.",
+          "verificationCommand": "cd backend && go test ./internal/speechplan ./internal/pipeline",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-05/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-05-AC02",
+          "assertion": "Pause metadata never creates fake highlight words or merges heading and body timing.",
+          "verificationCommand": "node scripts/verify-reader-first-speech-plan.mjs --fixture fixtures/pdf/scanned_fixture.expected-overlay.json",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-05/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-05-AC03",
+          "assertion": "Prepared/book/temporary jobs consume ordered speech units; the flattened strings.Join planning path is no longer authoritative.",
+          "verificationCommand": "cd backend && go test ./internal/speechplan ./internal/pipeline",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-05/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-05-AC04",
+          "assertion": "Heading identity, hard boundary, pause, emphasis, locator, and synthesis hash survive segmentation, retry, and reuse.",
+          "verificationCommand": "node scripts/verify-reader-first-speech-plan.mjs --fixture fixtures/pdf/scanned_fixture.expected-overlay.json",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-05/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_05.state_changed",
+          "reader_first.rfa_05.verified",
+          "reader_first.rfa_05.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "speechPlanRevision",
+          "unitCount",
+          "headingUnitCount",
+          "dispositionCount"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-05/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "disable_rfa_05_new_behavior_keep_prior_compatible_state",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-05/rollback.json"
+      },
+      "performanceBudgetIds": [],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "f906a85b-7df6-40ab-a18b-956cdf4d53d8",
+        "identifier": "QQP-617",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-617/rfa-05-generate-structure-aware-speech-plans-with-isolated-heading",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Speech Planning",
+      "inScope": {
+        "paths": [
+          "backend/internal/speechplan",
+          "backend/internal/pipeline",
+          "packages/schema",
+          "scripts/verify-reader-first-speech-plan.mjs"
+        ],
+        "symbols": ["SpeechUnit", "SpeechPlan", "structure-aware segment boundary planner"]
+      },
+      "nonGoals": [
+        "No provider timing implementation",
+        "No playback-controller changes",
+        "No flatten-string compatibility as authority"
+      ],
+      "verificationCommands": [
+        "cd backend && go test ./internal/speechplan ./internal/pipeline",
+        "node scripts/verify-reader-first-speech-plan.mjs --fixture fixtures/pdf/scanned_fixture.expected-overlay.json"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-05/verification.json",
+        "docs/evidence/reader-first/RFA-05/rollback.json"
+      ],
+      "legacyRemovalOwned": []
+    },
+    {
+      "localId": "RFA-06",
+      "title": "Enforce bounded first-playable segmentation and durable segment publication",
+      "objective": "Publish a contiguous 4–8 second target prefix before checking and final assembly",
+      "dependencies": ["RFA-02", "RFA-05"],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-06-AC01",
+          "assertion": "First segment is retrievable while the run remains active.",
+          "verificationCommand": "cd backend && go test ./internal/pipeline ./internal/audio ./internal/httpapi",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-06/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-06-AC02",
+          "assertion": "Every existing completed artifact under each enumerated legacy root is discovered; checksum, byte length, decodable header, and compatibility are verified; valid bytes are copied, fsynced, atomically renamed, and committed with revision-guarded metadata; interruption recovery is idempotent; post-backend-restart and post-host-reboot playback uses the durable object; a valid compatible candidate never becomes artifact_missing.",
+          "verificationCommand": "node scripts/e2e-reader-first-continuity.mjs --case completed-artifact-backfill",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-06/completed-artifact-backfill.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-06-AC03",
+          "assertion": "A job cannot become completed until committed job metadata and playable media are atomically promoted from tmpfs/scratch to durable storage.",
+          "verificationCommand": "cd backend && go test ./internal/pipeline ./internal/audio ./internal/httpapi",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-06/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_06.state_changed",
+          "reader_first.rfa_06.verified",
+          "reader_first.rfa_06.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "artifactSourceRoot",
+          "artifactDestination",
+          "checksumResult",
+          "metadataRevision",
+          "promotionPhase"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-06/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "stop_new_promotions_keep_verified_durable_bytes_and_prior_metadata",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-06/rollback.json"
+      },
+      "performanceBudgetIds": [
+        "warmFirstPlayable",
+        "commitToTransport",
+        "serverHydrationAudioBytes"
+      ],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "5a9b4806-eecf-4837-a5b9-454a496581dd",
+        "identifier": "QQP-618",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-618/rfa-06-enforce-bounded-first-playable-segmentation-and-durable-segment",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Media Publication",
+      "inScope": {
+        "paths": [
+          "backend/internal/pipeline",
+          "backend/internal/audio",
+          "backend/internal/httpapi"
+        ],
+        "symbols": ["CommittedSegment", "durable artifact promoter", "completed-artifact backfill"]
+      },
+      "nonGoals": [
+        "No Reader UI work",
+        "No final-audio requirement for playback",
+        "No timing alignment policy change"
+      ],
+      "verificationCommands": [
+        "cd backend && go test ./internal/pipeline ./internal/audio ./internal/httpapi",
+        "node scripts/e2e-reader-first-continuity.mjs --case completed-artifact-backfill"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-06/verification.json",
+        "docs/evidence/reader-first/RFA-06/rollback.json",
+        "docs/evidence/reader-first/RFA-06/completed-artifact-backfill.json"
+      ],
+      "legacyRemovalOwned": []
+    },
+    {
+      "localId": "RFA-07",
+      "title": "Normalize provider-native per-segment timing and capability evidence",
+      "objective": "Capture trustworthy native words/marks when a TTS provider exposes them",
+      "dependencies": ["RFA-01", "RFA-05"],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-07-AC01",
+          "assertion": "Native events are revision/artifact bound, monotonic, duration bounded, and normalized.",
+          "verificationCommand": "cd backend && go test ./internal/providers ./internal/pipeline",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-07/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-07-AC02",
+          "assertion": "Providers without native timing advertise that fact and do not fabricate trusted words.",
+          "verificationCommand": "node scripts/verify-reader-first-timing.mjs --mode provider-native",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-07/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_07.state_changed",
+          "reader_first.rfa_07.verified",
+          "reader_first.rfa_07.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "provider",
+          "segmentId",
+          "timingSource",
+          "timingRevision",
+          "confidence"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-07/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "disable_rfa_07_new_behavior_keep_prior_compatible_state",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-07/rollback.json"
+      },
+      "performanceBudgetIds": ["segmentTimingPublication", "trustedWordDrift"],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "9cbe9cc7-ad57-4da6-bba0-d5cfc98a22a1",
+        "identifier": "QQP-619",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-619/rfa-07-normalize-provider-native-per-segment-timing-and-capability",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Provider Timing",
+      "inScope": {
+        "paths": [
+          "backend/internal/providers",
+          "backend/internal/pipeline",
+          "packages/schema",
+          "scripts/verify-reader-first-timing.mjs"
+        ],
+        "symbols": ["ProviderTimingCapability", "NormalizedTimingRevision", "trusted-word gates"]
+      },
+      "nonGoals": [
+        "No forced alignment implementation",
+        "No heuristic promotion to trusted word",
+        "No browser rendering changes"
+      ],
+      "verificationCommands": [
+        "cd backend && go test ./internal/providers ./internal/pipeline",
+        "node scripts/verify-reader-first-timing.mjs --mode provider-native"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-07/verification.json",
+        "docs/evidence/reader-first/RFA-07/rollback.json"
+      ],
+      "legacyRemovalOwned": []
+    },
+    {
+      "localId": "RFA-08",
+      "title": "Run concurrent Qwen forced alignment fallback and publish timing revisions",
+      "objective": "Align each committed segment when native timing is unavailable, using explicit bounded capability activation",
+      "dependencies": ["RFA-06", "RFA-07"],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-08-AC01",
+          "assertion": "Qwen3 forced alignment runs per segment during narration, not only after final assembly.",
+          "verificationCommand": "cd backend && go test ./internal/alignment ./internal/pipeline",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-08/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-08-AC02",
+          "assertion": "Alignment failure downgrades fidelity without failing audio or reading.",
+          "verificationCommand": "node scripts/verify-reader-first-timing.mjs --mode qwen-segment-fallback",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-08/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_08.state_changed",
+          "reader_first.rfa_08.verified",
+          "reader_first.rfa_08.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "alignerProfile",
+          "segmentId",
+          "driftMs",
+          "confidence",
+          "resourceEnvelope"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-08/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "disable_rfa_08_new_behavior_keep_prior_compatible_state",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-08/rollback.json"
+      },
+      "performanceBudgetIds": ["segmentTimingPublication", "trustedWordDrift"],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "970b3f82-c8ea-416a-92c9-7fc2469f51f6",
+        "identifier": "QQP-620",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-620/rfa-08-run-concurrent-qwen-forced-alignment-fallback-and-publish",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Forced Alignment",
+      "inScope": {
+        "paths": ["backend/internal/alignment", "backend/internal/pipeline"],
+        "symbols": ["QwenSegmentAligner", "segment alignment scheduler", "fidelity downgrade"]
+      },
+      "nonGoals": [
+        "No provider-native timing rewrite",
+        "No audio failure on aligner failure",
+        "No whole-book alignment"
+      ],
+      "verificationCommands": [
+        "cd backend && go test ./internal/alignment ./internal/pipeline",
+        "node scripts/verify-reader-first-timing.mjs --mode qwen-segment-fallback"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-08/verification.json",
+        "docs/evidence/reader-first/RFA-08/rollback.json"
+      ],
+      "legacyRemovalOwned": []
+    },
+    {
+      "localId": "RFA-09",
+      "title": "Version immutable media/timing manifests and bounded segment/range delivery",
+      "objective": "Make immutable segment entries the normal playback protocol and bound retained assembled-file delivery",
+      "dependencies": ["RFA-06", "RFA-07"],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-09-AC01",
+          "assertion": "Normal playback never downloads growing partial or full-book audio.",
+          "verificationCommand": "cd backend && go test ./internal/httpapi ./internal/audio",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-09/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-09-AC02",
+          "assertion": "Full audio is available only to explicit export or a negotiated legacy client lacking manifest capability: full requests return 200, satisfiable byte ranges return 206 with correct Content-Range, unsatisfiable ranges return 416 with unsatisfied Content-Range, and all advertise Accept-Ranges: bytes.",
+          "verificationCommand": "node scripts/e2e-reader-first-media.mjs --profiles fmp4-aac,webm-opus",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-09/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-09-AC03",
+          "assertion": "Playback manifest entries expose stable index, checksum/ETag, bytes, timeline, source range, timing state/revision, and immutable cache policy.",
+          "verificationCommand": "cd backend && go test ./internal/httpapi ./internal/audio",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-09/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-09-AC04",
+          "assertion": "Manifest-capable Reader selects only immutable compressed segments and never full-audio fallback; route evidence proves the selection; fMP4/AAC is gapless on Safari/iOS WebKit and WebM/Opus is gapless on Chromium/Firefox.",
+          "verificationCommand": "node scripts/e2e-reader-first-media.mjs --profiles fmp4-aac,webm-opus",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-09/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_09.state_changed",
+          "reader_first.rfa_09.verified",
+          "reader_first.rfa_09.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "callerCapability",
+          "selectedRoute",
+          "responseStatus",
+          "contentRange",
+          "codecProfile",
+          "concurrencyReason"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-09/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "disable_new_manifest_profile_keep_immutable_segments_and_explicit_export",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-09/rollback.json"
+      },
+      "performanceBudgetIds": [
+        "commitToTransport",
+        "normalPlaybackFullBookFetches",
+        "segmentRequestsInFlight",
+        "bufferedMediaWindow",
+        "serverHydrationAudioBytes"
+      ],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "1e45b6ef-ed05-42c9-a9a8-9f245622ba7c",
+        "identifier": "QQP-621",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-621/rfa-09-version-immutable-mediatiming-manifests-and-bounded",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Media Delivery",
+      "inScope": {
+        "paths": [
+          "backend/internal/httpapi",
+          "backend/internal/audio",
+          "packages/schema",
+          "packages/sdk-ts",
+          "scripts/e2e-reader-first-media.mjs",
+          "frontend/src/api.ts"
+        ],
+        "symbols": [
+          "MediaManifest",
+          "segment/range routes",
+          "legacy capability negotiation",
+          "audioSource completed-job media route selection"
+        ]
+      },
+      "nonGoals": [
+        "No playback UI redesign",
+        "No Reader fallback to full audio",
+        "No mutable segment URLs"
+      ],
+      "verificationCommands": [
+        "cd backend && go test ./internal/httpapi ./internal/audio",
+        "node scripts/e2e-reader-first-media.mjs --profiles fmp4-aac,webm-opus"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-09/verification.json",
+        "docs/evidence/reader-first/RFA-09/rollback.json"
+      ],
+      "legacyRemovalOwned": []
+    },
+    {
+      "localId": "RFA-10",
+      "title": "Publish sequenced replayable narration events after durable commits",
+      "objective": "Replace timed full snapshots with monotonic replayable run/manifest/timing events",
+      "dependencies": ["RFA-01", "RFA-06", "RFA-09"],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-10-AC01",
+          "assertion": "Segment-playable and timing-updated events publish only after durable state.",
+          "verificationCommand": "cd backend && go test ./internal/httpapi -run 'Event|Replay|Cursor|Durable'",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-10/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-10-AC02",
+          "assertion": "Duplicate, gap, and reconnect cases converge through cursor plus authoritative snapshot.",
+          "verificationCommand": "node scripts/e2e-reader-first-continuity.mjs --case event-gap-reconnect",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-10/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_10.state_changed",
+          "reader_first.rfa_10.verified",
+          "reader_first.rfa_10.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "eventCursor",
+          "eventType",
+          "replayFrom",
+          "manifestVersion",
+          "deliveryLagMs"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-10/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "disable_rfa_10_new_behavior_keep_prior_compatible_state",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-10/rollback.json"
+      },
+      "performanceBudgetIds": ["narrateAcknowledgement", "warmFirstPlayable", "commitToTransport"],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "e5a66911-1275-43de-8cfd-2203f0a6efa0",
+        "identifier": "QQP-622",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-622/rfa-10-publish-sequenced-replayable-narration-events-after-durable",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Narration Event Transport",
+      "inScope": {
+        "paths": ["backend/internal/httpapi", "packages/schema", "packages/sdk-ts"],
+        "symbols": ["NarrationEvent", "event cursor", "snapshot replay reconciliation"]
+      },
+      "nonGoals": [
+        "No media generation changes",
+        "No client-owned durable truth",
+        "No event before durable commit"
+      ],
+      "verificationCommands": [
+        "cd backend && go test ./internal/httpapi -run 'Event|Replay|Cursor|Durable'",
+        "node scripts/e2e-reader-first-continuity.mjs --case event-gap-reconnect"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-10/verification.json",
+        "docs/evidence/reader-first/RFA-10/rollback.json"
+      ],
+      "legacyRemovalOwned": []
+    },
+    {
+      "localId": "RFA-11",
+      "title": "Build SourceSessionStore and deterministic clean-browser Cinema ingress",
+      "objective": "Hydrate selected source/revision from server authority and open readable Cinema without audio",
+      "dependencies": ["RFA-02", "RFA-03"],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-11-AC01",
+          "assertion": "Project selection visibly closes/updates the chooser and opens useful restored state.",
+          "verificationCommand": "pnpm --dir frontend test -- src/features/workspace src/features/cinema",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-11/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-11-AC02",
+          "assertion": "Cinema deep links resolve project/source identity server-side and survive empty browser storage.",
+          "verificationCommand": "node scripts/e2e-reader-first-continuity.mjs --case clean-browser-ingress",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-11/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-11-AC03",
+          "assertion": "When no server snapshot exists, one identity-compatible browser snapshot may be imported once without autoplay, persisted through the revision-guarded server mutation, and then removed; when a server snapshot exists it always wins; after retirement, removing all browser storage cannot change restore correctness and no workflow-authoritative localStorage write remains.",
+          "verificationCommand": "node scripts/e2e-reader-first-continuity.mjs --case legacy-browser-retirement",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-11/legacy-browser-import-removal.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_11.state_changed",
+          "reader_first.rfa_11.verified",
+          "reader_first.rfa_11.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "snapshotRevision",
+          "sourceRevisionId",
+          "restoreOutcome",
+          "browserImportDisposition"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-11/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "disable_rfa_11_new_behavior_keep_prior_compatible_state",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-11/rollback.json"
+      },
+      "performanceBudgetIds": [
+        "cleanBrowserRestore",
+        "residentCinemaOpen",
+        "initialWorkspaceSnapshotBytes",
+        "initialWorkspaceBootstrap"
+      ],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "84d62070-67d7-4650-a004-4d33a158eddc",
+        "identifier": "QQP-623",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-623/rfa-11-build-sourcesessionstore-and-deterministic-clean-browser-cinema",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Reader Ingress",
+      "inScope": {
+        "paths": [
+          "frontend/src/features/workspace",
+          "frontend/src/features/sources",
+          "frontend/src/features/cinema",
+          "frontend/src/projectState.ts",
+          "frontend/src/App.tsx"
+        ],
+        "symbols": [
+          "SourceSessionStore",
+          "Cinema deep-link resolver",
+          "project chooser transition",
+          "ProjectWorkspaceState",
+          "PROJECT_WORKSPACE_STATE_PREFIX",
+          "loadProjectWorkspaceState",
+          "saveProjectWorkspaceState",
+          "clearProjectWorkspaceState",
+          "migrateLegacyWorkspaceState",
+          "clearLegacyWorkspaceState",
+          "App activeProjectId localStorage initialization",
+          "restoreProjectWorkspace",
+          "selectProject",
+          "App project-change migration/restoration effect",
+          "App continuous workspace persistence effect"
+        ]
+      },
+      "nonGoals": [
+        "No playback scheduling changes",
+        "No automatic narration start",
+        "No localStorage workflow authority"
+      ],
+      "verificationCommands": [
+        "pnpm --dir frontend test -- src/features/workspace src/features/cinema",
+        "node scripts/e2e-reader-first-continuity.mjs --case clean-browser-ingress",
+        "node scripts/e2e-reader-first-continuity.mjs --case legacy-browser-retirement"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-11/verification.json",
+        "docs/evidence/reader-first/RFA-11/rollback.json",
+        "docs/evidence/reader-first/RFA-11/legacy-browser-import-removal.json"
+      ],
+      "legacyRemovalOwned": [
+        "remove localStorage and browser-authoritative workspace writes after server snapshot import/restore parity evidence passes"
+      ]
+    },
+    {
+      "localId": "RFA-12",
+      "title": "Build canonical NarrationRunStore with replay/snapshot reconciliation",
+      "objective": "Give one frontend store authority over run, manifest, event sequence, and timing revisions",
+      "dependencies": ["RFA-06", "RFA-09", "RFA-10"],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-12-AC01",
+          "assertion": "Stale/duplicate events are ignored and gaps reconcile once.",
+          "verificationCommand": "pnpm --dir frontend test -- src/features/workspace src/features/playback",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-12/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-12-AC02",
+          "assertion": "Terminal completion never erases playable prefix or local Cinema/playback intent.",
+          "verificationCommand": "node scripts/e2e-reader-first-continuity.mjs --case duplicate-gap-terminal",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-12/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_12.state_changed",
+          "reader_first.rfa_12.verified",
+          "reader_first.rfa_12.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "ackLatencyMs",
+          "firstPlayableLatencyMs",
+          "runState",
+          "firstSegmentId"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-12/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "disable_rfa_12_new_behavior_keep_prior_compatible_state",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-12/rollback.json"
+      },
+      "performanceBudgetIds": ["narrateAcknowledgement", "warmFirstPlayable"],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "53719a8f-aca2-4fa8-86f6-111d09dac9e9",
+        "identifier": "QQP-624",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-624/rfa-12-build-canonical-narrationrunstore-with-replaysnapshot",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Narration Client State",
+      "inScope": {
+        "paths": [
+          "frontend/src/features/workspace",
+          "frontend/src/features/cinema",
+          "frontend/src/features/playback"
+        ],
+        "symbols": ["NarrationRunStore", "event reducer", "terminal prefix retention"]
+      },
+      "nonGoals": [
+        "No media transport implementation",
+        "No terminal remount",
+        "No duplicate reconciliation loops"
+      ],
+      "verificationCommands": [
+        "pnpm --dir frontend test -- src/features/workspace src/features/playback",
+        "node scripts/e2e-reader-first-continuity.mjs --case duplicate-gap-terminal"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-12/verification.json",
+        "docs/evidence/reader-first/RFA-12/rollback.json"
+      ],
+      "legacyRemovalOwned": []
+    },
+    {
+      "localId": "RFA-13",
+      "title": "Build one append-capable PlaybackSessionController",
+      "objective": "Decode and schedule a bounded contiguous segment window under one controller",
+      "dependencies": ["RFA-09", "RFA-12"],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-13-AC01",
+          "assertion": "Later segments append without controller remount, cursor reset, or duplicate media owner.",
+          "verificationCommand": "pnpm --dir frontend test -- src/features/playback",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-13/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-13-AC02",
+          "assertion": "Buffering preserves reading and play intent at the contiguous boundary.",
+          "verificationCommand": "node scripts/e2e-reader-first-media.mjs --case bounded-playback",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-13/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-13-AC03",
+          "assertion": "While at least two eligible unbuffered segments are within bounded lookahead, the scheduler sustains 2–4 concurrent requests; sustained one-request operation is allowed only with concurrencyReason exactly saveData, effectiveType_2g, deviceMemory_below_2gb, or active_manifest_has_one_remaining_segment. Seek cancellation and backpressure are transient lifecycle events, never sustained-concurrency exceptions. Never more than four requests are in flight, and lookahead/back-buffer stay at or below 60 seconds with eviction.",
+          "verificationCommand": "node scripts/e2e-reader-first-media.mjs --case bounded-playback",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-13/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-13-AC04",
+          "assertion": "Seeking aborts obsolete requests; long-form Reader, Cinema, and Teleprompt waveform UI uses server envelopes and bounded manifest segments and never fetches or decodes a full audio object.",
+          "verificationCommand": "node scripts/e2e-reader-first-media.mjs --case bounded-playback",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-13/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_13.state_changed",
+          "reader_first.rfa_13.verified",
+          "reader_first.rfa_13.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "playbackOwnerId",
+          "bufferedSeconds",
+          "inFlightRequests",
+          "evictionReason",
+          "terminalState",
+          "concurrencyReason"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-13/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "disable_append_path_keep_single_owner_and_last_compatible_manifest",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-13/rollback.json"
+      },
+      "performanceBudgetIds": [
+        "mainThreadLongTasks",
+        "normalPlaybackFullBookFetches",
+        "segmentRequestsInFlight",
+        "bufferedMediaWindow",
+        "normalPlaybackFullWaveformDecodes"
+      ],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "e0eb3a2a-9c64-4e0f-9725-a2a4f25a508b",
+        "identifier": "QQP-625",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-625/rfa-13-build-one-append-capable-playbacksessioncontroller",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Playback Transport",
+      "inScope": {
+        "paths": [
+          "frontend/src/features/playback",
+          "frontend/src/features/cinema",
+          "frontend/src/App.tsx",
+          "frontend/src/audioWaveform.ts",
+          "frontend/src/waveform.ts",
+          "frontend/src/features/teleprompt",
+          "frontend/src/features/book-cinema/BookCinemaPanel.tsx",
+          "frontend/src/features/cinema/PreparedSourceCinemaTransportHelpers.tsx"
+        ],
+        "symbols": [
+          "PlaybackSessionController",
+          "bounded segment scheduler",
+          "waveform envelope client",
+          "useCompletedWaveformBars full-source decode path",
+          "ArrivalAudioPlayerQueue segment-loading effect",
+          "ArrivalAudioPlayerQueue loadRequests Promise.all fan-out",
+          "missingSegmentIndexes bounded scheduler",
+          "useAudioWaveformBars long-form full-object decode path",
+          "sampleAudioBuffer decoded-buffer waveform path",
+          "TelepromptStudio waveform call site",
+          "BookCinemaPanel waveform call site",
+          "PreparedSourceCinemaTransportHelpers waveform call site"
+        ]
+      },
+      "nonGoals": ["No document structure work", "No full-book decode", "No second audio owner"],
+      "verificationCommands": [
+        "pnpm --dir frontend test -- src/features/playback",
+        "node scripts/e2e-reader-first-media.mjs --case bounded-playback"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-13/verification.json",
+        "docs/evidence/reader-first/RFA-13/rollback.json"
+      ],
+      "legacyRemovalOwned": [
+        "remove terminal-status playback controller remount and duplicate audio owner paths"
+      ]
+    },
+    {
+      "localId": "RFA-14",
+      "title": "Make Cinema own immediate reading and regular narration transport",
+      "objective": "Start narration from the reader and enable its existing transport on first playable commit",
+      "dependencies": ["RFA-11", "RFA-12", "RFA-13"],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-14-AC01",
+          "assertion": "Book Reading mode opens before a run exists and stays mounted during generation.",
+          "verificationCommand": "pnpm --dir frontend test -- src/features/cinema src/features/book-cinema",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-14/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-14-AC02",
+          "assertion": "No terminal status or final assembly gates Cinema or first playback.",
+          "verificationCommand": "node scripts/e2e-reader-first-journey.mjs --case immediate-reading",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-14/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_14.state_changed",
+          "reader_first.rfa_14.verified",
+          "reader_first.rfa_14.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "readerMode",
+          "manifestVersion",
+          "timingFidelity",
+          "readerLocator"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-14/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "disable_rfa_14_new_behavior_keep_prior_compatible_state",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-14/rollback.json"
+      },
+      "performanceBudgetIds": [
+        "residentCinemaOpen",
+        "narrateAcknowledgement",
+        "warmFirstPlayable",
+        "mainThreadLongTasks"
+      ],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "ee8cb506-1b38-459f-8def-d00118bb6bfb",
+        "identifier": "QQP-626",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-626/rfa-14-make-cinema-own-immediate-reading-and-regular-narration",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Reader Product",
+      "inScope": {
+        "paths": [
+          "frontend/src/features/cinema",
+          "frontend/src/features/book-cinema",
+          "frontend/src/features/reading-surface",
+          "scripts/e2e-reader-first-journey.mjs"
+        ],
+        "symbols": ["Book Reading mode", "Cinema narration action", "single transport ownership"]
+      },
+      "nonGoals": [
+        "No Preview/Audition behavior",
+        "No source preprocessing",
+        "No final-assembly gate"
+      ],
+      "verificationCommands": [
+        "pnpm --dir frontend test -- src/features/cinema src/features/book-cinema",
+        "node scripts/e2e-reader-first-journey.mjs --case immediate-reading"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-14/verification.json",
+        "docs/evidence/reader-first/RFA-14/rollback.json"
+      ],
+      "legacyRemovalOwned": []
+    },
+    {
+      "localId": "RFA-15",
+      "title": "Implement windowed trusted-word read-along with fidelity upgrades and downgrades",
+      "objective": "Fetch/render only nearby text and timing, and highlight exact source words when gates pass",
+      "dependencies": ["RFA-07", "RFA-08", "RFA-09", "RFA-13", "RFA-14"],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-15-AC01",
+          "assertion": "Trusted-word drift is within budget with zero wrong-word identity on canonical fixtures.",
+          "verificationCommand": "pnpm --dir frontend test -- src/features/readalong src/features/reading-surface",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-15/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-15-AC02",
+          "assertion": "Timing arrival upgrades an active session without remount; failure degrades to phrase/audio-only honestly.",
+          "verificationCommand": "node scripts/verify-reader-first-timing.mjs --mode consumed-watermark",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-15/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-15-AC03",
+          "assertion": "For every cue at or before the persisted consumed watermark, later timing revisions cannot change cue ID, word identity, order, start or end in either direction, segment, or locator and cannot replace or delete the cue; revisions affect only later cues, conflicts preserve the consumed revision, and timing-conflict evidence is emitted.",
+          "verificationCommand": "node scripts/verify-reader-first-timing.mjs --mode consumed-watermark",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-15/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-15-AC04",
+          "assertion": "The 88.7 MB legacy highlight map is never required for Reader ingress or normal playback.",
+          "verificationCommand": "node scripts/verify-reader-first-timing.mjs --mode consumed-watermark",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-15/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-15-AC05",
+          "assertion": "All Reader, Teleprompt, Cinema, and Theatre timing renderers consume authoritative fidelity from the timing manifest or server snapshot; heuristic or estimated phrases remain visibly estimated even when word boundaries or highlight-map data exist and never enable exact read-along, and no renderer hard-codes or defaults timing to trusted. An omitted Theatre timing input defaults to estimated or unknown and cannot claim exact read-along. An inactive prepared-source block consumes authoritative fidelity or remains unknown, never becomes trusted by inactivity, and cannot enable exact read-along.",
+          "verificationCommand": "pnpm --dir frontend test -- src/features/readalong src/features/reading-surface src/features/teleprompt src/features/cinema src/features/theatre",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-15/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_15.state_changed",
+          "reader_first.rfa_15.verified",
+          "reader_first.rfa_15.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "consumedWatermark",
+          "oldTimingRevision",
+          "newTimingRevision",
+          "conflictReason",
+          "cueMutationDisposition"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-15/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "freeze_consumed_revision_degrade_only_unconsumed_cues",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-15/rollback.json"
+      },
+      "performanceBudgetIds": [
+        "segmentTimingPublication",
+        "trustedWordDrift",
+        "mainThreadLongTasks"
+      ],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "a93a915a-2dba-480f-b00a-996642f46644",
+        "identifier": "QQP-627",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-627/rfa-15-implement-windowed-trusted-word-read-along-with-fidelity",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Read-along Fidelity",
+      "inScope": {
+        "paths": [
+          "frontend/src/features/readalong",
+          "frontend/src/features/reading-surface",
+          "frontend/src/features/playback",
+          "frontend/src/features/teleprompt/TelepromptStudio.tsx",
+          "frontend/src/features/teleprompt/telepromptStudioComponents.tsx",
+          "frontend/src/features/teleprompt/telepromptTheatreCueContent.tsx",
+          "frontend/src/features/cinema/BookDocumentReaderStage.tsx",
+          "frontend/src/features/theatre/model.ts",
+          "frontend/src/features/teleprompt/TelepromptTheatre.tsx",
+          "frontend/src/features/cinema/PreparedSourceCinemaBase.tsx"
+        ],
+        "symbols": [
+          "TimingWindow",
+          "consumed cue watermark",
+          "fidelity upgrade/downgrade",
+          "TelepromptStudio authoritative timing fidelity consumption",
+          "Teleprompt cue and word authoritative timing-state defaults",
+          "Teleprompt theatre cue authoritative timing-state default",
+          "BookDocumentReaderStage authoritative block and word highlight fidelity",
+          "Theatre runtime authoritative timing availability",
+          "TelepromptTheatre omitted timing input fail-closed default",
+          "PreparedSourceCinema active and inactive block authoritative timing state"
+        ]
+      },
+      "nonGoals": [
+        "No cue mutation behind consumed watermark",
+        "No heuristic trusted-word display",
+        "No full highlight-map ingress"
+      ],
+      "verificationCommands": [
+        "pnpm --dir frontend test -- src/features/readalong src/features/reading-surface",
+        "node scripts/verify-reader-first-timing.mjs --mode consumed-watermark",
+        "pnpm --dir frontend test -- src/features/readalong src/features/reading-surface src/features/teleprompt src/features/cinema src/features/theatre"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-15/verification.json",
+        "docs/evidence/reader-first/RFA-15/rollback.json"
+      ],
+      "legacyRemovalOwned": []
+    },
+    {
+      "localId": "RFA-16",
+      "title": "Remove Preview Player from regular narration and isolate Audition identity",
+      "objective": "Restrict Preview/Audition to preview IDs in voice cloning/comparison",
+      "dependencies": ["RFA-14"],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-16-AC01",
+          "assertion": "Global Preview Player is absent in Narration Workbench, Reader, and Cinema.",
+          "verificationCommand": "pnpm --dir frontend test -- src/features/preview src/features/run-config",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-16/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-16-AC02",
+          "assertion": "Preview components cannot accept VoiceJob or narration runId.",
+          "verificationCommand": "node scripts/e2e-reader-first-journey.mjs --case preview-isolation",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-16/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-16-AC03",
+          "assertion": "Local full-clip waveform decoding is limited to voice-comparison or voice-cloning AuditionSessionId clips no longer than 30 seconds and no larger than 5242880 bytes; VoiceJob and narration runId are forbidden, and over-limit clips use a server waveform envelope or no waveform.",
+          "verificationCommand": "node scripts/e2e-reader-first-journey.mjs --case preview-isolation",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-16/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_16.state_changed",
+          "reader_first.rfa_16.verified",
+          "reader_first.rfa_16.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "playbackOwnerId",
+          "auditionId",
+          "readerActive",
+          "handoffDisposition"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-16/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "disable_rfa_16_new_behavior_keep_prior_compatible_state",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-16/rollback.json"
+      },
+      "performanceBudgetIds": [],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "7d63f557-dc56-43b7-9c44-c48b96078b9c",
+        "identifier": "QQP-628",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-628/rfa-16-remove-preview-player-from-regular-narration-and-isolate",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Audition Isolation",
+      "inScope": {
+        "paths": [
+          "frontend/src/features/preview",
+          "frontend/src/features/run-config",
+          "frontend/src/features/playback",
+          "frontend/src/App.tsx"
+        ],
+        "symbols": [
+          "AuditionSessionId",
+          "Preview route guard",
+          "narration-run type exclusion",
+          "playbackCursorSec",
+          "isPlaybackActive",
+          "playbackControls",
+          "handlePlaybackControlsChange",
+          "globalPreviewOwner",
+          "globalPreviewVisible",
+          "LazyGlobalPreviewPlayer mount",
+          "PlaybackControllerHost",
+          "StreamingAudioPanel ownership bridge",
+          "GlobalPreviewPlayer bounded Audition waveform path"
+        ]
+      },
+      "nonGoals": [
+        "No Reader transport changes",
+        "No deletion of Audition capability",
+        "No VoiceJob/runId Preview binding"
+      ],
+      "verificationCommands": [
+        "pnpm --dir frontend test -- src/features/preview src/features/run-config",
+        "node scripts/e2e-reader-first-journey.mjs --case preview-isolation"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-16/verification.json",
+        "docs/evidence/reader-first/RFA-16/rollback.json"
+      ],
+      "legacyRemovalOwned": [
+        "remove Preview Player from regular narration surfaces and enforce Audition-only identity"
+      ]
+    },
+    {
+      "localId": "RFA-17",
+      "title": "Repair artifact currentness, rebuild semantics, health severity, and retained-prefix recovery",
+      "objective": "Derive statuses from explicit identity/compatibility evidence and independent health facts",
+      "dependencies": ["RFA-02", "RFA-09", "RFA-12"],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-17-AC01",
+          "assertion": "The completed reference run is playable and not labelled rebuild/critical.",
+          "verificationCommand": "cd backend && go test ./internal/httpapi ./internal/systemmetrics",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-17/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-17-AC02",
+          "assertion": "Missing optional capability or final assembly failure cannot invalidate segments or create global critical status.",
+          "verificationCommand": "pnpm --dir frontend test -- src/features/status-strip src/features/health-report src/features/operational-status",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-17/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-17-AC03",
+          "assertion": "Global System critical requires a fresh backend-authored fact with reasonCode exactly backendUnavailable, corruptState, durableStorageFailure, or unrecoverableInvariantViolation plus sourceSubsystem, observedAt, expiresAt, correlationId, and clearCondition; domain-local facts cannot escalate globally.",
+          "verificationCommand": "cd backend && go test ./internal/httpapi ./internal/systemmetrics",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-17/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-17-AC04",
+          "assertion": "Critical evidence expires after 30 seconds to unknown, never critical, and clears only when its backend-authored clearCondition is satisfied; frontend status-strip/App inference cannot promote stale, missing, optional-capability, stage, run, audio, text/currentness, or disclosure-blocking facts to global critical.",
+          "verificationCommand": "pnpm --dir frontend test -- src/features/status-strip src/features/health-report src/features/operational-status",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-17/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_17.state_changed",
+          "reader_first.rfa_17.verified",
+          "reader_first.rfa_17.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "reasonCode",
+          "sourceSubsystem",
+          "observedAt",
+          "expiresAt",
+          "clearCondition",
+          "criticalDisposition"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-17/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "expire_backend_evidence_to_unknown_without_frontend_promotion",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-17/rollback.json"
+      },
+      "performanceBudgetIds": ["falseCriticalOrRebuild", "serverHydrationAudioBytes"],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "9ac08870-4b14-449b-a252-ca317d96ab8e",
+        "identifier": "QQP-629",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-629/rfa-17-repair-artifact-currentness-rebuild-semantics-health-severity",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Backend Health State",
+      "inScope": {
+        "paths": [
+          "backend/internal/httpapi",
+          "backend/internal/systemmetrics",
+          "frontend/src/features/health-report",
+          "frontend/src/features/operational-status",
+          "frontend/src/features/status-strip/model.ts",
+          "frontend/src/App.tsx"
+        ],
+        "symbols": [
+          "SystemHealthEvidence",
+          "artifact_missing",
+          "domain-local blocker mapping",
+          "resolveNarrationStatusModel",
+          "resolveNarrationOperationalIssues",
+          "resolveOperationalSystemIssue",
+          "highestPriorityPanel blocking critical inference",
+          "App narrationStatusModel/disclosure input call site"
+        ]
+      },
+      "nonGoals": [
+        "No app-shell decomposition",
+        "No frontend inference of critical",
+        "No deletion of valid compatible media"
+      ],
+      "verificationCommands": [
+        "cd backend && go test ./internal/httpapi ./internal/systemmetrics",
+        "pnpm --dir frontend test -- src/features/status-strip src/features/health-report src/features/operational-status"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-17/verification.json",
+        "docs/evidence/reader-first/RFA-17/rollback.json"
+      ],
+      "legacyRemovalOwned": []
+    },
+    {
+      "localId": "RFA-18",
+      "title": "Decompose application bootstrap/ownership and enforce lazy/browser budgets",
+      "objective": "Move domain state from App.tsx to canonical stores and lazy-load inactive features",
+      "dependencies": ["RFA-03", "RFA-11", "RFA-12", "RFA-13", "RFA-16", "RFA-17"],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-18-AC01",
+          "assertion": "Project opening does not ingest full source/job/timing/download lists.",
+          "verificationCommand": "pnpm --dir frontend test -- src/features/layout src/features/navigation src/features/performance",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-18/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-18-AC02",
+          "assertion": "A 60-second generation/read session has zero app-caused >=50ms long tasks and unrelated shell renders stay bounded.",
+          "verificationCommand": "node scripts/measure-reader-first-bootstrap.mjs --profiles desktop-cold,desktop-warm,webkit-cold",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-18/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_18.state_changed",
+          "reader_first.rfa_18.verified",
+          "reader_first.rfa_18.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "measurementProfile",
+          "bootstrapBytes",
+          "longTaskCount",
+          "renderCount",
+          "waveformBytes"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-18/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "disable_rfa_18_new_behavior_keep_prior_compatible_state",
+        "preserve": [
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"],
+        "verification": "docs/evidence/reader-first/RFA-18/rollback.json"
+      },
+      "performanceBudgetIds": [
+        "residentCinemaOpen",
+        "narrateAcknowledgement",
+        "mainThreadLongTasks",
+        "normalPlaybackFullBookFetches",
+        "segmentRequestsInFlight",
+        "bufferedMediaWindow",
+        "normalPlaybackFullWaveformDecodes",
+        "initialWorkspaceSnapshotBytes",
+        "initialWorkspaceBootstrap"
+      ],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "6ce6ffd4-f766-40d2-baef-26bdf28b21fc",
+        "identifier": "QQP-630",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-630/rfa-18-decompose-application-bootstrapownership-and-enforce",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Application Shell Performance",
+      "inScope": {
+        "paths": [
+          "frontend/src/App.tsx",
+          "frontend/src/features/layout",
+          "frontend/src/features/navigation",
+          "frontend/src/features/performance",
+          "scripts/run-reader-first-performance-gate.mjs"
+        ],
+        "symbols": ["App shell bootstrap", "lazy feature boundaries", "long-task observer"]
+      },
+      "nonGoals": ["No server contract changes", "No feature redesign", "No release adjudication"],
+      "verificationCommands": [
+        "pnpm --dir frontend test -- src/features/layout src/features/navigation src/features/performance",
+        "node scripts/measure-reader-first-bootstrap.mjs --profiles desktop-cold,desktop-warm,webkit-cold"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-18/verification.json",
+        "docs/evidence/reader-first/RFA-18/rollback.json"
+      ],
+      "legacyRemovalOwned": [
+        "remove eager giant-shell ownership and eager Reader feature imports after profile evidence passes"
+      ]
+    },
+    {
+      "localId": "RFA-19",
+      "title": "Prove cross-browser resume, reconnect, retry, repair, and migration continuity",
+      "objective": "Exercise Browser A to clean Browser B handoff and all retained-prefix recovery paths",
+      "dependencies": [
+        "RFA-02",
+        "RFA-10",
+        "RFA-11",
+        "RFA-12",
+        "RFA-13",
+        "RFA-14",
+        "RFA-15",
+        "RFA-17",
+        "RFA-18"
+      ],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-19-AC01",
+          "assertion": "Browser B restores source/run/manifest/fidelity/progress from server authority while Browser A may remain open.",
+          "verificationCommand": "node scripts/e2e-reader-first-continuity.mjs --all",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-19/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-19-AC02",
+          "assertion": "Every implementing-issue performance budget passes on its named browser, network, hardware, cache, and corpus profile with exact raw evidence and zero unowned app-shell long-task regressions.",
+          "verificationCommand": "node scripts/run-reader-first-performance-gate.mjs --profiles desktop-cold,desktop-warm,webkit-cold",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-19/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-19-AC03",
+          "assertion": "Backend restart preserves committed workspace/job state and host reboot preserves durable audio; artifact_missing is allowed only after verification proves no valid compatible artifact exists in any enumerated durable or legacy root.",
+          "verificationCommand": "node scripts/e2e-reader-first-continuity.mjs --all",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-19/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-19-AC04",
+          "assertion": "Concurrent stale workspace mutation is rejected by revision/ETag.",
+          "verificationCommand": "node scripts/e2e-reader-first-continuity.mjs --all",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-19/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_19.state_changed",
+          "reader_first.rfa_19.verified",
+          "reader_first.rfa_19.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "browserProfile",
+          "gateId",
+          "budgetId",
+          "rawEvidenceHash",
+          "gateResult"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-19/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "invalidate_or_supersede_failed_release_verdict_and_evidence_manifest_without_product_mutation",
+        "preserve": [
+          "product_state",
+          "source_content",
+          "committed_compatible_artifacts",
+          "server_authoritative_revisions"
+        ],
+        "never": [
+          "mutate_product_state",
+          "delete_valid_artifacts",
+          "infer_rebuild",
+          "restore_browser_authority"
+        ],
+        "verification": "docs/evidence/reader-first/RFA-19/rollback.json"
+      },
+      "performanceBudgetIds": [
+        "cleanBrowserRestore",
+        "residentCinemaOpen",
+        "narrateAcknowledgement",
+        "warmFirstPlayable",
+        "commitToTransport",
+        "segmentTimingPublication",
+        "trustedWordDrift",
+        "mainThreadLongTasks",
+        "normalPlaybackFullBookFetches",
+        "falseCriticalOrRebuild",
+        "segmentRequestsInFlight",
+        "bufferedMediaWindow",
+        "normalPlaybackFullWaveformDecodes",
+        "initialWorkspaceSnapshotBytes",
+        "initialWorkspaceBootstrap",
+        "serverHydrationAudioBytes"
+      ],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "024a6c32-0657-4a21-a94a-8d522db6170c",
+        "identifier": "QQP-631",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-631/rfa-19-prove-cross-browser-resume-reconnect-retry-repair-and-migration",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Release Reliability",
+      "inScope": {
+        "paths": ["docs/evidence/reader-first/RFA-19", "reviewer-screenshots"],
+        "symbols": [
+          "cross-browser continuity harness",
+          "backend restart/reboot harness",
+          "performance profile runner"
+        ]
+      },
+      "nonGoals": [
+        "No product feature implementation",
+        "No evidence fabrication",
+        "No bypass of target profiles"
+      ],
+      "verificationCommands": [
+        "node scripts/e2e-reader-first-continuity.mjs --all",
+        "node scripts/run-reader-first-performance-gate.mjs --profiles desktop-cold,desktop-warm,webkit-cold"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-19/verification.json",
+        "docs/evidence/reader-first/RFA-19/rollback.json"
+      ],
+      "legacyRemovalOwned": []
+    },
+    {
+      "localId": "RFA-20",
+      "title": "Adjudicate the integrated Design for the Real World release gate",
+      "objective": "Execute exact-byte integrated evidence and emit an approve-or-block verdict only; all implementation and legacy removals belong to prerequisite issues.",
+      "dependencies": [
+        "RFA-04",
+        "RFA-05",
+        "RFA-06",
+        "RFA-07",
+        "RFA-08",
+        "RFA-09",
+        "RFA-10",
+        "RFA-11",
+        "RFA-12",
+        "RFA-13",
+        "RFA-14",
+        "RFA-15",
+        "RFA-16",
+        "RFA-17",
+        "RFA-18",
+        "RFA-19"
+      ],
+      "acceptanceProbes": [
+        {
+          "id": "RFA-20-AC01",
+          "assertion": "A clean browser starts narration, enters Book Reading immediately, hears first audio, and follows trusted words while generation continues.",
+          "verificationCommand": "node scripts/run-reader-first-release-gate.mjs --exact-bytes --profiles desktop-cold,desktop-warm,webkit-cold",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-20/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-20-AC02",
+          "assertion": "The exact-byte integrated release gate executes and binds all browser, storage, 200/206/416 range, timing, heading/OCR, recovery, accessibility, and performance evidence for the 1,680-segment-scale corpus.",
+          "verificationCommand": "node scripts/run-reader-first-release-gate.mjs --exact-bytes --profiles desktop-cold,desktop-warm,webkit-cold",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-20/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-20-AC03",
+          "assertion": "A completed 1,680-segment run never fans out 1,680 requests, retains all decoded PCM, or decodes full audio for waveform.",
+          "verificationCommand": "node scripts/run-reader-first-release-gate.mjs --exact-bytes --profiles desktop-cold,desktop-warm,webkit-cold",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-20/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        },
+        {
+          "id": "RFA-20-AC04",
+          "assertion": "The exact-byte integrated release gate compares Design for the Real World scan/noisy structure output to reviewed truth, proves heading isolation and uncertain-front-matter disposition, and records the audited overlay revision.",
+          "verificationCommand": "node scripts/run-reader-first-release-gate.mjs --exact-bytes --profiles desktop-cold,desktop-warm,webkit-cold",
+          "evidenceArtifact": "docs/evidence/reader-first/RFA-20/verification.json",
+          "onFailure": "block_issue_and_preserve_prior_authoritative_path"
+        }
+      ],
+      "observabilityEvidence": {
+        "events": [
+          "reader_first.rfa_20.state_changed",
+          "reader_first.rfa_20.verified",
+          "reader_first.rfa_20.failed"
+        ],
+        "requiredFields": [
+          "issueId",
+          "correlationId",
+          "result",
+          "archiveHash",
+          "evidenceManifestHash",
+          "verdict",
+          "reviewer",
+          "supersedesVerdictHash"
+        ],
+        "artifact": "docs/evidence/reader-first/RFA-20/verification.json"
+      },
+      "rollbackBoundary": {
+        "strategy": "invalidate_or_supersede_evidence_verdict_without_product_state_change",
+        "preserve": ["product_state", "prior_evidence_manifests", "prior_verdicts"],
+        "never": ["mutate_product_state", "delete_prior_evidence", "infer_authorization"],
+        "verification": "docs/evidence/reader-first/RFA-20/rollback.json"
+      },
+      "performanceBudgetIds": [
+        "cleanBrowserRestore",
+        "residentCinemaOpen",
+        "narrateAcknowledgement",
+        "warmFirstPlayable",
+        "commitToTransport",
+        "segmentTimingPublication",
+        "trustedWordDrift",
+        "mainThreadLongTasks",
+        "normalPlaybackFullBookFetches",
+        "falseCriticalOrRebuild",
+        "segmentRequestsInFlight",
+        "bufferedMediaWindow",
+        "normalPlaybackFullWaveformDecodes",
+        "initialWorkspaceSnapshotBytes",
+        "initialWorkspaceBootstrap",
+        "serverHydrationAudioBytes"
+      ],
+      "ownerAccepted": true,
+      "peerApproved": true,
+      "linearCreationAuthorized": true,
+      "productImplementationAuthorized": false,
+      "dependencyUnblocked": false,
+      "status": "dependency_blocked_linear_created",
+      "linear": {
+        "id": "45cb7ec6-4c02-4573-b7cd-e6b23e73dfa9",
+        "identifier": "QQP-632",
+        "url": "https://linear.app/niklas-olsson/issue/QQP-632/rfa-20-adjudicate-the-integrated-design-for-the-real-world-release",
+        "state": "Backlog",
+        "stateType": "backlog",
+        "priority": 3,
+        "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685"
+      },
+      "accountableOwnerSurface": "Release Adjudication",
+      "inScope": {
+        "paths": [
+          "scripts/run-reader-first-release-gate.mjs",
+          "docs/evidence/reader-first/RFA-20",
+          "docs/project-management/linear"
+        ],
+        "symbols": ["Reader-First gate adjudicator", "evidence hash manifest", "release verdict"]
+      },
+      "nonGoals": [
+        "No production code edits",
+        "No legacy deletion",
+        "No Linear mutation without explicit post-Peer owner transition"
+      ],
+      "verificationCommands": [
+        "node scripts/run-reader-first-release-gate.mjs --exact-bytes --profiles desktop-cold,desktop-warm,webkit-cold",
+        "node scripts/validate-reader-first-release.mjs"
+      ],
+      "evidenceArtifacts": [
+        "docs/evidence/reader-first/RFA-20/verification.json",
+        "docs/evidence/reader-first/RFA-20/rollback.json"
+      ],
+      "legacyRemovalOwned": []
+    }
+  ],
+  "auditEvidence": {
+    "reviewHead": "e97ff6f4932f4429939f1c278e1d4b8361ac6688",
+    "reconciled": true,
+    "mutationsByReviewers": false,
+    "reviews": [
+      {
+        "id": "server-state-restoration-and-health",
+        "path": "docs/reviews/reader-first-audits/server-state-restoration-and-health.md",
+        "sha256": "99e65dad1cbdc7f0d85df6dcdbdf3d6fc81d8f9d4ab48c147037f9dc17025f1c"
+      },
+      {
+        "id": "progressive-media-timing-and-browser",
+        "path": "docs/reviews/reader-first-audits/progressive-media-timing-and-browser.md",
+        "sha256": "34602c38493ad171cf00e0ecd988281ff13f183640b0d686de3450d8383eb0e4"
+      },
+      {
+        "id": "structure-preprocessing-and-ui",
+        "path": "docs/reviews/reader-first-audits/structure-preprocessing-and-ui.md",
+        "sha256": "88de3250519ead829fb0edcb18e719881bc18761ced38031051d073df2c265f4"
+      },
+      {
+        "id": "source-scope-ownership-v5",
+        "path": "docs/reviews/reader-first-audits/source-scope-ownership-v5.md",
+        "sha256": "6150e3ead4604e209e4e0084b7149e985c3650cdc94470f7f17500f80349b140"
+      },
+      {
+        "id": "reader-first-release-self-audit-v6",
+        "path": "docs/reviews/reader-first-release-self-audit-v6.md",
+        "sha256": "ff6e0c98c1e9e139cf7ff5f2cdce1a9cb391256444dc0f58bfab7c0602ed9430"
+      }
+    ]
+  },
+  "targetProvenance": {
+    "path": "docs/project-management/linear/tts-research-reader-first-linear-provenance.json",
+    "sha256": "523be92d4064d5ff0a16149cb6d113dbfe66058c7983fa3f88839de5592dbc98",
+    "teamId": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+    "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+    "activeUnarchived": 20,
+    "cap": 20,
+    "hasNextPage": false
+  },
+  "peerReviewHistory": [
+    {
+      "round": 1,
+      "verdict": "request_changes",
+      "responsePath": "docs/reviews/chatgpt-reader-first-release-response-v1.md",
+      "sha256": "e6e99204ccf699715c7e2bafadef66abe50c9efd4278a43dbddf831d74c0f039",
+      "blockingFindingCount": 9,
+      "linearCreationPermitted": false,
+      "productImplementationPermitted": false,
+      "repairsRequired": [
+        "semantic-validator-closure",
+        "per-issue-execution-schema",
+        "snapshot-migration",
+        "request-concurrency-envelope",
+        "durable-artifact-backfill",
+        "manifest-reader-and-range-semantics",
+        "consumed-cue-immutability",
+        "real-scanned-ocr-adjudication",
+        "backend-health-and-provenance"
+      ],
+      "repairEvidencePath": "docs/reviews/reader-first-release-peer-repair-v2.md",
+      "repairEvidenceSha256": "394390409f0ce245c7d982d73c4080f3e0c7e8e16099df44ece7cb79a73ee805"
+    },
+    {
+      "round": 2,
+      "verdict": "request_changes",
+      "responsePath": "docs/reviews/chatgpt-reader-first-release-response-v2.md",
+      "responseSha256": "78ec9a3910ccc3758ecf8d4fb9a756e599da323e6abccaa2760eae7a229e73b2",
+      "linearCreationPermitted": false,
+      "productImplementationPermitted": false,
+      "blockingFindings": 10,
+      "repairEvidencePath": "docs/reviews/reader-first-release-peer-repair-v3.md",
+      "repairEvidenceSha256": "0d53d996bc60fb927330e6ad4968c94ae2b5d30f742c26f08c522c245468700c"
+    },
+    {
+      "round": "reader-first-release-v3",
+      "verdict": "request_changes",
+      "responsePath": "docs/reviews/chatgpt-reader-first-release-response-v3.md",
+      "responseSha256": "47029af8866a7f4fcc16f872ce7ed95a165707540943ae7bcbdd3fb16a5869d8",
+      "blockingFindings": 8,
+      "linearCreationPermitted": false,
+      "productImplementationPermitted": false,
+      "repairEvidencePath": "docs/reviews/reader-first-release-peer-repair-v4.md",
+      "repairEvidenceSha256": "09c713b9e62dfb5a4406f493eb8b3e9d5e9db7fe979915e5225e8d1a73959ef8"
+    },
+    {
+      "round": "reader-first-release-v4",
+      "verdict": "request_changes",
+      "responsePath": "docs/reviews/chatgpt-reader-first-release-response-v4.md",
+      "responseSha256": "047ac056b40a5d8ebf57741d8c911ded142167971382b360c99025c6e63accec",
+      "blockingFindings": 3,
+      "linearCreationPermitted": false,
+      "productImplementationPermitted": false,
+      "repairEvidencePath": "docs/reviews/reader-first-release-peer-repair-v5.md",
+      "repairEvidenceSha256": "303097594cb66865d714df933b59faf02d23e93ca48c81287b1a62b8ff83aedc"
+    },
+    {
+      "round": "reader-first-release-v6",
+      "verdict": "request_changes",
+      "responsePath": "docs/reviews/chatgpt-reader-first-release-response-v6.md",
+      "responseSha256": "c2ced797a0f916d6b1eb152538c5e2f1e5bc4d06cfb7a9b55c05cc7169e8a75c",
+      "blockingFindings": 2,
+      "linearCreationPermitted": false,
+      "productImplementationPermitted": false,
+      "repairEvidencePath": "docs/reviews/reader-first-release-peer-repair-v7.md",
+      "repairEvidenceSha256": "e3376691cfe578ad656a7578e3915a8ee7fc532d6dc9a35e17d8979158afe18a"
+    },
+    {
+      "round": "reader-first-release-v7",
+      "verdict": "request_changes",
+      "responsePath": "docs/reviews/chatgpt-reader-first-release-response-v7.md",
+      "responseSha256": "e838c60cc28d1bbdd8fd4f4b6aa286560a61190c0b04e9eda4a598a33f039b01",
+      "blockingFindings": 1,
+      "linearCreationPermitted": false,
+      "productImplementationPermitted": false,
+      "repairEvidencePath": "docs/reviews/reader-first-release-peer-repair-v8.md",
+      "repairEvidenceSha256": "67d6c37947731f4f33822753fcede456cce0686cac030ec1437a960eb0e8597a"
+    },
+    {
+      "round": "reader-first-release-v8",
+      "verdict": "approved",
+      "responsePath": "docs/reviews/chatgpt-reader-first-release-response-v8.md",
+      "responseSha256": "db77ea725ec44d7916c12ff243554a5b7ae34975e2b2ad61d283a6fb221bfe01",
+      "archiveSha256": "b91a683ac8c94bd44ca618b53b275cbe93c2d55d8a5cac1b11e6d9d1aeafc7de",
+      "linearCreationPermitted": true,
+      "productImplementationPermitted": true,
+      "graphUnblockedIssues": ["RFA-01"],
+      "parentApprovalPath": "docs/reviews/reader-first-release-peer-approval-v8.json",
+      "parentApprovalSha256": "29710a3b5af4fc21be5091b454a57fc7c2b14d363a9fc46706e403e901e7ecef"
+    }
+  ],
+  "issueSchemaVersion": "tts-research.reader-first-issue.v2",
+  "evidenceManifestContract": {
+    "schemaVersion": "tts-research.reader-first-evidence-manifest.v1",
+    "requiredFields": [
+      "issueId",
+      "acceptanceProbeId",
+      "command",
+      "commitOrArchiveSha256",
+      "fixtureSha256s",
+      "measurementProfile",
+      "toolVersions",
+      "operatingSystem",
+      "hardwareProfile",
+      "rawOutputPath",
+      "result",
+      "reviewer",
+      "observedAt"
+    ],
+    "resultEnum": ["pass", "fail", "blocked"],
+    "immutable": true,
+    "supersessionOnly": true
+  },
+  "linearTargetEvidence": null,
+  "liveLinearManifest": {
+    "path": "docs/project-management/linear/tts-research-reader-first-release-batch.manifest.json",
+    "sha256": "8999920d9453a3b1294f36b91158fbd2b383ead0f3eaae40f406b1f02333b3fb",
+    "issueCount": 20,
+    "relationCount": 65,
+    "verifiedAt": "2026-07-11T10:22:20Z"
+  },
+  "parentAuthorization": {
+    "path": "docs/reviews/reader-first-rfa02-parent-authorization.json",
+    "sha256": "41fa61517142af7c1ad5d2e9204aaaa4fa7c3020d21443df311a4532a329d265"
+  },
+  "currentExecutionAuthorization": {
+    "path": "docs/reviews/reader-first-rfa02-frontend-scope-authorization.json",
+    "sha256": "f957869b774e0978c42e67e5a0017b9ed1c7fb4d292ece20219ed6a16b118bc3"
+  },
+  "previousExecutionAuthorization": {
+    "path": "docs/reviews/reader-first-rfa02-start-scope-authorization.json",
+    "sha256": "14463389f0b9b686e194deaec3f7bb27616e32c2f09c48615259bf86748ea07c"
+  },
+  "flowRegistry": {
+    "path": "docs/flows/manifest.json",
+    "sha256": "4f789e39e9c0e12e6c67abed73492b4139aebe4b16786123324d567b5ae0b28d",
+    "officialRendererCommand": "node scripts/validate-flow-registry.mjs --write",
+    "artifacts": [
+      {
+        "path": "docs/flows/manifest.json",
+        "sha256": "4f789e39e9c0e12e6c67abed73492b4139aebe4b16786123324d567b5ae0b28d"
+      },
+      {
+        "path": "docs/flows/README.md",
+        "sha256": "f99e1fd689e755a4f036aaeae9bf1dc4cf17316ed877c62ed282cbd05cb97fa4"
+      },
+      {
+        "path": "docs/flows/application-ux.md",
+        "sha256": "2d4dfe18678c1d59e541d87ebdeae3f60c2dbc1ecd212d15f12f673955ee1d6c"
+      },
+      {
+        "path": "docs/flows/coverage-report.json",
+        "sha256": "d6045a1386d99f0a4c98f039fd138421e6ed395af2c97c6f152a5fb092823691"
+      }
+    ],
+    "directHttpRoutesObserved": 125,
+    "ownerFlowId": "APP-NAV-001",
+    "routes": ["GET /api/projects/:id/reader-workspace", "PUT /api/projects/:id/reader-workspace"]
+  },
+  "implementationState": {
+    "localId": "RFA-02",
+    "productMutationPerformed": true,
+    "frontendProductMutationPerformed": false,
+    "frontendAuthorizationEffectiveOnlyAfterGovernanceTransitionReviewedAndCommitted": true
+  },
+  "crossRegistryRouteOwnership": {
+    "frozenBicArtifacts": [
+      {
+        "path": "docs/project-management/linear/tts-research-best-in-class-batch-draft.json",
+        "sha256": "1ae22003178761e60de4661d763f239a2c22e3ca4624e14a29d155b50eb264c0"
+      },
+      {
+        "path": "docs/project-management/linear/tts-research-best-in-class-batch-draft.md",
+        "sha256": "589d54b0534091bb2442d5d84a1c93df3a36d719c9a04c37e0dfa5e306187e7c"
+      }
+    ],
+    "validatorArtifacts": [
+      {
+        "path": "scripts/validate-linear-batch.mjs",
+        "sha256": "7ea517a9d05c67f430c84a8bd8567bc973af3c8fae4600e8ff040c1f1a695a99"
+      },
+      {
+        "path": "scripts/validate-linear-batch.test.mjs",
+        "sha256": "1486bfa3fc78b94483ea42b00efb94d08148d651de808b057637d5aa39d4c36f"
+      }
+    ],
+    "postFreezeRouteAllowlist": [
+      "GET /api/projects/:id/reader-workspace",
+      "PUT /api/projects/:id/reader-workspace"
+    ],
+    "ownerFlowId": "APP-NAV-001",
+    "semantics": {
+      "frozenAssignmentsRemainUnique": true,
+      "allowlistIsExact": true,
+      "allowlistIsDisjointFromFrozenAssignments": true,
+      "allowlistedRoutesExistExactlyOnceUnderOwnerFlow": true,
+      "frozenAssignmentsPlusAllowlistEqualCurrentCanonicalRouteInventoryExactlyOnce": true,
+      "flowIdsAndStateSymbolsRemainExactUnchanged": true
+    }
+  }
+}

@@ -92,3 +92,184 @@ test("HTML adapter extracts HN-style comments inside layout tables", async () =>
   );
   assert(!emitted.document.nodes.some((node) => node.kind === "table"));
 });
+
+test("HTML adapter stable unit identity survives append insertions", () => {
+  const baseHTML = `<!doctype html><html><body><main>
+    <h1 id="stable-heading">Stable Heading</h1>
+    <p id="alpha">Alpha paragraph.</p>
+    <p id="beta">Beta paragraph.</p>
+  </main></body></html>`;
+  const appendedHTML = `<!doctype html><html><body><main>
+    <h1 id="stable-heading">Stable Heading</h1>
+    <p id="alpha">Alpha paragraph.</p>
+    <p id="beta">Beta paragraph.</p>
+    <p id="gamma">Gamma paragraph.</p>
+  </main></body></html>`;
+
+  const base = emitHTMLAdapter(baseHTML, {
+    href: "stable.html",
+    sourceId: "html-stable",
+    sourceName: "stable.html",
+  });
+  const appended = emitHTMLAdapter(appendedHTML, {
+    href: "stable.html",
+    sourceId: "html-stable",
+    sourceName: "stable.html",
+  });
+
+  for (const fragment of ["stable-heading", "alpha", "beta"]) {
+    const before = htmlNodeByFragment(base, fragment);
+    const after = htmlNodeByFragment(appended, fragment);
+    assert.equal(after.nodeId, before.nodeId, fragment);
+    assert.equal(after.orderKey, before.orderKey, fragment);
+    assert.equal(after.metadata.fingerprint, before.metadata.fingerprint, fragment);
+    assert.equal(after.provenance.sourceId, "html-stable");
+    assert.equal(after.provenance.locator.html.fragment, fragment);
+  }
+  assertSortedSparseOrderKeys(appended.document.nodes);
+});
+
+test("HTML adapter stable unit identity survives sibling insertion", () => {
+  const base = emitHTMLAdapter(
+    `<!doctype html><html><body><main>
+      <h1 id="stable-heading">Stable Heading</h1>
+      <p id="alpha">Alpha paragraph.</p>
+      <p id="beta">Beta paragraph.</p>
+    </main></body></html>`,
+    { href: "stable.html", sourceId: "html-stable", sourceName: "stable.html" },
+  );
+  const inserted = emitHTMLAdapter(
+    `<!doctype html><html><body><main>
+      <h1 id="stable-heading">Stable Heading</h1>
+      <p id="alpha">Alpha paragraph.</p>
+      <p id="inserted">Inserted paragraph.</p>
+      <p id="beta">Beta paragraph.</p>
+    </main></body></html>`,
+    { href: "stable.html", sourceId: "html-stable", sourceName: "stable.html" },
+  );
+
+  for (const fragment of ["stable-heading", "alpha", "beta"]) {
+    const before = htmlNodeByFragment(base, fragment);
+    const after = htmlNodeByFragment(inserted, fragment);
+    assert.equal(after.nodeId, before.nodeId, fragment);
+    assert.equal(after.metadata.fingerprint, before.metadata.fingerprint, fragment);
+  }
+  assertSortedSparseOrderKeys(inserted.document.nodes);
+});
+
+test("HTML adapter uniquifies duplicate explicit id and name node IDs", () => {
+  const html = `<!doctype html><html><body><main>
+    <p id="dup">First duplicate id paragraph.</p>
+    <p id="dup">Second duplicate id paragraph.</p>
+    <p name="dup">Third duplicate name paragraph.</p>
+  </main></body></html>`;
+  const emitted = emitHTMLAdapter(html, {
+    href: "duplicates.html",
+    sourceId: "html-duplicates",
+    sourceName: "duplicates.html",
+  });
+  const repeat = emitHTMLAdapter(html, {
+    href: "duplicates.html",
+    sourceId: "html-duplicates",
+    sourceName: "duplicates.html",
+  });
+
+  const nodes = emitted.document.nodes;
+  assert.deepEqual(
+    nodes.map((node) => node.provenance.locator.html.fragment),
+    ["dup", "dup-2", "dup-3"],
+  );
+  assert.deepEqual(
+    nodes.map((node) => node.nodeId),
+    ["dup", "dup-2", "dup-3"],
+  );
+  assert.equal(new Set(nodes.map((node) => node.nodeId)).size, nodes.length);
+  assert.deepEqual(
+    repeat.document.nodes.map((node) => node.nodeId),
+    nodes.map((node) => node.nodeId),
+  );
+});
+
+test("HTML adapter no-explicit-id identity survives unrelated sibling insertion", () => {
+  const base = emitHTMLAdapter(
+    `<!doctype html><html><body><main>
+      <h1 id="stable-heading">Stable Heading</h1>
+      <p>Alpha paragraph without an explicit identifier.</p>
+      <p>Beta target paragraph without an explicit identifier.</p>
+    </main></body></html>`,
+    { href: "stable-no-id.html", sourceId: "html-stable-no-id", sourceName: "stable-no-id.html" },
+  );
+  const inserted = emitHTMLAdapter(
+    `<!doctype html><html><body><main>
+      <h1 id="stable-heading">Stable Heading</h1>
+      <p>Alpha paragraph without an explicit identifier.</p>
+      <p>Inserted unrelated paragraph without an explicit identifier.</p>
+      <p>Beta target paragraph without an explicit identifier.</p>
+    </main></body></html>`,
+    { href: "stable-no-id.html", sourceId: "html-stable-no-id", sourceName: "stable-no-id.html" },
+  );
+
+  const before = htmlNodeByText(base, "Beta target paragraph without an explicit identifier.");
+  const after = htmlNodeByText(inserted, "Beta target paragraph without an explicit identifier.");
+  assert.equal(after.nodeId, before.nodeId);
+  assert.equal(after.metadata.fingerprint, before.metadata.fingerprint);
+  assert.equal(after.provenance.locator.html.fragment, before.provenance.locator.html.fragment);
+});
+
+test("HTML adapter no-explicit-id identity survives slug-colliding preceding sibling insertion", () => {
+  const targetText = "Beta target paragraph without an explicit identifier.";
+  const base = emitHTMLAdapter(
+    `<!doctype html><html><body><main>
+      <h1 id="stable-heading">Stable Heading</h1>
+      <p>Alpha paragraph without an explicit identifier.</p>
+      <p>${targetText}</p>
+    </main></body></html>`,
+    { href: "stable-no-id.html", sourceId: "html-stable-no-id", sourceName: "stable-no-id.html" },
+  );
+  const inserted = emitHTMLAdapter(
+    `<!doctype html><html><body><main>
+      <h1 id="stable-heading">Stable Heading</h1>
+      <p>Alpha paragraph without an explicit identifier.</p>
+      <p>Beta target paragraph without an explicit identifier?</p>
+      <p>${targetText}</p>
+    </main></body></html>`,
+    { href: "stable-no-id.html", sourceId: "html-stable-no-id", sourceName: "stable-no-id.html" },
+  );
+
+  const before = htmlNodeByText(base, targetText);
+  const after = htmlNodeByText(inserted, targetText);
+  assert.equal(after.nodeId, before.nodeId);
+  assert.equal(after.metadata.fingerprint, before.metadata.fingerprint);
+  assert.equal(
+    before.provenance.locator.html.fragment,
+    "beta-target-paragraph-without-an-explicit-identifier",
+  );
+  assert.equal(
+    after.provenance.locator.html.fragment,
+    "beta-target-paragraph-without-an-explicit-identifier-2",
+  );
+});
+
+function htmlNodeByFragment(emitted, fragment) {
+  const node = emitted.document.nodes.find(
+    (item) => item.provenance.locator.html.fragment === fragment,
+  );
+  assert(node, `missing HTML node for ${fragment}`);
+  return node;
+}
+
+function htmlNodeByText(emitted, text) {
+  const node = emitted.document.nodes.find((item) => item.displayText === text);
+  assert(node, `missing HTML node for text ${text}`);
+  return node;
+}
+
+function assertSortedSparseOrderKeys(nodes) {
+  const keys = nodes.map((node) => Number.parseInt(node.orderKey, 10));
+  assert(keys.every(Number.isFinite), "order keys should be numeric strings");
+  assert.deepEqual(
+    [...keys].sort((left, right) => left - right),
+    keys,
+  );
+  assert(keys.slice(1).every((key, index) => key - keys[index] > 1));
+}

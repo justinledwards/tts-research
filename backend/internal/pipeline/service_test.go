@@ -7,10 +7,12 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -21,6 +23,7 @@ import (
 	"github.com/justinedwards/tts-research/backend/internal/contentir"
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
 	"github.com/justinedwards/tts-research/backend/internal/policy"
+	"github.com/justinedwards/tts-research/backend/internal/sourceprep"
 )
 
 func TestCreateJobCompletesWithMockAgents(t *testing.T) {
@@ -238,6 +241,119 @@ func TestPreparedSourceSkipsResearchCitationsAndKeepsHeadings(t *testing.T) {
 	}
 }
 
+func TestPreparedSourceJobExcludesReferenceOnlyCueLeaks(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceServiceWithOptions(t, pipeline.Options{StudioSegmentMaxRunes: 120})
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "reference-cue-leaks.md",
+		Text: strings.Join([]string{
+			"Narrative introduction with a [useful link](https://example.com/guide) and [6] citation.",
+			"",
+			"## References",
+			"",
+			"<!-- deep-research-references:start -->",
+			"",
+			"one. https://opentelemetry.io/docs/what-is-opentelemetry/ two. https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf three. https://www.w3.org/TR/trace-context/",
+			"",
+			"<!-- deep-research-references:end -->",
+			"",
+			"[6](https://example.com/reference)",
+			"",
+			"iturn14image2turn14image5",
+			"",
+			"After the reference section, normal narration resumes.",
+		}, "\n"),
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	forbidden := []string{"opentelemetry", "Shneiderman", "turn14image", "https://example.com/reference"}
+	assertNoReferenceCueLeak(t, source.SpeechText, forbidden, "prepared source speech text")
+	if !strings.Contains(source.SpeechText, "Narrative introduction with a useful link and citation.") ||
+		!strings.Contains(source.SpeechText, "After the reference section, normal narration resumes.") {
+		t.Fatalf("prepared source speech text lost body content: %q", source.SpeechText)
+	}
+
+	job, err := service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
+	}
+	assertNoReferenceCueLeak(t, job.InputText, forbidden, "job input text")
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	completed, err := service.GetJob(job.ID)
+	if err != nil {
+		t.Fatalf("GetJob returned error: %v", err)
+	}
+	for _, segment := range completed.Segments {
+		assertNoReferenceCueLeak(t, segment.Text, forbidden, "job segment text")
+	}
+}
+
+func TestPreparedSourceJobTimingUsesPreparedSourceScope(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceServiceWithOptions(t, pipeline.Options{StudioSegmentMaxRunes: 120})
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "follow-along.md",
+		Text: strings.Join([]string{
+			"# Follow Along",
+			"",
+			"Intro body.",
+			"",
+			"| Raw | Source |",
+			"| --- | --- |",
+			"| A | B |",
+			"",
+			"Tail body.",
+		}, "\n"),
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	job, err := service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.Timing == nil || completed.Timing.SyncFidelity == nil {
+		t.Fatalf("completed timing sync fidelity = %#v, want additive fidelity decision metadata", completed.Timing)
+	}
+	if completed.Timing.SyncFidelity.SourceID != source.ID || completed.Timing.SyncFidelity.ExactAllowed {
+		t.Fatalf("sync fidelity = %#v, want prepared source-bound non-exact decision for mock heuristic timing", completed.Timing.SyncFidelity)
+	}
+	if completed.Timing.SyncFidelity.Fidelity != pipeline.SyncFidelityBlock {
+		t.Fatalf("sync fidelity = %q, want block fallback for mock heuristic timing", completed.Timing.SyncFidelity.Fidelity)
+	}
+	timing, err := service.GetHighlightMapV2(completed.ID)
+	if err != nil {
+		t.Fatalf("GetHighlightMapV2 returned error: %v", err)
+	}
+	if timing.SourceID != source.ID {
+		t.Fatalf("highlight sourceId = %q, want prepared source %q", timing.SourceID, source.ID)
+	}
+	if timing.ScopeKey != "prepared-source" {
+		t.Fatalf("highlight scopeKey = %q, want prepared-source", timing.ScopeKey)
+	}
+	if len(timing.Entries) == 0 {
+		t.Fatalf("highlight timing has no entries: summary=%#v", timing.Summary)
+	}
+	var sourceIndexes []int
+	for _, entry := range timing.Entries {
+		if entry.SourceID != source.ID {
+			t.Fatalf("entry sourceId = %q, want prepared source %q", entry.SourceID, source.ID)
+		}
+		if entry.SourceWordIndex != nil {
+			sourceIndexes = append(sourceIndexes, *entry.SourceWordIndex)
+		}
+	}
+	if len(sourceIndexes) == 0 || sourceIndexes[0] != 0 {
+		t.Fatalf("source word indexes = %#v, want prepared speech indexes starting at 0", sourceIndexes)
+	}
+}
+
 func TestPreparedSourceMarkdownStrictDefaultPreservesMetadataAndEmbeddedNodes(t *testing.T) {
 	t.Parallel()
 
@@ -418,6 +534,140 @@ func TestPreparedSourcePolicyPreviewAndOverrides(t *testing.T) {
 	if reloaded.SpeechPolicyProfile != "Accessibility" || !strings.Contains(reloaded.SpeechText, "fmt.Println") {
 		t.Fatalf("reloaded source did not use stored project profile: profile=%q text=%q", reloaded.SpeechPolicyProfile, reloaded.SpeechText)
 	}
+}
+
+func TestPreparedSourceJobDefensivelyExcludesOnDemandSelectedBlocks(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "selected-on-demand.md",
+		Text: strings.Join([]string{
+			"# Selected on-demand",
+			"",
+			"Narrative introduction stays speakable.",
+			"",
+			"[^1]: Selected footnote should not be narrated.",
+			"",
+			"Tail body stays speakable.",
+		}, "\n"),
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+
+	overrides := policy.Overrides{FootnoteMode: policy.FootnoteModeOnDemand}
+	preview, err := service.PreviewPreparedSourceSpeechPolicy(source.ID, pipeline.SpeechPolicyPreviewRequest{
+		Overrides: overrides,
+	})
+	if err != nil {
+		t.Fatalf("PreviewPreparedSourceSpeechPolicy returned error: %v", err)
+	}
+	footnote := findPreparedBlockByKind(preview.Blocks, pipeline.NarrationBlockKindFootnote)
+	if footnote == nil || footnote.SpeechPolicy.Mode != string(policy.ModeOnDemand) {
+		t.Fatalf("footnote block = %#v, want on-demand footnote", footnote)
+	}
+	selectedBlockIDs := make([]string, 0, len(preview.Blocks))
+	for _, block := range preview.Blocks {
+		selectedBlockIDs = append(selectedBlockIDs, block.ID)
+	}
+
+	job, err := service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{
+		SelectedBlockIDs:      selectedBlockIDs,
+		SpeechPolicyOverrides: overrides,
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
+	}
+	if strings.Contains(job.InputText, "Selected footnote should not be narrated") {
+		t.Fatalf("job input text = %q, want on-demand footnote omitted", job.InputText)
+	}
+	if strings.Contains(strings.Join(job.SelectedBlockIDs, ","), footnote.ID) {
+		t.Fatalf("job selected ids = %#v, want on-demand footnote id %q omitted", job.SelectedBlockIDs, footnote.ID)
+	}
+	if !strings.Contains(job.InputText, "Narrative introduction stays speakable.") ||
+		!strings.Contains(job.InputText, "Tail body stays speakable.") {
+		t.Fatalf("job input text = %q, want surrounding body narration", job.InputText)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+}
+
+func TestPreparedSourceJobIgnoresUnknownSelectionIDsAndExcludesSkippedBlocks(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "selected-unknown.md",
+		Text: strings.Join([]string{
+			"# Selected unknown",
+			"",
+			"Narrative introduction stays speakable.",
+			"",
+			"[^1]: Selected footnote should not be narrated.",
+			"",
+			"Tail body stays speakable.",
+		}, "\n"),
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+
+	overrides := policy.Overrides{FootnoteMode: policy.FootnoteModeOnDemand}
+	preview, err := service.PreviewPreparedSourceSpeechPolicy(source.ID, pipeline.SpeechPolicyPreviewRequest{
+		Overrides: overrides,
+	})
+	if err != nil {
+		t.Fatalf("PreviewPreparedSourceSpeechPolicy returned error: %v", err)
+	}
+	footnote := findPreparedBlockByKind(preview.Blocks, pipeline.NarrationBlockKindFootnote)
+	if footnote == nil || footnote.SpeechPolicy.Mode != string(policy.ModeOnDemand) {
+		t.Fatalf("footnote block = %#v, want on-demand footnote", footnote)
+	}
+
+	selectedBlockID := ""
+	selectedBlockText := ""
+	for _, block := range preview.Blocks {
+		if block.ID != footnote.ID && block.SpeechPolicy.Mode != string(policy.ModeOnDemand) {
+			selectedBlockID = block.ID
+			selectedBlockText = strings.TrimSpace(block.SpokenText)
+			break
+		}
+	}
+	if selectedBlockID == "" {
+		t.Fatal("expected a non-on-demand block id for controlled selection")
+	}
+
+	job, err := service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{
+		SelectedBlockIDs:      []string{"missing-source-block-id", selectedBlockID, footnote.ID},
+		SpeechPolicyOverrides: overrides,
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
+	}
+	if selectedBlockText == "" {
+		t.Fatal("expected selected block text for controlled selection")
+	}
+	if !strings.Contains(job.InputText, selectedBlockText) {
+		t.Fatalf("job input text = %q, want selected non-on-demand speech text", job.InputText)
+	}
+	if strings.Contains(job.InputText, "Selected footnote should not be narrated") {
+		t.Fatalf("job input text = %q, want on-demand footnote excluded", job.InputText)
+	}
+	if strings.Contains(strings.Join(job.SelectedBlockIDs, ","), footnote.ID) {
+		t.Fatalf("job selected ids = %#v, want on-demand footnote id %q omitted", job.SelectedBlockIDs, footnote.ID)
+	}
+	if !containsString(job.SelectedBlockIDs, selectedBlockID) {
+		t.Fatalf("job selected ids = %#v, want selected block %q retained", job.SelectedBlockIDs, selectedBlockID)
+	}
+	if !strings.Contains(strings.Join(job.SegmentationWarnings, ","), "selected block id not found: missing-source-block-id") {
+		t.Fatalf("job segmentation warnings = %#v, want missing source block warning", job.SegmentationWarnings)
+	}
+	if !strings.Contains(strings.Join(job.SegmentationWarnings, ","), "selected block id not speakable: "+footnote.ID) {
+		t.Fatalf("job segmentation warnings = %#v, want non-speakable selected block warning", job.SegmentationWarnings)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
 }
 
 func TestPreparedSourcePolicyPinFollowsPrecedenceOrder(t *testing.T) {
@@ -609,6 +859,13 @@ func TestPreparedSourceURLIngestHonorsPrivateNetworkDefault(t *testing.T) {
 	if source.Kind != pipeline.PreparedSourceKindURL || !strings.Contains(source.SpeechText, "U R L Source") {
 		t.Fatalf("source = %#v, want prepared URL source", source)
 	}
+	safety, ok := source.Metadata["urlSafety"].(sourceprep.URLSafetyReport)
+	if !ok {
+		t.Fatalf("url safety metadata missing: %#v", source.Metadata)
+	}
+	if !safety.Allowed || safety.Class != sourceprep.URLSafetyLocalMachine {
+		t.Fatalf("url safety metadata = %#v, want allowed local-machine fixture", safety)
+	}
 }
 
 func TestPlaybackProgressSessionLifecycle(t *testing.T) {
@@ -669,6 +926,9 @@ func TestCreateJobOutlivesRequestContextCancellation(t *testing.T) {
 	if completed.Error == "cancelled by request" {
 		t.Fatal("request context cancellation should not mark the background job as user-cancelled")
 	}
+	if completed.TerminalReason != "" || completed.Retriable {
+		t.Fatalf("completed terminal metadata = (%q, %t), want empty/non-retriable", completed.TerminalReason, completed.Retriable)
+	}
 }
 
 func TestCancelJobMarksExplicitUserCancellation(t *testing.T) {
@@ -693,6 +953,9 @@ func TestCancelJobMarksExplicitUserCancellation(t *testing.T) {
 	cancelled := waitForJob(t, service, job.ID, pipeline.JobStatusCancelled)
 	if cancelled.Error != "cancelled by request" {
 		t.Fatalf("cancelled job error = %q, want explicit request reason", cancelled.Error)
+	}
+	if cancelled.TerminalReason != pipeline.JobTerminalReasonUserCancelled || !cancelled.Retriable {
+		t.Fatalf("cancelled terminal metadata = (%q, %t), want user-cancelled/retriable", cancelled.TerminalReason, cancelled.Retriable)
 	}
 }
 
@@ -908,6 +1171,44 @@ func TestListTTSEnginesIncludesAutoAndDiagnostics(t *testing.T) {
 	}
 }
 
+func TestListTTSEnginesAutoInheritsMockRuntimeCapabilities(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			DefaultTTSEngine: pipeline.TTSEngineKokoro,
+			MaxRetries:       3,
+			JobDataDir:       t.TempDir(),
+			ProjectDataDir:   t.TempDir(),
+			TTSEngines: []pipeline.TTSEngineRegistration{
+				{
+					ID:    pipeline.TTSEngineKokoro,
+					Agent: agents.NewMockTTSAgent(),
+					Diagnostics: pipeline.TTSEngineDiagnostics{
+						ID:            pipeline.TTSEngineKokoro,
+						Label:         "Kokoro",
+						Status:        "ready",
+						Local:         true,
+						SupportsVoice: true,
+						Metadata:      map[string]string{"runtimeProvider": "mock"},
+					},
+				},
+			},
+		},
+	)
+
+	engines := service.ListTTSEngines()
+	if len(engines) == 0 || engines[0].ID != pipeline.TTSEngineAuto {
+		t.Fatalf("engines = %#v, want Auto first", engines)
+	}
+	if !engines[0].Capabilities.MockTTS || !engines[0].Capabilities.WordTiming || !engines[0].Capabilities.ABComparison {
+		t.Fatalf("Auto should expose mock runtime review capabilities, got %+v", engines[0].Capabilities)
+	}
+}
+
 func TestCreateJobCanSkipTextPreprocessing(t *testing.T) {
 	t.Parallel()
 
@@ -1012,6 +1313,97 @@ func TestProjectsCreateRenameAndGroupJobs(t *testing.T) {
 	}
 }
 
+func TestProjectCompletedAudioSurvivesServiceRestart(t *testing.T) {
+	t.Parallel()
+
+	options := pipeline.Options{
+		MaxRetries:         3,
+		JobDataDir:         t.TempDir(),
+		ProjectDataDir:     t.TempDir(),
+		BookSourceDir:      t.TempDir(),
+		SourcePrepDir:      t.TempDir(),
+		ProgressDataDir:    t.TempDir(),
+		PlaybackSessionDir: t.TempDir(),
+	}
+	newService := func() *pipeline.Service {
+		return pipeline.NewService(
+			agents.NewVoiceOptimizationAgent(),
+			agents.NewMockTTSAgent(),
+			agents.NewMockVoiceCheckerAgent(),
+			options,
+		)
+	}
+
+	service := newService()
+	project, err := service.CreateProject("Restart audio project")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		ProjectID: project.ID,
+		Text:      "Persisted audio should remain available after a service restart.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	assertCompletedAudioMetadata(t, completed)
+
+	reloaded := newService()
+	projectJobs, err := reloaded.ListProjectJobs(project.ID)
+	if err != nil {
+		t.Fatalf("ListProjectJobs after restart returned error: %v", err)
+	}
+	var restored *pipeline.VoiceJob
+	for index := range projectJobs {
+		if projectJobs[index].ID == completed.ID {
+			restored = &projectJobs[index]
+			break
+		}
+	}
+	if restored == nil {
+		t.Fatalf("project jobs after restart = %#v, want completed job %q", projectJobs, completed.ID)
+	}
+	assertCompletedAudioMetadata(t, *restored)
+
+	audio, contentType, err := reloaded.GetAudio(completed.ID)
+	if err != nil {
+		t.Fatalf("GetAudio after restart returned error: %v", err)
+	}
+	if contentType != "audio/wav" {
+		t.Fatalf("content type after restart = %q, want audio/wav", contentType)
+	}
+	if len(audio) <= 44 {
+		t.Fatalf("audio length after restart = %d, want WAV data", len(audio))
+	}
+}
+
+func assertCompletedAudioMetadata(t *testing.T, job pipeline.VoiceJob) {
+	t.Helper()
+
+	if job.AudioURL == "" {
+		t.Fatal("completed job should include audio URL")
+	}
+	if job.AudioPath == "" {
+		t.Fatal("completed job should include audio path")
+	}
+	if job.AudioReadySegments <= 0 {
+		t.Fatalf("audio ready segments = %d, want persisted ready segment metadata", job.AudioReadySegments)
+	}
+	if len(job.Segments) == 0 {
+		t.Fatal("completed job should include segment metadata")
+	}
+	readySegments := 0
+	for _, segment := range job.Segments {
+		if segment.Status == "ready" {
+			readySegments += 1
+		}
+	}
+	if readySegments == 0 {
+		t.Fatalf("segments = %#v, want at least one ready segment", job.Segments)
+	}
+}
+
 func TestProjectCustomSpeechPolicyProfilesPersistAndSelect(t *testing.T) {
 	t.Parallel()
 
@@ -1090,12 +1482,59 @@ func TestProjectCustomSpeechPolicyProfilesPersistAndSelect(t *testing.T) {
 		t.Fatalf("updated policy = %#v, want edited custom settings", updated)
 	}
 
+	if _, err := reloaded.UpdateProjectSpeechPolicy(project.ID, "Enterprise"); err != nil {
+		t.Fatalf("UpdateProjectSpeechPolicy(Enterprise) returned error: %v", err)
+	}
 	deleted, err := reloaded.DeleteCustomSpeechPolicyProfile(project.ID, customID)
 	if err != nil {
 		t.Fatalf("DeleteCustomSpeechPolicyProfile returned error: %v", err)
 	}
 	if deleted.Profile != "Enterprise" || len(deleted.CustomProfiles) != 0 {
 		t.Fatalf("deleted policy = %#v, want Enterprise fallback without custom profiles", deleted)
+	}
+}
+
+func TestDeleteCustomSpeechPolicyProfileBlocksReferencedAssets(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	project, err := service.CreateProject("Policy references")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	created, err := service.CreateCustomSpeechPolicyProfile(project.ID, pipeline.UpsertSpeechPolicyProfileRequest{
+		Name:        "Pinned policy",
+		BaseProfile: "Enterprise",
+		Settings: policy.Settings{
+			Mode:      policy.ModeSpeak,
+			TableMode: policy.TableModeSummary,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateCustomSpeechPolicyProfile returned error: %v", err)
+	}
+	customID := created.Profile
+	if _, err := service.DeleteCustomSpeechPolicyProfile(project.ID, customID); !errors.Is(err, pipeline.ErrAssetInUse) {
+		t.Fatalf("DeleteCustomSpeechPolicyProfile(default) error = %v, want asset in use", err)
+	}
+	if _, err := service.UpdateProjectSpeechPolicy(project.ID, "Enterprise"); err != nil {
+		t.Fatalf("UpdateProjectSpeechPolicy(Enterprise) returned error: %v", err)
+	}
+	source, err := service.CreatePreparedSource(context.Background(), project.ID, pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "policy.md",
+		Text:       "# Policy\n\nThis source pins a custom policy.",
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	if _, err := service.UpdatePreparedSourceSpeechPolicy(source.ID, pipeline.SourceSpeechPolicyUpdateRequest{
+		Profile: customID,
+	}); err != nil {
+		t.Fatalf("UpdatePreparedSourceSpeechPolicy returned error: %v", err)
+	}
+	if _, err := service.DeleteCustomSpeechPolicyProfile(project.ID, customID); !errors.Is(err, pipeline.ErrAssetInUse) {
+		t.Fatalf("DeleteCustomSpeechPolicyProfile(source pin) error = %v, want asset in use", err)
 	}
 }
 
@@ -1158,6 +1597,261 @@ func TestProjectDeleteAndStorageSummary(t *testing.T) {
 	}
 }
 
+func TestDeleteVoiceJobRemovesTerminalNarrationArtifactsAndPlaybackReferences(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	project, err := service.CreateProject("Job cleanup")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	source, err := service.CreatePreparedSource(context.Background(), project.ID, pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "cleanup.md",
+		Text:       "# Cleanup\n\nThis source should keep its progress after deleting audio.",
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	job, err := service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	jobDir := filepath.Join(service.Options().JobDataDir, completed.ID)
+	if _, err := os.Stat(filepath.Join(jobDir, "metadata.json")); err != nil {
+		t.Fatalf("job metadata should exist before delete: %v", err)
+	}
+	if completed.AudioPath == "" {
+		t.Fatal("completed job should have an audio path")
+	}
+	if _, err := os.Stat(completed.AudioPath); err != nil {
+		t.Fatalf("job audio should exist before delete: %v", err)
+	}
+	if _, err := service.UpdatePlaybackProgress("prepared:"+source.ID, pipeline.PlaybackProgressUpdate{
+		ProjectID:        project.ID,
+		PreparedSourceID: source.ID,
+		JobID:            completed.ID,
+		CurrentTimeSec:   1,
+		Progress:         0.25,
+	}); err != nil {
+		t.Fatalf("UpdatePlaybackProgress(prepared) returned error: %v", err)
+	}
+	if _, err := service.UpdatePlaybackProgress("job:"+completed.ID, pipeline.PlaybackProgressUpdate{
+		ProjectID:      project.ID,
+		JobID:          completed.ID,
+		CurrentTimeSec: 1,
+		Progress:       0.25,
+	}); err != nil {
+		t.Fatalf("UpdatePlaybackProgress(job) returned error: %v", err)
+	}
+	session, err := service.StartPlaybackSession(pipeline.PlaybackProgressUpdate{
+		TargetID:         "prepared:" + source.ID,
+		ProjectID:        project.ID,
+		PreparedSourceID: source.ID,
+		JobID:            completed.ID,
+		CurrentTimeSec:   1,
+	})
+	if err != nil {
+		t.Fatalf("StartPlaybackSession returned error: %v", err)
+	}
+
+	if err := service.DeleteVoiceJob(completed.ID); err != nil {
+		t.Fatalf("DeleteVoiceJob returned error: %v", err)
+	}
+	if _, err := service.GetJob(completed.ID); !errors.Is(err, pipeline.ErrJobNotFound) {
+		t.Fatalf("GetJob deleted error = %v, want not found", err)
+	}
+	if _, err := os.Stat(jobDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("job dir stat error = %v, want not exist", err)
+	}
+	jobs, err := service.ListProjectJobs(project.ID)
+	if err != nil {
+		t.Fatalf("ListProjectJobs returned error: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("project jobs = %d, want 0", len(jobs))
+	}
+	progress, err := service.ListProjectProgress(project.ID)
+	if err != nil {
+		t.Fatalf("ListProjectProgress returned error: %v", err)
+	}
+	if len(progress) != 1 || progress[0].JobID != "" || progress[0].PreparedSourceID != source.ID {
+		t.Fatalf("progress = %#v, want source progress without deleted job id", progress)
+	}
+	if _, err := service.SyncPlaybackSession(session.ID, pipeline.PlaybackProgressUpdate{}); !errors.Is(err, pipeline.ErrPlaybackSessionNotFound) {
+		t.Fatalf("SyncPlaybackSession deleted error = %v, want not found", err)
+	}
+}
+
+func TestDeleteVoiceJobRejectsActiveJob(t *testing.T) {
+	t.Parallel()
+
+	optimizer := &repeatBlockingOptimizer{started: make(chan struct{}, 2)}
+	service := pipeline.NewService(
+		optimizer,
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+	)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{Text: strings.Repeat("active. ", 80)})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	waitForSignal(t, optimizer.started, "optimizer start")
+
+	if err := service.DeleteVoiceJob(job.ID); !errors.Is(err, pipeline.ErrJobInUse) {
+		t.Fatalf("DeleteVoiceJob(active) error = %v, want in use", err)
+	}
+	if err := service.CancelJob(job.ID); err != nil {
+		t.Fatalf("CancelJob returned error: %v", err)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCancelled)
+}
+
+func TestDeleteVoiceJobRejectsActiveRetryDependency(t *testing.T) {
+	t.Parallel()
+
+	optimizer := &repeatBlockingOptimizer{started: make(chan struct{}, 2)}
+	service := pipeline.NewService(
+		optimizer,
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{MaxRetries: 3, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+	)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{Text: strings.Repeat("retry source. ", 80)})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	waitForSignal(t, optimizer.started, "first optimizer start")
+	if err := service.CancelJob(job.ID); err != nil {
+		t.Fatalf("CancelJob(first) returned error: %v", err)
+	}
+	cancelled := waitForJob(t, service, job.ID, pipeline.JobStatusCancelled)
+
+	retry, err := service.RetryJob(context.Background(), cancelled.ID)
+	if err != nil {
+		t.Fatalf("RetryJob returned error: %v", err)
+	}
+	waitForSignal(t, optimizer.started, "retry optimizer start")
+	if err := service.DeleteVoiceJob(cancelled.ID); !errors.Is(err, pipeline.ErrJobInUse) {
+		t.Fatalf("DeleteVoiceJob(active retry dependency) error = %v, want in use", err)
+	}
+	if err := service.CancelJob(retry.ID); err != nil {
+		t.Fatalf("CancelJob(retry) returned error: %v", err)
+	}
+	waitForJob(t, service, retry.ID, pipeline.JobStatusCancelled)
+}
+
+func TestPreparedSourceRenameAndDeleteRespectActiveJobs(t *testing.T) {
+	t.Parallel()
+
+	optimizer := &cancelAwareBlockingOptimizer{started: make(chan struct{})}
+	service := pipeline.NewService(
+		optimizer,
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:         3,
+			JobDataDir:         t.TempDir(),
+			ProjectDataDir:     t.TempDir(),
+			BookSourceDir:      t.TempDir(),
+			SourcePrepDir:      t.TempDir(),
+			ProgressDataDir:    t.TempDir(),
+			PlaybackSessionDir: t.TempDir(),
+		},
+	)
+	source, err := service.CreatePreparedSource(context.Background(), "default", pipeline.CreatePreparedSourceRequest{
+		Kind:       pipeline.PreparedSourceKindFile,
+		SourceName: "asset.md",
+		Text:       "# Asset\n\nThis source is reusable project material.",
+	})
+	if err != nil {
+		t.Fatalf("CreatePreparedSource returned error: %v", err)
+	}
+	renamed, err := service.RenamePreparedSource(source.ID, "Renamed asset")
+	if err != nil {
+		t.Fatalf("RenamePreparedSource returned error: %v", err)
+	}
+	if renamed.Title != "Renamed asset" || renamed.SourceReadiness.Title != "Renamed asset" {
+		t.Fatalf("renamed source = %#v, want title propagated to readiness", renamed)
+	}
+
+	job, err := service.CreatePreparedSourceJob(context.Background(), source.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreatePreparedSourceJob returned error: %v", err)
+	}
+	waitForSignal(t, optimizer.started, "optimizer start")
+	if err := service.DeletePreparedSource(source.ID); !errors.Is(err, pipeline.ErrAssetInUse) {
+		t.Fatalf("DeletePreparedSource(active job) error = %v, want asset in use", err)
+	}
+	if err := service.CancelJob(job.ID); err != nil {
+		t.Fatalf("CancelJob returned error: %v", err)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCancelled)
+	if err := service.DeletePreparedSource(source.ID); err != nil {
+		t.Fatalf("DeletePreparedSource(after terminal job) returned error: %v", err)
+	}
+	if _, err := service.GetPreparedSource(source.ID); !errors.Is(err, pipeline.ErrPreparedSourceNotFound) {
+		t.Fatalf("GetPreparedSource deleted error = %v, want not found", err)
+	}
+}
+
+func TestBookSourceRenameAndDeleteRespectActiveJobs(t *testing.T) {
+	t.Parallel()
+
+	optimizer := &cancelAwareBlockingOptimizer{started: make(chan struct{})}
+	service := pipeline.NewService(
+		optimizer,
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:         3,
+			JobDataDir:         t.TempDir(),
+			ProjectDataDir:     t.TempDir(),
+			BookSourceDir:      t.TempDir(),
+			SourcePrepDir:      t.TempDir(),
+			ProgressDataDir:    t.TempDir(),
+			PlaybackSessionDir: t.TempDir(),
+		},
+	)
+	epubPath := writeTestEPUB(t, "asset.epub")
+	info, err := os.Stat(epubPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), "default", epubPath, "asset.epub", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+	renamed, err := service.RenameBookSource(book.ID, "Renamed book")
+	if err != nil {
+		t.Fatalf("RenameBookSource returned error: %v", err)
+	}
+	if renamed.Title != "Renamed book" || renamed.SourceReadiness.Title != "Renamed book" {
+		t.Fatalf("renamed book = %#v, want title propagated to readiness", renamed)
+	}
+
+	job, err := service.CreateBookNarrationJob(context.Background(), book.ID, pipeline.CreateJobRequest{})
+	if err != nil {
+		t.Fatalf("CreateBookNarrationJob returned error: %v", err)
+	}
+	waitForSignal(t, optimizer.started, "optimizer start")
+	if err := service.DeleteBookSource(book.ID); !errors.Is(err, pipeline.ErrAssetInUse) {
+		t.Fatalf("DeleteBookSource(active job) error = %v, want asset in use", err)
+	}
+	if err := service.CancelJob(job.ID); err != nil {
+		t.Fatalf("CancelJob returned error: %v", err)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCancelled)
+	if err := service.DeleteBookSource(book.ID); err != nil {
+		t.Fatalf("DeleteBookSource(after terminal job) returned error: %v", err)
+	}
+	if _, err := service.GetBookSource(book.ID); !errors.Is(err, pipeline.ErrBookSourceNotFound) {
+		t.Fatalf("GetBookSource deleted error = %v, want not found", err)
+	}
+}
+
 func TestCreateJobCanSkipASRCheckAndRetry(t *testing.T) {
 	t.Parallel()
 
@@ -1196,6 +1890,15 @@ func TestCreateJobCanSkipASRCheckAndRetry(t *testing.T) {
 	}
 	if completed.QualityReport.ReferenceProfile {
 		t.Fatal("quality report should not mark a default voice job as reference-profile")
+	}
+	if len(completed.Segments) == 0 {
+		t.Fatal("completed job should include segments")
+	}
+	if completed.Segments[0].ArtifactState != pipeline.AudioArtifactStateUnchecked {
+		t.Fatalf("ASR-disabled completed segment artifact state = %q, want unchecked without checker evidence", completed.Segments[0].ArtifactState)
+	}
+	if !completed.Segments[0].Replaceable {
+		t.Fatal("ASR-disabled completed audio should remain replaceable until checker evidence exists")
 	}
 }
 
@@ -1378,6 +2081,212 @@ func TestProjectBundleImportCopyAndReplace(t *testing.T) {
 	if len(targetJobs) != 1 || targetJobs[0].ID == oldJob.ID {
 		t.Fatalf("replaced project jobs = %#v, want old job removed and bundle job imported", targetJobs)
 	}
+}
+
+func TestProjectBundleExportCanOmitGeneratedAudio(t *testing.T) {
+	t.Parallel()
+
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	project, err := service.CreateProject("No Audio Bundle")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		ProjectID: project.ID,
+		Text:      "Generated audio can be intentionally omitted.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+
+	options := pipeline.ProjectBundleExportOptions{IncludeGeneratedAudio: false}
+	summary, err := service.GetProjectBundleSummary(project.ID, options)
+	if err != nil {
+		t.Fatalf("GetProjectBundleSummary returned error: %v", err)
+	}
+	if summary.GeneratedAudio != 0 || summary.OmittedGeneratedAudio != 1 || summary.OmittedGeneratedBytes <= 0 {
+		t.Fatalf("summary audio fields = %#v, want generated audio omitted", summary)
+	}
+	if !bundleContentIncluded(summary.Contents, "generatedAudio", false) {
+		t.Fatalf("summary contents = %#v, want generatedAudio marked excluded", summary.Contents)
+	}
+
+	bundle, filename, err := service.ExportProjectBundle(project.ID, options)
+	if err != nil {
+		t.Fatalf("ExportProjectBundle returned error: %v", err)
+	}
+	bundlePath := writeBundle(t, filename, bundle)
+	preview, err := service.PreviewProjectBundle(bundlePath)
+	if err != nil {
+		t.Fatalf("PreviewProjectBundle returned error: %v", err)
+	}
+	if !preview.Valid || preview.GeneratedAudio != 0 || preview.Manifest == nil {
+		t.Fatalf("preview = %#v, want valid bundle without generated audio", preview)
+	}
+	if preview.Manifest.GeneratedAudioIncluded || preview.Manifest.OmittedGeneratedAudio != 1 {
+		t.Fatalf("manifest audio fields = %#v, want omitted audio recorded", preview.Manifest)
+	}
+	for _, file := range preview.Manifest.Files {
+		if file.Role == "job_audio" {
+			t.Fatalf("manifest files = %#v, want no job audio file", preview.Manifest.Files)
+		}
+	}
+	imported, err := service.ImportProjectBundle(
+		bundlePath,
+		pipeline.ProjectBundleImportRequest{Mode: pipeline.BundleImportModeCopy},
+	)
+	if err != nil {
+		t.Fatalf("ImportProjectBundle returned error: %v", err)
+	}
+	if len(imported.Jobs) != 1 || imported.Jobs[0].Status != pipeline.JobStatusFailed || !imported.Jobs[0].Retriable {
+		t.Fatalf("imported jobs = %#v, want retriable audio regeneration state", imported.Jobs)
+	}
+}
+
+func TestProjectBundleManifestSanitizesRuntimeFields(t *testing.T) {
+	t.Parallel()
+
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	project, err := service.CreateProject("Sanitized Bundle")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		EngineOptions: map[string]string{
+			"apiKey":    "do-not-export",
+			"lang":      "en",
+			"modelPath": "/models/private",
+		},
+		ProjectID: project.ID,
+		Text:      "Sensitive runtime fields stay out of manifests.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+
+	bundle, filename, err := service.ExportProjectBundle(project.ID)
+	if err != nil {
+		t.Fatalf("ExportProjectBundle returned error: %v", err)
+	}
+	preview, err := service.PreviewProjectBundle(writeBundle(t, filename, bundle))
+	if err != nil {
+		t.Fatalf("PreviewProjectBundle returned error: %v", err)
+	}
+	if preview.Manifest == nil || len(preview.Manifest.Jobs) != 1 {
+		t.Fatalf("preview manifest = %#v, want one job", preview.Manifest)
+	}
+	exportedJob := preview.Manifest.Jobs[0]
+	if exportedJob.AudioPath != "" || exportedJob.AudioURL != "" || exportedJob.AudioPartialURL != "" {
+		t.Fatalf("exported job audio fields = %#v, want portable manifest paths", exportedJob)
+	}
+	if exportedJob.EngineOptions["apiKey"] != "" || exportedJob.EngineOptions["modelPath"] != "" {
+		t.Fatalf("engine options = %#v, want secret/path options omitted", exportedJob.EngineOptions)
+	}
+	if exportedJob.EngineOptions["lang"] != "en" {
+		t.Fatalf("engine options = %#v, want non-sensitive option preserved", exportedJob.EngineOptions)
+	}
+	if !bundleContentIncluded(preview.Excluded, "providerSecrets", false) ||
+		!bundleContentIncluded(preview.Excluded, "modelPaths", false) {
+		t.Fatalf("excluded = %#v, want sensitive-data exclusions", preview.Excluded)
+	}
+}
+
+func TestProjectBundlePreviewBlocksInvalidHashesWithoutMutation(t *testing.T) {
+	t.Parallel()
+
+	service := newMockService(t, agents.NewMockVoiceCheckerAgent())
+	project, err := service.CreateProject("Tampered Bundle")
+	if err != nil {
+		t.Fatalf("CreateProject returned error: %v", err)
+	}
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		ProjectID: project.ID,
+		Text:      "Checksum validation catches tampered bundles.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+	waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	bundle, filename, err := service.ExportProjectBundle(project.ID)
+	if err != nil {
+		t.Fatalf("ExportProjectBundle returned error: %v", err)
+	}
+	bundlePath := writeBundle(t, filename, tamperFirstBundleHash(t, bundle))
+	beforeProjects := service.ListProjects()
+
+	preview, err := service.PreviewProjectBundle(bundlePath)
+	if err != nil {
+		t.Fatalf("PreviewProjectBundle returned error: %v", err)
+	}
+	if preview.Valid || len(preview.Errors) == 0 {
+		t.Fatalf("preview = %#v, want invalid checksum report", preview)
+	}
+	projects := service.ListProjects()
+	if len(projects) != len(beforeProjects) {
+		t.Fatalf("projects = %#v, preview should not mutate state from %#v", projects, beforeProjects)
+	}
+}
+
+func bundleContentIncluded(
+	items []pipeline.ProjectBundleContentItem,
+	key string,
+	included bool,
+) bool {
+	for _, item := range items {
+		if item.Key == key && item.Included == included {
+			return true
+		}
+	}
+	return false
+}
+
+func writeBundle(t *testing.T, filename string, bundle []byte) string {
+	t.Helper()
+	bundlePath := filepath.Join(t.TempDir(), filename)
+	if err := os.WriteFile(bundlePath, bundle, 0o644); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	return bundlePath
+}
+
+func tamperFirstBundleHash(t *testing.T, bundle []byte) []byte {
+	t.Helper()
+	reader, err := zip.NewReader(bytes.NewReader(bundle), int64(len(bundle)))
+	if err != nil {
+		t.Fatalf("open bundle reader: %v", err)
+	}
+	var output bytes.Buffer
+	writer := zip.NewWriter(&output)
+	hashPattern := regexp.MustCompile(`"sha256":\s*"[a-f0-9]{64}"`)
+	for _, file := range reader.File {
+		handle, err := file.Open()
+		if err != nil {
+			t.Fatalf("open zip file %s: %v", file.Name, err)
+		}
+		var payload bytes.Buffer
+		if _, err := payload.ReadFrom(handle); err != nil {
+			_ = handle.Close()
+			t.Fatalf("read zip file %s: %v", file.Name, err)
+		}
+		_ = handle.Close()
+		data := payload.Bytes()
+		if file.Name == "manifest.json" {
+			data = hashPattern.ReplaceAll(data, []byte(`"sha256": "0000000000000000000000000000000000000000000000000000000000000000"`))
+		}
+		entry, err := writer.Create(file.Name)
+		if err != nil {
+			t.Fatalf("create zip file %s: %v", file.Name, err)
+		}
+		if _, err := entry.Write(data); err != nil {
+			t.Fatalf("write zip file %s: %v", file.Name, err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close tampered bundle: %v", err)
+	}
+	return output.Bytes()
 }
 
 func TestCreateBookSourceImportsEPUBWordSpans(t *testing.T) {
@@ -1784,6 +2693,86 @@ func TestCreateBookNarrationJobUsesBookText(t *testing.T) {
 	}
 }
 
+func TestCreateBookNarrationJobUsesCanonicalReviewTextWhenProvided(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceServiceWithOptions(t, pipeline.Options{
+		SourcePrepSentenceMaxRunes: 24,
+	})
+	epubPath := writeTestEPUB(t, "canonical-override.epub")
+	info, err := os.Stat(epubPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), "default", epubPath, "canonical-override.epub", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+	overrideText := "This sentence is far too long to fit in the configured sentence chunk limit without a warning."
+	job, err := service.CreateBookNarrationJob(
+		context.Background(),
+		book.ID,
+		pipeline.CreateJobRequest{
+			SpeechText: overrideText,
+			RunMode:    pipeline.RunModeDraftPreview,
+			PipelineOptions: pipeline.CreateJobPipelineOptions{
+				ASRCheck:  boolPtr(false),
+				AutoRetry: boolPtr(false),
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("CreateBookNarrationJob returned error: %v", err)
+	}
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.InputText != overrideText {
+		t.Fatalf("job input text = %q, want override text %q", completed.InputText, overrideText)
+	}
+	if !strings.Contains(strings.Join(completed.SegmentationWarnings, ","), "sentence_too_long") {
+		t.Fatalf("job segmentation warnings = %#v, want sentence_too_long", completed.SegmentationWarnings)
+	}
+}
+
+func TestCreateBookNarrationJobOutlivesRequestContextCancellation(t *testing.T) {
+	t.Parallel()
+
+	service := newBookSourceService(t)
+	epubPath := writeTestEPUB(t, "book-context-cancel.epub")
+	info, err := os.Stat(epubPath)
+	if err != nil {
+		t.Fatalf("Stat returned error: %v", err)
+	}
+	book, err := service.CreateBookSource(context.Background(), "default", epubPath, "book-context-cancel.epub", info.Size())
+	if err != nil {
+		t.Fatalf("CreateBookSource returned error: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	job, err := service.CreateBookNarrationJob(
+		ctx,
+		book.ID,
+		pipeline.CreateJobRequest{
+			RunMode: pipeline.RunModeDraftPreview,
+			PipelineOptions: pipeline.CreateJobPipelineOptions{
+				ASRCheck:  boolPtr(false),
+				AutoRetry: boolPtr(false),
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("CreateBookNarrationJob returned error: %v", err)
+	}
+	cancel()
+
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.Error == "cancelled by request" {
+		t.Fatal("book narration request context cancellation should not mark job as user-cancelled")
+	}
+	if completed.TerminalReason != "" || completed.Retriable {
+		t.Fatalf("completed terminal metadata = (%q, %t), want empty/non-retriable", completed.TerminalReason, completed.Retriable)
+	}
+}
+
 func TestCreateBookNarrationJobUsesChapterScope(t *testing.T) {
 	t.Parallel()
 
@@ -2165,6 +3154,40 @@ func TestCreateJobPublishesPartialAudioWhileSynthesizing(t *testing.T) {
 	if processingJob.AudioReadySegments < 1 {
 		t.Fatalf("partial audio should be available after at least one segment, got %d", processingJob.AudioReadySegments)
 	}
+	if processingJob.FirstPlayableAt == nil {
+		t.Fatal("partial audio should record firstPlayableAt once the first segment is ready")
+	}
+	if processingJob.PartialAudioManifest == nil {
+		t.Fatal("partial audio should expose a manifest while synthesis continues")
+	}
+	if processingJob.PartialAudioManifest.Status != "partialReady" {
+		t.Fatalf("partial manifest status = %q, want partialReady", processingJob.PartialAudioManifest.Status)
+	}
+	if processingJob.PartialAudioManifest.ReadySegments != processingJob.AudioReadySegments {
+		t.Fatalf("partial manifest ready segments = %d, want %d", processingJob.PartialAudioManifest.ReadySegments, processingJob.AudioReadySegments)
+	}
+	if processingJob.PartialAudioManifest.FirstPlayableAt == nil {
+		t.Fatal("partial manifest should include firstPlayableAt")
+	}
+	if len(processingJob.PartialAudioManifest.Segments) == 0 || processingJob.PartialAudioManifest.Segments[0].AudioURL == "" {
+		t.Fatalf("partial manifest segments = %#v, want segment audio URL", processingJob.PartialAudioManifest.Segments)
+	}
+	firstPartialSegment := processingJob.PartialAudioManifest.Segments[0]
+	if firstPartialSegment.ArtifactState != pipeline.AudioArtifactStateUnchecked {
+		t.Fatalf("partial segment artifact state = %q, want unchecked", firstPartialSegment.ArtifactState)
+	}
+	if !firstPartialSegment.Replaceable {
+		t.Fatal("partial segment should be replaceable while unchecked")
+	}
+	if firstPartialSegment.CheckedAt != nil {
+		t.Fatalf("partial segment checkedAt = %v, want nil before final checker completion", firstPartialSegment.CheckedAt)
+	}
+	if len(processingJob.Segments) == 0 || processingJob.Segments[0].AudioURL == "" {
+		t.Fatalf("job segments = %#v, want ready segment audio URL", processingJob.Segments)
+	}
+	if processingJob.Segments[0].ArtifactState != pipeline.AudioArtifactStateUnchecked {
+		t.Fatalf("job segment artifact state = %q, want unchecked before completion", processingJob.Segments[0].ArtifactState)
+	}
 
 	partialAudio, partialType, err := service.GetPartialAudio(job.ID)
 	if err != nil {
@@ -2181,6 +3204,21 @@ func TestCreateJobPublishesPartialAudioWhileSynthesizing(t *testing.T) {
 	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
 	if completed.AudioPath == "" {
 		t.Fatal("completed job should include final audio path")
+	}
+	if completed.PartialAudioManifest == nil {
+		t.Fatal("completed job should retain partial audio manifest metadata")
+	}
+	if completed.PartialAudioManifest.ArtifactState != pipeline.AudioArtifactStateChecked {
+		t.Fatalf("completed manifest artifact state = %q, want checked", completed.PartialAudioManifest.ArtifactState)
+	}
+	if len(completed.PartialAudioManifest.Segments) == 0 || completed.PartialAudioManifest.Segments[0].ArtifactState != pipeline.AudioArtifactStateChecked {
+		t.Fatalf("completed partial segment state = %#v, want checked", completed.PartialAudioManifest.Segments)
+	}
+	if len(completed.Segments) == 0 || completed.Segments[0].ArtifactState != pipeline.AudioArtifactStateChecked {
+		t.Fatalf("completed job segment state = %#v, want checked", completed.Segments)
+	}
+	if completed.Segments[0].CheckedAt == nil {
+		t.Fatal("completed checked segment should include checkedAt evidence")
 	}
 }
 
@@ -2232,6 +3270,150 @@ func TestGetAudioSegmentReturnsOnlyWhenReady(t *testing.T) {
 		if err != nil {
 			t.Fatalf("segment %d should still be available after completion: %v", segmentIndex, err)
 		}
+	}
+}
+
+func TestRetryJobReusesPersistedReadySegments(t *testing.T) {
+	t.Parallel()
+
+	jobDataDir := t.TempDir()
+	projectDataDir := t.TempDir()
+	tts := &failOnceTTSAgent{failCall: 2}
+	options := pipeline.Options{
+		JobDataDir:      jobDataDir,
+		MaxRetries:      1,
+		ProjectDataDir:  projectDataDir,
+		SegmentMaxRunes: 18,
+		SegmentWorkers:  1,
+	}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		tts,
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		Text:            "first short sentence. second short sentence. third short sentence.",
+		PerformanceMode: pipeline.PerformanceModeQuality,
+		PipelineOptions: pipeline.CreateJobPipelineOptions{
+			AutoRetry: boolPtr(false),
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	failed := waitForFailedJob(t, service, job.ID)
+	if failed.AudioReadySegments != 1 {
+		t.Fatalf("failed job ready segments = %d, want 1", failed.AudioReadySegments)
+	}
+	if failed.Retriable != true {
+		t.Fatal("failed job should remain retriable")
+	}
+	if failed.FailureKind == "" {
+		t.Fatal("failed job should identify a failure kind")
+	}
+	if len(failed.Segments) < 2 {
+		t.Fatalf("failed job segments = %#v, want ready and failed segment", failed.Segments)
+	}
+	if failed.Segments[0].ArtifactState != pipeline.AudioArtifactStateUnchecked || !failed.Segments[0].Replaceable {
+		t.Fatalf("ready segment state = %q replaceable=%v, want unchecked replaceable", failed.Segments[0].ArtifactState, failed.Segments[0].Replaceable)
+	}
+	if failed.Segments[1].ArtifactState != pipeline.AudioArtifactStateRetryable {
+		t.Fatalf("failed segment artifact state = %q, want retryable", failed.Segments[1].ArtifactState)
+	}
+	if failed.Segments[1].Retry == nil || !failed.Segments[1].Retry.Retryable || failed.Segments[1].Retry.Scope != pipeline.AudioArtifactRetryScopeSegment {
+		t.Fatalf("failed segment retry metadata = %#v, want segment-scoped retryable", failed.Segments[1].Retry)
+	}
+	if failed.Segments[1].FailureMessage == "" {
+		t.Fatal("failed segment should preserve failure message")
+	}
+	if failed.PartialAudioManifest == nil || len(failed.PartialAudioManifest.Segments) < 2 {
+		t.Fatalf("failed partial manifest = %#v, want segment artifact states", failed.PartialAudioManifest)
+	}
+	if failed.PartialAudioManifest.Segments[0].ArtifactState != pipeline.AudioArtifactStateUnchecked {
+		t.Fatalf("failed manifest ready segment state = %q, want unchecked", failed.PartialAudioManifest.Segments[0].ArtifactState)
+	}
+	if failed.PartialAudioManifest.Segments[1].ArtifactState != pipeline.AudioArtifactStateRetryable {
+		t.Fatalf("failed manifest retry segment state = %q, want retryable", failed.PartialAudioManifest.Segments[1].ArtifactState)
+	}
+	if _, _, err := service.GetPartialAudio(failed.ID); err != nil {
+		t.Fatalf("GetPartialAudio after failure returned error: %v", err)
+	}
+	if _, _, err := service.GetAudioSegment(failed.ID, 1); err != nil {
+		t.Fatalf("GetAudioSegment after failure returned error: %v", err)
+	}
+
+	reloaded := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+	reloadedJob, err := reloaded.GetJob(failed.ID)
+	if err != nil {
+		t.Fatalf("GetJob after reload returned error: %v", err)
+	}
+	if reloadedJob.AudioReadySegments != 1 {
+		t.Fatalf("reloaded ready segments = %d, want 1", reloadedJob.AudioReadySegments)
+	}
+	if len(reloadedJob.Segments) < 2 || reloadedJob.Segments[1].ArtifactState != pipeline.AudioArtifactStateRetryable {
+		t.Fatalf("reloaded failed segment state = %#v, want retryable", reloadedJob.Segments)
+	}
+	if _, _, err := reloaded.GetPartialAudio(failed.ID); err != nil {
+		t.Fatalf("reloaded GetPartialAudio returned error: %v", err)
+	}
+	if _, _, err := reloaded.GetAudioSegment(failed.ID, 1); err != nil {
+		t.Fatalf("reloaded GetAudioSegment returned error: %v", err)
+	}
+
+	retry, err := service.RetryJob(context.Background(), failed.ID)
+	if err != nil {
+		t.Fatalf("RetryJob returned error: %v", err)
+	}
+	if retry.RunMode != failed.RunMode {
+		t.Fatalf("retry run mode = %q, want saved failed job mode %q", retry.RunMode, failed.RunMode)
+	}
+	if retry.PerformanceMode != failed.PerformanceMode {
+		t.Fatalf("retry performance mode = %q, want saved failed job performance mode %q", retry.PerformanceMode, failed.PerformanceMode)
+	}
+	if retry.PipelineOptions != failed.PipelineOptions {
+		t.Fatalf("retry pipeline options = %#v, want saved failed job options %#v", retry.PipelineOptions, failed.PipelineOptions)
+	}
+	completed := waitForJob(t, service, retry.ID, pipeline.JobStatusCompleted)
+	if completed.RetryOfJobID != failed.ID {
+		t.Fatalf("retryOfJobId = %q, want %q", completed.RetryOfJobID, failed.ID)
+	}
+	if completed.ReusedReadySegments != 1 {
+		t.Fatalf("reusedReadySegments = %d, want 1", completed.ReusedReadySegments)
+	}
+	if len(completed.Segments) == 0 || completed.Segments[0].ReusedFromJobID != failed.ID {
+		t.Fatalf("first segment reuse marker = %+v, want source job %s", completed.Segments, failed.ID)
+	}
+	if completed.Segments[0].Reuse == nil || !completed.Segments[0].Reuse.Reused || !completed.Segments[0].Reuse.ReuseAllowed {
+		t.Fatalf("first segment reuse metadata = %#v, want allowed compatible reuse", completed.Segments[0].Reuse)
+	}
+	if completed.Segments[0].Reuse.FromJobID != failed.ID || completed.Segments[0].Reuse.FromArtifactID == "" || completed.Segments[0].Reuse.CompatibilityKey == "" {
+		t.Fatalf("first segment reuse metadata = %#v, want source job/artifact/key", completed.Segments[0].Reuse)
+	}
+	if completed.Segments[0].ArtifactState != pipeline.AudioArtifactStateChecked {
+		t.Fatalf("reused completed segment state = %q, want checked only after retry completion", completed.Segments[0].ArtifactState)
+	}
+	if len(completed.Segments) < 2 || completed.Segments[1].Replacement == nil {
+		t.Fatalf("regenerated segment replacement metadata = %#v, want replacement link", completed.Segments)
+	}
+	if completed.Segments[1].Replacement.ReplacementOfJobID != failed.ID || completed.Segments[1].Replacement.ReplacementOfArtifactID == "" {
+		t.Fatalf("regenerated segment replacement metadata = %#v, want source artifact link", completed.Segments[1].Replacement)
+	}
+	if completed.Segments[1].ArtifactState != pipeline.AudioArtifactStateChecked {
+		t.Fatalf("regenerated segment state = %q, want checked after retry checker completion", completed.Segments[1].ArtifactState)
+	}
+	if completed.Segments[1].Replacement.NewState != completed.Segments[1].ArtifactState {
+		t.Fatalf("regenerated segment replacement new state = %q, want current artifact state %q", completed.Segments[1].Replacement.NewState, completed.Segments[1].ArtifactState)
+	}
+	if completed.AudioReadySegments != completed.Retries.TotalSegments {
+		t.Fatalf("completed ready segments = %d, want %d", completed.AudioReadySegments, completed.Retries.TotalSegments)
 	}
 }
 
@@ -3123,6 +4305,86 @@ func TestCreateVoiceProfileFromCandidateCopiesCompatibleReference(t *testing.T) 
 	}
 	if profile.Likeness == nil || profile.Likeness.Status != "pending" {
 		t.Fatalf("profile likeness = %#v, want pending when reference synthesis is unavailable", profile.Likeness)
+	}
+}
+
+func TestVoiceProfileSourceProvenancePersistsAndCopiesToProfile(t *testing.T) {
+	t.Parallel()
+
+	sourcePath := writeToneWAV(t, 30_000, 10_000)
+	analyzer := mockProfileSourceAnalyzer{
+		result: pipeline.VoiceProfileSourceAnalysisResult{
+			ModelVersion: "mock-diarizer",
+			Spans: []pipeline.DetectedSpeakerSpan{
+				{SpeakerID: "SPEAKER_00", StartMS: 0, EndMS: 30_000, Confidence: 0.94},
+			},
+		},
+	}
+	options := profileSourceOptions(t, analyzer)
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+	provenance := pipeline.VoiceProfileProvenance{
+		SourceType:           "provided-recording",
+		RightsBasis:          "speaker-consent",
+		ConsentStatus:        "confirmed",
+		AllowedUse:           "narration-profile",
+		RetentionPolicy:      "keep-profile",
+		SpeakerName:          "Narrator",
+		SourceOwner:          "Studio",
+		ConsentDocumentLabel: "release-42",
+		Notes:                "Approved for local narration profile work.",
+	}
+
+	source, err := service.CreateVoiceProfileSourceWithOptions(
+		context.Background(),
+		sourcePath,
+		"narrator.wav",
+		0,
+		pipeline.CreateVoiceProfileSourceOptions{Provenance: &provenance},
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileSourceWithOptions returned error: %v", err)
+	}
+	ready := waitForProfileSource(t, service, source.ID, pipeline.VoiceProfileSourceStatusReady)
+	if ready.Provenance == nil || ready.Provenance.ConsentStatus != "confirmed" {
+		t.Fatalf("ready provenance = %#v, want persisted consent metadata", ready.Provenance)
+	}
+
+	reloaded := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		agents.NewMockVoiceCheckerAgent(),
+		options,
+	)
+	reloadedSource, err := reloaded.GetVoiceProfileSource(source.ID)
+	if err != nil {
+		t.Fatalf("GetVoiceProfileSource after reload returned error: %v", err)
+	}
+	if reloadedSource.Provenance == nil || reloadedSource.Provenance.SourceOwner != "Studio" {
+		t.Fatalf("reloaded provenance = %#v, want source owner", reloadedSource.Provenance)
+	}
+
+	autoValidate := false
+	profile, err := service.CreateVoiceProfileFromCandidateWithOptions(
+		context.Background(),
+		ready.ID,
+		ready.Candidates[0].ID,
+		"Narrator",
+		"en",
+		pipeline.VoiceProfileCreationOptions{
+			AutoValidate: &autoValidate,
+			Targets:      []string{pipeline.VoiceProfileTargetKokoroClone},
+		},
+	)
+	if err != nil {
+		t.Fatalf("CreateVoiceProfileFromCandidateWithOptions returned error: %v", err)
+	}
+	if profile.Provenance == nil || profile.Provenance.ConsentDocumentLabel != "release-42" {
+		t.Fatalf("profile provenance = %#v, want copied consent document", profile.Provenance)
 	}
 }
 
@@ -4868,7 +6130,7 @@ func TestCreateJobRetriesRejectedSegmentFromStart(t *testing.T) {
 	}
 }
 
-func TestCreateJobMarksCheckerFailedWhenRetryLimitExhausts(t *testing.T) {
+func TestCreateJobCompletesWithAudioReviewWarningWhenCheckerRetryLimitExhausts(t *testing.T) {
 	t.Parallel()
 
 	service := pipeline.NewService(
@@ -4883,15 +6145,357 @@ func TestCreateJobMarksCheckerFailedWhenRetryLimitExhausts(t *testing.T) {
 		t.Fatalf("CreateJob returned error: %v", err)
 	}
 
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.Stages.Checker != pipeline.StageStatusDone {
+		t.Fatalf("checker stage = %q, want %q", completed.Stages.Checker, pipeline.StageStatusDone)
+	}
+	if completed.Stages.Synthesis != pipeline.StageStatusDone {
+		t.Fatalf("synthesis stage = %q, want %q", completed.Stages.Synthesis, pipeline.StageStatusDone)
+	}
+	if completed.Retries.Attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", completed.Retries.Attempts)
+	}
+	if completed.TerminalReason != "" || completed.Retriable {
+		t.Fatalf("completed terminal metadata = (%q, %t), want empty/non-retriable", completed.TerminalReason, completed.Retriable)
+	}
+	if len(completed.Segments) == 0 || completed.Segments[0].Status != "ready" || len(completed.Segments[0].Warnings) != 1 {
+		t.Fatalf("completed segment = %#v, want ready with one ASR warning", completed.Segments)
+	}
+	if completed.QualityReport == nil || completed.QualityReport.WarningCount != 1 || completed.QualityReport.UnverifiedSegmentCount != 1 {
+		t.Fatalf("quality report = %#v, want one warning and one unverified segment", completed.QualityReport)
+	}
+	if completed.Segments[0].ArtifactState != pipeline.AudioArtifactStateUnchecked {
+		t.Fatalf("warning segment artifact state = %q, want unchecked", completed.Segments[0].ArtifactState)
+	}
+	if !completed.Segments[0].Replaceable {
+		t.Fatal("warning segment should remain replaceable")
+	}
+	if completed.Segments[0].CheckedAt != nil {
+		t.Fatalf("warning segment checkedAt = %v, want nil", completed.Segments[0].CheckedAt)
+	}
+	if completed.PartialAudioManifest == nil || len(completed.PartialAudioManifest.Segments) == 0 {
+		t.Fatalf("partial audio manifest = %#v, want warning segment metadata", completed.PartialAudioManifest)
+	}
+	manifestSegment := completed.PartialAudioManifest.Segments[0]
+	if manifestSegment.ArtifactState != pipeline.AudioArtifactStateUnchecked {
+		t.Fatalf("warning manifest segment artifact state = %q, want unchecked", manifestSegment.ArtifactState)
+	}
+	if !manifestSegment.Replaceable {
+		t.Fatal("warning manifest segment should remain replaceable")
+	}
+	if manifestSegment.CheckedAt != nil {
+		t.Fatalf("warning manifest segment checkedAt = %v, want nil", manifestSegment.CheckedAt)
+	}
+	if completed.PartialAudioManifest.ArtifactState == pipeline.AudioArtifactStateChecked || completed.PartialAudioManifest.CheckedAt != nil {
+		t.Fatalf("warning manifest artifact state/checkedAt = %q/%v, want non-checked nil", completed.PartialAudioManifest.ArtifactState, completed.PartialAudioManifest.CheckedAt)
+	}
+}
+
+func TestCreateJobContinuesWhenSegmentThirteenASRDoesNotMatch(t *testing.T) {
+	t.Parallel()
+
+	checker := &rejectMatchingSegmentChecker{
+		rejectMatches: []string{"Segment 13.", "Segment thirteen."},
+		reason:        "ASR transcript did not sufficiently match and did not look like a clean cutoff",
+	}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		checker,
+		pipeline.Options{
+			MaxRetries:      2,
+			SegmentWorkers:  1,
+			SegmentMaxRunes: 12,
+			JobDataDir:      t.TempDir(),
+			ProjectDataDir:  t.TempDir(),
+		},
+	)
+
+	segments := make([]string, 0, 15)
+	for index := 1; index <= 15; index += 1 {
+		segments = append(segments, fmt.Sprintf("Segment %02d.", index))
+	}
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{Text: strings.Join(segments, " ")})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if completed.AudioReadySegments != 15 {
+		t.Fatalf("audio ready segments = %d, want 15", completed.AudioReadySegments)
+	}
+	if len(completed.Segments) != 15 {
+		t.Fatalf("segments = %d, want 15", len(completed.Segments))
+	}
+	for index, segment := range completed.Segments {
+		if segment.Status != "ready" {
+			t.Fatalf("segment %d status = %q, want ready", index+1, segment.Status)
+		}
+	}
+	warned := completed.Segments[12]
+	if warned.Attempts != 2 {
+		t.Fatalf("segment 13 attempts = %d, want 2", warned.Attempts)
+	}
+	if warned.Similarity != 0.1 {
+		t.Fatalf("segment 13 similarity = %f, want 0.1", warned.Similarity)
+	}
+	if len(warned.Warnings) != 1 || !strings.Contains(warned.Warnings[0], checker.reason) {
+		t.Fatalf("segment 13 warnings = %#v, want ASR review warning", warned.Warnings)
+	}
+	if completed.Status != pipeline.JobStatusCompleted || completed.Error != "" {
+		t.Fatalf("completed status/error = %q/%q, want completed with no error", completed.Status, completed.Error)
+	}
+	if completed.VoiceCheck.Complete != true || !strings.Contains(completed.VoiceCheck.Reason, "segment review warning") {
+		t.Fatalf("voice check = %#v, want completed aggregate warning", completed.VoiceCheck)
+	}
+	if completed.QualityReport == nil || completed.QualityReport.WarningCount != 1 || completed.QualityReport.UnverifiedSegmentCount != 1 {
+		t.Fatalf("quality report = %#v, want one ASR warning", completed.QualityReport)
+	}
+	for index, segment := range completed.Segments {
+		if segment.ArtifactState != pipeline.AudioArtifactStateUnchecked {
+			t.Fatalf("segment %d artifact state = %q, want unchecked when any segment is unverified", index+1, segment.ArtifactState)
+		}
+		if !segment.Replaceable {
+			t.Fatalf("segment %d should remain replaceable when any segment is unverified", index+1)
+		}
+		if segment.CheckedAt != nil {
+			t.Fatalf("segment %d checkedAt = %v, want nil when any segment is unverified", index+1, segment.CheckedAt)
+		}
+	}
+	if completed.PartialAudioManifest == nil || completed.PartialAudioManifest.ArtifactState == pipeline.AudioArtifactStateChecked || completed.PartialAudioManifest.CheckedAt != nil {
+		t.Fatalf("partial audio manifest = %#v, want non-checked aggregate for unverified job", completed.PartialAudioManifest)
+	}
+	if len(completed.PartialAudioManifest.Segments) != len(completed.Segments) {
+		t.Fatalf("partial manifest segments = %d, want %d", len(completed.PartialAudioManifest.Segments), len(completed.Segments))
+	}
+	for index, segment := range completed.PartialAudioManifest.Segments {
+		if segment.ArtifactState != pipeline.AudioArtifactStateUnchecked {
+			t.Fatalf("partial manifest segment %d artifact state = %q, want unchecked when any segment is unverified", index+1, segment.ArtifactState)
+		}
+		if !segment.Replaceable {
+			t.Fatalf("partial manifest segment %d should remain replaceable when any segment is unverified", index+1)
+		}
+		if segment.CheckedAt != nil {
+			t.Fatalf("partial manifest segment %d checkedAt = %v, want nil when any segment is unverified", index+1, segment.CheckedAt)
+		}
+	}
+}
+
+func TestCreateJobTreatsUnexpectedProviderCancellationAsRetriableFailure(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		cancelledTTSAgent{},
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{MaxRetries: 1, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+	)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		PipelineOptions: pipeline.CreateJobPipelineOptions{
+			ASRCheck:  boolPtr(false),
+			AutoRetry: boolPtr(false),
+		},
+		Text: "Provider cancellation should be a failure unless the user cancelled the job.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
 	failed := waitForFailedJob(t, service, job.ID)
-	if failed.Stages.Checker != pipeline.StageStatusFailed {
-		t.Fatalf("checker stage = %q, want %q", failed.Stages.Checker, pipeline.StageStatusFailed)
+	if failed.Status == pipeline.JobStatusCancelled {
+		t.Fatal("unexpected provider cancellation must not become a user-cancelled job")
 	}
-	if failed.Stages.Synthesis != pipeline.StageStatusDone {
-		t.Fatalf("synthesis stage = %q, want %q", failed.Stages.Synthesis, pipeline.StageStatusDone)
+	if failed.TerminalReason != pipeline.JobTerminalReasonProviderFailed || !failed.Retriable {
+		t.Fatalf("failed terminal metadata = (%q, %t), want provider-failed/retriable", failed.TerminalReason, failed.Retriable)
 	}
-	if failed.Retries.Attempts != 2 {
-		t.Fatalf("attempts = %d, want 2", failed.Retries.Attempts)
+}
+
+func TestCreateJobTreatsProviderTimeoutAsRetriableFailure(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		timeoutTTSAgent{},
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{MaxRetries: 1, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+	)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		PipelineOptions: pipeline.CreateJobPipelineOptions{
+			ASRCheck:  boolPtr(false),
+			AutoRetry: boolPtr(false),
+		},
+		Text: "Provider timeout should remain retryable and distinct from cancellation.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	failed := waitForFailedJob(t, service, job.ID)
+	if failed.Status == pipeline.JobStatusCancelled {
+		t.Fatal("provider timeout must not become a user-cancelled job")
+	}
+	if failed.TerminalReason != pipeline.JobTerminalReasonProviderTimeout || !failed.Retriable {
+		t.Fatalf("failed terminal metadata = (%q, %t), want provider-timeout/retriable", failed.TerminalReason, failed.Retriable)
+	}
+}
+
+func TestCreateJobRetriesTransientProviderCancellationBeforeFailingRun(t *testing.T) {
+	t.Parallel()
+
+	tts := &transientRuntimeTTSAgent{err: context.Canceled}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		tts,
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{MaxRetries: 2, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+	)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		PipelineOptions: pipeline.CreateJobPipelineOptions{
+			ASRCheck: boolPtr(false),
+		},
+		Text: "Transient provider cancellation should retry the segment.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if calls := tts.calls(); calls != 2 {
+		t.Fatalf("tts calls = %d, want 2", calls)
+	}
+	if completed.TerminalReason != "" || completed.Retriable {
+		t.Fatalf("completed terminal metadata = (%q, %t), want empty/non-retriable", completed.TerminalReason, completed.Retriable)
+	}
+	if completed.Retries.Attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", completed.Retries.Attempts)
+	}
+	for index, segment := range completed.Segments {
+		assertJobSegmentHasNoDerivedFailureMetadata(t, segment, fmt.Sprintf("completed provider retry segment %d", index+1))
+	}
+	if completed.PartialAudioManifest == nil || len(completed.PartialAudioManifest.Segments) == 0 {
+		t.Fatalf("partial audio manifest = %#v, want final segment metadata", completed.PartialAudioManifest)
+	}
+	for index, segment := range completed.PartialAudioManifest.Segments {
+		assertPartialSegmentHasNoDerivedFailureMetadata(t, segment, fmt.Sprintf("completed provider retry manifest segment %d", index+1))
+	}
+}
+
+func TestCreateJobRetriesTransientCheckerTimeoutBeforeFailingRun(t *testing.T) {
+	t.Parallel()
+
+	checker := &transientRuntimeChecker{err: context.DeadlineExceeded}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		checker,
+		pipeline.Options{MaxRetries: 2, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+	)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		Text: "Transient checker timeout should retry the current segment.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if calls := checker.calls(); calls != 2 {
+		t.Fatalf("checker calls = %d, want 2", calls)
+	}
+	if completed.TerminalReason != "" || completed.Retriable {
+		t.Fatalf("completed terminal metadata = (%q, %t), want empty/non-retriable", completed.TerminalReason, completed.Retriable)
+	}
+	if completed.Retries.Attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", completed.Retries.Attempts)
+	}
+	for index, segment := range completed.Segments {
+		assertJobSegmentHasNoDerivedFailureMetadata(t, segment, fmt.Sprintf("completed checker retry segment %d", index+1))
+	}
+	if completed.PartialAudioManifest == nil || len(completed.PartialAudioManifest.Segments) == 0 {
+		t.Fatalf("partial audio manifest = %#v, want final segment metadata", completed.PartialAudioManifest)
+	}
+	for index, segment := range completed.PartialAudioManifest.Segments {
+		assertPartialSegmentHasNoDerivedFailureMetadata(t, segment, fmt.Sprintf("completed checker retry manifest segment %d", index+1))
+	}
+}
+
+func TestCreateJobCompletesWithAudioReviewWarningWhenCheckerTimeoutExhausts(t *testing.T) {
+	t.Parallel()
+
+	checker := &alwaysRuntimeChecker{err: context.DeadlineExceeded}
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		agents.NewMockTTSAgent(),
+		checker,
+		pipeline.Options{MaxRetries: 2, JobDataDir: t.TempDir(), ProjectDataDir: t.TempDir()},
+	)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		Text: "Checker timeout should not discard generated speech.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	completed := waitForJob(t, service, job.ID, pipeline.JobStatusCompleted)
+	if calls := checker.calls(); calls != 2 {
+		t.Fatalf("checker calls = %d, want 2", calls)
+	}
+	if completed.TerminalReason != "" || completed.Retriable || completed.Error != "" {
+		t.Fatalf("completed terminal metadata = (%q, %t, %q), want empty/non-retriable", completed.TerminalReason, completed.Retriable, completed.Error)
+	}
+	if completed.AudioReadySegments != completed.Retries.TotalSegments {
+		t.Fatalf("ready segments = %d, want %d", completed.AudioReadySegments, completed.Retries.TotalSegments)
+	}
+	if len(completed.Segments) != 1 || len(completed.Segments[0].Warnings) != 1 {
+		t.Fatalf("segment warnings = %#v, want one ASR review warning", completed.Segments)
+	}
+	if !strings.Contains(completed.Segments[0].Warnings[0], "voice checker timed out") {
+		t.Fatalf("segment warning = %q, want timeout detail", completed.Segments[0].Warnings[0])
+	}
+	if completed.QualityReport == nil || completed.QualityReport.UnverifiedSegmentCount != 1 || completed.QualityReport.WarningCount != 1 {
+		t.Fatalf("quality report = %#v, want one unverified warning", completed.QualityReport)
+	}
+}
+
+func TestCreateJobExhaustedProviderRetriesPreserveReadyPrefix(t *testing.T) {
+	t.Parallel()
+
+	service := pipeline.NewService(
+		agents.NewVoiceOptimizationAgent(),
+		&prefixThenTimeoutTTSAgent{failFromCall: 2},
+		agents.NewMockVoiceCheckerAgent(),
+		pipeline.Options{
+			MaxRetries:      2,
+			SegmentWorkers:  1,
+			SegmentMaxRunes: 20,
+			JobDataDir:      t.TempDir(),
+			ProjectDataDir:  t.TempDir(),
+		},
+	)
+	job, err := service.CreateJob(context.Background(), pipeline.CreateJobRequest{
+		PipelineOptions: pipeline.CreateJobPipelineOptions{
+			ASRCheck: boolPtr(false),
+		},
+		Text: "First sentence. Second sentence.",
+	})
+	if err != nil {
+		t.Fatalf("CreateJob returned error: %v", err)
+	}
+
+	failed := waitForFailedJob(t, service, job.ID)
+	if failed.AudioReadySegments != 1 {
+		t.Fatalf("audio ready segments = %d, want 1", failed.AudioReadySegments)
+	}
+	if failed.AudioPartialURL == "" {
+		t.Fatal("partial audio URL should be preserved for the ready prefix")
+	}
+	if failed.Retries.CurrentSegment != 2 || failed.Retries.SegmentAttempts != 2 {
+		t.Fatalf("retry progress = segment %d attempts %d, want segment 2 attempts 2", failed.Retries.CurrentSegment, failed.Retries.SegmentAttempts)
+	}
+	if len(failed.Segments) < 2 || failed.Segments[0].Status != "ready" || failed.Segments[1].Status != "failed" {
+		t.Fatalf("segment statuses = %#v, want ready prefix then failed segment", failed.Segments)
+	}
+	if failed.TerminalReason != pipeline.JobTerminalReasonProviderTimeout || !failed.Retriable {
+		t.Fatalf("failed terminal metadata = (%q, %t), want provider-timeout/retriable", failed.TerminalReason, failed.Retriable)
 	}
 }
 
@@ -4958,6 +6562,10 @@ type slowStreamingOptimizer struct {
 
 type cancelAwareBlockingOptimizer struct {
 	once    sync.Once
+	started chan struct{}
+}
+
+type repeatBlockingOptimizer struct {
 	started chan struct{}
 }
 
@@ -5143,6 +6751,72 @@ func (mockReferenceTTS) SynthesizeWithReference(
 		Provider:    "mock-reference",
 		Voice:       "clone",
 	}, nil
+}
+
+type cancelledTTSAgent struct{}
+
+func (cancelledTTSAgent) Synthesize(context.Context, string) (agents.TTSResult, error) {
+	return agents.TTSResult{}, context.Canceled
+}
+
+type timeoutTTSAgent struct{}
+
+func (timeoutTTSAgent) Synthesize(context.Context, string) (agents.TTSResult, error) {
+	return agents.TTSResult{}, context.DeadlineExceeded
+}
+
+type failOnceTTSAgent struct {
+	mu       sync.Mutex
+	calls    int
+	failCall int
+}
+
+func (agent *failOnceTTSAgent) Synthesize(_ context.Context, text string) (agents.TTSResult, error) {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	agent.calls += 1
+	if agent.calls == agent.failCall {
+		return agents.TTSResult{}, context.DeadlineExceeded
+	}
+	return silentTTSResult(text, "fail-once")
+}
+
+type transientRuntimeTTSAgent struct {
+	mu       sync.Mutex
+	err      error
+	attempts int
+}
+
+func (agent *transientRuntimeTTSAgent) Synthesize(_ context.Context, text string) (agents.TTSResult, error) {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	agent.attempts += 1
+	if agent.attempts == 1 {
+		return agents.TTSResult{}, agent.err
+	}
+	return silentTTSResult(text, "transient-runtime")
+}
+
+func (agent *transientRuntimeTTSAgent) calls() int {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	return agent.attempts
+}
+
+type prefixThenTimeoutTTSAgent struct {
+	mu           sync.Mutex
+	calls        int
+	failFromCall int
+}
+
+func (agent *prefixThenTimeoutTTSAgent) Synthesize(_ context.Context, text string) (agents.TTSResult, error) {
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+	agent.calls += 1
+	if agent.calls >= agent.failFromCall {
+		return agents.TTSResult{}, context.DeadlineExceeded
+	}
+	return silentTTSResult(text, "prefix-timeout")
 }
 
 type recordingTTSAgent struct {
@@ -5432,6 +7106,15 @@ func (optimizer *cancelAwareBlockingOptimizer) Optimize(ctx context.Context, _ s
 	return "", ctx.Err()
 }
 
+func (optimizer *repeatBlockingOptimizer) Optimize(ctx context.Context, _ string) (string, error) {
+	select {
+	case optimizer.started <- struct{}{}:
+	default:
+	}
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
 func (optimizer *slowStreamingOptimizer) OptimizeStream(_ context.Context, _ string, onDelta func(string)) (string, error) {
 	onDelta("streamed ")
 	close(optimizer.firstDelta)
@@ -5472,6 +7155,54 @@ func (checker *retryRejectedChecker) Check(_ context.Context, optimizedText stri
 	}, nil
 }
 
+type transientRuntimeChecker struct {
+	mu       sync.Mutex
+	err      error
+	attempts int
+}
+
+func (checker *transientRuntimeChecker) Check(_ context.Context, optimizedText string, _ []byte) (agents.VoiceCheckResult, error) {
+	checker.mu.Lock()
+	defer checker.mu.Unlock()
+	checker.attempts += 1
+	if checker.attempts == 1 {
+		return agents.VoiceCheckResult{}, checker.err
+	}
+	return agents.VoiceCheckResult{
+		Complete:    true,
+		Transcript:  optimizedText,
+		NeedsResume: false,
+		Reason:      "test complete after transient checker error",
+		Provider:    "test",
+		Similarity:  1,
+	}, nil
+}
+
+func (checker *transientRuntimeChecker) calls() int {
+	checker.mu.Lock()
+	defer checker.mu.Unlock()
+	return checker.attempts
+}
+
+type alwaysRuntimeChecker struct {
+	mu       sync.Mutex
+	err      error
+	attempts int
+}
+
+func (checker *alwaysRuntimeChecker) Check(_ context.Context, _ string, _ []byte) (agents.VoiceCheckResult, error) {
+	checker.mu.Lock()
+	defer checker.mu.Unlock()
+	checker.attempts += 1
+	return agents.VoiceCheckResult{}, checker.err
+}
+
+func (checker *alwaysRuntimeChecker) calls() int {
+	checker.mu.Lock()
+	defer checker.mu.Unlock()
+	return checker.attempts
+}
+
 type alwaysRejectChecker struct{}
 
 func (checker *alwaysRejectChecker) Check(_ context.Context, _ string, _ []byte) (agents.VoiceCheckResult, error) {
@@ -5482,6 +7213,66 @@ func (checker *alwaysRejectChecker) Check(_ context.Context, _ string, _ []byte)
 		Reason:      "test rejected attempt",
 		Provider:    "test",
 		Similarity:  0.1,
+	}, nil
+}
+
+type rejectMatchingSegmentChecker struct {
+	rejectMatches []string
+	reason        string
+}
+
+func (checker *rejectMatchingSegmentChecker) Check(_ context.Context, optimizedText string, _ []byte) (agents.VoiceCheckResult, error) {
+	trimmed := strings.TrimSpace(optimizedText)
+	for _, candidate := range checker.rejectMatches {
+		if trimmed != candidate {
+			continue
+		}
+		return agents.VoiceCheckResult{
+			Complete:    false,
+			Transcript:  "unrelated transcript",
+			NeedsResume: false,
+			Reason:      checker.reason,
+			Provider:    "test",
+			Similarity:  0.1,
+		}, nil
+	}
+	return agents.VoiceCheckResult{
+		Complete:    true,
+		Transcript:  optimizedText,
+		NeedsResume: false,
+		Reason:      "test complete",
+		Provider:    "test",
+		Similarity:  1,
+	}, nil
+}
+
+type rejectSecondChecker struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (checker *rejectSecondChecker) Check(_ context.Context, optimizedText string, _ []byte) (agents.VoiceCheckResult, error) {
+	checker.mu.Lock()
+	checker.calls++
+	call := checker.calls
+	checker.mu.Unlock()
+	if call == 2 {
+		return agents.VoiceCheckResult{
+			Complete:    false,
+			Transcript:  "rejected",
+			NeedsResume: false,
+			Reason:      "test rejected second segment",
+			Provider:    "test",
+			Similarity:  0.1,
+		}, nil
+	}
+	return agents.VoiceCheckResult{
+		Complete:    true,
+		Transcript:  optimizedText,
+		NeedsResume: false,
+		Reason:      "test complete",
+		Provider:    "test",
+		Similarity:  1,
 	}, nil
 }
 
@@ -5543,427 +7334,32 @@ func (checker *countingRejectChecker) Check(_ context.Context, _ string, _ []byt
 	}, nil
 }
 
+func assertNoReferenceCueLeak(t *testing.T, text string, forbidden []string, label string) {
+	t.Helper()
+	for _, token := range forbidden {
+		if strings.Contains(text, token) {
+			t.Fatalf("%s leaked %q: %q", label, token, text)
+		}
+	}
+	if regexp.MustCompile(`\b6\b`).MatchString(text) {
+		t.Fatalf("%s leaked numeric citation: %q", label, text)
+	}
+}
+
+func assertJobSegmentHasNoDerivedFailureMetadata(t *testing.T, segment pipeline.JobSegment, label string) {
+	t.Helper()
+	if segment.FailureCode != "" || segment.FailureMessage != "" || segment.Retry != nil {
+		t.Fatalf("%s derived failure metadata = code %q message %q retry %#v, want empty/nil", label, segment.FailureCode, segment.FailureMessage, segment.Retry)
+	}
+}
+
+func assertPartialSegmentHasNoDerivedFailureMetadata(t *testing.T, segment pipeline.PartialAudioSegmentManifest, label string) {
+	t.Helper()
+	if segment.FailureCode != "" || segment.FailureMessage != "" || segment.Retry != nil {
+		t.Fatalf("%s derived failure metadata = code %q message %q retry %#v, want empty/nil", label, segment.FailureCode, segment.FailureMessage, segment.Retry)
+	}
+}
+
 func boolPtr(value bool) *bool {
 	return &value
-}
-
-func findPreparedBlockContaining(blocks []pipeline.NarrationBlock, text string) *pipeline.NarrationBlock {
-	for index := range blocks {
-		if strings.Contains(blocks[index].Text, text) {
-			return &blocks[index]
-		}
-	}
-	return nil
-}
-
-func findPreparedBlockByKind(
-	blocks []pipeline.NarrationBlock,
-	kind pipeline.NarrationBlockKind,
-) *pipeline.NarrationBlock {
-	for index := range blocks {
-		if blocks[index].Kind == kind {
-			return &blocks[index]
-		}
-	}
-	return nil
-}
-
-func containsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
-}
-
-func newMockService(t *testing.T, checker pipeline.VoiceChecker) *pipeline.Service {
-	t.Helper()
-
-	return pipeline.NewService(
-		agents.NewVoiceOptimizationAgent(),
-		agents.NewMockTTSAgent(),
-		checker,
-		pipeline.Options{
-			MaxRetries:         3,
-			JobDataDir:         t.TempDir(),
-			ProjectDataDir:     t.TempDir(),
-			BookSourceDir:      t.TempDir(),
-			SourcePrepDir:      t.TempDir(),
-			ProgressDataDir:    t.TempDir(),
-			PlaybackSessionDir: t.TempDir(),
-		},
-	)
-}
-
-func newRecordingTTSService(
-	t *testing.T,
-	engineID string,
-	agent pipeline.TTSAgent,
-	supportsSSML bool,
-) *pipeline.Service {
-	t.Helper()
-
-	return pipeline.NewService(
-		agents.NewVoiceOptimizationAgent(),
-		agent,
-		agents.NewMockVoiceCheckerAgent(),
-		pipeline.Options{
-			MaxRetries:         3,
-			JobDataDir:         t.TempDir(),
-			ProjectDataDir:     t.TempDir(),
-			BookSourceDir:      t.TempDir(),
-			SourcePrepDir:      t.TempDir(),
-			ProgressDataDir:    t.TempDir(),
-			PlaybackSessionDir: t.TempDir(),
-			DefaultTTSEngine:   engineID,
-			TTSEngines: []pipeline.TTSEngineRegistration{{
-				ID:    engineID,
-				Agent: agent,
-				Diagnostics: pipeline.TTSEngineDiagnostics{
-					ID:           engineID,
-					Label:        engineID,
-					Status:       "ready",
-					Local:        true,
-					SupportsSSML: supportsSSML,
-				},
-			}},
-		},
-	)
-}
-
-func newBookSourceService(t *testing.T) *pipeline.Service {
-	t.Helper()
-
-	return newBookSourceServiceWithOptions(t, pipeline.Options{})
-}
-
-func newBookSourceServiceWithPDFScript(t *testing.T, scriptPath string) *pipeline.Service {
-	t.Helper()
-
-	return newBookSourceServiceWithOptions(t, pipeline.Options{
-		BookPDFPythonPath:          "/bin/sh",
-		BookPDFExtractorScriptPath: scriptPath,
-	})
-}
-
-func newBookSourceServiceWithOptions(t *testing.T, options pipeline.Options) *pipeline.Service {
-	t.Helper()
-	if options.MaxRetries == 0 {
-		options.MaxRetries = 3
-	}
-	if options.JobDataDir == "" {
-		options.JobDataDir = t.TempDir()
-	}
-	if options.ProjectDataDir == "" {
-		options.ProjectDataDir = t.TempDir()
-	}
-	if options.BookSourceDir == "" {
-		options.BookSourceDir = t.TempDir()
-	}
-	if options.SourcePrepDir == "" {
-		options.SourcePrepDir = t.TempDir()
-	}
-	if options.ProgressDataDir == "" {
-		options.ProgressDataDir = t.TempDir()
-	}
-	if options.PlaybackSessionDir == "" {
-		options.PlaybackSessionDir = t.TempDir()
-	}
-	return pipeline.NewService(
-		agents.NewVoiceOptimizationAgent(),
-		agents.NewMockTTSAgent(),
-		agents.NewMockVoiceCheckerAgent(),
-		options,
-	)
-}
-
-func writeTestPDFExtractorScript(t *testing.T) string {
-	t.Helper()
-	scriptPath := filepath.Join(t.TempDir(), "pdf_extract_fixture.sh")
-	body := `#!/bin/sh
-if [ "${1:-}" = "--check" ]; then
-  exit 0
-fi
-cat <<'JSON'
-{"adapterVersion":"pdf-adapter-test","document":{"schemaVersion":"content-ir.v1","id":"fixture","sourceType":"bookSource","sourceId":"fixture","projectId":"default","sourceName":"fixture.pdf","adapterVersion":"pdf-adapter-test","generatedAt":"2026-05-16T12:00:00Z","metadata":{"title":"PDF Fixture","supportTier":"B","supportTierLabel":"Tier B: born-digital PDF","confidence":0.9,"extractorChain":[{"id":"detect","label":"Detect format and text-layer health","status":"done","confidence":1},{"id":"fixture","label":"Fixture extractor","status":"done","confidence":0.9}],"warnings":[]},"nodes":[{"nodeId":"page-0001","parentId":"","orderKey":"00000001","kind":"body","role":"body","displayText":"This is the first page.","normalisedText":"This is the first page.","speechText":"This is the first page.","lang":"und","script":"Latn","dir":"ltr","provenance":{"format":"pdf","sourceId":"fixture","locator":{"type":"pdf","pdf":{"pageIndex":0,"readingOrderIndex":0}},"offsets":{"start":0,"end":23},"extraction":{"extractor":"fixture","extractorVersion":"pdf-adapter-test","supportTier":"B","step":"Fixture extractor","confidence":0.9}},"ui":{"progressionHint":"linear","highlightUnitHint":"node"},"speech":{"policyHint":{"mode":"speak","emphasis":"","pauseBeforeMs":0,"pauseAfterMs":0},"speechPolicy":{"profile":"Enterprise","mode":"speak","explanation":"fixture"}},"warnings":[],"confidence":0.9,"rights":{"status":"unknown","notes":""},"adapterVersion":"pdf-adapter-test"},{"nodeId":"page-0002","parentId":"","orderKey":"00000002","kind":"body","role":"body","displayText":"This is the second page.","normalisedText":"This is the second page.","speechText":"This is the second page.","lang":"und","script":"Latn","dir":"ltr","provenance":{"format":"pdf","sourceId":"fixture","locator":{"type":"pdf","pdf":{"pageIndex":1,"readingOrderIndex":0}},"offsets":{"start":25,"end":49},"extraction":{"extractor":"fixture","extractorVersion":"pdf-adapter-test","supportTier":"B","step":"Fixture extractor","confidence":0.9}},"ui":{"progressionHint":"linear","highlightUnitHint":"node"},"speech":{"policyHint":{"mode":"speak","emphasis":"","pauseBeforeMs":0,"pauseAfterMs":0},"speechPolicy":{"profile":"Enterprise","mode":"speak","explanation":"fixture"}},"warnings":[],"confidence":0.9,"rights":{"status":"unknown","notes":""},"adapterVersion":"pdf-adapter-test"},{"nodeId":"page-0003","parentId":"","orderKey":"00000003","kind":"body","role":"body","displayText":"This is the third page.","normalisedText":"This is the third page.","speechText":"This is the third page.","lang":"und","script":"Latn","dir":"ltr","provenance":{"format":"pdf","sourceId":"fixture","locator":{"type":"pdf","pdf":{"pageIndex":2,"readingOrderIndex":0}},"offsets":{"start":51,"end":74},"extraction":{"extractor":"fixture","extractorVersion":"pdf-adapter-test","supportTier":"B","step":"Fixture extractor","confidence":0.9}},"ui":{"progressionHint":"linear","highlightUnitHint":"node"},"speech":{"policyHint":{"mode":"speak","emphasis":"","pauseBeforeMs":0,"pauseAfterMs":0},"speechPolicy":{"profile":"Enterprise","mode":"speak","explanation":"fixture"}},"warnings":[],"confidence":0.9,"rights":{"status":"unknown","notes":""},"adapterVersion":"pdf-adapter-test"}]},"metadata":{"title":"PDF Fixture","supportTier":"B","supportTierLabel":"Tier B: born-digital PDF","confidence":0.9,"warnings":[]},"title":"PDF Fixture","warnings":[]}
-JSON
-`
-	if err := os.WriteFile(scriptPath, []byte(body), 0o755); err != nil {
-		t.Fatalf("WriteFile script returned error: %v", err)
-	}
-	return scriptPath
-}
-
-func writeTestEPUB(t *testing.T, filename string) string {
-	t.Helper()
-
-	outputPath := filepath.Join(t.TempDir(), filename)
-	file, err := os.Create(outputPath)
-	if err != nil {
-		t.Fatalf("Create EPUB returned error: %v", err)
-	}
-	zipWriter := zip.NewWriter(file)
-	files := map[string]string{
-		"META-INF/container.xml": `<?xml version="1.0" encoding="UTF-8"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles><rootfile full-path="OPS/package.opf" media-type="application/oebps-package+xml"/></rootfiles>
-</container>`,
-		"OPS/package.opf": `<?xml version="1.0" encoding="UTF-8"?>
-<package version="3.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
-  <metadata>
-    <dc:title>Northern Lights</dc:title>
-    <dc:creator>Ada Reader</dc:creator>
-  </metadata>
-  <manifest>
-    <item id="chapter-one" href="chapter-one.xhtml" media-type="application/xhtml+xml"/>
-    <item id="chapter-two" href="chapter-two.xhtml" media-type="application/xhtml+xml"/>
-  </manifest>
-  <spine>
-    <itemref idref="chapter-one"/>
-    <itemref idref="chapter-two"/>
-  </spine>
-</package>`,
-		"OPS/chapter-one.xhtml": `<?xml version="1.0" encoding="UTF-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Opening</title></head>
-<body><h1>Opening</h1><p>Det var en kylig kväll i Stockholm.</p></body></html>`,
-		"OPS/chapter-two.xhtml": `<?xml version="1.0" encoding="UTF-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Second Chapter</title></head>
-<body><h1>Second Chapter</h1><p>The second chapter keeps the reader moving.</p></body></html>`,
-	}
-	for path, body := range files {
-		writer, createErr := zipWriter.Create(path)
-		if createErr != nil {
-			t.Fatalf("Create zip file returned error: %v", createErr)
-		}
-		if _, writeErr := writer.Write([]byte(body)); writeErr != nil {
-			t.Fatalf("Write zip file returned error: %v", writeErr)
-		}
-	}
-	if err := zipWriter.Close(); err != nil {
-		t.Fatalf("Close zip writer returned error: %v", err)
-	}
-	if err := file.Close(); err != nil {
-		t.Fatalf("Close EPUB returned error: %v", err)
-	}
-	return outputPath
-}
-
-func writeStructuredTestEPUB(t *testing.T, filename string) string {
-	t.Helper()
-
-	outputPath := filepath.Join(t.TempDir(), filename)
-	file, err := os.Create(outputPath)
-	if err != nil {
-		t.Fatalf("Create EPUB returned error: %v", err)
-	}
-	zipWriter := zip.NewWriter(file)
-	files := map[string]string{
-		"META-INF/container.xml": `<?xml version="1.0" encoding="UTF-8"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles><rootfile full-path="EPUB/package.opf" media-type="application/oebps-package+xml"/></rootfiles>
-</container>`,
-		"EPUB/package.opf": `<?xml version="1.0" encoding="UTF-8"?>
-<package version="3.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
-  <metadata>
-    <dc:title>Structured Book</dc:title>
-    <dc:creator>Reader Example</dc:creator>
-  </metadata>
-  <manifest>
-    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
-    <item id="copyright" href="copyright.xhtml" media-type="application/xhtml+xml"/>
-    <item id="chapter-one" href="chapter-one.xhtml" media-type="application/xhtml+xml"/>
-    <item id="chapter-two" href="chapter-two.xhtml" media-type="application/xhtml+xml"/>
-    <item id="about" href="about.xhtml" media-type="application/xhtml+xml"/>
-  </manifest>
-  <spine>
-    <itemref idref="copyright"/>
-    <itemref idref="chapter-one"/>
-    <itemref idref="chapter-two"/>
-    <itemref idref="about"/>
-  </spine>
-</package>`,
-		"EPUB/nav.xhtml": `<?xml version="1.0" encoding="UTF-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml"><body><nav epub:type="toc">
-<ol>
-<li><a href="copyright.xhtml">Copyright</a></li>
-<li><a href="chapter-one.xhtml">Chapter 1: A Clean Start</a></li>
-<li><a href="chapter-two.xhtml">Chapter 2: A Wider Sky</a></li>
-<li><a href="about.xhtml">About the Author</a></li>
-</ol>
-</nav></body></html>`,
-		"EPUB/copyright.xhtml": `<?xml version="1.0" encoding="UTF-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Copyright</title></head>
-<body><h1>Copyright</h1><p>Copyright page. Not for narration.</p></body></html>`,
-		"EPUB/chapter-one.xhtml": `<?xml version="1.0" encoding="UTF-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Raw One</title></head>
-<body><h1>Raw One</h1><p>The first real chapter starts with clean narration text for the reader.</p></body></html>`,
-		"EPUB/chapter-two.xhtml": `<?xml version="1.0" encoding="UTF-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Raw Two</title></head>
-<body><h1>Raw Two</h1><p>The second real chapter keeps the guided cinema moving forward.</p></body></html>`,
-		"EPUB/about.xhtml": `<?xml version="1.0" encoding="UTF-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml"><head><title>About</title></head>
-<body><h1>About the Author</h1><p>Back matter. Not for narration.</p></body></html>`,
-	}
-	for path, body := range files {
-		writer, createErr := zipWriter.Create(path)
-		if createErr != nil {
-			t.Fatalf("Create zip file returned error: %v", createErr)
-		}
-		if _, writeErr := writer.Write([]byte(body)); writeErr != nil {
-			t.Fatalf("Write zip file returned error: %v", writeErr)
-		}
-	}
-	if err := zipWriter.Close(); err != nil {
-		t.Fatalf("Close zip writer returned error: %v", err)
-	}
-	if err := file.Close(); err != nil {
-		t.Fatalf("Close EPUB returned error: %v", err)
-	}
-	return outputPath
-}
-
-func writeTestDOCX(t *testing.T, filename string) string {
-	t.Helper()
-
-	outputPath := filepath.Join(t.TempDir(), filename)
-	file, err := os.Create(outputPath)
-	if err != nil {
-		t.Fatalf("Create DOCX returned error: %v", err)
-	}
-	zipWriter := zip.NewWriter(file)
-	files := map[string]string{
-		"docProps/core.xml": `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/">
-<dc:title>DOCX Integration Fixture</dc:title><dc:creator>Adapter Writer</dc:creator></cp:coreProperties>`,
-		"word/_rels/document.xml.rels": `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/></Relationships>`,
-		"word/footnotes.xml": `<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-<w:footnote w:id="2"><w:p><w:r><w:t>Footnote detail.</w:t></w:r></w:p></w:footnote></w:footnotes>`,
-		"word/endnotes.xml": `<w:endnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-<w:endnote w:id="3"><w:p><w:r><w:t>Endnote detail.</w:t></w:r></w:p></w:endnote></w:endnotes>`,
-		"word/comments.xml": `<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-<w:comment w:id="4"><w:p><w:r><w:t>Comment detail.</w:t></w:r></w:p></w:comment></w:comments>`,
-		"word/document.xml": `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><w:body>
-<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Chapter One</w:t></w:r></w:p>
-<w:p><w:r><w:t>Body paragraph with notes.</w:t></w:r><w:footnoteReference w:id="2"/><w:commentReference w:id="4"/></w:p>
-<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="9"/></w:numPr></w:pPr><w:r><w:t>List item one.</w:t></w:r></w:p>
-<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Cell A</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Cell B</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
-<w:p><w:pPr><w:pStyle w:val="Caption"/></w:pPr><w:r><w:t>Figure 1. A caption.</w:t></w:r></w:p>
-<w:p><w:r><w:drawing><wp:inline><wp:docPr id="1" name="Picture 1" descr="Diagram alt text"/><a:blip r:embed="rId5"/></wp:inline></w:drawing></w:r></w:p>
-<w:p><w:r><w:t>Paragraph with endnote.</w:t></w:r><w:endnoteReference w:id="3"/></w:p>
-</w:body></w:document>`,
-	}
-	for path, body := range files {
-		writer, createErr := zipWriter.Create(path)
-		if createErr != nil {
-			t.Fatalf("Create zip file returned error: %v", createErr)
-		}
-		if _, writeErr := writer.Write([]byte(body)); writeErr != nil {
-			t.Fatalf("Write zip file returned error: %v", writeErr)
-		}
-	}
-	if err := zipWriter.Close(); err != nil {
-		t.Fatalf("Close zip writer returned error: %v", err)
-	}
-	if err := file.Close(); err != nil {
-		t.Fatalf("Close DOCX returned error: %v", err)
-	}
-	return outputPath
-}
-
-func writeTestHTML(t *testing.T, filename string) string {
-	t.Helper()
-
-	outputPath := filepath.Join(t.TempDir(), filename)
-	if err := os.WriteFile(outputPath, []byte(testHTMLFixture()), 0o644); err != nil {
-		t.Fatalf("Write HTML returned error: %v", err)
-	}
-	return outputPath
-}
-
-func testHTMLFixture() string {
-	return `<!doctype html><html lang="en"><head><title>Synthetic Article</title></head><body><main><article>
-<h1 id="synthetic-article">Synthetic Article</h1>
-<p>Article lead paragraph with enough words for spans.</p>
-<figure><img src="desk.jpg" alt="A newsroom desk"/><figcaption>Useful figure caption.</figcaption></figure>
-<table><tr><th>Metric</th><td>Value</td></tr></table>
-</article></main></body></html>`
-}
-
-func findTestSection(sections []pipeline.BookSourceSection, id string) *pipeline.BookSourceSection {
-	for _, section := range sections {
-		if section.ID == id {
-			nextSection := section
-			return &nextSection
-		}
-	}
-	return nil
-}
-
-func waitForJob(t *testing.T, service *pipeline.Service, id string, status pipeline.JobStatus) pipeline.VoiceJob {
-	t.Helper()
-
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		job, err := service.GetJob(id)
-		if err != nil {
-			t.Fatalf("GetJob returned error: %v", err)
-		}
-		if job.Status == status {
-			return job
-		}
-		if job.Status == pipeline.JobStatusFailed {
-			t.Fatalf("job failed: %s", job.Error)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	job, _ := service.GetJob(id)
-	t.Fatalf("job status = %q, want %q", job.Status, status)
-	return pipeline.VoiceJob{}
-}
-
-func waitForFailedJob(t *testing.T, service *pipeline.Service, id string) pipeline.VoiceJob {
-	t.Helper()
-
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		job, err := service.GetJob(id)
-		if err != nil {
-			t.Fatalf("GetJob returned error: %v", err)
-		}
-		if job.Status == pipeline.JobStatusFailed {
-			return job
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	job, _ := service.GetJob(id)
-	t.Fatalf("job status = %q, want %q", job.Status, pipeline.JobStatusFailed)
-	return pipeline.VoiceJob{}
-}
-
-func waitForAudioSegments(t *testing.T, service *pipeline.Service, id string, minSegments int) {
-	t.Helper()
-
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		job, err := service.GetJob(id)
-		if err != nil {
-			t.Fatalf("GetJob returned error: %v", err)
-		}
-		if job.AudioReadySegments >= minSegments {
-			return
-		}
-		if job.Status == pipeline.JobStatusFailed {
-			t.Fatalf("job failed: %s", job.Error)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	job, err := service.GetJob(id)
-	if err != nil {
-		t.Fatalf("GetJob returned error: %v", err)
-	}
-	t.Fatalf("audio segments ready = %d, want >= %d", job.AudioReadySegments, minSegments)
 }

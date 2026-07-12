@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tts-research.local/schemas/extraction-revision.v1.schema.json",
+  "title": "ExtractionRevision v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "extractionRevisionId",
+    "sourceId",
+    "sourceRevisionId",
+    "adapter",
+    "adapterVersion",
+    "startedAt",
+    "status",
+    "emittedUnitIds"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "extraction-revision.v1"
+    },
+    "extractionRevisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceRevisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "adapter": {
+      "type": "string",
+      "minLength": 1
+    },
+    "adapterVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "enum": ["running", "complete", "complete_with_warnings", "failed", "interrupted_retriable"]
+    },
+    "emittedUnitIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "retryAfterRevisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

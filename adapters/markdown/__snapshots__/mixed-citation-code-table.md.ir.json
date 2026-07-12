@@ -1,0 +1,637 @@
+{
+  "adapterVersion": "markdown-adapter-v2",
+  "blocks": [
+    {
+      "confidence": 0.98,
+      "endOffset": 22,
+      "id": "markdown-heading-mixed-citation-code-tablemdheadingmixed-research-notes-mixed-research-notes-6d910d06d2d2",
+      "index": 1,
+      "kind": "heading",
+      "label": "Mixed Research Notes",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/0",
+        "columnEnd": 23,
+        "columnStart": 1,
+        "lineEnd": 1,
+        "lineStart": 1,
+        "sourceSlice": "# Mixed Research Notes",
+        "fingerprint": "1b75a9595b785a7cf4195ff122017576",
+        "identityAnchor": "mixed-citation-code-table.md|heading|Mixed Research Notes|# Mixed Research Notes",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:0"
+      },
+      "speakMode": "speak",
+      "spokenText": "Mixed Research Notes",
+      "startOffset": 0,
+      "text": "# Mixed Research Notes",
+      "warnings": [],
+      "orderKey": "000000001024"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 89,
+      "id": "markdown-body-mixed-citation-code-tablemdbodymixed-research-notesuse-preparesource-before-reviewing-citation-heavy-notes-12-6f3a9dc13d08",
+      "index": 2,
+      "kind": "body",
+      "label": "Use prepareSource() before reviewing citation-heavy notes.",
+      "language": "",
+      "metadata": {
+        "inlineArtifacts": [
+          {
+            "endOffset": 45,
+            "identifier": "",
+            "kind": "code",
+            "markerType": "markdown_code_span",
+            "raw": "`prepareSource()`",
+            "speechText": "prepareSource()",
+            "startOffset": 28,
+            "url": "",
+            "visualLabel": "code"
+          },
+          {
+            "endOffset": 88,
+            "identifier": "",
+            "kind": "reference",
+            "markerType": "reference_marker",
+            "raw": "[12]",
+            "speechText": "Reference 12.",
+            "startOffset": 84,
+            "url": "",
+            "visualLabel": "ref"
+          }
+        ],
+        "astPath": "/children/1",
+        "columnEnd": 66,
+        "columnStart": 1,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "sourceSlice": "Use `prepareSource()` before reviewing citation-heavy notes [12].",
+        "fingerprint": "22f8f00eadddff912f66c5cd0dcd893c",
+        "identityAnchor": "mixed-citation-code-table.md|body|Mixed Research Notes|Use `prepareSource()` before reviewing citation-heavy notes [12].",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:24"
+      },
+      "speakMode": "speak",
+      "spokenText": "Use prepareSource() before reviewing citation-heavy notes.",
+      "startOffset": 24,
+      "text": "Use `prepareSource()` before reviewing citation-heavy notes [12].",
+      "warnings": ["inline_code_policy", "reference_marker_removed"],
+      "orderKey": "000000025601"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 88,
+      "id": "markdown-reference-mixed-citation-code-tablemdreferencemixed-research-notes12-31cc5c96bdb5",
+      "index": 3,
+      "kind": "reference",
+      "label": "Reference",
+      "language": "",
+      "metadata": {
+        "endOffset": 88,
+        "identifier": "",
+        "kind": "reference",
+        "markerType": "reference_marker",
+        "raw": "[12]",
+        "speechText": "Reference 12.",
+        "startOffset": 84,
+        "url": "",
+        "visualLabel": "ref",
+        "astPath": "/children/1/inline-artifact/1",
+        "columnEnd": 65,
+        "columnStart": 61,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "sourceSlice": "[12]",
+        "fingerprint": "cb68c4593a7556b1d7e478cbd3c8e528",
+        "identityAnchor": "mixed-citation-code-table.md|reference|Mixed Research Notes|[12]",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:84"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 84,
+      "text": "[12]",
+      "warnings": ["inline_artifact", "reference_marker_removed", "reference_policy"],
+      "orderKey": "000000087042"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 163,
+      "id": "markdown-table-mixed-citation-code-tablemdtablemixed-research-notes-claim-status-links-render-visibly-smith-2024-928191a24694",
+      "index": 4,
+      "kind": "table",
+      "label": "Table",
+      "language": "",
+      "metadata": {
+        "align": [null, null],
+        "headers": ["Claim", "Status"],
+        "rows": [["Links render visibly", ""]],
+        "astPath": "/children/2",
+        "columnEnd": 40,
+        "columnStart": 1,
+        "lineEnd": 7,
+        "lineStart": 5,
+        "sourceSlice": "| Claim | Status |\n| --- | --- |\n| Links render visibly | [Smith 2024] |",
+        "fingerprint": "affd53d7bfa09e7a163a53fb66607da7",
+        "identityAnchor": "mixed-citation-code-table.md|table|Mixed Research Notes|| Claim | Status | | --- | --- | | Links render visibly | [Smith 2024] |",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:91"
+      },
+      "speakMode": "speak",
+      "spokenText": "| Claim | Status |\n| --- | --- |\n| Links render visibly | [Smith 2024] |",
+      "startOffset": 91,
+      "text": "| Claim | Status |\n| --- | --- |\n| Links render visibly | [Smith 2024] |",
+      "warnings": ["table_policy"],
+      "orderKey": "000000094211"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 229,
+      "id": "markdown-admonition-mixed-citation-code-tablemdadmonitionmixed-research-notes-note-keep-table-code-and-citation-handling-explainable-1572d82a9864",
+      "index": 5,
+      "kind": "admonition",
+      "label": "Note",
+      "language": "",
+      "metadata": {
+        "admonitionKind": "note",
+        "directiveName": "note",
+        "astPath": "/children/3",
+        "columnEnd": 55,
+        "columnStart": 1,
+        "lineEnd": 10,
+        "lineStart": 9,
+        "sourceSlice": "> [!NOTE]\n> Keep table, code, and citation handling explainable.",
+        "fingerprint": "18088d91dda78c8bb5b6157bb6f05497",
+        "identityAnchor": "mixed-citation-code-table.md|admonition|Mixed Research Notes|> [!NOTE] > Keep table, code, and citation handling explainable.",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:165"
+      },
+      "speakMode": "speak",
+      "spokenText": "Keep table, code, and citation handling explainable.",
+      "startOffset": 165,
+      "text": "> [!NOTE]\n> Keep table, code, and citation handling explainable.",
+      "warnings": ["admonition_callout"],
+      "orderKey": "000000169988"
+    }
+  ],
+  "document": {
+    "adapterVersion": "markdown-adapter-v2",
+    "generatedAt": "1970-01-01T00:00:00.000Z",
+    "id": "mixed-citation-code-table",
+    "metadata": {
+      "capabilities": {
+        "commonmark": true,
+        "directives": true,
+        "frontmatter": true,
+        "gfm": true,
+        "mdx": true,
+        "mystSafeSubset": true
+      },
+      "frontmatter": []
+    },
+    "nodes": [
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "# Mixed Research Notes",
+        "kind": "heading",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/0",
+          "columnEnd": 23,
+          "columnStart": 1,
+          "lineEnd": 1,
+          "lineStart": 1,
+          "sourceSlice": "# Mixed Research Notes",
+          "fingerprint": "1b75a9595b785a7cf4195ff122017576",
+          "identityAnchor": "mixed-citation-code-table.md|heading|Mixed Research Notes|# Mixed Research Notes",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:0"
+        },
+        "nodeId": "markdown-heading-mixed-citation-code-tablemdheadingmixed-research-notes-mixed-research-notes-6d910d06d2d2",
+        "normalisedText": "# Mixed Research Notes",
+        "orderKey": "000000001024",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/0",
+              "columnEnd": 23,
+              "columnStart": 1,
+              "lineEnd": 1,
+              "lineStart": 1,
+              "path": "mixed-citation-code-table.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 22,
+            "start": 0
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "mixed-citation-code-table"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "heading",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "Mixed Research Notes",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "Use `prepareSource()` before reviewing citation-heavy notes [12].",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "inlineArtifacts": [
+            {
+              "endOffset": 45,
+              "identifier": "",
+              "kind": "code",
+              "markerType": "markdown_code_span",
+              "raw": "`prepareSource()`",
+              "speechText": "prepareSource()",
+              "startOffset": 28,
+              "url": "",
+              "visualLabel": "code"
+            },
+            {
+              "endOffset": 88,
+              "identifier": "",
+              "kind": "reference",
+              "markerType": "reference_marker",
+              "raw": "[12]",
+              "speechText": "Reference 12.",
+              "startOffset": 84,
+              "url": "",
+              "visualLabel": "ref"
+            }
+          ],
+          "astPath": "/children/1",
+          "columnEnd": 66,
+          "columnStart": 1,
+          "lineEnd": 3,
+          "lineStart": 3,
+          "sourceSlice": "Use `prepareSource()` before reviewing citation-heavy notes [12].",
+          "fingerprint": "22f8f00eadddff912f66c5cd0dcd893c",
+          "identityAnchor": "mixed-citation-code-table.md|body|Mixed Research Notes|Use `prepareSource()` before reviewing citation-heavy notes [12].",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:24"
+        },
+        "nodeId": "markdown-body-mixed-citation-code-tablemdbodymixed-research-notesuse-preparesource-before-reviewing-citation-heavy-notes-12-6f3a9dc13d08",
+        "normalisedText": "Use `prepareSource()` before reviewing citation-heavy notes [12].",
+        "orderKey": "000000025601",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/1",
+              "columnEnd": 66,
+              "columnStart": 1,
+              "lineEnd": 3,
+              "lineStart": 3,
+              "path": "mixed-citation-code-table.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 89,
+            "start": 24
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "mixed-citation-code-table"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "Use prepareSource() before reviewing citation-heavy notes.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["inline_code_policy", "reference_marker_removed"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "[12]",
+        "kind": "reference",
+        "lang": "und",
+        "metadata": {
+          "endOffset": 88,
+          "identifier": "",
+          "kind": "reference",
+          "markerType": "reference_marker",
+          "raw": "[12]",
+          "speechText": "Reference 12.",
+          "startOffset": 84,
+          "url": "",
+          "visualLabel": "ref",
+          "astPath": "/children/1/inline-artifact/1",
+          "columnEnd": 65,
+          "columnStart": 61,
+          "lineEnd": 3,
+          "lineStart": 3,
+          "sourceSlice": "[12]",
+          "fingerprint": "cb68c4593a7556b1d7e478cbd3c8e528",
+          "identityAnchor": "mixed-citation-code-table.md|reference|Mixed Research Notes|[12]",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:84"
+        },
+        "nodeId": "markdown-reference-mixed-citation-code-tablemdreferencemixed-research-notes12-31cc5c96bdb5",
+        "normalisedText": "[12]",
+        "orderKey": "000000087042",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/1/inline-artifact/1",
+              "columnEnd": 65,
+              "columnStart": 61,
+              "lineEnd": 3,
+              "lineStart": 3,
+              "path": "mixed-citation-code-table.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 88,
+            "start": 84
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "mixed-citation-code-table"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "reference",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["inline_artifact", "reference_marker_removed", "reference_policy"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "| Claim | Status |\n| --- | --- |\n| Links render visibly | [Smith 2024] |",
+        "kind": "table",
+        "lang": "und",
+        "metadata": {
+          "align": [null, null],
+          "headers": ["Claim", "Status"],
+          "rows": [["Links render visibly", ""]],
+          "astPath": "/children/2",
+          "columnEnd": 40,
+          "columnStart": 1,
+          "lineEnd": 7,
+          "lineStart": 5,
+          "sourceSlice": "| Claim | Status |\n| --- | --- |\n| Links render visibly | [Smith 2024] |",
+          "fingerprint": "affd53d7bfa09e7a163a53fb66607da7",
+          "identityAnchor": "mixed-citation-code-table.md|table|Mixed Research Notes|| Claim | Status | | --- | --- | | Links render visibly | [Smith 2024] |",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:91"
+        },
+        "nodeId": "markdown-table-mixed-citation-code-tablemdtablemixed-research-notes-claim-status-links-render-visibly-smith-2024-928191a24694",
+        "normalisedText": "| Claim | Status | | --- | --- | | Links render visibly | [Smith 2024] |",
+        "orderKey": "000000094211",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/2",
+              "columnEnd": 40,
+              "columnStart": 1,
+              "lineEnd": 7,
+              "lineStart": 5,
+              "path": "mixed-citation-code-table.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 163,
+            "start": 91
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "mixed-citation-code-table"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "table",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "| Claim | Status |\n| --- | --- |\n| Links render visibly | [Smith 2024] |",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["table_policy"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "> [!NOTE]\n> Keep table, code, and citation handling explainable.",
+        "kind": "admonition",
+        "lang": "und",
+        "metadata": {
+          "admonitionKind": "note",
+          "directiveName": "note",
+          "astPath": "/children/3",
+          "columnEnd": 55,
+          "columnStart": 1,
+          "lineEnd": 10,
+          "lineStart": 9,
+          "sourceSlice": "> [!NOTE]\n> Keep table, code, and citation handling explainable.",
+          "fingerprint": "18088d91dda78c8bb5b6157bb6f05497",
+          "identityAnchor": "mixed-citation-code-table.md|admonition|Mixed Research Notes|> [!NOTE] > Keep table, code, and citation handling explainable.",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:165"
+        },
+        "nodeId": "markdown-admonition-mixed-citation-code-tablemdadmonitionmixed-research-notes-note-keep-table-code-and-citation-handling-explainable-1572d82a9864",
+        "normalisedText": "> [!NOTE] > Keep table, code, and citation handling explainable.",
+        "orderKey": "000000169988",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/3",
+              "columnEnd": 55,
+              "columnStart": 1,
+              "lineEnd": 10,
+              "lineStart": 9,
+              "path": "mixed-citation-code-table.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 229,
+            "start": 165
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "mixed-citation-code-table"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "admonition",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "Keep table, code, and citation handling explainable.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["admonition_callout"]
+      }
+    ],
+    "projectId": "",
+    "schemaVersion": "content-ir.v1",
+    "sourceId": "mixed-citation-code-table",
+    "sourceName": "mixed-citation-code-table.md",
+    "sourceType": "preparedSource"
+  },
+  "metadata": {
+    "capabilities": {
+      "commonmark": true,
+      "directives": true,
+      "frontmatter": true,
+      "gfm": true,
+      "mdx": true,
+      "mystSafeSubset": true
+    },
+    "frontmatter": []
+  },
+  "parseMode": "strict",
+  "skippedItems": [
+    {
+      "id": "markdown-reference-mixed-citation-code-tablemdreferencemixed-research-notes12-31cc5c96bdb5",
+      "kind": "reference",
+      "offset": 84,
+      "reason": "reference marker available through citation policy",
+      "text": "[12]"
+    }
+  ],
+  "title": "Mixed Research Notes",
+  "warnings": []
+}

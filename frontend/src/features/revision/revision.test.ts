@@ -1,0 +1,408 @@
+import { describe, expect, it } from "vitest";
+import { applyRevisionBatchAction } from "./revisionBatchActions";
+import {
+  DEFAULT_REVISION_FILTERS,
+  applyRevisionSpokenRepair,
+  applyRevisionSessionState,
+  buildRevisionTriageItems,
+  composeReviewedSpeechText,
+  deriveRevisionBlockStatus,
+  filterRevisionBlocks,
+  firstRevisionRepairBlockId,
+  groupRevisionTriageItems,
+  normalizeRevisionPolicyNoteType,
+  revisionBlockIsCleanApprovable,
+  revisionBlockIsSpeakable,
+  revisionPreviewReadinessLabel,
+  revisionFiltersAreDefault,
+  revisionNextActionLabel,
+  revisionTextIsStandaloneArtifactToken,
+  stripRevisionTrailingReferenceNumberText,
+  summarizeRevisionHealth,
+  summarizeRevisionBlocks,
+  type RevisionBlock,
+} from "./revisionFilters";
+import {
+  buildCanonicalPreviewSpeechPlan,
+  previewSpeechPlanJobTextIsStale,
+} from "./revisionSpeechPlan";
+
+const blocks: RevisionBlock[] = [
+  block({
+    confidence: 0.95,
+    id: "a",
+    label: "Intro",
+    policyNoteType: "spoken",
+    sourceSection: "Chapter 1",
+  }),
+  block({
+    confidence: 0.62,
+    id: "b",
+    label: "Equation",
+    needsAttention: true,
+    policyNote: "Math is spoken semantically.",
+    policyNoteType: "math",
+    sourceSection: "Chapter 1",
+    status: "needsReview",
+    warnings: ["Low confidence"],
+  }),
+  block({
+    id: "c",
+    label: "Citation",
+    policyNoteType: "citation",
+    sourceSection: "Notes",
+    status: "skipped",
+  }),
+];
+
+describe("revision filters", () => {
+  it("filters by search, status, policy note, confidence, and attention", () => {
+    expect(
+      filterRevisionBlocks(blocks, {
+        ...DEFAULT_REVISION_FILTERS,
+        confidence: "low",
+        needsAttention: "yes",
+        policyNoteType: "math",
+        search: "semantic",
+        status: "needsReview",
+      }).map((item) => item.id),
+    ).toEqual(["b"]);
+  });
+
+  it("treats trimmed empty search as the default filter state", () => {
+    expect(revisionFiltersAreDefault(DEFAULT_REVISION_FILTERS)).toBe(true);
+    expect(revisionFiltersAreDefault({ ...DEFAULT_REVISION_FILTERS, search: "   " })).toBe(true);
+    expect(revisionFiltersAreDefault({ ...DEFAULT_REVISION_FILTERS, status: "needsReview" })).toBe(
+      false,
+    );
+  });
+
+  it("summarizes revision health", () => {
+    const summary = summarizeRevisionBlocks(blocks);
+
+    expect(summary.averageConfidence).toBeCloseTo(0.823, 3);
+    expect(summary).toMatchObject({
+      needsAttention: 1,
+      skipped: 1,
+      total: 3,
+    });
+  });
+
+  it("derives repair queue severity and health from triage categories", () => {
+    const triageBlocks = [
+      block({
+        id: "empty",
+        index: 1,
+        spokenText: "",
+        status: "waiting",
+      }),
+      block({
+        id: "pronunciation",
+        index: 2,
+        normalisationCount: 1,
+        normalisations: [
+          {
+            endOffset: 4,
+            kind: "abbreviation",
+            original: "Dr.",
+            rule: "doctor-title",
+            spoken: "Doctor",
+            startOffset: 0,
+          },
+        ],
+        pronunciationCount: 1,
+        pronunciations: [
+          {
+            endOffset: 9,
+            originalText: "OpenAI",
+            source: "project",
+            spoken: "Open A I",
+            startOffset: 0,
+            term: "OpenAI",
+          },
+        ],
+      }),
+      block({
+        id: "policy",
+        index: 3,
+        policyNote: "Citation is summarized for speech.",
+        policyNoteType: "citation",
+      }),
+      block({
+        id: "clean",
+        index: 4,
+        status: "approved",
+      }),
+    ];
+
+    const items = buildRevisionTriageItems(triageBlocks);
+    const groups = groupRevisionTriageItems(items);
+    const summary = summarizeRevisionHealth(triageBlocks);
+
+    expect(items.map((item) => [item.block.id, item.category])).toEqual([
+      ["empty", "audioBlocker"],
+      ["pronunciation", "pronunciation"],
+      ["policy", "policyTransform"],
+      ["clean", "clean"],
+    ]);
+    expect(groups.map((group) => group.category)).toEqual([
+      "audioBlocker",
+      "pronunciation",
+      "policyTransform",
+      "clean",
+    ]);
+    expect(summary).toMatchObject({
+      audioBlockers: 1,
+      needsRepair: 2,
+      policyTransforms: 1,
+      previewReadiness: "warning",
+      previewWarnings: 3,
+      pronunciationBlocks: 1,
+      pronunciationItems: 2,
+      ready: 1,
+    });
+    expect(revisionPreviewReadinessLabel(summary)).toContain("blocker");
+    expect(revisionNextActionLabel(summary)).toBe("Repair blockers");
+    expect(firstRevisionRepairBlockId(triageBlocks)).toBe("empty");
+    expect(revisionBlockIsCleanApprovable(triageBlocks[3])).toBe(false);
+    expect(
+      revisionBlockIsCleanApprovable(
+        block({
+          id: "clean-waiting",
+          status: "waiting",
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it("applies pronunciation and normalization repairs into spoken text", () => {
+    expect(
+      applyRevisionSpokenRepair("Open A I builds tools.", {
+        currentSpoken: "Open A I",
+        original: "OpenAI",
+        replacement: "OpenAI",
+      }),
+    ).toBe("OpenAI builds tools.");
+    expect(
+      applyRevisionSpokenRepair("Dr. Rivera reads.", {
+        currentSpoken: "Doctor",
+        original: "Dr.",
+        replacement: "Doctor",
+      }),
+    ).toBe("Doctor Rivera reads.");
+    expect(
+      applyRevisionSpokenRepair("", {
+        currentSpoken: "A S R",
+        original: "ASR",
+        replacement: "A S R",
+      }),
+    ).toBe("A S R");
+  });
+
+  it("composes reviewed speech text from session edits and skipped decisions", () => {
+    const sessionBlocks = applyRevisionSessionState(blocks, {
+      editedTextByBlockId: { a: "Edited spoken intro." },
+      statusByBlockId: { b: "skipped" },
+    });
+
+    expect(sessionBlocks.find((item) => item.id === "a")?.spokenText).toBe("Edited spoken intro.");
+    expect(sessionBlocks.find((item) => item.id === "b")?.status).toBe("skipped");
+    expect(composeReviewedSpeechText(sessionBlocks)).toBe("Edited spoken intro.");
+  });
+
+  it("builds canonical speech text and ids from speakable preview cues", () => {
+    const previewBlocks = [
+      block({ id: "intro", index: 1, spokenText: "Intro body." }),
+      block({
+        id: "refs-heading",
+        index: 2,
+        kind: "reference",
+        label: "References",
+        policyNoteType: "onDemand",
+        spokenText: "## References",
+        text: "## References",
+      }),
+      block({
+        id: "number",
+        index: 3,
+        kind: "reference",
+        label: "Reference",
+        spokenText: "thirty four",
+        text: "[34](https://example.com/reference)",
+      }),
+      block({ id: "body", index: 4, spokenText: "Body resumes." }),
+    ];
+
+    const plan = buildCanonicalPreviewSpeechPlan(previewBlocks);
+
+    expect(plan.text).toBe("Intro body.\n\nBody resumes.");
+    expect(plan.blockIds).toEqual(["intro", "body"]);
+    expect(plan.skippedBlockIds).toEqual(["refs-heading", "number"]);
+    expect(composeReviewedSpeechText(previewBlocks)).toBe(plan.text);
+  });
+
+  it("keeps completed audio current when optimized job text matches the spoken plan", () => {
+    const plan = buildCanonicalPreviewSpeechPlan([
+      block({ id: "body", index: 1, spokenText: "CPU Nguyen paid twelve pounds." }),
+    ]);
+
+    expect(
+      previewSpeechPlanJobTextIsStale(plan, {
+        inputText: "CPU Nguyen paid £12.",
+        optimizedText: "CPU Nguyen paid twelve pounds.",
+        status: "completed",
+      }),
+    ).toBe(false);
+  });
+
+  it("marks completed audio stale when neither submitted nor optimized text matches", () => {
+    const plan = buildCanonicalPreviewSpeechPlan([
+      block({ id: "body", index: 1, spokenText: "Current narration body." }),
+    ]);
+
+    expect(
+      previewSpeechPlanJobTextIsStale(plan, {
+        inputText: "Previous narration body.",
+        optimizedText: "Previous narration body.",
+        status: "completed",
+      }),
+    ).toBe(true);
+  });
+
+  it("marks completed audio stale when job text still contains skipped cues", () => {
+    const plan = buildCanonicalPreviewSpeechPlan([
+      block({ id: "intro", index: 1, spokenText: "Intro body." }),
+      block({
+        id: "refs-heading",
+        index: 2,
+        kind: "reference",
+        label: "References",
+        policyNoteType: "onDemand",
+        spokenText: "## References",
+        text: "## References",
+      }),
+      block({ id: "body", index: 3, spokenText: "Body resumes." }),
+    ]);
+
+    expect(
+      previewSpeechPlanJobTextIsStale(plan, {
+        inputText: "Intro body.\n\n## References\n\nBody resumes.",
+        optimizedText: "Intro body.\n\n## References\n\nBody resumes.",
+        status: "completed",
+      }),
+    ).toBe(true);
+    expect(
+      previewSpeechPlanJobTextIsStale(plan, {
+        inputText: "Intro body. Body resumes.",
+        optimizedText: "Intro body. Body resumes.",
+        status: "completed",
+      }),
+    ).toBe(false);
+  });
+
+  it("normalizes policy note types from source decisions", () => {
+    expect(normalizeRevisionPolicyNoteType("on-demand citation")).toBe("citation");
+    expect(normalizeRevisionPolicyNoteType("table_summary")).toBe("summarized");
+    expect(normalizeRevisionPolicyNoteType("syntax-aware code")).toBe("code");
+  });
+
+  it("derives status from skipped blocks, warnings, and low confidence", () => {
+    expect(deriveRevisionBlockStatus({ speakMode: "skip" })).toBe("skipped");
+    expect(deriveRevisionBlockStatus({ warnings: ["needs review"] })).toBe("needsReview");
+    expect(deriveRevisionBlockStatus({ confidence: 0.5 })).toBe("needsReview");
+    expect(deriveRevisionBlockStatus({ confidence: 0.92 })).toBe("waiting");
+  });
+
+  it("classifies stale reference-only spoken forms as non-speaking", () => {
+    expect(
+      revisionBlockIsSpeakable(
+        block({
+          kind: "reference",
+          label: "Reference",
+          spokenText: "thirty four",
+          text: "[34](https://example.com/reference)",
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      revisionBlockIsSpeakable(
+        block({
+          kind: "body",
+          label: "Artifact",
+          spokenText: "iturn14image2turn14image5turn15image8turn15image9",
+          text: "iturn14image2turn14image5turn15image8turn15image9",
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      revisionTextIsStandaloneArtifactToken(
+        "iturn14image2turn14image5turn15image8turn15image9",
+      ),
+    ).toBe(true);
+    expect(
+      revisionBlockIsSpeakable(
+        block({
+          kind: "body",
+          spokenText:
+            "one. https://opentelemetry.io/docs/what-is-opentelemetry/ thirty four. https://example.com/reference.pdf",
+          text: "one. https://opentelemetry.io/docs/what-is-opentelemetry/ thirty four. https://example.com/reference.pdf",
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("strips stale inline citation number tails without removing body prose", () => {
+    expect(
+      stripRevisionTrailingReferenceNumberText(
+        "Industrial alarm guidance and healthcare reviews converge on that finding. forty three",
+      ),
+    ).toBe("Industrial alarm guidance and healthcare reviews converge on that finding.");
+    expect(stripRevisionTrailingReferenceNumberText("Findings converge. 43")).toBe(
+      "Findings converge.",
+    );
+  });
+});
+
+describe("revision batch actions", () => {
+  it("updates selected block status and records history", () => {
+    const result = applyRevisionBatchAction({
+      actionId: "approveSelected",
+      blocks,
+      context: {
+        policyProfile: "Technical Docs",
+        runConfiguration: "Checked Master",
+        voiceProfile: "Default voice",
+      },
+      selectedBlockIds: new Set(["a", "b"]),
+      statusByBlockId: {},
+    });
+
+    expect(result.statusByBlockId).toMatchObject({ a: "approved", b: "approved" });
+    expect(result.historyEntries).toHaveLength(2);
+    expect(result.statusMessage).toContain("2 blocks");
+  });
+});
+
+function block(overrides: Partial<RevisionBlock>): RevisionBlock {
+  return {
+    confidence: 0.9,
+    estimatedDurationMs: 1200,
+    id: "block",
+    index: 1,
+    kind: "body",
+    label: "Block",
+    needsAttention: false,
+    normalisationCount: 0,
+    policyNote: "Spoken as prose.",
+    policyNoteType: "spoken",
+    pronunciationCount: 0,
+    segmentCount: 1,
+    sourceSection: "Body",
+    speakMode: "speak",
+    spokenText: "Spoken text.",
+    status: "waiting",
+    text: "Source text.",
+    warnings: [],
+    ...overrides,
+  };
+}

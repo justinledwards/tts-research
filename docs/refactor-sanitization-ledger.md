@@ -1,0 +1,76 @@
+# Refactor Sanitization Ledger
+
+## Cycle 2026-05-28 - Codebase Sanitization
+- frontend/src/App.tsx:extract command palette handler map — done
+- scripts/e2e-surface-complexity-budget.mjs:extract budget config and reporting helpers — done
+- backend/internal/policy/evaluator.go:extract pure inline and media helper cluster — done
+- frontend/src/features/teleprompt/telepromptTheatreCueContent.tsx:extract cue parsing/rendering helpers — done
+- backend/internal/pipeline/project_bundles.go:extract bundle helper cluster — done
+- backend/internal/pipeline/research_modules.go:extract configuration helper cluster — done
+- scripts/e2e-golden-minute.mjs:extract interaction and artifact helpers — done
+- backend/internal/sourceprep/html_quality.go:extract html quality helpers and confidence heuristics — done
+- backend/internal/agents/tts.go:extract kokoro synthesis helpers — done
+- scripts/validate-local/review-evidence.mjs:extract review command step and artifact builders — done
+- frontend/src/App.tsx:extract trailing utility helpers: done
+- frontend/src/RunConfigDrawer.tsx:extract run configuration control helpers — done
+- frontend/src/features/book-cinema/BookCinemaPanel.tsx:extract reusable upload/import helpers: done
+- frontend/src/features/cinema/PreparedSourceCinemaBase.tsx:extract transport/player subcomponents: done
+- frontend/src/features/settings/SettingsPanel.tsx:extract section components and state helpers — done
+- backend/internal/pipeline/service.go:decompose generation orchestration functions — done
+- backend/internal/pipeline/service_test.go:extract fixture builders and assertion helpers — done
+- backend/internal/httpapi/router.go:split route registration helpers — done
+- scripts/e2e-book-cinema.mjs:extract reusable e2e command helpers — done
+- scripts/e2e-ui-action-audit.mjs:extract audit helpers and table builders — done
+- scripts/e2e-ui-action-matrix.mjs:extract action classification and interaction helpers — done
+- scripts/validate-local/validate-final-ux-gates.mjs:extract final-ux orchestration and gate helpers — done
+- scripts/validate-local/validate-local.mjs:extract reusable command batch constants — done
+- backend/internal/pipeline/source_preps.go:extract source prep helpers — done
+- backend/internal/pipeline/profile_targets.go:extract target normalization helpers — done
+- backend/internal/pipeline/profile_sources.go:extract audio and candidate scoring helpers — done
+- backend/internal/pipeline/book_sources.go:extract book scope and import helper cluster — done
+- backend/internal/pipeline/profile_source_helpers.go:extract candidate scoring and candidate selection helpers — done
+- backend/internal/httpapi/router_test.go:extract reusable endpoint helper cluster — done
+- frontend/src/api.ts:extract transcript normalization helpers — done
+- frontend/src/features/teleprompt/TelepromptStudio.tsx:extract studio view helpers — done
+- frontend/src/WorkspaceDrawer.tsx:extract workspace drawer helper components — done
+- frontend/src/features/teleprompt/TelepromptTheatre.tsx:extract cue rendering and parsing helpers — done
+- frontend/src/features/teleprompt/TelepromptStudio.tsx:extract context panel tab builder — done
+- frontend/src/features/intake/IntakeWizard.tsx:extract intake decision helpers — done
+- scripts/validate-local/validate-final-ux-gates-helpers.mjs:extract final UX constants and artifact map — done
+- frontend/src/features/revision/RevisionPanel.tsx:extract pure view helpers — done
+- frontend/src/features/teleprompt/telepromptCueTimeline.ts:extract timeline text/math helper cluster — done
+- frontend/src/features/voices/VoiceProfileDashboard.tsx:extract dashboard row and utility helpers — done
+- frontend/src/types.ts:extract speech-policy type cluster — done
+- backend/internal/pipeline/models.go:extract job and voice-profile model cluster — done
+- backend/internal/pipeline/projects.go:extract project speech-policy utility helpers — done
+- frontend/src/features/preferences/model.ts:extract persistence and normalization helpers — done
+- scripts/validate-local/review-evidence.mjs:extract review evidence collection and coverage helpers — done
+- frontend/src/features/speech-policy/SpeechPolicyWizard.tsx:extract wizard subcomponents and helpers — done
+- frontend/src/features/speech-policy/policyPreview.ts:extract speech-policy preview helper cluster — done
+- scripts/validate-local/validate-local.mjs:extract reusable CLI/runtime/report helpers — done
+- backend/cmd/api/main.go:extract pipeline service bootstrap — done
+- scripts/golden-minute-fixture.mjs:extract fixture constants — done
+- frontend/src/BundlePanels.tsx:extract panel section dispatch and shared helpers — done
+- frontend/src/VoiceSourceAnalysisPanel.tsx:extract helper components and target-option helpers — done
+- frontend/src/features/dashboard/ProjectDashboard.tsx:extract panel helper components and format utilities — done
+- frontend/src/features/cinema/CinemaTransportBar.tsx:extract transport helpers and display-popover hook — done
+- scripts/speech-fluency.mjs:extract fluency analytics and PCM helper cluster — done
+- adapters/markdown/transform.js:extract markdown parsing helper and citation utilities — done
+- adapters/html/emit_ir.js:extract traversal and metadata helper cluster — done
+- frontend/src/features/ui-audit/actionMetadata.ts:extract static catalog data and owner/classification helpers — done
+- frontend/src/features/preview/GlobalPreviewPlayer.tsx:extract preview player controls and helpers — done
+- frontend/src/features/readalong/wordTimeline.ts:extract segment helper cluster — done
+
+- frontend/src/features/readalong/readAlongInvariant.ts:extract invariant helper cluster — done
+- frontend/src/features/book-cinema/model.ts:extract timing cue resolution helpers — done
+- scripts/e2e-accessibility-audit.mjs:extract accessibility scan/report helpers — done
+- frontend/src/features/book-cinema/model.test.ts:extract assertion fixtures and result builders — done
+- scripts/validate-local/reader-timing.mjs:extract reader timing budget constants into dedicated config module — done
+- scripts/e2e-responsive-snapshots.mjs:extract website calm fixture and metric helpers — done
+- scripts/generate-contract-types.mjs:extract generated contract templates — done
+- scripts/readalong-sync-evidence.mjs:extract sync-report helpers — done
+
+- frontend/src/App.tsx:extract voice cloning activity helpers — done
+- frontend/src/App.tsx:extract command palette registration helpers — done
+- frontend/src/features/cinema/PreparedSourceCinemaTransport.tsx:extract transport presentation helpers — done
+- backend/internal/alignment/timing_schema.go:extract timing normalization helper cluster — done

@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "tts-research.linear-provenance.v1",
+  "target": {
+    "project": {
+      "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+      "name": "TTS-Research"
+    },
+    "team": {
+      "id": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+      "key": "QQP",
+      "name": "QQ-PWN"
+    }
+  },
+  "artifacts": {
+    "capacitySnapshot": {
+      "path": "docs/project-management/linear/tts-research-capacity-snapshot-20260710T071226+0200.json",
+      "sha256": "f865eb997af1d3ade17a09fc00cc21e4f3b49e07ab29a848fecc20679f361714",
+      "schemaVersion": "tts-research.linear-capacity.v1",
+      "capturedAt": "2026-07-10T07:12:26.438544+02:00",
+      "source": "Linear GraphQL project-scoped issues(includeArchived:false)",
+      "expectedCounts": {
+        "cap": 20,
+        "unarchivedTotal": 0,
+        "activeUnarchivedBefore": 0,
+        "newIssuesCreatedNow": 0,
+        "activeUnarchivedAfter": 0,
+        "availableSlots": 20,
+        "hasNextPage": false,
+        "compliant": true
+      }
+    },
+    "existingIssues": {
+      "path": "docs/project-management/linear/tts-research-existing-issues-20260710T071540+0200.json",
+      "sha256": "805a04ac27fb1c0930764a457143e7da072704a422921a3ad251e60b52afbc24",
+      "schemaVersion": "tts-research.linear-existing-issues.v1",
+      "capturedAt": "2026-07-10T07:15:40.998513+02:00",
+      "source": "Linear GraphQL project-scoped issues(includeArchived:true), paginated",
+      "expectedCounts": {
+        "issueCount": 22,
+        "stateTypeCounts": {
+          "completed": 22
+        },
+        "archivedCount": 22
+      }
+    },
+    "completedArchive": {
+      "path": "docs/project-management/linear/tts-research-completed-archive-20260709T214157+0200.json",
+      "sha256": "f16573fbaa4cb6e0d87e7700cc32c1dde64720cf51070d38b7e61994f190fbf5",
+      "schemaVersion": 1,
+      "exportedAt": "2026-07-09T19:41:57.571640+00:00",
+      "purpose": "Backup completed unarchived TTS-Research issues before Linear archive",
+      "expectedCounts": {
+        "completedUnarchived": 9,
+        "safeToArchive": 9,
+        "skippedUnsafe": 0
+      }
+    }
+  }
+}

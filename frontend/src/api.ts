@@ -1,52 +1,80 @@
 import type {
-  BookSource,
-  BookSourceImportOptions,
-  BookCinemaDiagnostics,
-  BookScope,
-  BookSourceScopeContent,
+  LocatorEnvelope,
+  ReadalongManifest,
+  ReadingUnitManifest,
+  SourceEnvelope,
+  SourceRevision,
+} from "@tts-research/schema";
+import {
+  normalizePreparedSource,
+  normalizeVoiceProfileCandidate,
+  normalizeVoiceProfileSource,
+} from "./apiNormalizationHelpers";
+import type { ContentIRDocument, ContentIRSchemaVersion, SpeechPlanDocument } from "./content-ir";
+import type { HighlightMapV2 } from "./features/readalong";
+import type {
   AdapterCapability,
   AdapterDiagnostics,
+  AlignmentQualityReport,
+  BookCinemaDiagnostics,
+  BookScope,
+  BookSource,
+  BookSourceImportOptions,
+  BookSourceScopeContent,
   BundleImportMode,
   CreatePreparedSourceRequest,
-  LexiconUpsertRequest,
-  CreateVoiceProfileFromCandidateRequest,
+  CreateTemporarySourceRequest,
   CreateVoiceJobRequest,
+  CreateVoiceProfileFromCandidateRequest,
   CreateVoiceProfileRequest,
   CreateVoiceProfileSourceRequest,
   FragmentTimingArtifact,
   HighlightMap,
+  LexiconUpsertRequest,
   MarkdownParseMode,
   MathPreviewResult,
   PlaybackProgress,
   PlaybackProgressUpdate,
   PlaybackSession,
   PreparedSource,
-  ProjectSpeechPolicy,
-  PronunciationLexicon,
   ProjectBundleImportResult,
   ProjectBundlePreview,
   ProjectBundleSummary,
+  ProjectSpeechPolicy,
   ProjectStorageSummary,
+  PronunciationLexicon,
+  RenameAssetRequest,
   ResearchModuleDiagnostics,
+  SourceReadinessConfirmationRequest,
+  SourceSpeechPolicyUpdateRequest,
   SpeechPolicyDefinition,
   SpeechPolicyOverrides,
   SpeechPolicyProfile,
-  SourceSpeechPolicyUpdateRequest,
-  UpsertSpeechPolicyProfileRequest,
   SystemMetrics,
+  TemporarySourceCleanupRequest,
+  TemporarySourceCleanupResult,
+  TemporarySourceEnvelope,
+  TemporarySourcePromotionRequest,
+  TemporarySourceSession,
+  TemporaryStorageUsageSummary,
   TokenTimingArtifact,
-  TranscriptMetadata,
   TTSEngineDiagnostics,
+  UpsertSpeechPolicyProfileRequest,
   Voice,
   VoiceJob,
-  VoiceProfileCredentialStatus,
   VoiceProfile,
   VoiceProfileCandidate,
+  VoiceProfileCredentialStatus,
   VoiceProfileSource,
   VoiceProfileSourceDiagnostics,
   VoiceProject,
 } from "./types";
-import type { ContentIRDocument, ContentIRSchemaVersion, SpeechPlanDocument } from "./content-ir";
+
+export {
+  normalizePreparedSource,
+  normalizeVoiceProfileCandidate,
+  normalizeVoiceProfileSource,
+} from "./apiNormalizationHelpers";
 
 // Vite rewrites direct import.meta.env access during dev and build.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -65,11 +93,19 @@ function apiEndpoint(path: string, params: Record<string, string | undefined> = 
 
 export class ApiRequestError extends Error {
   readonly status: number;
+  readonly code?: string;
+  readonly temporarySource?: boolean;
 
-  constructor(status: number, message: string) {
+  constructor(
+    status: number,
+    message: string,
+    options: { code?: string; temporarySource?: boolean } = {},
+  ) {
     super(message);
     this.name = "ApiRequestError";
     this.status = status;
+    this.code = options.code;
+    this.temporarySource = options.temporarySource;
   }
 }
 
@@ -81,6 +117,309 @@ export function isApiNotFoundError(error: unknown): boolean {
     return (error as { status?: unknown }).status === 404;
   }
   return error instanceof Error && /\b404\b/.test(error.message);
+}
+
+export type ReaderWorkspaceSyncFidelity =
+  | "exact_word"
+  | "phrase"
+  | "block"
+  | "audio_only"
+  | "source_only"
+  | "none";
+
+export interface ReaderWorkspaceSnapshot {
+  readonly schemaVersion: "reader_workspace_snapshot.v1";
+  readonly projectId: string;
+  readonly projectRevision: number;
+  readonly readMode: "paused" | "readable";
+  readonly sourceId: string;
+  readonly sourceRevisionId: string;
+  readonly sourceContentHash: string;
+  readonly runId: string | null;
+  readonly runCompatibilityKey: string | null;
+  readonly mediaManifestVersion: number | null;
+  readonly timingRevision: number | null;
+  readonly syncFidelity: ReaderWorkspaceSyncFidelity | null;
+  readonly readerLocator: LocatorEnvelope | null;
+  readonly playbackCursorMs: number | null;
+  readonly playbackRate: number | null;
+  readonly followPreference: boolean | null;
+  readonly updatedAt: string;
+}
+
+export interface ReaderWorkspaceVersionedSnapshot {
+  readonly snapshot: ReaderWorkspaceSnapshot;
+  readonly etag: string;
+}
+
+export class ReaderWorkspacePreconditionError extends ApiRequestError {
+  readonly current: ReaderWorkspaceSnapshot;
+  readonly etag: string;
+
+  constructor(message: string, current: ReaderWorkspaceSnapshot, etag: string) {
+    super(412, message);
+    this.name = "ReaderWorkspacePreconditionError";
+    this.current = current;
+    this.etag = etag;
+  }
+}
+
+export async function getReaderWorkspace(
+  projectId: string,
+): Promise<ReaderWorkspaceVersionedSnapshot> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/projects/${encodeURIComponent(projectId)}/reader-workspace`,
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return {
+    snapshot: (await response.json()) as ReaderWorkspaceSnapshot,
+    etag: requiredReaderWorkspaceETag(response),
+  };
+}
+
+export async function putReaderWorkspace(
+  projectId: string,
+  snapshot: ReaderWorkspaceSnapshot,
+  etag: string,
+): Promise<ReaderWorkspaceVersionedSnapshot> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/projects/${encodeURIComponent(projectId)}/reader-workspace`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "If-Match": etag },
+      body: JSON.stringify(snapshot),
+    },
+  );
+  if (response.status === 412) {
+    const payload = (await response.json()) as {
+      current: ReaderWorkspaceSnapshot;
+      error?: string;
+      retryToken?: string;
+    };
+    throw new ReaderWorkspacePreconditionError(
+      payload.error ?? "Reader workspace changed on the server",
+      payload.current,
+      requiredReaderWorkspaceETag(response, payload.retryToken),
+    );
+  }
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return {
+    snapshot: (await response.json()) as ReaderWorkspaceSnapshot,
+    etag: requiredReaderWorkspaceETag(response),
+  };
+}
+
+function requiredReaderWorkspaceETag(response: Response, fallback?: string): string {
+  const etag = response.headers.get("ETag")?.trim() ?? fallback?.trim();
+  if (!etag) {
+    throw new ApiRequestError(response.status, "Reader workspace response is missing ETag");
+  }
+  return etag;
+}
+
+export type SourceManifestEventType =
+  | "source_revision_created"
+  | "extraction_revision_updated"
+  | "reading_unit_manifest_written"
+  | "readalong_manifest_written"
+  | "audio_artifact_updated"
+  | "progress_updated"
+  | "repair_overlay_created"
+  | "promotion_crosswalk_created"
+  | "artifact_interrupted_retriable";
+
+export interface SourceManifestEventSubject {
+  readonly sourceRevisionId?: string;
+  readonly extractionRevisionId?: string;
+  readonly readingUnitManifestId?: string;
+  readonly readalongManifestId?: string;
+  readonly audioArtifactId?: string;
+  readonly progressId?: string;
+  readonly repairOverlayId?: string;
+  readonly promotionCrosswalkId?: string;
+  readonly state?: string;
+}
+
+export interface SourceManifestEvent {
+  readonly schemaVersion: string;
+  readonly eventId: string;
+  readonly sourceId: string;
+  readonly sequence: number;
+  readonly occurredAt: string;
+  readonly eventType: SourceManifestEventType;
+  readonly snapshotAvailable: boolean;
+  readonly cursor?: string;
+  readonly subject: SourceManifestEventSubject;
+  readonly snapshotManifestId?: string;
+  readonly metadata?: Record<string, unknown>;
+}
+
+export interface SourceManifestEventReplay {
+  readonly sourceId: string;
+  readonly afterSequence: number;
+  readonly events: SourceManifestEvent[];
+  readonly gap: boolean;
+  readonly snapshotRequired: boolean;
+  readonly latestSequence: number;
+  readonly nextCursor?: string;
+}
+
+export interface SourceManifestSnapshotFallback {
+  readonly sourceId: string;
+  readonly sourceRevisionId?: string;
+  readonly cursor?: string;
+  readonly latestSequence: number;
+  readonly sourceEnvelope?: SourceEnvelope;
+  readonly sourceRevision?: SourceRevision;
+  readonly currentReadingUnitManifest?: ReadingUnitManifest;
+  readonly currentReadalongManifest?: ReadalongManifest;
+}
+
+export interface SourceManifestReplayRequest {
+  readonly sourceId: string;
+  readonly afterSequence?: number;
+  readonly limit?: number;
+}
+
+export interface SourceManifestSnapshotRequest {
+  readonly sourceId: string;
+  readonly sourceRevisionId?: string;
+}
+
+export interface SourceManifestStreamRequest extends SourceManifestReplayRequest {
+  readonly once?: boolean;
+}
+
+export interface SourceManifestStreamHandlers {
+  readonly onEvent: (event: SourceManifestEvent) => void;
+  readonly onGap: (replay: SourceManifestEventReplay) => void;
+  readonly onError: (error: Error) => void;
+}
+
+export interface SourceManifestEventSourceLike {
+  readonly readyState?: number;
+  addEventListener(type: string, listener: (event: Event | MessageEvent<string>) => void): void;
+  close(): void;
+}
+
+export interface SourceManifestSubscribeOptions {
+  readonly eventSourceFactory?: (url: string) => SourceManifestEventSourceLike;
+}
+
+export async function replaySourceManifestEvents(
+  request: SourceManifestReplayRequest,
+): Promise<SourceManifestEventReplay> {
+  const response = await fetch(sourceManifestEventsUrl("/api/source-manifest/events", request));
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<SourceManifestEventReplay>;
+}
+
+export async function getSourceManifestSnapshot(
+  request: SourceManifestSnapshotRequest,
+): Promise<SourceManifestSnapshotFallback> {
+  const response = await fetch(
+    apiEndpoint("/api/source-manifest/snapshot", {
+      sourceId: request.sourceId,
+      sourceRevisionId: request.sourceRevisionId,
+    }),
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<SourceManifestSnapshotFallback>;
+}
+
+export function sourceManifestEventsStreamUrl(request: SourceManifestStreamRequest): string {
+  return sourceManifestEventsUrl("/api/source-manifest/events/stream", request);
+}
+
+function defaultSourceManifestEventSourceFactory(url: string): SourceManifestEventSourceLike {
+  if (typeof EventSource === "undefined") {
+    throw new TypeError("EventSource is not available in this environment");
+  }
+  return new EventSource(url);
+}
+
+function noopSourceManifestDispose(): void {
+  return;
+}
+
+export function subscribeToSourceManifestEvents(
+  request: SourceManifestStreamRequest,
+  handlers: SourceManifestStreamHandlers,
+  options: SourceManifestSubscribeOptions = {},
+): () => void {
+  const factory = options.eventSourceFactory ?? defaultSourceManifestEventSourceFactory;
+
+  let eventSource: SourceManifestEventSourceLike;
+  try {
+    eventSource = factory(sourceManifestEventsStreamUrl(request));
+  } catch (error) {
+    handlers.onError(error instanceof Error ? error : new Error(String(error)));
+    return noopSourceManifestDispose;
+  }
+
+  let closed = false;
+  eventSource.addEventListener("source-manifest-event", (event) => {
+    parseSourceManifestSsePayload(
+      event,
+      (payload) => {
+        handlers.onEvent(payload as SourceManifestEvent);
+      },
+      handlers.onError,
+    );
+  });
+  eventSource.addEventListener("source-manifest-gap", (event) => {
+    parseSourceManifestSsePayload(
+      event,
+      (payload) => {
+        handlers.onGap(payload as SourceManifestEventReplay);
+      },
+      handlers.onError,
+    );
+  });
+  eventSource.addEventListener("error", () => {
+    if (!closed) {
+      handlers.onError(new Error("Source manifest event stream disconnected"));
+    }
+  });
+
+  return () => {
+    closed = true;
+    eventSource.close();
+  };
+}
+
+function sourceManifestEventsUrl(
+  path: string,
+  request: SourceManifestReplayRequest | SourceManifestStreamRequest,
+): string {
+  return apiEndpoint(path, {
+    sourceId: request.sourceId,
+    afterSequence:
+      typeof request.afterSequence === "number" ? String(request.afterSequence) : undefined,
+    limit: typeof request.limit === "number" ? String(request.limit) : undefined,
+    once: "once" in request && typeof request.once === "boolean" ? String(request.once) : undefined,
+  });
+}
+
+function parseSourceManifestSsePayload(
+  event: Event | MessageEvent<string>,
+  onPayload: (payload: unknown) => void,
+  onError: (error: Error) => void,
+): void {
+  const data = "data" in event && typeof event.data === "string" ? event.data : "";
+  try {
+    onPayload(JSON.parse(data));
+  } catch (error) {
+    onError(error instanceof Error ? error : new Error(String(error)));
+  }
 }
 
 export async function createVoiceJob(request: CreateVoiceJobRequest): Promise<VoiceJob> {
@@ -97,6 +436,61 @@ export async function createVoiceJob(request: CreateVoiceJobRequest): Promise<Vo
   }
 
   return response.json() as Promise<VoiceJob>;
+}
+
+export async function retryVoiceJob(id: string): Promise<VoiceJob> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}/retry`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response.json() as Promise<VoiceJob>;
+}
+
+export async function deleteVoiceJob(id: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+}
+
+export interface VoicePreviewAudio {
+  readonly audio: Blob;
+  readonly contentType: string;
+  readonly durationMs: number | null;
+  readonly provider: string;
+  readonly voice: string;
+}
+
+export async function createVoicePreview(
+  request: CreateVoiceJobRequest,
+): Promise<VoicePreviewAudio> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-previews`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+
+  const contentType = response.headers.get("Content-Type") ?? "audio/wav";
+  return {
+    audio: await response.blob(),
+    contentType,
+    durationMs: parseOptionalNumber(response.headers.get("X-Voice-Preview-Duration-Ms")),
+    provider: response.headers.get("X-Voice-Preview-Provider") ?? "",
+    voice: response.headers.get("X-Voice-Preview-Voice") ?? "",
+  };
 }
 
 export async function getBookCinemaDiagnostics(): Promise<BookCinemaDiagnostics> {
@@ -499,6 +893,38 @@ export async function listProjectBookSources(projectId: string): Promise<BookSou
   return response.json() as Promise<BookSource[]>;
 }
 
+export async function getBookSource(id: string): Promise<BookSource> {
+  const response = await fetch(`${apiBaseUrl}/api/book-sources/${encodeURIComponent(id)}`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<BookSource>;
+}
+
+export async function renameBookSource(
+  bookSourceId: string,
+  request: RenameAssetRequest,
+): Promise<BookSource> {
+  const response = await fetch(`${apiBaseUrl}/api/book-sources/${bookSourceId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<BookSource>;
+}
+
+export async function deleteBookSource(bookSourceId: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/book-sources/${bookSourceId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+}
+
 export async function getBookSourceScope(
   bookSourceId: string,
   scope: BookScope,
@@ -523,6 +949,21 @@ export async function getBookSourceScope(
   }
 
   return response.json() as Promise<BookSourceScopeContent>;
+}
+
+export async function confirmBookSourceReadiness(
+  bookSourceId: string,
+  request: SourceReadinessConfirmationRequest,
+): Promise<BookSource> {
+  const response = await fetch(`${apiBaseUrl}/api/book-sources/${bookSourceId}/readiness/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<BookSource>;
 }
 
 export async function createBookSource(
@@ -604,6 +1045,191 @@ export async function createPreparedSource(
   return normalizePreparedSource((await response.json()) as PreparedSource);
 }
 
+export async function createTemporarySource(
+  request: CreateTemporarySourceRequest | File,
+  options: { markdownParseMode?: MarkdownParseMode } = {},
+): Promise<TemporarySourceSession> {
+  const init: RequestInit = { method: "POST" };
+  if (request instanceof File) {
+    const formData = new FormData();
+    formData.append("file", request);
+    if (options.markdownParseMode) {
+      formData.append("markdownParseMode", options.markdownParseMode);
+    }
+    init.body = formData;
+  } else {
+    init.headers = { "Content-Type": "application/json" };
+    init.body = JSON.stringify({
+      ...request,
+      markdownParseMode: request.markdownParseMode ?? options.markdownParseMode,
+    });
+  }
+  const response = await fetch(`${apiBaseUrl}/api/temporary-sources`, init);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  const payload = (await response.json()) as TemporarySourceEnvelope | TemporarySourceSession;
+  return temporarySourceFromPayload(payload);
+}
+
+export async function getTemporarySource(id: string): Promise<TemporarySourceSession> {
+  const response = await fetch(`${apiBaseUrl}/api/temporary-sources/${encodeURIComponent(id)}`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return temporarySourceFromPayload(
+    (await response.json()) as TemporarySourceEnvelope | TemporarySourceSession,
+  );
+}
+
+export async function reopenTemporarySource(id: string): Promise<TemporarySourceSession> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/temporary-sources/${encodeURIComponent(id)}/reopen`,
+    { method: "POST" },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return temporarySourceFromPayload(
+    (await response.json()) as TemporarySourceEnvelope | TemporarySourceSession,
+  );
+}
+
+export async function listTemporarySources(): Promise<TemporarySourceSession[]> {
+  const response = await fetch(`${apiBaseUrl}/api/temporary-sources`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  const payload = (await response.json()) as (TemporarySourceEnvelope | TemporarySourceSession)[];
+  return payload.map((source) => temporarySourceFromPayload(source));
+}
+
+export async function listTemporarySourceJobs(): Promise<VoiceJob[]> {
+  const response = await fetch(`${apiBaseUrl}/api/temporary-sources/jobs`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<VoiceJob[]>;
+}
+
+export async function getTemporaryStorageUsageSummary(): Promise<TemporaryStorageUsageSummary> {
+  const response = await fetch(`${apiBaseUrl}/api/temporary-sources/storage/summary`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<TemporaryStorageUsageSummary>;
+}
+
+export async function cleanupTemporarySource(
+  id: string,
+  request: TemporarySourceCleanupRequest,
+): Promise<TemporarySourceCleanupResult> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/temporary-sources/${encodeURIComponent(id)}/cleanup`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<TemporarySourceCleanupResult>;
+}
+
+export async function clearExpiredTemporarySources(): Promise<TemporarySourceCleanupResult> {
+  const response = await fetch(`${apiBaseUrl}/api/temporary-sources/cleanup-expired`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<TemporarySourceCleanupResult>;
+}
+
+export async function clearTemporarySources(): Promise<TemporarySourceCleanupResult> {
+  const response = await fetch(`${apiBaseUrl}/api/temporary-sources/clear`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<TemporarySourceCleanupResult>;
+}
+
+export async function deleteTemporarySource(id: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/temporary-sources/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+}
+
+export async function confirmTemporarySourceReadiness(
+  id: string,
+  request: SourceReadinessConfirmationRequest,
+): Promise<TemporarySourceSession> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/temporary-sources/${encodeURIComponent(id)}/readiness/confirm`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return temporarySourceFromPayload(
+    (await response.json()) as TemporarySourceEnvelope | TemporarySourceSession,
+  );
+}
+
+function temporarySourceFromPayload(
+  payload: TemporarySourceEnvelope | TemporarySourceSession,
+): TemporarySourceSession {
+  const source = "source" in payload ? payload.source : payload;
+  return { ...source, scope: "temporary", sourceOwner: "temporary" };
+}
+
+export async function promoteTemporarySource(
+  id: string,
+  request: TemporarySourcePromotionRequest,
+): Promise<PreparedSource> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/temporary-sources/${encodeURIComponent(id)}/promote`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return normalizePreparedSource((await response.json()) as PreparedSource);
+}
+
+export async function createTemporarySourceJob(
+  temporarySourceId: string,
+  request: CreateVoiceJobRequest,
+): Promise<VoiceJob> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/temporary-sources/${encodeURIComponent(temporarySourceId)}/voice-jobs`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return response.json() as Promise<VoiceJob>;
+}
+
 export async function createPreparedSourceJob(
   preparedSourceId: string,
   request: CreateVoiceJobRequest,
@@ -621,6 +1247,48 @@ export async function createPreparedSourceJob(
 
 export async function getPreparedSource(id: string): Promise<PreparedSource> {
   const response = await fetch(`${apiBaseUrl}/api/source-preps/${id}`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return normalizePreparedSource((await response.json()) as PreparedSource);
+}
+
+export async function renamePreparedSource(
+  preparedSourceId: string,
+  request: RenameAssetRequest,
+): Promise<PreparedSource> {
+  const response = await fetch(`${apiBaseUrl}/api/source-preps/${preparedSourceId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return normalizePreparedSource((await response.json()) as PreparedSource);
+}
+
+export async function deletePreparedSource(preparedSourceId: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/source-preps/${preparedSourceId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+}
+
+export async function confirmPreparedSourceReadiness(
+  preparedSourceId: string,
+  request: SourceReadinessConfirmationRequest,
+): Promise<PreparedSource> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/source-preps/${preparedSourceId}/readiness/confirm`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+  );
   if (!response.ok) {
     throw await apiError(response);
   }
@@ -802,16 +1470,30 @@ export async function getProjectStorageSummary(id: string): Promise<ProjectStora
   return response.json() as Promise<ProjectStorageSummary>;
 }
 
-export async function getProjectBundleSummary(id: string): Promise<ProjectBundleSummary> {
-  const response = await fetch(`${apiBaseUrl}/api/projects/${id}/bundle/summary`);
+export async function getProjectBundleSummary(
+  id: string,
+  options: { includeGeneratedAudio?: boolean } = {},
+): Promise<ProjectBundleSummary> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/projects/${id}/bundle/summary${bundleAudioQuery(options.includeGeneratedAudio)}`,
+  );
   if (!response.ok) {
     throw new Error(await readError(response));
   }
   return response.json() as Promise<ProjectBundleSummary>;
 }
 
-export function projectBundleDownloadUrl(id: string): string {
-  return `${apiBaseUrl}/api/projects/${id}/bundle`;
+export function projectBundleDownloadUrl(
+  id: string,
+  options: { includeGeneratedAudio?: boolean } = {},
+): string {
+  return `${apiBaseUrl}/api/projects/${id}/bundle${bundleAudioQuery(options.includeGeneratedAudio)}`;
+}
+
+function bundleAudioQuery(includeGeneratedAudio: boolean | undefined): string {
+  return typeof includeGeneratedAudio === "boolean"
+    ? `?includeGeneratedAudio=${String(includeGeneratedAudio)}`
+    : "";
 }
 
 export async function previewProjectBundle(file: File): Promise<ProjectBundlePreview> {
@@ -874,6 +1556,14 @@ export async function getHighlightMap(id: string): Promise<HighlightMap> {
   return response.json() as Promise<HighlightMap>;
 }
 
+export async function getHighlightMapV2(id: string): Promise<HighlightMapV2> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}/highlight-map-v2`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<HighlightMapV2>;
+}
+
 export async function getJobSpeechPlan(id: string): Promise<SpeechPlanDocument> {
   const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}/speech-plan`);
   if (!response.ok) {
@@ -896,6 +1586,14 @@ export async function getTokenTiming(id: string): Promise<TokenTimingArtifact> {
     throw await apiError(response);
   }
   return response.json() as Promise<TokenTimingArtifact>;
+}
+
+export async function getAlignmentQuality(id: string): Promise<AlignmentQualityReport> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-jobs/${id}/timing/alignment`);
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response.json() as Promise<AlignmentQualityReport>;
 }
 
 export async function listVoiceProfiles(): Promise<VoiceProfile[]> {
@@ -1113,6 +1811,9 @@ export async function createVoiceProfileSource(
 ): Promise<VoiceProfileSource> {
   const formData = new FormData();
   formData.append("file", request.file);
+  if (request.provenance) {
+    formData.append("provenance", JSON.stringify(request.provenance));
+  }
 
   const response = await fetch(`${apiBaseUrl}/api/voice-profile-sources`, {
     method: "POST",
@@ -1194,70 +1895,6 @@ export async function getVoiceProfileSourceDiagnostics(): Promise<VoiceProfileSo
   return response.json() as Promise<VoiceProfileSourceDiagnostics>;
 }
 
-export function normalizeVoiceProfileSource(source: VoiceProfileSource): VoiceProfileSource {
-  const nullableSource = source as VoiceProfileSource & {
-    candidates?: VoiceProfileSource["candidates"] | null;
-    stages?: VoiceProfileSource["stages"] | null;
-  };
-  const normalized = normalizeTranscriptFields(source);
-
-  return {
-    ...normalized,
-    candidates: Array.isArray(nullableSource.candidates)
-      ? nullableSource.candidates.map((candidate) => normalizeVoiceProfileCandidate(candidate))
-      : [],
-    stages: Array.isArray(nullableSource.stages) ? nullableSource.stages : [],
-  };
-}
-
-export function normalizePreparedSource(source: PreparedSource): PreparedSource {
-  return normalizeTranscriptFields(source);
-}
-
-export function normalizeVoiceProfileCandidate(
-  candidate: VoiceProfileCandidate,
-): VoiceProfileCandidate {
-  return normalizeTranscriptFields(candidate);
-}
-
-interface TranscriptCapable {
-  transcriptMetadata?: TranscriptMetadata | null;
-  transcript?: string;
-  transcriptGeneratedAt?: string;
-  transcriptModel?: string;
-  transcriptError?: string;
-  transcriptConfidence?: number;
-}
-
-function normalizeTranscriptFields<T extends TranscriptCapable>(item: T): T {
-  const metadata = item.transcriptMetadata ?? undefined;
-  const transcript = item.transcript ?? metadata?.text;
-  const transcriptGeneratedAt = item.transcriptGeneratedAt ?? metadata?.generatedAt;
-  const transcriptModel = item.transcriptModel ?? metadata?.model ?? metadata?.provider;
-  const transcriptError = item.transcriptError ?? metadata?.error;
-  const transcriptConfidence = item.transcriptConfidence ?? metadata?.confidence;
-  const transcriptMetadata =
-    metadata ??
-    (transcript || transcriptGeneratedAt || transcriptModel || transcriptError
-      ? {
-          text: transcript,
-          generatedAt: transcriptGeneratedAt,
-          model: transcriptModel,
-          confidence: transcriptConfidence,
-          error: transcriptError,
-        }
-      : undefined);
-  return {
-    ...item,
-    ...(transcriptMetadata ? { transcriptMetadata } : {}),
-    ...(transcript ? { transcript } : {}),
-    ...(transcriptGeneratedAt ? { transcriptGeneratedAt } : {}),
-    ...(transcriptModel ? { transcriptModel } : {}),
-    ...(transcriptError ? { transcriptError } : {}),
-    ...(typeof transcriptConfidence === "number" ? { transcriptConfidence } : {}),
-  };
-}
-
 export async function createVoiceProfileFromCandidate(
   sourceId: string,
   candidateId: string,
@@ -1289,6 +1926,21 @@ export function voiceProfileCandidatePreviewSource(
   return `${apiBaseUrl}/api/voice-profile-sources/${sourceId}/candidates/${candidateId}/preview.wav?kind=${kind}`;
 }
 
+export async function renameVoiceProfile(
+  profileId: string,
+  request: RenameAssetRequest,
+): Promise<VoiceProfile> {
+  const response = await fetch(`${apiBaseUrl}/api/voice-profiles/${profileId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+  return response.json() as Promise<VoiceProfile>;
+}
+
 export async function deleteVoiceProfile(id: string): Promise<void> {
   const response = await fetch(`${apiBaseUrl}/api/voice-profiles/${id}`, {
     method: "DELETE",
@@ -1315,14 +1967,41 @@ export function subscribeToVoiceJob(
   onError: (error: Error) => void,
 ): () => void {
   const eventSource = new EventSource(`${apiBaseUrl}/api/voice-jobs/${id}/events`);
+  let closed = false;
+  let pollingTimer: ReturnType<typeof globalThis.setInterval> | null = null;
+
+  const stopPolling = () => {
+    if (pollingTimer) {
+      globalThis.clearInterval(pollingTimer);
+      pollingTimer = null;
+    }
+  };
+  const emitJob = (job: VoiceJob) => {
+    onJob(job);
+    if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
+      eventSource.close();
+      stopPolling();
+    }
+  };
+  const pollJob = () => {
+    void getVoiceJob(id)
+      .then(emitJob)
+      .catch((error: unknown) => {
+        onError(error instanceof Error ? error : new Error(String(error)));
+      });
+  };
+  const startPolling = () => {
+    if (pollingTimer || closed) {
+      return;
+    }
+    pollJob();
+    pollingTimer = globalThis.setInterval(pollJob, 2000);
+  };
 
   eventSource.addEventListener("voice-job", (event) => {
     const message = event as MessageEvent<string>;
     const job = JSON.parse(message.data) as VoiceJob;
-    onJob(job);
-    if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
-      eventSource.close();
-    }
+    emitJob(job);
   });
 
   eventSource.addEventListener("voice-job-error", (event) => {
@@ -1334,10 +2013,14 @@ export function subscribeToVoiceJob(
   eventSource.addEventListener("error", () => {
     if (eventSource.readyState !== EventSource.CLOSED) {
       onError(new Error("Voice job progress stream disconnected"));
+      eventSource.close();
+      startPolling();
     }
   });
 
   return () => {
+    closed = true;
+    stopPolling();
     eventSource.close();
   };
 }
@@ -1346,7 +2029,7 @@ export function audioSource(job: VoiceJob, options?: { partial: boolean }): stri
   const usePartial = options?.partial ?? false;
   const useStreamingPartial =
     usePartial && job.status !== "completed" && Boolean(job.audioPartialUrl);
-  const baseUrl = useStreamingPartial ? job.audioPartialUrl : job.audioUrl;
+  const baseUrl = useStreamingPartial ? job.audioPartialUrl : job.audioUrl || job.audioPartialUrl;
   if (!baseUrl) {
     return "";
   }
@@ -1369,15 +2052,70 @@ export function backendAssetUrl(path: string): string {
   return `${apiBaseUrl}${normalizedPath}`;
 }
 
-async function readError(response: Response): Promise<string> {
+interface ErrorPayload {
+  code?: string;
+  message: string;
+  temporarySource?: boolean;
+}
+
+async function readErrorPayload(response: Response): Promise<ErrorPayload> {
+  const fallback = `Request failed with ${String(response.status)}`;
+  let rawBody = "";
   try {
-    const payload = (await response.json()) as { error?: string };
-    return payload.error ?? `Request failed with ${String(response.status)}`;
+    rawBody = await response.text();
   } catch {
-    return `Request failed with ${String(response.status)}`;
+    return { message: fallback };
   }
+  const trimmed = rawBody.trim();
+  if (!trimmed) {
+    return { message: fallback };
+  }
+  try {
+    const payload = JSON.parse(trimmed) as {
+      code?: unknown;
+      error?: unknown;
+      message?: unknown;
+      temporarySource?: unknown;
+    };
+    const error = typeof payload.error === "string" ? payload.error.trim() : "";
+    if (error) {
+      return {
+        code: typeof payload.code === "string" ? payload.code : undefined,
+        message: error,
+        temporarySource: payload.temporarySource === true,
+      };
+    }
+    const message = typeof payload.message === "string" ? payload.message.trim() : "";
+    if (message) {
+      return {
+        code: typeof payload.code === "string" ? payload.code : undefined,
+        message,
+        temporarySource: payload.temporarySource === true,
+      };
+    }
+  } catch {
+    return { message: trimmed };
+  }
+  return { message: trimmed };
+}
+
+async function readError(response: Response): Promise<string> {
+  const payload = await readErrorPayload(response);
+  return payload.message;
 }
 
 async function apiError(response: Response): Promise<ApiRequestError> {
-  return new ApiRequestError(response.status, await readError(response));
+  const payload = await readErrorPayload(response);
+  return new ApiRequestError(response.status, payload.message, {
+    code: payload.code,
+    temporarySource: payload.temporarySource,
+  });
+}
+
+function parseOptionalNumber(value: string | null): number | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }

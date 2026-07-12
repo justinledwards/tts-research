@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "source-revision.v1",
+  "revisionId": "sr-md-002",
+  "sourceId": "contract-markdown",
+  "createdAt": "2026-05-17T01:12:00Z",
+  "revisionOrdinal": 2,
+  "revisionState": "current",
+  "contentHash": "sha256:contract-md-v2",
+  "sourceFingerprint": "fp-md-repaired",
+  "rawArtifact": {
+    "artifactId": "raw-md-002",
+    "uri": "file://sources/contract-md/v2.md",
+    "sha256": "sha256:contract-md-v2",
+    "contentType": "text/markdown",
+    "byteLength": 42
+  },
+  "supersedesRevisionId": "sr-md-001",
+  "repairOverlayId": "repair-md-001"
+}

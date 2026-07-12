@@ -1,0 +1,25 @@
+QUALITY APPROVED
+
+- Critical/important issues: none found. I reviewed the touched implementation/tests and ran targeted regressions successfully:
+  - `vitest` command passed: 3 files / 71 tests (`followAlongRenderer.test.tsx`, `ReadAlongWordScheduler.test.ts`, `teleprompt.test.ts`).
+- Follow-along helpers are simple and fail-closed:
+  - Exact word claims require trusted timing, non-low-resource mode, no explicit exact timing veto, and affirmative transport evidence: `followAlongModel.ts:281-297`.
+  - Visual mode downgrades stale/degraded/low-resource and non-claimable exact requests to honest fallback modes: `followAlongModel.ts:300-342`.
+- Renderer exact-identity vs role-context split looks maintainable and avoids confusing exact claims:
+  - Exact data attributes are driven only by resolved exact identity: `ReadingFollowAlongRenderer.tsx:124-139`.
+  - Word role/window context is separately resolved so section-local recent/upcoming roles survive without granting `aria-current`: `ReadingFollowAlongRenderer.tsx:159-169`, `239-281`.
+  - Source/index mismatch fails closed via token agreement check: `ReadingFollowAlongRenderer.tsx:192-230`.
+- Transport and scheduler integration looks sound:
+  - Book and Prepared surfaces derive transport descriptors with checked-audio + trusted-word + low-resource gates, then downgrade word mode when exact cannot be claimed: `BookCinemaPanel.tsx:1069-1104`, `PreparedSourceCinemaBase.tsx:597-630`.
+  - Both scheduler call sites require `canClaimExactReadAlong` before high-frequency word scheduling and pass the same gate into the scheduler: `BookCinemaPanel.tsx:1173-1186`, `PreparedSourceCinemaBase.tsx:657-661`, `2031-2051`.
+  - Scheduler clears stale DOM active state and avoids scheduling/onWordChange when exact cannot be claimed: `ReadAlongWordScheduler.ts:88-97`, `117-121`.
+- Tests are adequate for the requested risk areas:
+  - Exact allowed, omitted transport, source/index mismatch fail-close, stale/degraded, low-resource downgrade, and section-local role context: `followAlongRenderer.test.tsx:15-196`.
+  - Window role bounds and non-claiming role behavior: `followAlongRenderer.test.tsx:253-292`.
+  - Scheduler non-overclaiming: `ReadAlongWordScheduler.test.ts:84-121`.
+  - Combined theatre recent/active/upcoming regression: `teleprompt.test.ts:685-766`.
+  - Transport model affirmative exact-sync behavior: `model.test.ts:195-237`.
+- Minor notes, non-blocking:
+  - Book/Prepared low-resource predicates are duplicated exactly: `BookCinemaPanel.tsx:4569-4573`, `PreparedSourceCinemaBase.tsx:3099-3103`. Acceptable for two local surfaces within scope; factor into a shared readalong helper if a third surface needs it.
+  - `ReadAlongWordSchedulerOptions.canClaimExactReadAlong` remains optional/default-true: `ReadAlongWordScheduler.ts:24-31`, `180-182`. Current production call sites pass explicit gates, so no present integration risk, but making it required or default-false would improve future fail-closed ergonomics.
+- Files created/modified by me: none. Issues encountered: none.

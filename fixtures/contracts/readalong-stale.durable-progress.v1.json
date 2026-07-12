@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "durable-progress.v1",
+  "progressId": "progress-md-stale",
+  "sourceId": "contract-markdown",
+  "readalongManifestId": "ram-md-001",
+  "sourceRevisionId": "sr-md-001",
+  "audioArtifactId": "audio-md-stale",
+  "kind": "resume",
+  "state": "superseded",
+  "updatedAt": "2026-05-17T01:05:00Z",
+  "canonical": true,
+  "locatorEnvelope": {
+    "schemaVersion": "locator-envelope.v1",
+    "kind": "resume",
+    "sourceId": "contract-markdown",
+    "nodeId": "md-0001",
+    "scopeKey": "document",
+    "activeWordIndex": 1,
+    "locator": {
+      "type": "markdown",
+      "markdown": {
+        "path": "contract.md",
+        "lineStart": 3,
+        "lineEnd": 3,
+        "columnStart": 1,
+        "columnEnd": 22,
+        "astPath": "/children/1"
+      }
+    },
+    "textQuote": "Dr Nguyen shipped v1."
+  },
+  "position": {
+    "unitId": "unit-md-0001",
+    "segmentId": "seg-0001",
+    "activeWordIndex": 1,
+    "audioOffsetMs": 280,
+    "textQuote": "Dr Nguyen shipped v1."
+  }
+}

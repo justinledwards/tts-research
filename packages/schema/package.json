@@ -18,12 +18,29 @@
     "./schemas/locator-envelope.v1.schema.json": "./schemas/locator-envelope.v1.schema.json",
     "./schemas/speech-plan.v1.schema.json": "./schemas/speech-plan.v1.schema.json",
     "./schemas/highlight-map.v1.schema.json": "./schemas/highlight-map.v1.schema.json",
+    "./schemas/highlight-map.v2.schema.json": "./schemas/highlight-map.v2.schema.json",
     "./schemas/fragment-timing.v1.schema.json": "./schemas/fragment-timing.v1.schema.json",
-    "./schemas/token-timing.v1.schema.json": "./schemas/token-timing.v1.schema.json"
+    "./schemas/token-timing.v1.schema.json": "./schemas/token-timing.v1.schema.json",
+    "./schemas/source-envelope.v1.schema.json": "./schemas/source-envelope.v1.schema.json",
+    "./schemas/source-revision.v1.schema.json": "./schemas/source-revision.v1.schema.json",
+    "./schemas/extraction-revision.v1.schema.json": "./schemas/extraction-revision.v1.schema.json",
+    "./schemas/reading-unit-manifest.v1.schema.json": "./schemas/reading-unit-manifest.v1.schema.json",
+    "./schemas/readalong-manifest.v1.schema.json": "./schemas/readalong-manifest.v1.schema.json",
+    "./schemas/audio-artifact.v1.schema.json": "./schemas/audio-artifact.v1.schema.json",
+    "./schemas/artifact-compatibility.v1.schema.json": "./schemas/artifact-compatibility.v1.schema.json",
+    "./schemas/repair-overlay.v1.schema.json": "./schemas/repair-overlay.v1.schema.json",
+    "./schemas/revision-map.v1.schema.json": "./schemas/revision-map.v1.schema.json",
+    "./schemas/promotion-crosswalk.v1.schema.json": "./schemas/promotion-crosswalk.v1.schema.json",
+    "./schemas/source-manifest-event.v1.schema.json": "./schemas/source-manifest-event.v1.schema.json",
+    "./schemas/durable-progress.v1.schema.json": "./schemas/durable-progress.v1.schema.json",
+    "./schemas/resume-resolution.v1.schema.json": "./schemas/resume-resolution.v1.schema.json",
+    "./schemas/sync-fidelity-decision.v1.schema.json": "./schemas/sync-fidelity-decision.v1.schema.json",
+    "./schemas/reader-workspace-snapshot.v1.schema.json": "./schemas/reader-workspace-snapshot.v1.schema.json"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "pnpm build && node --test test/*.test.mjs"
+    "test:core": "node --test test/*.test.mjs",
+    "test": "pnpm build && pnpm test:core"
   },
   "dependencies": {
     "ajv": "^8.20.0"

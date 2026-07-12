@@ -72,6 +72,12 @@ func elementLabel(element string) string {
 		return "This caption"
 	case "citation":
 		return "This citation"
+	case "reference":
+		return "This reference"
+	case "artifact_token":
+		return "This artifact token"
+	case "unknown_inline_marker":
+		return "This inline marker"
 	default:
 		return "This prose"
 	}

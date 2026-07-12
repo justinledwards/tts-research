@@ -27,6 +27,13 @@ export interface PolicyScopeChip {
   label: string;
 }
 
+export interface PolicyScopeSummary {
+  compactLabel: string;
+  currentProfileLabel: string;
+  description: string;
+  ownershipLabel: string;
+}
+
 export interface PolicyProfileOption {
   label: string;
   name: string;
@@ -66,6 +73,29 @@ export function policyScopeChips(state: PolicyScopeState): PolicyScopeChip[] {
       label: "Session override",
     },
   ];
+}
+
+export function policyScopeSummary(state: PolicyScopeState): PolicyScopeSummary {
+  const chips = policyScopeChips(state);
+  const currentProfileLabel = chips.find((chip) => chip.id === "current")?.detail ?? "Enterprise";
+  const project = chips.find((chip) => chip.id === "project");
+  const source = chips.find((chip) => chip.id === "source");
+  const session = chips.find((chip) => chip.id === "session");
+  const ownershipLabel = source?.isActive ? "Source" : "Project";
+  const sessionSuffix = session?.isActive ? " + Session" : "";
+  const compactLabel = `${currentProfileLabel} · ${ownershipLabel}${sessionSuffix}`;
+  const description = [
+    `Current profile: ${currentProfileLabel}`,
+    `Project default: ${project?.detail ?? "Enterprise"}`,
+    `Source pin: ${source?.detail ?? "Not pinned"}`,
+    `Session override: ${session?.detail ?? "None"}`,
+  ].join(". ");
+  return {
+    compactLabel,
+    currentProfileLabel,
+    description,
+    ownershipLabel: `${ownershipLabel}${sessionSuffix}`,
+  };
 }
 
 export function sourcePolicyUpdateRequest(

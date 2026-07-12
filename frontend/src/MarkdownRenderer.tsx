@@ -1,34 +1,49 @@
 import {
   Children,
   isValidElement,
+  memo,
   useEffect,
   useId,
   useMemo,
   useRef,
   useState,
+  type ComponentPropsWithoutRef,
   type ReactNode,
 } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { documentCinemaInlineArtifactPlugin } from "./features/document-cinema/rendering/inlineArtifacts";
+import type {
+  ReadAlongCueRole,
+  ReadAlongTimingState,
+  ReadAlongWordRole,
+} from "./features/readalong";
+import { buildUiActionId } from "./features/ui-audit/actionIds";
 export { looksLikeMermaidDiagram } from "./markdownModel";
 
-export function MarkdownRenderer({
+export const MarkdownRenderer = memo(function MarkdownRenderer({
   children,
+  artifactRendering = "none",
   blockHighlight,
   className = "prose-markdown",
+  wordAnchors,
   wordHighlight,
 }: Readonly<{
+  artifactRendering?: "document-cinema" | "none";
   children: string;
   blockHighlight?: MarkdownBlockHighlight;
   className?: string;
+  wordAnchors?: MarkdownWordAnchors;
   wordHighlight?: MarkdownWordHighlight;
 }>) {
   const rehypePlugins = useMemo(
     () => [
+      ...(artifactRendering === "document-cinema" ? [documentCinemaInlineArtifactPlugin] : []),
       ...(blockHighlight ? [createBlockHighlightPlugin(blockHighlight)] : []),
+      ...(wordAnchors && !wordHighlight ? [createWordAnchorPlugin(wordAnchors)] : []),
       ...(wordHighlight ? [createWordHighlightPlugin(wordHighlight)] : []),
     ],
-    [blockHighlight, wordHighlight],
+    [artifactRendering, blockHighlight, wordAnchors, wordHighlight],
   );
 
   return (
@@ -42,7 +57,7 @@ export function MarkdownRenderer({
       </ReactMarkdown>
     </div>
   );
-}
+});
 
 export function MermaidDiagram({ chart }: Readonly<{ chart: string }>) {
   const rawId = useId();
@@ -120,7 +135,7 @@ export function MermaidDiagram({ chart }: Readonly<{ chart: string }>) {
   return (
     <div
       aria-busy={!svg}
-      className="mermaid-diagram rounded-lg border bg-white p-4 text-center vs-border"
+      className="mermaid-diagram rounded-lg border bg-[var(--vs-surface-primary)] p-4 text-center vs-border"
     >
       {svg ? (
         <div ref={outputRef} />
@@ -165,7 +180,146 @@ const markdownComponents: Components = {
   pre({ children }: { children?: ReactNode }) {
     return <>{children}</>;
   },
+  span({ children, ...props }) {
+    const spanProps = props as DocumentInlineArtifactChipProps;
+    if (typeof spanProps["data-artifact-kind"] === "string") {
+      return <DocumentInlineArtifactChip {...spanProps}>{children}</DocumentInlineArtifactChip>;
+    }
+    return <span {...props}>{children}</span>;
+  },
 };
+
+type DocumentInlineArtifactChipProps = ComponentPropsWithoutRef<"span"> & {
+  "data-artifact-kind"?: string;
+  "data-artifact-marker-type"?: string;
+  "data-artifact-reference-label"?: string;
+  "data-speech-behavior"?: string;
+  "data-speech-behavior-label"?: string;
+};
+
+function DocumentInlineArtifactChip({
+  children,
+  className,
+  "data-artifact-kind": artifactKind = "citation",
+  "data-artifact-marker-type": markerType = "",
+  "data-artifact-reference-label": referenceLabel = "",
+  "data-speech-behavior": speechBehavior = "skipped",
+  "data-speech-behavior-label": speechBehaviorLabel = "Skipped in generated speech",
+  ...props
+}: Readonly<DocumentInlineArtifactChipProps>) {
+  const rawId = useId();
+  const detailsId = `citation-chip-${rawId.replaceAll(/[^A-Za-z0-9_-]/g, "-")}`;
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const kindLabel = formatInlineArtifactKindLabel(artifactKind);
+  const shortReference = compactInlineArtifactReference(referenceLabel);
+  const artifactActionId = buildUiActionId({
+    actionSlug: `${markerType || "marker"}-${referenceLabel || artifactKind}`,
+    contextId: artifactKind,
+    ownerId: "document-artifact",
+    surfaceId: "documentcinema",
+  });
+  const copyValue = [
+    kindLabel,
+    referenceLabel ? `reference ${referenceLabel}` : "",
+    speechBehaviorLabel.toLowerCase(),
+  ]
+    .filter(Boolean)
+    .join("; ");
+
+  function copyCitation() {
+    setCopied(false);
+    void navigator.clipboard
+      .writeText(copyValue)
+      .then(() => {
+        setCopied(true);
+      })
+      .catch(() => {
+        setCopied(false);
+      });
+  }
+
+  return (
+    <span className="document-inline-artifact-shell">
+      <button
+        aria-controls={detailsId}
+        aria-expanded={open}
+        aria-label={[kindLabel, referenceLabel || "", speechBehaviorLabel, "Show citation details"]
+          .filter(Boolean)
+          .join(". ")}
+        className={className}
+        data-artifact-kind={artifactKind}
+        data-artifact-marker-type={markerType}
+        data-artifact-reference-label={referenceLabel}
+        data-speech-behavior={speechBehavior}
+        data-speech-behavior-label={speechBehaviorLabel}
+        data-speech-mode="skip"
+        data-testid={artifactActionId}
+        data-ui-action-id={artifactActionId}
+        data-ui-noop-reason="Citation details may already be toggled during replay."
+        onClick={() => {
+          setOpen((current) => !current);
+        }}
+        type="button"
+        {...props}
+      >
+        <span>{children}</span>
+        {shortReference ? (
+          <span className="document-inline-artifact-ref">{shortReference}</span>
+        ) : null}
+      </button>
+      <span
+        className="document-inline-artifact-popover"
+        hidden={!open}
+        id={detailsId}
+        role="status"
+      >
+        <span className="font-semibold">{kindLabel}</span>
+        {referenceLabel ? <span>Reference: {referenceLabel}</span> : null}
+        <span>Speech: {speechBehaviorLabel}.</span>
+        <span>Raw marker is only shown in Debug.</span>
+        <span className="document-inline-artifact-actions">
+          <button onClick={copyCitation} type="button">
+            Copy citation
+          </button>
+          <a href="#prepared-source-policy-notes">Show in policy notes</a>
+        </span>
+        {copied ? <span className="text-[0.68rem] font-semibold">Copied</span> : null}
+      </span>
+    </span>
+  );
+}
+
+function formatInlineArtifactKindLabel(kind: string): string {
+  switch (kind) {
+    case "artifact_token": {
+      return "Artifact token";
+    }
+    case "footnote": {
+      return "Footnote marker";
+    }
+    case "reference": {
+      return "Reference marker";
+    }
+    case "unknown_inline_marker": {
+      return "Inline metadata marker";
+    }
+    default: {
+      return "Citation marker";
+    }
+  }
+}
+
+function compactInlineArtifactReference(reference: string): string {
+  const clean = reference.trim();
+  if (!clean || clean === "unresolved citation") {
+    return "";
+  }
+  if (clean.length <= 12) {
+    return clean;
+  }
+  return `${clean.slice(0, 6)}...${clean.slice(-4)}`;
+}
 
 function reactNodeToText(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") {
@@ -181,13 +335,42 @@ function reactNodeToText(node: ReactNode): string {
 
 export interface MarkdownWordHighlight {
   activeWordOffset: number;
+  activeWordIndex?: number;
+  blockWordStartIndex?: number;
   blockEndOffset: number;
   blockStartOffset: number;
+  cueRole?: ReadAlongCueRole;
+  nodeId?: string;
+  renderWordAnchors?: boolean;
+  sourceId?: string;
+  timingState?: ReadAlongTimingState;
+  wordRole?: ReadAlongWordRole;
+  wordStates?: ReadonlyMap<number, MarkdownWordCueState>;
+}
+
+export interface MarkdownWordAnchors {
+  blockEndOffset: number;
+  blockStartOffset: number;
+  blockWordStartIndex?: number;
+  cueRole?: ReadAlongCueRole;
+  nodeId?: string;
+  sourceId?: string;
+  timingState?: ReadAlongTimingState;
+}
+
+export interface MarkdownWordCueState {
+  intensity: number;
+  state: "active" | "idle" | "spoken" | "upcoming";
+  wordRole: ReadAlongWordRole;
 }
 
 export interface MarkdownBlockHighlight {
   blockEndOffset: number;
   blockStartOffset: number;
+  cueRole?: ReadAlongCueRole;
+  nodeId?: string;
+  sourceId?: string;
+  timingState?: ReadAlongTimingState;
 }
 
 interface HastPositionPoint {
@@ -217,6 +400,15 @@ function createWordHighlightPlugin(highlight: MarkdownWordHighlight) {
   };
 }
 
+function createWordAnchorPlugin(anchors: MarkdownWordAnchors) {
+  return function anchorMarkdownWords() {
+    return function transformTree(tree: HastNode) {
+      let blockWordOffset = 0;
+      transformAnchorChildren(tree, anchors, () => blockWordOffset++);
+    };
+  };
+}
+
 function createBlockHighlightPlugin(highlight: MarkdownBlockHighlight) {
   return function highlightMarkdownBlock() {
     return function transformTree(tree: HastNode) {
@@ -233,17 +425,41 @@ function markHighlightedElements(node: HastNode, highlight: MarkdownBlockHighlig
   }
   if (node.type === "element" && overlaps && !childOverlaps) {
     const properties = node.properties ?? {};
-    const className = properties.className;
-    let classes: string[] = [];
-    if (Array.isArray(className)) {
-      classes = className.map(String);
-    } else if (typeof className === "string") {
-      classes = className.split(/\s+/);
-    }
-    properties.className = [...classes, "markdown-cinema-block-active"];
+    properties.className = [
+      ...markdownClassList(properties.className),
+      "markdown-cinema-block-active",
+      highlight.cueRole ? `readalong-cue-role--${highlight.cueRole}` : "",
+      highlight.timingState ? `readalong-timing-state--${highlight.timingState}` : "",
+    ].filter(Boolean);
+    applyMarkdownHighlightProperties(properties, highlight);
     node.properties = properties;
   }
   return overlaps || childOverlaps;
+}
+
+function markdownClassList(className: unknown): string[] {
+  if (Array.isArray(className)) {
+    return className.map(String);
+  }
+  return typeof className === "string" ? className.split(/\s+/) : [];
+}
+
+function applyMarkdownHighlightProperties(
+  properties: Record<string, unknown>,
+  highlight: Pick<MarkdownWordHighlight, "cueRole" | "nodeId" | "sourceId" | "timingState">,
+) {
+  if (highlight.cueRole) {
+    properties["data-readalong-cue-role"] = highlight.cueRole;
+  }
+  if (highlight.nodeId) {
+    properties["data-readalong-node-id"] = highlight.nodeId;
+  }
+  if (highlight.sourceId) {
+    properties["data-readalong-source-id"] = highlight.sourceId;
+  }
+  if (highlight.timingState) {
+    properties["data-readalong-timing-state"] = highlight.timingState;
+  }
 }
 
 function transformChildren(
@@ -261,10 +477,43 @@ function transformChildren(
       nextChildren.push(...splitHighlightedTextNode(child, highlight, nextWordOffset));
       continue;
     }
+    if (isSpeechSkippedElement(child)) {
+      nextChildren.push(child);
+      continue;
+    }
     transformChildren(child, highlight, nextWordOffset);
     nextChildren.push(child);
   }
   node.children = nextChildren;
+}
+
+function transformAnchorChildren(
+  node: HastNode,
+  anchors: MarkdownWordAnchors,
+  nextWordOffset: () => number,
+) {
+  if (!node.children) {
+    return;
+  }
+
+  const nextChildren: HastNode[] = [];
+  for (const child of node.children) {
+    if (child.type === "text" && typeof child.value === "string") {
+      nextChildren.push(...splitAnchoredTextNode(child, anchors, nextWordOffset));
+      continue;
+    }
+    if (isSpeechSkippedElement(child)) {
+      nextChildren.push(child);
+      continue;
+    }
+    transformAnchorChildren(child, anchors, nextWordOffset);
+    nextChildren.push(child);
+  }
+  node.children = nextChildren;
+}
+
+function isSpeechSkippedElement(node: HastNode): boolean {
+  return node.type === "element" && node.properties?.["data-speech-mode"] === "skip";
 }
 
 function splitHighlightedTextNode(
@@ -287,16 +536,7 @@ function splitHighlightedTextNode(
     }
 
     const wordOffset = nextWordOffset();
-    parts.push(
-      wordOffset === highlight.activeWordOffset
-        ? {
-            children: [{ type: "text", value: word }],
-            properties: { className: ["markdown-cinema-word-active"] },
-            tagName: "span",
-            type: "element",
-          }
-        : { type: "text", value: word },
-    );
+    parts.push(markdownWordNodeForHighlight(word, wordOffset, highlight));
     lastIndex = index + word.length;
   }
 
@@ -304,6 +544,129 @@ function splitHighlightedTextNode(
     parts.push({ type: "text", value: node.value.slice(lastIndex) });
   }
   return parts.length > 0 ? parts : [node];
+}
+
+function splitAnchoredTextNode(
+  node: HastNode,
+  anchors: MarkdownWordAnchors,
+  nextWordOffset: () => number,
+): HastNode[] {
+  if (!nodePositionOverlapsHighlight(node.position, anchors) || !node.value) {
+    return [node];
+  }
+
+  const parts: HastNode[] = [];
+  const wordPattern = /\S+/g;
+  let lastIndex = 0;
+  for (const match of node.value.matchAll(wordPattern)) {
+    const word = match[0];
+    const index = match.index;
+    if (index > lastIndex) {
+      parts.push({ type: "text", value: node.value.slice(lastIndex, index) });
+    }
+
+    const wordOffset = nextWordOffset();
+    parts.push(markdownWordAnchorNode(word, wordOffset, anchors));
+    lastIndex = index + word.length;
+  }
+
+  if (lastIndex < node.value.length) {
+    parts.push({ type: "text", value: node.value.slice(lastIndex) });
+  }
+  return parts.length > 0 ? parts : [node];
+}
+
+function markdownWordAnchorNode(
+  word: string,
+  wordOffset: number,
+  anchors: MarkdownWordAnchors,
+): HastNode {
+  const absoluteWordIndex = (anchors.blockWordStartIndex ?? 0) + wordOffset;
+  const properties: Record<string, unknown> = {
+    className: ["markdown-cinema-word", "readalong-word-role--idle"],
+    "data-readalong-word-index": String(absoluteWordIndex),
+    "data-readalong-word-role": "idle",
+  };
+  applyMarkdownHighlightProperties(properties, anchors);
+  return {
+    children: [{ type: "text", value: word }],
+    properties,
+    tagName: "span",
+    type: "element",
+  };
+}
+
+function markdownWordNodeForHighlight(
+  word: string,
+  wordOffset: number,
+  highlight: MarkdownWordHighlight,
+): HastNode {
+  const isActive = wordOffset === highlight.activeWordOffset;
+  const absoluteWordIndex =
+    highlight.blockWordStartIndex === undefined
+      ? highlight.activeWordIndex
+      : highlight.blockWordStartIndex + wordOffset;
+  const wordState =
+    absoluteWordIndex === undefined ? undefined : highlight.wordStates?.get(absoluteWordIndex);
+  if (!isActive && !highlight.renderWordAnchors && !wordState) {
+    return { type: "text", value: word };
+  }
+  const visualState = wordState?.state ?? (isActive ? "active" : "idle");
+  const wordRole = wordState?.wordRole ?? (isActive ? (highlight.wordRole ?? "active") : "idle");
+  const properties: Record<string, unknown> = {
+    className: markdownWordClassList({ isActive, visualState, wordRole, wordState }),
+  };
+  applyMarkdownWordStateProperties(properties, wordState);
+  if (absoluteWordIndex !== undefined) {
+    properties["data-readalong-word-index"] = String(absoluteWordIndex);
+  }
+  applyMarkdownHighlightProperties(properties, highlight);
+  properties["data-readalong-word-role"] = wordRole;
+  if (isActive) {
+    properties["aria-current"] = "true";
+    properties["data-readalong-dom-active"] = "true";
+  }
+  return {
+    children: [{ type: "text", value: word }],
+    properties,
+    tagName: "span",
+    type: "element",
+  };
+}
+
+function markdownWordClassList({
+  isActive,
+  visualState,
+  wordRole,
+  wordState,
+}: {
+  isActive: boolean;
+  visualState: MarkdownWordCueState["state"];
+  wordRole: ReadAlongWordRole;
+  wordState: MarkdownWordCueState | undefined;
+}): string[] {
+  return [
+    "markdown-cinema-word",
+    isActive ? "markdown-cinema-word-active" : "",
+    wordState ? "teleprompter-word" : "",
+    wordState ? "teleprompter-word--cinema" : "",
+    wordState ? `teleprompter-word--${visualState}` : "",
+    `readalong-word-role--${wordRole}`,
+  ].filter(Boolean);
+}
+
+function applyMarkdownWordStateProperties(
+  properties: Record<string, unknown>,
+  wordState: MarkdownWordCueState | undefined,
+): void {
+  if (!wordState) {
+    return;
+  }
+  properties["data-effect"] = "spark";
+  properties.style = {
+    "--teleprompter-accent": "#fb923c",
+    "--teleprompter-intensity": String(wordState.intensity),
+  };
 }
 
 function nodePositionOverlapsHighlight(

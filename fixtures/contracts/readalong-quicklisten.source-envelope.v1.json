@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "source-envelope.v1",
+  "sourceId": "quicklisten-temp-001",
+  "sourceKind": "quick_listen_temporary",
+  "origin": {
+    "method": "paste",
+    "contentType": "text/markdown",
+    "contentHash": "sha256:quicklisten-temp"
+  },
+  "projectId": "quick-listen",
+  "createdAt": "2026-05-17T00:58:00Z",
+  "currentRevisionId": "sr-ql-001",
+  "lifecycle": "promoted",
+  "expiresAt": "2026-05-18T00:58:00Z",
+  "promotedToSourceId": "contract-markdown"
+}

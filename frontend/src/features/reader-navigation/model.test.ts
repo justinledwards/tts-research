@@ -33,6 +33,38 @@ describe("reader navigation model", () => {
     ]);
   });
 
+  it("keeps the latest recent position per reader target", () => {
+    const progress = [
+      playbackProgress({
+        currentTimeSec: 10,
+        targetId: "book:book-1:chapter:1",
+        updatedAt: "2026-05-19T09:00:00Z",
+      }),
+      playbackProgress({
+        currentTimeSec: 80,
+        progress: 0.75,
+        targetId: "book:book-1:chapter:1",
+        updatedAt: "2026-05-19T11:00:00Z",
+      }),
+      playbackProgress({
+        currentTimeSec: 40,
+        targetId: "book:book-1:chapter:2",
+        updatedAt: "2026-05-19T10:00:00Z",
+      }),
+    ];
+
+    expect(
+      readerRecentPositionsFromProgress(progress).map((item) => [
+        item.id,
+        item.currentTimeSec,
+        item.progress,
+      ]),
+    ).toEqual([
+      ["book:book-1:chapter:1", 80, 0.75],
+      ["book:book-1:chapter:2", 40, 0.25],
+    ]);
+  });
+
   it("derives bookmark rows and resume targets from saved progress", () => {
     const progress = playbackProgress({
       activeWordIndex: 3,

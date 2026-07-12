@@ -20,7 +20,7 @@
   },
   "nodes": [
     {
-      "nodeId": "block-0001",
+      "nodeId": "markdown-heading-simplemdheadingtitle-title-655dd2b2a62b",
       "parentId": "",
       "orderKey": "00000001",
       "kind": "heading",
@@ -79,13 +79,17 @@
         "astPath": "/children/0",
         "columnEnd": 8,
         "columnStart": 1,
+        "fingerprint": "f64d2db49221abe35fcbe82e6b8ab135",
+        "identityAnchor": "simple.md|heading|Title|# Title",
+        "identityVersion": "stable-unit-identity.v1",
         "lineEnd": 1,
         "lineStart": 1,
+        "orderAnchor": "byte:0",
         "policySpeechText": "Title",
         "sourceSlice": "# Title",
         "speechRender": {
           "plainText": "Title",
-          "ssml": "<speak version=\"1.1\" xml:lang=\"en\">Title</speak>",
+          "ssml": "\u003cspeak version=\"1.1\" xml:lang=\"en\"\u003eTitle\u003c/speak\u003e",
           "lang": "en",
           "locale": "en-GB",
           "languageSpans": [
@@ -104,7 +108,7 @@
       "adapterVersion": "markdown-adapter-v2"
     },
     {
-      "nodeId": "block-0002",
+      "nodeId": "markdown-body-simplemdbodytitlehello-world-3e6a9a6ef939",
       "parentId": "",
       "orderKey": "00000002",
       "kind": "body",
@@ -163,13 +167,17 @@
         "astPath": "/children/1",
         "columnEnd": 13,
         "columnStart": 1,
+        "fingerprint": "6d1fb4a691e67624eaa707e2de5e640d",
+        "identityAnchor": "simple.md|body|Title|Hello world.",
+        "identityVersion": "stable-unit-identity.v1",
         "lineEnd": 3,
         "lineStart": 3,
+        "orderAnchor": "byte:9",
         "policySpeechText": "Hello world.",
         "sourceSlice": "Hello world.",
         "speechRender": {
           "plainText": "Hello world.",
-          "ssml": "<speak version=\"1.1\" xml:lang=\"en\">Hello world.</speak>",
+          "ssml": "\u003cspeak version=\"1.1\" xml:lang=\"en\"\u003eHello world.\u003c/speak\u003e",
           "lang": "en",
           "locale": "en-GB",
           "languageSpans": [

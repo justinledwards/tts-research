@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import (
+    contract_fit,
     detect_tagged_pdf,
     extract_tables_with_pdfplumber,
     extract_with_pymupdf,
@@ -78,6 +79,14 @@ def emit_adapter(payload: dict[str, Any]) -> dict[str, Any]:
     if not nodes:
         raise RuntimeError("No readable text was extracted from this source.")
     chain = _extractor_chain(strategy, confidence, warnings)
+    contract_fit_report = contract_fit.create_lower_tier_contract_fit_report(
+        adapter_id="pdf",
+        adapter_version=ADAPTER_VERSION,
+        evidence={"fixtureIds": payload.get("contractFixtureIds") or [], "sourceNames": [source_name]},
+        extraction_path=strategy.extractor_id,
+        source_kind="ocr" if strategy.extractor_id == "ocr" or kind == "image" else "pdf",
+        support_tier_label=strategy.label,
+    )
     metadata = {
         "title": extracted.get("title") or Path(source_name).stem,
         "author": extracted.get("author") or "",
@@ -89,6 +98,7 @@ def emit_adapter(payload: dict[str, Any]) -> dict[str, Any]:
         "importProfile": import_profile,
         "pdfTableMode": table_mode,
         "capabilities": capabilities(),
+        "contractFitReport": contract_fit_report,
     }
     document = {
         "schemaVersion": "content-ir.v1",
@@ -102,11 +112,14 @@ def emit_adapter(payload: dict[str, Any]) -> dict[str, Any]:
         "metadata": metadata,
         "nodes": nodes,
     }
+    adapter_diagnostics = diagnostics()
+    adapter_diagnostics["contractFitReport"] = contract_fit_report
     return {
         "adapterVersion": ADAPTER_VERSION,
         "author": metadata["author"],
         "capabilities": capabilities(),
-        "diagnostics": diagnostics(),
+        "contractFitReport": contract_fit_report,
+        "diagnostics": adapter_diagnostics,
         "document": document,
         "metadata": metadata,
         "title": metadata["title"],
@@ -316,7 +329,7 @@ def _nodes_from_pages(
                 },
                 "ui": {"progressionHint": "linear", "highlightUnitHint": "node"},
                 "speech": {
-                    "policyHint": {"mode": "speak", "emphasis": "", "pauseBeforeMs": 0, "pauseAfterMs": 0},
+                    "policyHint": _policy_hint(kind),
                     "speechPolicy": {
                         "profile": "Enterprise",
                         "mode": "speak",
@@ -337,6 +350,19 @@ def _nodes_from_pages(
             nodes.append(node)
     confidence = sum(confidences) / len(confidences) if confidences else 0
     return nodes, round(confidence, 3)
+
+
+def _policy_hint(kind: str) -> dict[str, Any]:
+    if kind == "heading":
+        return {"mode": "speak", "emphasis": "heading", "pauseBeforeMs": 420, "pauseAfterMs": 520}
+    if kind == "subheading":
+        return {
+            "mode": "speak",
+            "emphasis": "subheading",
+            "pauseBeforeMs": 280,
+            "pauseAfterMs": 360,
+        }
+    return {"mode": "speak", "emphasis": "", "pauseBeforeMs": 0, "pauseAfterMs": 0}
 
 
 def _locator(source_format: str, page_index: int, block: dict[str, Any], ocr_engine: str, confidence: float) -> dict[str, Any]:

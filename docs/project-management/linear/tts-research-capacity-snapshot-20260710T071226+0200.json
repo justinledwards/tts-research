@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "tts-research.linear-capacity.v1",
+  "capturedAt": "2026-07-10T07:12:26.438544+02:00",
+  "source": "Linear GraphQL project-scoped issues(includeArchived:false)",
+  "project": {
+    "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+    "name": "TTS-Research"
+  },
+  "cap": 20,
+  "activeDefinition": "unarchived issue whose state.type is neither completed nor canceled",
+  "unarchivedTotal": 0,
+  "activeUnarchivedBefore": 0,
+  "newIssuesCreatedNow": 0,
+  "activeUnarchivedAfter": 0,
+  "compliant": true,
+  "availableSlots": 20,
+  "hasNextPage": false,
+  "issues": []
+}

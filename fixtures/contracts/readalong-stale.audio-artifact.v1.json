@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "audio-artifact.v1",
+  "artifactId": "audio-md-stale",
+  "sourceId": "contract-markdown",
+  "sourceRevisionId": "sr-md-001",
+  "extractionRevisionId": "er-md-001",
+  "readalongManifestId": "ram-md-001",
+  "segmentIds": ["seg-0001"],
+  "state": "stale",
+  "generatedAt": "2026-05-17T01:01:00Z",
+  "provider": {
+    "name": "fixture-tts",
+    "voiceId": "voice-contract",
+    "model": "fixture-v1"
+  },
+  "format": "mp3",
+  "durationMs": 1700,
+  "uri": "file://audio/audio-md-stale.mp3",
+  "checksum": "sha256:audio-md-stale",
+  "compatibilityKey": "ck-md-001-seg-0001",
+  "replacedByArtifactId": "audio-md-checked",
+  "retry": {
+    "retryable": true,
+    "scope": "segment",
+    "reason": "source revision superseded by repair",
+    "attempt": 1
+  }
+}

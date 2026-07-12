@@ -5,6 +5,7 @@ import { emitDOCXAdapter } from "./emit_ir.js";
 
 test("DOCX adapter emits headings, lists, tables, notes, comments, captions, and images", async () => {
   const emitted = await emitDOCXAdapter(await fixtureDOCX(), {
+    contractFixtureIds: ["docx-fixture.content-ir.v1"],
     sourceId: "docx-fixture",
     sourceName: "fixture.docx",
   });
@@ -47,6 +48,22 @@ test("DOCX adapter emits headings, lists, tables, notes, comments, captions, and
   assert.equal(emitted.metadata.footnotes[0].text, "Footnote detail.");
   assert.equal(emitted.metadata.endnotes[0].text, "Endnote detail.");
   assert.equal(emitted.metadata.comments[0].text, "Comment detail.");
+
+  const report = emitted.contractFitReport;
+  assert.equal(report.schemaVersion, "adapter-contract-fit-report.v1");
+  assert.equal(report.adapter.id, "docx");
+  assert.equal(report.adapter.sourceKind, "docx");
+  assert.equal(report.adapter.supportTier, "lower-tier");
+  assert.equal(report.status, "lower_tier_with_gaps");
+  assert.deepEqual(report.evidence.fixtureIds, ["docx-fixture.content-ir.v1"]);
+  assert.deepEqual(report.evidence.sourceNames, ["fixture.docx"]);
+  assert(report.supportedFeatures.some((feature) => feature.id === "content_ir_v1_output"));
+  assert(report.gaps.some((gap) => gap.id === "docx_identity_is_paragraph_derived"));
+  assert(report.warnings.some((warning) => warning.code === "no_best_in_class_claim"));
+  assert(report.nonClaims.includes("best_in_class_docx"));
+  assert(report.nonClaims.includes("exact_word_sync_ready"));
+  assert.deepEqual(emitted.metadata.contractFitReport, report);
+  assert.deepEqual(emitted.diagnostics.contractFitReport, report);
 });
 
 async function fixtureDOCX() {

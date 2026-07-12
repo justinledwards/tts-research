@@ -1,0 +1,21 @@
+# Disabled example only.
+# To enable later, copy this file into .github/workflows/ after the team agrees
+# which local QA reports should become hosted checks.
+
+name: Local QA Expansion Example
+
+on:
+  workflow_dispatch:
+
+jobs:
+  local-qa-expansion:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: mise install
+      - run: pnpm install --frozen-lockfile
+      - run: mise run validate:local
+      - run: pnpm e2e:ui-actions
+      - run: pnpm e2e:book-cinema:low-resource

@@ -1,0 +1,144 @@
+import { describe, expect, it } from "vitest";
+import {
+  buildCinemaAdvancedCommandMetadata,
+  buildCinemaFocusCommandMetadata,
+  buildSettingsCommandMetadata,
+  buildWorkspaceCommandMetadata,
+  commandDisabled,
+  commandDisabledReason,
+  searchCommandEntries,
+  type CommandEntry,
+} from "./index";
+
+const noop = () => {
+  void 0;
+};
+
+describe("command search", () => {
+  it("ranks exact and title matches before detail-only matches", () => {
+    const entries: CommandEntry[] = [
+      {
+        detail: "Change local reader preferences.",
+        id: "settings-reader",
+        perform: noop,
+        section: "Settings",
+        title: "Reader preferences",
+      },
+      {
+        detail: "A reader setting lives over here.",
+        id: "workspace-reader",
+        perform: noop,
+        section: "Workspace",
+        title: "Open workspace",
+      },
+      {
+        detail: "Search generated audio and source context.",
+        id: "source",
+        keywords: ["reader"],
+        perform: noop,
+        section: "Sources",
+        title: "Prepared source",
+      },
+    ];
+
+    expect(searchCommandEntries(entries, "reader").map((entry) => entry.id)).toEqual([
+      "settings-reader",
+      "source",
+      "workspace-reader",
+    ]);
+  });
+
+  it("supports multi-token searches across title and keywords", () => {
+    const entries: CommandEntry[] = [
+      {
+        id: "cinema-review",
+        keywords: ["bookmarks", "recent"],
+        perform: noop,
+        section: "Cinema",
+        title: "Review cinema focus",
+      },
+      {
+        id: "settings-review",
+        perform: noop,
+        section: "Settings",
+        title: "Review settings",
+      },
+    ];
+
+    expect(searchCommandEntries(entries, "review bookmarks").map((entry) => entry.id)).toEqual([
+      "cinema-review",
+    ]);
+  });
+
+  it("treats blocked command availability as disabled with a visible reason", () => {
+    const entry: CommandEntry = {
+      availability: { reason: "Open Review before using this command.", state: "blocked" },
+      id: "review-blocked",
+      perform: noop,
+      section: "Review",
+      title: "Approve current block",
+    };
+
+    expect(commandDisabled(entry)).toBe(true);
+    expect(commandDisabledReason(entry)).toBe("Open Review before using this command.");
+  });
+});
+
+describe("metadata command generation", () => {
+  it("generates settings commands from groups, fields, and scopes", () => {
+    const commands = buildSettingsCommandMetadata();
+
+    expect(commands.map((command) => command.id)).toContain("settings:layer:quick");
+    expect(commands.map((command) => command.id)).toContain("settings:layer:expert");
+    expect(commands.map((command) => command.id)).toContain("settings:group:sources");
+    expect(
+      commands.find((command) => command.id === "settings:field:previewSample")?.target,
+    ).toMatchObject({
+      layerId: "quick",
+    });
+    expect(commands.map((command) => command.id)).toContain("settings:field:sourceSpeechPolicy");
+    expect(commands.map((command) => command.id)).toContain(
+      "settings:field:temporarySourceBehavior",
+    );
+    expect(commands.map((command) => command.id)).toContain("settings:field:telepromptTheatre");
+    expect(commands.map((command) => command.id)).toContain("settings:scope:machine");
+    expect(
+      commands.find((command) => command.id === "settings:scope:temporarySource"),
+    ).toMatchObject({
+      target: { groupId: "sources" },
+    });
+  });
+
+  it("generates workspace and cinema commands from shared metadata", () => {
+    expect(buildWorkspaceCommandMetadata().map((command) => command.id)).toContain(
+      "workspace:stage:teleprompt",
+    );
+    expect(buildWorkspaceCommandMetadata().map((command) => command.id)).toContain(
+      "workspace:stage:theatre",
+    );
+    expect(buildWorkspaceCommandMetadata().map((command) => command.id)).toContain(
+      "workspace:layout:focus",
+    );
+    expect(buildWorkspaceCommandMetadata().map((command) => command.id)).toContain(
+      "workspace:layout:custom",
+    );
+    expect(buildCinemaFocusCommandMetadata().map((command) => command.id)).toEqual([
+      "cinema:focus:read",
+      "cinema:focus:inspect",
+      "cinema:focus:review",
+      "cinema:focus:debug",
+    ]);
+    expect(buildCinemaAdvancedCommandMetadata().map((command) => command.id)).toEqual([
+      "cinema:advanced:diagnostics",
+      "cinema:advanced:timing-map",
+      "cinema:advanced:alignment-repair",
+      "cinema:advanced:policy-internals",
+      "cinema:advanced:source-internals",
+    ]);
+    expect(
+      buildCinemaAdvancedCommandMetadata().find(
+        (command) => command.id === "cinema:advanced:diagnostics",
+      )?.title,
+    ).toBe("Advanced: Diagnostics");
+  });
+});

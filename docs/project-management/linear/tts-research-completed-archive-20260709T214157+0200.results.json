@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "archivedAt": "2026-07-09T19:42:01.288864+00:00",
+  "backupJson": "docs/project-management/linear/tts-research-completed-archive-20260709T214157+0200.json",
+  "backupMarkdown": "docs/project-management/linear/tts-research-completed-archive-20260709T214157+0200.md",
+  "attempted": 9,
+  "succeeded": 9,
+  "failed": 0,
+  "results": [
+    {
+      "identifier": "QQP-543",
+      "success": true,
+      "entity": {
+        "id": "a9bbef20-a2bd-4883-88e4-9ddb79e3c627",
+        "identifier": "QQP-543",
+        "archivedAt": "2026-07-09T19:42:00.621Z",
+        "state": {
+          "name": "Done",
+          "type": "completed"
+        },
+        "url": "https://linear.app/niklas-olsson/issue/QQP-543/resolve-final-ux-ui-action-audit-debt-blocking-qqp-441"
+      }
+    },
+    {
+      "identifier": "QQP-542",
+      "success": true,
+      "entity": {
+        "id": "a0c98d9a-4640-4c10-96e1-6662f9df8d4c",
+        "identifier": "QQP-542",
+        "archivedAt": "2026-07-09T19:42:00.952Z",
+        "state": {
+          "name": "Done",
+          "type": "completed"
+        },
+        "url": "https://linear.app/niklas-olsson/issue/QQP-542/book-cinema-theatre-compact-phone-controls-exceed-canvas-budget"
+      }
+    },
+    {
+      "identifier": "QQP-441",
+      "success": true,
+      "entity": {
+        "id": "45b1cc50-6a65-43fd-a16a-a6e0631aeb7c",
+        "identifier": "QQP-441",
+        "archivedAt": "2026-07-09T19:42:01.308Z",
+        "state": {
+          "name": "Done",
+          "type": "completed"
+        },
+        "url": "https://linear.app/niklas-olsson/issue/QQP-441/first-batch-active-processing-and-canonical-fixture-evidence-gate"
+      }
+    },
+    {
+      "identifier": "QQP-440",
+      "success": true,
+      "entity": {
+        "id": "906d0ddf-17cb-4484-a9ab-63d1e70a259f",
+        "identifier": "QQP-440",
+        "archivedAt": "2026-07-09T19:42:01.764Z",
+        "state": {
+          "name": "Done",
+          "type": "completed"
+        },
+        "url": "https://linear.app/niklas-olsson/issue/QQP-440/reader-windowing-and-highlight-scheduling"
+      }
+    },
+    {
+      "identifier": "QQP-439",
+      "success": true,
+      "entity": {
+        "id": "1615aafd-1886-4cb1-a5fa-0baa5590f4d1",
+        "identifier": "QQP-439",
+        "archivedAt": "2026-07-09T19:42:02.174Z",
+        "state": {
+          "name": "Done",
+          "type": "completed"
+        },
+        "url": "https://linear.app/niklas-olsson/issue/QQP-439/reader-transport-state-machine"
+      }
+    },
+    {
+      "identifier": "QQP-438",
+      "success": true,
+      "entity": {
+        "id": "c58a01f3-9c9e-4b29-99dd-be9266a55667",
+        "identifier": "QQP-438",
+        "archivedAt": "2026-07-09T19:42:02.902Z",
+        "state": {
+          "name": "Done",
+          "type": "completed"
+        },
+        "url": "https://linear.app/niklas-olsson/issue/QQP-438/reader-shell-state-vocabulary-and-mode-labels"
+      }
+    },
+    {
+      "identifier": "QQP-437",
+      "success": true,
+      "entity": {
+        "id": "fe4dea9d-cf6e-4424-a9b7-5f0977e82a4a",
+        "identifier": "QQP-437",
+        "archivedAt": "2026-07-09T19:42:03.195Z",
+        "state": {
+          "name": "Done",
+          "type": "completed"
+        },
+        "url": "https://linear.app/niklas-olsson/issue/QQP-437/quick-listen-to-project-promotion-crosswalk"
+      }
+    },
+    {
+      "identifier": "QQP-436",
+      "success": true,
+      "entity": {
+        "id": "5f4a077e-a800-4b9f-8edc-eba53d862873",
+        "identifier": "QQP-436",
+        "archivedAt": "2026-07-09T19:42:03.497Z",
+        "state": {
+          "name": "Done",
+          "type": "completed"
+        },
+        "url": "https://linear.app/niklas-olsson/issue/QQP-436/minimal-repair-overlay-and-manifest-supersession"
+      }
+    },
+    {
+      "identifier": "QQP-4",
+      "success": true,
+      "entity": {
+        "id": "d60a8996-f8cf-423a-b70e-1d5e0025bb3f",
+        "identifier": "QQP-4",
+        "archivedAt": "2026-07-09T19:42:03.962Z",
+        "state": {
+          "name": "Done",
+          "type": "completed"
+        },
+        "url": "https://linear.app/niklas-olsson/issue/QQP-4/quick-narrate-pasted-url"
+      }
+    }
+  ],
+  "verification": {
+    "remainingCompletedUnarchived": [],
+    "hasNextPage": false
+  }
+}

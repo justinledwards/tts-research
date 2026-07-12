@@ -1,0 +1,3 @@
+# Preserve exact external review bytes and generated packet parity.
+docs/reviews/chatgpt-*.md whitespace=-blank-at-eof
+docs/project-management/linear/*-batch-draft.md whitespace=-trailing-space

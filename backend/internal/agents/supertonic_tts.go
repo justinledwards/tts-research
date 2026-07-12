@@ -55,7 +55,7 @@ func NewSupertonicTTSAgent(config SupertonicConfig) *SupertonicTTSAgent {
 		config.DefaultLang = "en"
 	}
 	if config.TimeoutSeconds <= 0 {
-		config.TimeoutSeconds = 180
+		config.TimeoutSeconds = 3600
 	}
 	return &SupertonicTTSAgent{config: config}
 }

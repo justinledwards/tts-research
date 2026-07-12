@@ -5,15 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html"
 	"io"
-	"mime"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -22,11 +19,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/extension"
-	"github.com/yuin/goldmark/parser"
-	"github.com/yuin/goldmark/text"
+	"github.com/justinedwards/tts-research/backend/internal/sourceprep"
 
 	"github.com/justinedwards/tts-research/backend/internal/policy"
 )
@@ -40,6 +33,7 @@ const (
 	readableURLUserAgent           = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 VoiceStudio/1.0"
 	maxHackerNewsComments          = 120
 	warningSentenceTooLong         = "sentence_too_long"
+	websiteVisibleTextOnlySelector = "__visible_text_only"
 )
 
 type fetchedReadableSource struct {
@@ -47,6 +41,7 @@ type fetchedReadableSource struct {
 	Filename    string
 	ContentType string
 	Bytes       []byte
+	Safety      sourceprep.URLSafetyReport
 }
 
 type hackerNewsAlgoliaItem struct {
@@ -69,18 +64,42 @@ type sourcePreprocessResult struct {
 	SourceFormat        string
 	RenderMode          string
 	Title               string
+	ReadableText        string
 	MarkdownParseMode   string
 	Metadata            map[string]any
 }
 
 var (
 	citationGlyphPattern      = regexp.MustCompile(`cite[^]*`)
-	turnCitationPattern       = regexp.MustCompile(`\bturn\d+(?:search|view|news|fetch)\d+\b`)
+	chatGPTArtifactPattern    = regexp.MustCompile(`[^]*`)
+	chatGPTCitationPattern    = regexp.MustCompile(`(?i)\[cite\]\s*\[\s*turn\d+(?:search|view|news|fetch|image)\d+\s*\]`)
+	contentReferencePattern   = regexp.MustCompile(`:contentReference\[[^\]\n]+\]\{[^}\n]*\}`)
+	malformedCitationPattern  = regexp.MustCompile(`(?i)\[(?:cite|citation|source|reference)(?::[^\]\n]*)?\]`)
+	turnCitationPattern       = regexp.MustCompile(`\bturn\d+(?:search|view|news|fetch|image)\d+\b`)
+	footnoteReferencePattern  = regexp.MustCompile(`\[\^[^\]\s]+\]`)
+	referenceMarkerPattern    = regexp.MustCompile(`\[(?:\d+(?:\s*(?:,|-|–)\s*\d+)*(?:,\s*p\.?\s*\d+)?|[A-Z][A-Za-z .'-]{1,40}(?:19|20)\d{2}[^\]\n]{0,20})\]`)
+	bracketedMetadataPattern  = regexp.MustCompile(`(?i)\[(?:todo|note|metadata|draft|review|debug|loc(?:ator)?|id|ref)[:\s][^\]\n]{0,80}\]`)
 	markdownLinkPattern       = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
+	markdownReferenceLink     = regexp.MustCompile(`(?i)!?\[[^\]\n]*\]\(\s*(?:https?://|www\.|doi:|10\.)[^)\s]*\s*\)`)
 	markdownImagePattern      = regexp.MustCompile(`!\[([^\]]*)\]\([^)]+\)`)
 	markdownImageOnlyLine     = regexp.MustCompile(`^!\[[^\]]*\]\([^)]+\)\s*$`)
+	referenceSectionMarker    = regexp.MustCompile(`(?i)^<!--\s*deep-research-references\s*:\s*(start|end)\s*-->$`)
+	referenceSectionLabel     = regexp.MustCompile(`(?i)^(references?|reference\s+list|bibliograph(?:y|ies)|works?\s+cited|sources?|source\s+list|further\s+reading|selected\s+references?)$`)
+	referenceURLPattern       = regexp.MustCompile(`(?i)\b(?:https?://|www\.)\S+`)
+	referenceDOIPattern       = regexp.MustCompile(`(?i)\b(?:doi:\s*|https?://(?:dx\.)?doi\.org/|10\.\d{4,9}/)[-._;()/:A-Z0-9]+`)
+	referenceNumberPattern    = regexp.MustCompile(`^\s*\[?\s*\d{1,4}\s*\]?\s*$`)
 	inlineCodeSpeechPattern   = regexp.MustCompile("`([^`]+)`")
 	htmlScriptStylePattern    = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>|<style[^>]*>.*?</style>|<noscript[^>]*>.*?</noscript>`)
+	htmlChromePattern         = regexp.MustCompile(`(?is)<(?:nav|header|footer|aside|form|dialog)\b[^>]*>.*?</(?:nav|header|footer|aside|form|dialog)>`)
+	htmlArticlePattern        = regexp.MustCompile(`(?is)<article\b[^>]*>(.*?)</article>`)
+	htmlMainPattern           = regexp.MustCompile(`(?is)<main\b[^>]*>(.*?)</main>`)
+	htmlRoleMainPattern       = regexp.MustCompile(`(?is)<(?:div|section)\b[^>]*\brole=["']main["'][^>]*>(.*?)</(?:div|section)>`)
+	htmlReadableClassPattern  = regexp.MustCompile(`(?is)<(?:div|section)\b[^>]*(?:class|id)=["'][^"']*(?:article|post|entry-content|story|main-content)[^"']*["'][^>]*>(.*?)</(?:div|section)>`)
+	htmlHeadingOnePattern     = regexp.MustCompile(`(?is)<h1\b[^>]*>(.*?)</h1>`)
+	htmlTitlePattern          = regexp.MustCompile(`(?is)<title\b[^>]*>(.*?)</title>`)
+	htmlCanonicalPattern      = regexp.MustCompile(`(?is)<link\b[^>]*\brel=["'][^"']*\bcanonical\b[^"']*["'][^>]*\bhref=["']([^"']+)["'][^>]*>`)
+	htmlMetaPropertyPattern   = regexp.MustCompile(`(?is)<meta\b[^>]*(?:name|property)=["']([^"']+)["'][^>]*\bcontent=["']([^"']*)["'][^>]*>`)
+	htmlLangPattern           = regexp.MustCompile(`(?is)<html\b[^>]*\blang=["']([^"']+)["']`)
 	htmlBlockBreakPattern     = regexp.MustCompile(`(?i)</(p|div|section|article|br|h[1-6]|li|tr)>`)
 	htmlTagSpeechPattern      = regexp.MustCompile(`(?s)<[^>]+>`)
 	markdownHeadingLine       = regexp.MustCompile(`^(#{1,6})\s+(.+)$`)
@@ -112,17 +131,22 @@ func (service *Service) CreatePreparedSource(
 	sourceURL := strings.TrimSpace(request.URL)
 	contentType := strings.TrimSpace(request.SourceContentType)
 	sourceBytes := request.SourceBytes
+	lifecycleRawBytes := []byte(sourceText)
+	var urlSafety *sourceprep.URLSafetyReport
 
 	if kind == PreparedSourceKindURL {
 		fetched, err := service.fetchReadableSourceURL(ctx, sourceURL)
 		if err != nil {
 			return PreparedSource{}, err
 		}
+		lifecycleRawBytes = append([]byte(nil), fetched.Bytes...)
 		sourceText = string(fetched.Bytes)
 		sourceName = fetched.Filename
 		sourceURL = fetched.URL
 		contentType = fetched.ContentType
 		sourceBytes = int64(len(fetched.Bytes))
+		safety := fetched.Safety
+		urlSafety = &safety
 	}
 	if sourceName == "" {
 		sourceName = "Untitled source"
@@ -153,6 +177,7 @@ func (service *Service) CreatePreparedSource(
 		contentType,
 		service.options.SourcePrepSentenceMaxRunes,
 		markdownParseMode,
+		request.HTMLContainerSelector,
 	)
 	prepared.PreprocessorID = preprocessed.PreprocessorID
 	prepared.PreprocessorVersion = preprocessed.PreprocessorVersion
@@ -163,6 +188,14 @@ func (service *Service) CreatePreparedSource(
 	prepared.Blocks = preprocessed.Blocks
 	prepared.Warnings = preprocessed.Warnings
 	prepared.Metadata = preprocessed.Metadata
+	prepared = sanitizePreparedSourceReferenceCueLeaks(prepared, service.options.SourcePrepSentenceMaxRunes)
+	if urlSafety != nil {
+		if prepared.Metadata == nil {
+			prepared.Metadata = map[string]any{}
+		}
+		prepared.Metadata["urlSafety"] = *urlSafety
+		prepared.Metadata["urlProvenance"] = urlProvenanceMetadata(request.URL, prepared.SourceURL)
+	}
 	prepared.SpeechPolicyProfile = project.SpeechPolicyProfile
 	prepared = applySpeechPolicyToPreparedSourceWithEvaluator(
 		prepared,
@@ -172,12 +205,22 @@ func (service *Service) CreatePreparedSource(
 	prepared = service.applySpeechRenderToPreparedSource(prepared, SpeechRenderOptions{
 		ProjectID: project.ID,
 	})
+	readiness := preparedSourceNeedsMetadataReadiness(prepared)
+	prepared.SourceReadiness = &readiness
+	if _, _, err := service.PersistSourceLifecycle(sourceLifecycleRequestFromPreparedSource(prepared, sourceText, lifecycleRawBytes, SourceLifecycleWorkStatusRunning)); err != nil {
+		return PreparedSource{}, err
+	}
 
 	service.updatePreparedSource(prepared)
 	if err := service.writePreparedSourceMetadata(prepared); err != nil {
+		_ = service.UpdateSourceLifecycleWorkStatus(prepared.ID, prepared.ID+"-rev", SourceLifecycleWorkStatusFailed)
 		return PreparedSource{}, err
 	}
 	if err := service.writePreparedSourceContentIR(prepared); err != nil {
+		_ = service.UpdateSourceLifecycleWorkStatus(prepared.ID, prepared.ID+"-rev", SourceLifecycleWorkStatusFailed)
+		return PreparedSource{}, err
+	}
+	if err := service.UpdateSourceLifecycleWorkStatus(prepared.ID, prepared.ID+"-rev", SourceLifecycleWorkStatusComplete); err != nil {
 		return PreparedSource{}, err
 	}
 	return prepared, nil
@@ -258,6 +301,7 @@ func (service *Service) ListProjectPreparedSources(projectID string) ([]Prepared
 	service.mu.RUnlock()
 	for index, source := range sources {
 		source = service.applyCurrentSpeechPolicy(source, policy.Overrides{})
+		source = ensurePreparedSourceReadiness(source)
 		sources[index] = summarizePreparedSourcePayload(service.sanitizePreparedSourceWarnings(source))
 	}
 	sort.SliceStable(sources, func(left int, right int) bool {
@@ -274,7 +318,8 @@ func (service *Service) GetPreparedSource(id string) (PreparedSource, error) {
 		return PreparedSource{}, ErrPreparedSourceNotFound
 	}
 	source = clonePreparedSource(source)
-	return service.sanitizePreparedSourceWarnings(service.applyCurrentSpeechPolicy(source, policy.Overrides{})), nil
+	source = ensurePreparedSourceReadiness(service.applyCurrentSpeechPolicy(source, policy.Overrides{}))
+	return service.sanitizePreparedSourceWarnings(source), nil
 }
 
 func (service *Service) PreviewPreparedSourceSpeechPolicy(sourceID string, request SpeechPolicyPreviewRequest) (PreparedSource, error) {
@@ -347,11 +392,58 @@ func (service *Service) UpdatePreparedSourceSpeechPolicy(sourceID string, reques
 	source = service.applySpeechRenderToPreparedSource(source, SpeechRenderOptions{
 		ProjectID: source.ProjectID,
 	})
+	source.UpdatedAt = time.Now().UTC()
+	source = ensurePreparedSourceReadiness(source)
 	service.updatePreparedSource(source)
 	if err := service.writePreparedSourceMetadata(source); err != nil {
 		return PreparedSource{}, err
 	}
 	return source, nil
+}
+
+func (service *Service) ConfirmPreparedSourceReadiness(id string, request SourceReadinessConfirmationRequest) (PreparedSource, error) {
+	service.mu.RLock()
+	source, ok := service.sourcePreps[strings.TrimSpace(id)]
+	service.mu.RUnlock()
+	if !ok {
+		return PreparedSource{}, ErrPreparedSourceNotFound
+	}
+	source = clonePreparedSource(source)
+	if source.Status != PreparedSourceStatusReady {
+		readiness := preparedSourceFailedReadiness(source, SourceReadinessFailureStructure, source.Error)
+		source.SourceReadiness = &readiness
+		return source, nil
+	}
+	now := time.Now().UTC()
+	if title := strings.TrimSpace(request.Title); title != "" {
+		source.Title = title
+	}
+	if profile := strings.TrimSpace(request.SpeechPolicyProfile); profile != "" {
+		source.SourceSpeechPolicyProfile = profile
+	}
+	if source.Metadata == nil {
+		source.Metadata = map[string]any{}
+	}
+	if language := strings.TrimSpace(request.Language); language != "" {
+		source.Metadata["language"] = language
+	}
+	if sourceType := strings.TrimSpace(request.SourceType); sourceType != "" {
+		source.Metadata["sourceType"] = sourceType
+	}
+	if structureChoice := strings.TrimSpace(request.StructureChoice); structureChoice != "" {
+		source.Metadata["structureChoice"] = structureChoice
+	}
+	if voiceProfileID := strings.TrimSpace(request.VoiceProfileID); voiceProfileID != "" {
+		source.Metadata["voiceProfileId"] = voiceProfileID
+	}
+	readiness := confirmedPreparedSourceReadiness(source, request, now)
+	source.SourceReadiness = &readiness
+	source.UpdatedAt = now
+	service.updatePreparedSource(source)
+	if err := service.writePreparedSourceMetadata(source); err != nil {
+		return PreparedSource{}, err
+	}
+	return service.sanitizePreparedSourceWarnings(source), nil
 }
 
 func (service *Service) applyCurrentSpeechPolicy(source PreparedSource, overrides policy.Overrides) PreparedSource {
@@ -419,9 +511,34 @@ func (service *Service) CreatePreparedSourceJob(
 		Locale:         request.Locale,
 		TTSEngine:      request.TTSEngine,
 	})
+	source = sanitizePreparedSourceReferenceCueLeaks(source, service.options.SourcePrepSentenceMaxRunes)
 	selected := map[string]struct{}{}
 	for _, id := range request.SelectedBlockIDs {
-		selected[strings.TrimSpace(id)] = struct{}{}
+		trimmed := strings.TrimSpace(id)
+		if trimmed == "" {
+			continue
+		}
+		selected[trimmed] = struct{}{}
+	}
+	selectionIndex := make(map[string]NarrationBlock, len(source.Blocks))
+	for _, block := range source.Blocks {
+		selectionIndex[block.ID] = block
+	}
+	sourceBlockIDs := make(map[string]struct{}, len(source.Blocks))
+	for _, block := range source.Blocks {
+		sourceBlockIDs[block.ID] = struct{}{}
+	}
+	selectionWarnings := make([]string, 0)
+	if len(selected) > 0 {
+		for selectedID := range selected {
+			if _, ok := sourceBlockIDs[selectedID]; !ok {
+				selectionWarnings = append(selectionWarnings, "selected block id not found: "+selectedID)
+				continue
+			}
+			if !isPreparedSourceSelectionSpeakable(selectionIndex[selectedID]) {
+				selectionWarnings = append(selectionWarnings, "selected block id not speakable: "+selectedID)
+			}
+		}
 	}
 	parts := make([]string, 0, len(source.Blocks))
 	warnings := make([]string, 0)
@@ -432,19 +549,19 @@ func (service *Service) CreatePreparedSourceJob(
 				continue
 			}
 		}
-		if block.SpeakMode == NarrationSpeakModeSkip {
+		if !isPreparedSourceSelectionSpeakable(block) {
 			continue
 		}
 		text := strings.TrimSpace(block.SpokenText)
-		if text == "" {
-			text = strings.TrimSpace(block.Text)
-		}
 		if text == "" {
 			continue
 		}
 		parts = append(parts, text)
 		warnings = append(warnings, block.Warnings...)
 		selectedIDs = append(selectedIDs, block.ID)
+	}
+	if len(selectionWarnings) > 0 {
+		warnings = append(warnings, selectionWarnings...)
 	}
 	if len(parts) == 0 {
 		return VoiceJob{}, ErrEmptyText
@@ -474,6 +591,22 @@ func (service *Service) CreatePreparedSourceJob(
 	return job, nil
 }
 
+func isPreparedSourceSelectionSpeakable(block NarrationBlock) bool {
+	if block.SpeakMode == NarrationSpeakModeSkip {
+		return false
+	}
+	if strings.TrimSpace(block.SpokenText) == "" {
+		return false
+	}
+	if referencePolicyModeIsNonSpeaking(block.SpeechPolicy.Mode) {
+		return false
+	}
+	if _, _, isStandaloneReferenceOnly := standaloneReferenceOnlyText(block.SpokenText); isStandaloneReferenceOnly {
+		return false
+	}
+	return true
+}
+
 func (service *Service) updatePreparedSource(source PreparedSource) {
 	service.mu.Lock()
 	source.UpdatedAt = time.Now().UTC()
@@ -489,6 +622,7 @@ func clonePreparedSource(source PreparedSource) PreparedSource {
 	source.Metadata = cloneAnyMap(source.Metadata)
 	source.TranscriptMetadata = cloneTranscriptMetadata(source.TranscriptMetadata)
 	source.TranscriptGeneratedAt = cloneTimePtr(source.TranscriptGeneratedAt)
+	source = sanitizePreparedSourceReferenceCueLeaks(source, defaultSourcePrepSentenceMaxRunes)
 	return source
 }
 
@@ -646,12 +780,13 @@ func (service *Service) reloadSourcePreps() {
 }
 
 func (service *Service) fetchReadableSourceURL(ctx context.Context, rawURL string) (fetchedReadableSource, error) {
-	parsed, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return fetchedReadableSource{}, fmt.Errorf("enter a valid http or https URL")
+	safety := sourceprep.AnalyzeURLSafety(rawURL, service.options.SourceURLAllowPrivate)
+	if err := sourceprep.ValidateURLSafety(safety); err != nil {
+		return fetchedReadableSource{}, err
 	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return fetchedReadableSource{}, fmt.Errorf("only http and https URLs are supported")
+	parsed, err := url.Parse(safety.NormalizedURL)
+	if err != nil {
+		return fetchedReadableSource{}, fmt.Errorf("enter a valid http or https URL")
 	}
 
 	client := &http.Client{
@@ -668,7 +803,7 @@ func (service *Service) fetchReadableSourceURL(ctx context.Context, rawURL strin
 					return nil, err
 				}
 				for _, ip := range ips {
-					if !service.options.SourceURLAllowPrivate && isPrivateOrLocalIP(ip) {
+					if !service.options.SourceURLAllowPrivate && sourceprep.IsPrivateOrLocalIP(ip) {
 						return nil, fmt.Errorf("URL resolves to a private or local address")
 					}
 				}
@@ -723,12 +858,14 @@ func (service *Service) fetchReadableSourceURL(ctx context.Context, rawURL strin
 	if len(body) > maxReadableURLBytes {
 		return fetchedReadableSource{}, fmt.Errorf("URL content is too large")
 	}
+	safety.NormalizedURL = resp.Request.URL.String()
 	filename := filenameFromURL(resp.Request.URL, contentType)
 	return fetchedReadableSource{
 		URL:         resp.Request.URL.String(),
 		Filename:    filename,
 		ContentType: contentType,
 		Bytes:       body,
+		Safety:      safety,
 	}, nil
 }
 
@@ -883,7 +1020,7 @@ func hackerNewsReadableText(input string) string {
 }
 
 func prepareNarrationBlocks(input string, maxSentenceRunes int) ([]NarrationBlock, []SkippedSourceItem, []string) {
-	result := preprocessReadableSource(input, "book-scope.md", "text/markdown", maxSentenceRunes, "legacy")
+	result := preprocessReadableSource(input, "book-scope.md", "text/markdown", maxSentenceRunes, "legacy", "")
 	return result.Blocks, result.SkippedItems, result.Warnings
 }
 
@@ -893,20 +1030,67 @@ func preprocessReadableSource(
 	contentType string,
 	maxSentenceRunes int,
 	markdownParseMode string,
+	htmlContainerSelector string,
 ) sourcePreprocessResult {
 	sourceFormat := detectPreparedSourceFormat(sourceName, contentType, input)
 	switch sourceFormat {
 	case "html":
-		blocks, skipped, warnings := preparePlainNarrationBlocks(normalizeReadableSourceText(input), maxSentenceRunes)
+		if strings.TrimSpace(htmlContainerSelector) == websiteVisibleTextOnlySelector {
+			readableText := normalizeReadableSourceText(visibleHTMLTextFallback(input))
+			blocks, skipped, warnings := preparePlainNarrationBlocks(readableText, maxSentenceRunes)
+			quality := sourceprep.HTMLExtractionQuality{
+				ChosenContainer:           "visible text",
+				ExtractionConfidence:      "medium",
+				ExtractionConfidenceScore: 0.58,
+				ArticleUncertain:          true,
+				NarrationBlockCount:       len(blocks),
+				ReadableTextRatio:         1,
+			}
+			return sourcePreprocessResult{
+				Blocks:              blocks,
+				SkippedItems:        skipped,
+				Warnings:            uniqueStrings(append(warnings, "website_visible_text_fallback")),
+				PreprocessorID:      "html-visible-text",
+				PreprocessorVersion: "html-visible-text-v1",
+				SourceFormat:        sourceFormat,
+				RenderMode:          "blocks",
+				Title:               inferReadableHTMLTitle(input, readableText, sourceName),
+				ReadableText:        readableText,
+				Metadata: map[string]any{
+					"websiteExtractionQuality": quality,
+					"websiteMetadata":          extractWebsiteMetadata(input, sourceName),
+				},
+			}
+		}
+		analysis := sourceprep.AnalyzeHTMLQuality(input, sourceprep.HTMLQualityOptions{
+			PreferredContainer: strings.TrimSpace(htmlContainerSelector),
+		})
+		readableText := normalizeReadableSourceText(analysis.ReadableText)
+		blocks, skipped, warnings := preparePlainNarrationBlocks(readableText, maxSentenceRunes)
+		quality := analysis.Quality
+		quality.NarrationBlockCount = len(blocks)
+		chromeSkipped := skippedItemsFromHTMLChrome(quality.SkippedBlocks)
+		if len(chromeSkipped) > 0 {
+			skipped = append(chromeSkipped, skipped...)
+			quality.SkippedBlockCount = len(skipped)
+		}
+		if quality.ExtractionConfidence == "low" {
+			warnings = uniqueStrings(append(warnings, "website_extraction_low_confidence"))
+		}
 		return sourcePreprocessResult{
 			Blocks:              blocks,
 			SkippedItems:        skipped,
 			Warnings:            warnings,
 			PreprocessorID:      "html-readable",
-			PreprocessorVersion: "html-readable-v1",
+			PreprocessorVersion: "html-readable-v3",
 			SourceFormat:        sourceFormat,
 			RenderMode:          "blocks",
-			Title:               inferPreparedSourceTitle(normalizeReadableSourceText(input), sourceName),
+			Title:               inferReadableHTMLTitle(input, readableText, sourceName),
+			ReadableText:        readableText,
+			Metadata: map[string]any{
+				"websiteExtractionQuality": quality,
+				"websiteMetadata":          extractWebsiteMetadata(input, sourceName),
+			},
 		}
 	case "structured":
 		blocks, skipped, warnings := preparePlainNarrationBlocks(input, maxSentenceRunes)
@@ -964,6 +1148,7 @@ func preparePlainNarrationBlocks(input string, maxSentenceRunes int) ([]Narratio
 	skipped := make([]SkippedSourceItem, 0)
 	warnings := make([]string, 0)
 	offsetCursor := 0
+	referenceMode := ""
 	for _, paragraph := range paragraphs {
 		raw := strings.TrimSpace(paragraph)
 		if raw == "" {
@@ -977,6 +1162,52 @@ func preparePlainNarrationBlocks(input string, maxSentenceRunes int) ([]Narratio
 			start = offsetCursor
 		}
 		end := start + len(raw)
+		if marker := deepResearchReferencesMarker(raw); marker == "start" {
+			referenceMode = "marker"
+			offsetCursor = end
+			continue
+		} else if marker == "end" {
+			referenceMode = ""
+			offsetCursor = end
+			continue
+		}
+		if paragraphStartsMarkerReferenceSection(raw) {
+			referenceMode = "marker"
+			block := newReferenceSectionBlock(len(blocks), "References", raw, start, end, maxSentenceRunes)
+			blocks = append(blocks, block)
+			skipped = append(skipped, skippedSourceItem(block, "reference section available on demand"))
+			warnings = append(warnings, block.Warnings...)
+			offsetCursor = end
+			continue
+		}
+		if isReferenceSectionLabel(raw) || paragraphStartsReferenceSection(raw) {
+			referenceMode = "implicit"
+			block := newReferenceSectionBlock(len(blocks), "References", raw, start, end, maxSentenceRunes)
+			blocks = append(blocks, block)
+			skipped = append(skipped, skippedSourceItem(block, "reference section available on demand"))
+			warnings = append(warnings, block.Warnings...)
+			offsetCursor = end
+			continue
+		}
+		if referenceMode != "" {
+			if referenceMode == "marker" || isReferenceLikeText(raw) {
+				block := newReferenceSectionBlock(len(blocks), "Reference section", raw, start, end, maxSentenceRunes)
+				blocks = append(blocks, block)
+				skipped = append(skipped, skippedSourceItem(block, "reference section available on demand"))
+				warnings = append(warnings, block.Warnings...)
+				offsetCursor = end
+				continue
+			}
+			referenceMode = ""
+		}
+		if kind, label, ok := standaloneReferenceOnlyText(raw); ok {
+			block := newSkippedInlineReferenceBlock(len(blocks), kind, label, raw, start, end, maxSentenceRunes)
+			blocks = append(blocks, block)
+			skipped = append(skipped, skippedSourceItem(block, "reference or artifact marker available on demand"))
+			warnings = append(warnings, block.Warnings...)
+			offsetCursor = end
+			continue
+		}
 		clean := cleanMarkdownInline(raw)
 		kind := NarrationBlockKindBody
 		mode := NarrationSpeakModeSpeak
@@ -993,6 +1224,22 @@ func preparePlainNarrationBlocks(input string, maxSentenceRunes int) ([]Narratio
 		offsetCursor = end
 	}
 	return blocks, skipped, uniqueStrings(warnings)
+}
+
+func skippedItemsFromHTMLChrome(blocks []sourceprep.HTMLSkippedBlock) []SkippedSourceItem {
+	if len(blocks) == 0 {
+		return nil
+	}
+	items := make([]SkippedSourceItem, 0, len(blocks))
+	for index, block := range blocks {
+		items = append(items, SkippedSourceItem{
+			ID:     fmt.Sprintf("html-chrome-%d", index),
+			Kind:   NarrationBlockKindEmbedded,
+			Text:   truncateString(block.Text, 240),
+			Reason: block.Reason,
+		})
+	}
+	return items
 }
 
 type markdownAdapterResponse struct {
@@ -1172,6 +1419,7 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 	mathStart := 0
 	var tableLines []string
 	tableStart := 0
+	referenceMode := ""
 
 	flushParagraph := func(endOffset int) {
 		if len(paragraph) == 0 {
@@ -1179,6 +1427,12 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 		}
 		raw := strings.Join(paragraph, " ")
 		paragraph = nil
+		if kind, label, ok := standaloneReferenceOnlyText(raw); ok {
+			block := newSkippedInlineReferenceBlock(len(blocks), kind, label, raw, paragraphStart, endOffset, maxSentenceRunes)
+			blocks = append(blocks, block)
+			skipped = append(skipped, skippedSourceItem(block, "reference or artifact marker available on demand"))
+			return
+		}
 		clean := cleanMarkdownInline(raw)
 		if strings.TrimSpace(clean) == "" {
 			return
@@ -1262,6 +1516,19 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 			mathLines = append(mathLines, line)
 			continue
 		}
+		if marker := deepResearchReferencesMarker(trimmed); marker == "start" {
+			flushParagraph(lineStart)
+			flushTable(lineStart)
+			flushMath(lineStart)
+			referenceMode = "marker"
+			continue
+		} else if marker == "end" {
+			flushParagraph(lineStart)
+			flushTable(lineStart)
+			flushMath(lineStart)
+			referenceMode = ""
+			continue
+		}
 		if matches := markdownFenceLine.FindStringSubmatch(trimmed); len(matches) > 0 {
 			flushParagraph(lineStart)
 			flushTable(lineStart)
@@ -1292,6 +1559,28 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 			flushTable(lineStart)
 			continue
 		}
+		if isReferenceSectionLabel(trimmed) {
+			flushParagraph(lineStart)
+			flushTable(lineStart)
+			flushMath(lineStart)
+			referenceMode = "implicit"
+			block := newReferenceSectionBlock(len(blocks), cleanMarkdownInline(trimmed), trimmed, lineStart, offsetCursor, maxSentenceRunes)
+			blocks = append(blocks, block)
+			skipped = append(skipped, skippedSourceItem(block, "reference section available on demand"))
+			continue
+		}
+		if referenceMode != "" {
+			if referenceMode == "marker" || isReferenceLikeText(trimmed) {
+				flushParagraph(lineStart)
+				flushTable(lineStart)
+				flushMath(lineStart)
+				block := newReferenceSectionBlock(len(blocks), "Reference section", trimmed, lineStart, offsetCursor, maxSentenceRunes)
+				blocks = append(blocks, block)
+				skipped = append(skipped, skippedSourceItem(block, "reference section available on demand"))
+				continue
+			}
+			referenceMode = ""
+		}
 		if strings.Contains(trimmed, "|") || markdownTableDividerLine.MatchString(trimmed) {
 			flushParagraph(lineStart)
 			if len(tableLines) == 0 {
@@ -1318,10 +1607,17 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 			blocks = append(blocks, block)
 			continue
 		}
+		if kind, label, ok := standaloneReferenceOnlyText(trimmed); ok {
+			flushParagraph(lineStart)
+			block := newSkippedInlineReferenceBlock(len(blocks), kind, label, trimmed, lineStart, offsetCursor, maxSentenceRunes)
+			blocks = append(blocks, block)
+			skipped = append(skipped, skippedSourceItem(block, "reference or artifact marker available on demand"))
+			continue
+		}
 		if markdownFootnoteLine.MatchString(trimmed) || markdownRawURLLine.MatchString(trimmed) || shouldSkipCitationBlock(trimmed) {
 			flushParagraph(lineStart)
 			clean := cleanMarkdownInline(trimmed)
-			block := newNarrationBlock(len(blocks), NarrationBlockKindCitation, NarrationSpeakModeSpeak, "Citation", trimmed, clean, lineStart, offsetCursor, maxSentenceRunes)
+			block := newNarrationBlock(len(blocks), NarrationBlockKindCitation, NarrationSpeakModeSkip, "Citation", trimmed, "", lineStart, offsetCursor, maxSentenceRunes)
 			block.Warnings = append(block.Warnings, "citation_skipped")
 			blocks = append(blocks, block)
 			skipped = append(skipped, SkippedSourceItem{ID: block.ID, Kind: block.Kind, Text: clean, Reason: "citation or raw URL skipped", Offset: lineStart})
@@ -1352,6 +1648,506 @@ func prepareMarkdownNarrationBlocks(input string, maxSentenceRunes int) ([]Narra
 		warnings = append(warnings, block.Warnings...)
 	}
 	return blocks, skipped, uniqueStrings(warnings)
+}
+
+func deepResearchReferencesMarker(value string) string {
+	matches := referenceSectionMarker.FindStringSubmatch(strings.TrimSpace(value))
+	if len(matches) < 2 {
+		return ""
+	}
+	return strings.ToLower(matches[1])
+}
+
+func isReferenceSectionLabel(value string) bool {
+	candidate := strings.TrimSpace(value)
+	if matches := markdownHeadingLine.FindStringSubmatch(candidate); len(matches) == 3 {
+		candidate = matches[2]
+	}
+	candidate = markdownListPrefixPattern.ReplaceAllString(candidate, "")
+	clean := strings.TrimRight(cleanMarkdownInline(candidate), ":：")
+	return referenceSectionLabel.MatchString(strings.TrimSpace(clean))
+}
+
+func paragraphStartsReferenceSection(value string) bool {
+	lines := nonEmptyReferenceLines(value)
+	if len(lines) < 2 || !isReferenceSectionLabel(lines[0]) {
+		return false
+	}
+	return referenceLineRatio(strings.Join(lines[1:], "\n")) > 0
+}
+
+func paragraphStartsMarkerReferenceSection(value string) bool {
+	lines := nonEmptyReferenceLines(value)
+	return len(lines) >= 2 && isReferenceSectionLabel(lines[0]) && deepResearchReferencesMarker(lines[1]) == "start"
+}
+
+func isReferenceLikeText(value string) bool {
+	return referenceLineRatio(value) > 0
+}
+
+func sanitizePreparedSourceReferenceCueLeaks(source PreparedSource, maxSentenceRunes int) PreparedSource {
+	if len(source.Blocks) == 0 {
+		return source
+	}
+	if maxSentenceRunes <= 0 {
+		maxSentenceRunes = defaultSourcePrepSentenceMaxRunes
+	}
+	referenceMode := ""
+	for index := range source.Blocks {
+		block := source.Blocks[index]
+		text := referenceCueCandidateText(block)
+		marker := deepResearchReferencesMarker(text)
+		if marker == "" && blockHasReferenceSectionMetadata(block) {
+			marker = deepResearchReferencesMarker(block.Text)
+		}
+		switch marker {
+		case "start":
+			referenceMode = "marker"
+			source.Blocks[index] = forceReferenceCueLeakBlock(block, NarrationBlockKindReference, "Reference section", []string{"reference_section", "reference_on_demand"}, maxSentenceRunes)
+			source.SkippedItems = mergeSkippedSourceItems(source.SkippedItems, skippedSourceItem(source.Blocks[index], "reference section available on demand"))
+			continue
+		case "end":
+			source.Blocks[index] = forceReferenceCueLeakBlock(block, NarrationBlockKindReference, "Reference section", []string{"reference_section", "reference_on_demand"}, maxSentenceRunes)
+			source.SkippedItems = mergeSkippedSourceItems(source.SkippedItems, skippedSourceItem(source.Blocks[index], "reference section available on demand"))
+			referenceMode = ""
+			continue
+		}
+		if blockHasReferenceSectionMetadata(block) || isReferenceSectionLabel(text) {
+			referenceMode = "implicit"
+			source.Blocks[index] = forceReferenceCueLeakBlock(block, NarrationBlockKindReference, "References", []string{"reference_section", "reference_on_demand"}, maxSentenceRunes)
+			source.SkippedItems = mergeSkippedSourceItems(source.SkippedItems, skippedSourceItem(source.Blocks[index], "reference section available on demand"))
+			continue
+		}
+		if referenceMode != "" {
+			if referenceMode == "marker" || isReferenceLikeText(text) || referenceControlledKind(block.Kind) {
+				source.Blocks[index] = forceReferenceCueLeakBlock(block, NarrationBlockKindReference, "Reference section", []string{"reference_section", "reference_on_demand"}, maxSentenceRunes)
+				source.SkippedItems = mergeSkippedSourceItems(source.SkippedItems, skippedSourceItem(source.Blocks[index], "reference section available on demand"))
+				continue
+			}
+			referenceMode = ""
+		}
+		if alreadySilentReferenceCue(block) || explicitlySpeakingReferenceCue(block) {
+			continue
+		}
+		if kind, label, ok := standaloneReferenceOnlyText(text); ok {
+			source.Blocks[index] = forceReferenceCueLeakBlock(block, kind, label, referenceCueLeakWarnings(kind), maxSentenceRunes)
+			source.SkippedItems = mergeSkippedSourceItems(source.SkippedItems, skippedSourceItem(source.Blocks[index], "reference or artifact marker available on demand"))
+			continue
+		}
+		if referenceControlledKind(block.Kind) && standaloneReferenceNumberText(firstNonEmpty(block.Text, block.SpokenText, block.Label)) {
+			source.Blocks[index] = forceReferenceCueLeakBlock(block, block.Kind, firstNonEmpty(block.Label, "Reference"), referenceCueLeakWarnings(block.Kind), maxSentenceRunes)
+			source.SkippedItems = mergeSkippedSourceItems(source.SkippedItems, skippedSourceItem(source.Blocks[index], "reference marker available on demand"))
+			continue
+		}
+		if shouldStripInlineReferenceTail(block) {
+			if stripped, ok := stripTrailingInlineReferenceNumberSpeech(block.SpokenText); ok {
+				block.SpokenText = stripped
+				if block.Metadata == nil {
+					block.Metadata = map[string]any{}
+				}
+				block.Metadata["policySpeechText"] = stripped
+				block.Segments, block.Warnings = resetPolicySegments(block, maxSentenceRunes)
+				block.Warnings = uniqueStrings(append(block.Warnings, "citation_reference_number_removed"))
+				block.EstimatedDurationMS = estimateBookDurationMS(countWords(block.SpokenText))
+				block.Emphasis, block.PauseBeforeMS, block.PauseAfterMS = narrationEmphasis(block.Kind, block.SpeakMode)
+				block.Confidence = confidenceForBlock(block.Kind, block.SpeakMode)
+				source.Blocks[index] = block
+			}
+		}
+	}
+	source.SpeechText = preparedSourceSpeechText(source.Blocks)
+	source.WordCount = countWords(source.SpeechText)
+	source.BlockCount = len(source.Blocks)
+	source.SegmentCount = countPreparedSegments(source.Blocks)
+	source.Summary = summarizePreparedSource(source.Blocks)
+	return source
+}
+
+func standaloneReferenceOnlyText(value string) (NarrationBlockKind, string, bool) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", "", false
+	}
+	candidate := markdownListPrefixPattern.ReplaceAllString(trimmed, "")
+	candidate = strings.TrimSpace(strings.TrimPrefix(candidate, ">"))
+	remainder := stripStandaloneReferenceArtifacts(candidate)
+	if strings.Trim(remainder, " \t\n\r[]().,;:|*_`>\"'-") != "" {
+		return "", "", false
+	}
+	switch {
+	case citationGlyphPattern.MatchString(candidate) ||
+		chatGPTCitationPattern.MatchString(candidate) ||
+		malformedCitationPattern.MatchString(candidate):
+		return NarrationBlockKindCitation, "Citation", true
+	case chatGPTArtifactPattern.MatchString(candidate) ||
+		(turnCitationPattern.MatchString(candidate) && strings.Contains(strings.ToLower(candidate), "image")):
+		return NarrationBlockKindArtifact, "Artifact token", true
+	case footnoteReferencePattern.MatchString(candidate):
+		return NarrationBlockKindFootnote, "Footnote", true
+	default:
+		return NarrationBlockKindReference, "Reference", true
+	}
+}
+
+func stripStandaloneReferenceArtifacts(value string) string {
+	clean := markdownReferenceLink.ReplaceAllString(value, " ")
+	clean = markdownImagePattern.ReplaceAllString(clean, " ")
+	clean = stripMarkdownInlineArtifacts(clean)
+	clean = referenceURLPattern.ReplaceAllString(clean, " ")
+	clean = referenceDOIPattern.ReplaceAllString(clean, " ")
+	return clean
+}
+
+func referenceCueCandidateText(block NarrationBlock) string {
+	return firstNonEmpty(block.Text, block.SpokenText, block.Label)
+}
+
+func blockHasReferenceSectionMetadata(block NarrationBlock) bool {
+	if hasWarning(block.Warnings, "reference_section") {
+		return true
+	}
+	if block.Metadata == nil {
+		return false
+	}
+	value, ok := block.Metadata["referenceSection"]
+	if !ok {
+		return false
+	}
+	if boolValue, ok := value.(bool); ok {
+		return boolValue
+	}
+	return strings.EqualFold(strings.TrimSpace(fmt.Sprint(value)), "true")
+}
+
+func referenceControlledKind(kind NarrationBlockKind) bool {
+	switch kind {
+	case NarrationBlockKindCitation,
+		NarrationBlockKindFootnote,
+		NarrationBlockKindReference,
+		NarrationBlockKindArtifact,
+		NarrationBlockKindUnknownMark:
+		return true
+	default:
+		return false
+	}
+}
+
+func alreadySilentReferenceCue(block NarrationBlock) bool {
+	if block.SpeakMode != NarrationSpeakModeSkip || strings.TrimSpace(block.SpokenText) != "" || len(block.Segments) != 0 {
+		return false
+	}
+	if referenceControlledKind(block.Kind) || blockHasReferenceSectionMetadata(block) {
+		return true
+	}
+	return referencePolicyModeIsNonSpeaking(block.SpeechPolicy.Mode)
+}
+
+func shouldStripInlineReferenceTail(block NarrationBlock) bool {
+	if block.SpeakMode == NarrationSpeakModeSkip || strings.TrimSpace(block.SpokenText) == "" {
+		return false
+	}
+	return hasWarning(block.Warnings, "citation_removed") ||
+		hasWarning(block.Warnings, "reference_marker_removed") ||
+		hasWarning(block.Warnings, "citation_reference_number_removed") ||
+		blockHasPolicyInlineReferenceArtifact(block)
+}
+
+func blockHasPolicyInlineReferenceArtifact(block NarrationBlock) bool {
+	if block.Metadata == nil {
+		return false
+	}
+	raw, ok := block.Metadata["inlineArtifacts"]
+	if !ok {
+		return false
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		return false
+	}
+	for _, item := range items {
+		fields, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		kind := strings.ToLower(strings.TrimSpace(fmt.Sprint(fields["kind"])))
+		if kind == "citation" || kind == "reference" || kind == "footnote" {
+			return true
+		}
+	}
+	return false
+}
+
+func explicitlySpeakingReferenceCue(block NarrationBlock) bool {
+	if strings.TrimSpace(block.SpokenText) == "" || !strings.EqualFold(strings.TrimSpace(block.SpeechPolicy.Mode), string(policy.ModeSpeak)) {
+		return false
+	}
+	switch block.Kind {
+	case NarrationBlockKindCitation, NarrationBlockKindFootnote, NarrationBlockKindReference:
+	default:
+		return false
+	}
+	explanation := strings.TrimSpace(strings.ToLower(block.SpeechPolicy.Explanation))
+	return explanation != "" && !strings.Contains(explanation, "not been evaluated")
+}
+
+func referencePolicyModeIsNonSpeaking(mode string) bool {
+	clean := strings.TrimSpace(mode)
+	return strings.EqualFold(clean, string(policy.ModeSkip)) || strings.EqualFold(clean, string(policy.ModeOnDemand))
+}
+
+func referencePolicyExplanationLooksExplicit(explanation string) bool {
+	clean := strings.TrimSpace(strings.ToLower(explanation))
+	return clean != "" && !strings.Contains(clean, "not been evaluated")
+}
+
+func standaloneReferenceNumberText(value string) bool {
+	clean := strings.TrimSpace(strings.ToLower(value))
+	if clean == "" {
+		return false
+	}
+	clean = strings.Trim(clean, "[]().,;:|*_`>\"'")
+	if referenceNumberPattern.MatchString(clean) {
+		return true
+	}
+	fields := strings.Fields(strings.ReplaceAll(clean, "-", " "))
+	if len(fields) == 0 || len(fields) > 4 {
+		return false
+	}
+	for _, field := range fields {
+		if !referenceNumberWord(field) {
+			return false
+		}
+	}
+	return true
+}
+
+func referenceNumberWord(value string) bool {
+	switch value {
+	case "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+		"ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+		"seventeen", "eighteen", "nineteen", "twenty", "thirty", "forty", "fifty",
+		"sixty", "seventy", "eighty", "ninety", "hundred", "thousand":
+		return true
+	default:
+		return false
+	}
+}
+
+func stripTrailingInlineReferenceNumberSpeech(value string) (string, bool) {
+	tokens := indexedSpeechTokens(value)
+	if len(tokens) == 0 {
+		return value, false
+	}
+	for length := minInt(4, len(tokens)); length >= 1; length -= 1 {
+		suffix := tokens[len(tokens)-length:]
+		if !referenceNumberSpeechTokens(suffix) {
+			continue
+		}
+		stripped := strings.TrimSpace(value[:suffix[0].start])
+		if stripped == "" {
+			return value, false
+		}
+		return stripped, true
+	}
+	return value, false
+}
+
+type indexedSpeechToken struct {
+	start int
+	text  string
+}
+
+func indexedSpeechTokens(value string) []indexedSpeechToken {
+	tokens := make([]indexedSpeechToken, 0)
+	inToken := false
+	start := 0
+	for index, char := range value {
+		if char == ' ' || char == '\t' || char == '\n' || char == '\r' {
+			if inToken {
+				tokens = append(tokens, indexedSpeechToken{start: start, text: value[start:index]})
+				inToken = false
+			}
+			continue
+		}
+		if !inToken {
+			start = index
+			inToken = true
+		}
+	}
+	if inToken {
+		tokens = append(tokens, indexedSpeechToken{start: start, text: value[start:]})
+	}
+	return tokens
+}
+
+func referenceNumberSpeechTokens(tokens []indexedSpeechToken) bool {
+	if len(tokens) == 0 || len(tokens) > 4 {
+		return false
+	}
+	words := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		clean := strings.Trim(strings.ToLower(token.text), "[]().,;:|*_`>\"'-")
+		if clean == "" {
+			return false
+		}
+		if referenceNumberPattern.MatchString(clean) {
+			words = append(words, clean)
+			continue
+		}
+		for _, part := range strings.Fields(strings.ReplaceAll(clean, "-", " ")) {
+			if !referenceNumberWord(part) {
+				return false
+			}
+			words = append(words, part)
+		}
+	}
+	return len(words) > 0
+}
+
+func minInt(left int, right int) int {
+	if left < right {
+		return left
+	}
+	return right
+}
+
+func referenceCueLeakWarnings(kind NarrationBlockKind) []string {
+	switch kind {
+	case NarrationBlockKindArtifact:
+		return []string{"artifact_token_removed", "artifact_token_policy"}
+	case NarrationBlockKindFootnote:
+		return []string{"footnote_reference", "footnote_policy"}
+	case NarrationBlockKindCitation:
+		return []string{"citation_skipped"}
+	default:
+		return []string{"reference_marker_removed", "reference_on_demand"}
+	}
+}
+
+func forceReferenceCueLeakBlock(block NarrationBlock, kind NarrationBlockKind, label string, warnings []string, maxSentenceRunes int) NarrationBlock {
+	block.Kind = kind
+	block.SpeakMode = NarrationSpeakModeSkip
+	block.Label = firstNonEmpty(label, block.Label, labelForBlock(kind, block.Text))
+	block.SpokenText = ""
+	block.Segments = nil
+	block.EstimatedDurationMS = 0
+	block.LanguageSpans = nil
+	block.Pronunciations = nil
+	block.Normalisations = nil
+	block.MathPreview = nil
+	block.Warnings = uniqueStrings(append(block.Warnings, warnings...))
+	if block.Metadata == nil {
+		block.Metadata = map[string]any{}
+	}
+	if hasWarning(block.Warnings, "reference_section") {
+		block.Metadata["referenceSection"] = true
+	} else {
+		block.Metadata["standaloneReferenceOnly"] = true
+	}
+	if strings.TrimSpace(block.SpeechPolicy.Profile) == "" {
+		block.SpeechPolicy.Profile = string(policy.DefaultProfileName)
+	}
+	if strings.TrimSpace(block.SpeechPolicy.Element) == "" {
+		block.SpeechPolicy.Element = string(kind)
+	}
+	policyMode := strings.TrimSpace(block.SpeechPolicy.Mode)
+	keepSpeakingPolicy := strings.EqualFold(policyMode, string(policy.ModeSpeak)) &&
+		referencePolicyExplanationLooksExplicit(block.SpeechPolicy.Explanation) &&
+		!hasWarning(block.Warnings, "reference_section") &&
+		(kind == NarrationBlockKindCitation || kind == NarrationBlockKindFootnote || kind == NarrationBlockKindReference)
+	if policyMode == "" || (!referencePolicyModeIsNonSpeaking(policyMode) && !keepSpeakingPolicy) {
+		block.SpeechPolicy.Mode = string(policy.ModeSkip)
+	}
+	if strings.TrimSpace(block.SpeechPolicy.ElementMode) == "" {
+		block.SpeechPolicy.ElementMode = block.SpeechPolicy.Mode
+	}
+	if strings.TrimSpace(block.SpeechPolicy.Explanation) == "" || strings.Contains(strings.ToLower(block.SpeechPolicy.Explanation), "not been evaluated") {
+		block.SpeechPolicy.Explanation = "Reference material is skipped in generated speech."
+	}
+	block.Emphasis, block.PauseBeforeMS, block.PauseAfterMS = narrationEmphasis(block.Kind, block.SpeakMode)
+	block.Confidence = confidenceForBlock(block.Kind, block.SpeakMode)
+	_ = maxSentenceRunes
+	return block
+}
+
+func mergeSkippedSourceItems(existing []SkippedSourceItem, next SkippedSourceItem) []SkippedSourceItem {
+	if strings.TrimSpace(next.ID) == "" {
+		return existing
+	}
+	for index, item := range existing {
+		if item.ID == next.ID {
+			existing[index] = next
+			return existing
+		}
+	}
+	return append(existing, next)
+}
+
+func referenceLineRatio(value string) float64 {
+	lines := nonEmptyReferenceLines(value)
+	if len(lines) == 0 {
+		return 0
+	}
+	referenceLines := 0
+	for _, line := range lines {
+		clean := markdownListPrefixPattern.ReplaceAllString(strings.TrimSpace(line), "")
+		clean = strings.TrimSpace(strings.TrimPrefix(clean, ">"))
+		if referenceURLPattern.MatchString(clean) || referenceDOIPattern.MatchString(clean) {
+			referenceLines += 1
+		}
+	}
+	if referenceLines == 0 {
+		return 0
+	}
+	if referenceLines == len(lines) {
+		return 1
+	}
+	ratio := float64(referenceLines) / float64(len(lines))
+	if len(lines) > 1 && ratio >= 0.6 {
+		return ratio
+	}
+	return 0
+}
+
+func nonEmptyReferenceLines(value string) []string {
+	lines := strings.Split(strings.TrimSpace(value), "\n")
+	output := make([]string, 0, len(lines))
+	for _, line := range lines {
+		clean := strings.TrimSpace(line)
+		if clean != "" {
+			output = append(output, clean)
+		}
+	}
+	return output
+}
+
+func newReferenceSectionBlock(index int, label string, text string, startOffset int, endOffset int, maxSentenceRunes int) NarrationBlock {
+	block := newNarrationBlock(index, NarrationBlockKindReference, NarrationSpeakModeSkip, label, text, "", startOffset, endOffset, maxSentenceRunes)
+	block.Warnings = uniqueStrings(append(block.Warnings, "reference_section", "reference_on_demand"))
+	if block.Metadata == nil {
+		block.Metadata = map[string]any{}
+	}
+	block.Metadata["referenceSection"] = true
+	return block
+}
+
+func newSkippedInlineReferenceBlock(index int, kind NarrationBlockKind, label string, text string, startOffset int, endOffset int, maxSentenceRunes int) NarrationBlock {
+	block := newNarrationBlock(index, kind, NarrationSpeakModeSkip, label, text, "", startOffset, endOffset, maxSentenceRunes)
+	switch kind {
+	case NarrationBlockKindArtifact:
+		block.Warnings = uniqueStrings(append(block.Warnings, "artifact_token_removed", "artifact_token_policy"))
+	case NarrationBlockKindFootnote:
+		block.Warnings = uniqueStrings(append(block.Warnings, "footnote_reference", "footnote_policy"))
+	case NarrationBlockKindCitation:
+		block.Warnings = uniqueStrings(append(block.Warnings, "citation_skipped"))
+	default:
+		block.Warnings = uniqueStrings(append(block.Warnings, "reference_marker_removed", "reference_on_demand"))
+	}
+	if block.Metadata == nil {
+		block.Metadata = map[string]any{}
+	}
+	block.Metadata["standaloneReferenceOnly"] = true
+	return block
 }
 
 func newNarrationBlock(index int, kind NarrationBlockKind, mode NarrationSpeakMode, label string, text string, spokenText string, startOffset int, endOffset int, maxSentenceRunes int) NarrationBlock {
@@ -1394,6 +2190,7 @@ func applySpeechPolicyToPreparedSource(source PreparedSource, profileName string
 
 func applySpeechPolicyToPreparedSourceWithEvaluator(source PreparedSource, evaluator policy.Evaluator, maxSentenceRunes int) PreparedSource {
 	source.SpeechPolicyProfile = evaluator.ProfileID()
+	source = sanitizePreparedSourceReferenceCueLeaks(source, maxSentenceRunes)
 	source.SkippedItems = nil
 	for index := range source.Blocks {
 		block := source.Blocks[index]
@@ -1428,6 +2225,7 @@ func applySpeechPolicyToPreparedSourceWithEvaluator(source PreparedSource, evalu
 		block.Confidence = confidenceForBlock(block.Kind, block.SpeakMode)
 		source.Blocks[index] = block
 	}
+	source = sanitizePreparedSourceReferenceCueLeaks(source, maxSentenceRunes)
 	source.SpeechText = preparedSourceSpeechText(source.Blocks)
 	source.WordCount = countWords(source.SpeechText)
 	source.BlockCount = len(source.Blocks)
@@ -1444,6 +2242,10 @@ func policyElementText(block NarrationBlock) string {
 		NarrationBlockKindImage,
 		NarrationBlockKindCaption,
 		NarrationBlockKindCitation,
+		NarrationBlockKindFootnote,
+		NarrationBlockKindReference,
+		NarrationBlockKindArtifact,
+		NarrationBlockKindUnknownMark,
 		NarrationBlockKindList,
 		NarrationBlockKindDirective,
 		NarrationBlockKindEmbedded,
@@ -1492,371 +2294,4 @@ func narrationEmphasis(kind NarrationBlockKind, mode NarrationSpeakMode) (string
 	default:
 		return "", 0, 0
 	}
-}
-
-func sentenceSafeSegments(text string, maxRunes int) ([]NarrationSegment, []string) {
-	clean := strings.TrimSpace(text)
-	if clean == "" {
-		return nil, nil
-	}
-	if maxRunes <= 0 {
-		maxRunes = defaultSourcePrepSentenceMaxRunes
-	}
-	sentences := splitSentencePieces(clean)
-	segments := make([]NarrationSegment, 0, len(sentences))
-	warnings := make([]string, 0)
-	cursor := 0
-	for _, sentence := range sentences {
-		sentence = strings.TrimSpace(sentence)
-		if sentence == "" {
-			continue
-		}
-		start := strings.Index(clean[cursor:], sentence)
-		if start < 0 {
-			start = cursor
-		} else {
-			start += cursor
-		}
-		end := start + len(sentence)
-		segmentWarnings := []string{}
-		if utf8.RuneCountInString(sentence) > maxRunes {
-			segmentWarnings = append(segmentWarnings, warningSentenceTooLong)
-			warnings = append(warnings, warningSentenceTooLong)
-		}
-		segments = append(segments, NarrationSegment{
-			Index:       len(segments) + 1,
-			Text:        sentence,
-			StartOffset: start,
-			EndOffset:   end,
-			Warnings:    segmentWarnings,
-		})
-		cursor = end
-	}
-	return segments, uniqueStrings(warnings)
-}
-
-func normalizeReadableSourceText(input string) string {
-	trimmed := strings.TrimSpace(strings.ReplaceAll(input, "\r\n", "\n"))
-	trimmed = strings.ReplaceAll(trimmed, "\r", "\n")
-	if strings.Contains(trimmed, "<") && strings.Contains(trimmed, ">") {
-		trimmed = htmlScriptStylePattern.ReplaceAllString(trimmed, " ")
-		trimmed = htmlBlockBreakPattern.ReplaceAllString(trimmed, "\n")
-		trimmed = htmlTagSpeechPattern.ReplaceAllString(trimmed, " ")
-		trimmed = html.UnescapeString(trimmed)
-	}
-	return strings.TrimSpace(trimmed)
-}
-
-func cleanMarkdownInline(input string) string {
-	clean := citationGlyphPattern.ReplaceAllString(input, " ")
-	clean = turnCitationPattern.ReplaceAllString(clean, " ")
-	clean = markdownImagePattern.ReplaceAllString(clean, "$1")
-	clean = markdownLinkPattern.ReplaceAllString(clean, "$1")
-	clean = inlineCodeSpeechPattern.ReplaceAllString(clean, "$1")
-	clean = strings.NewReplacer("**", "", "__", "", "~~", "", "•", "").Replace(clean)
-	clean = strings.Trim(clean, " \t-*`_")
-	return strings.Join(strings.Fields(clean), " ")
-}
-
-func shouldSkipCitationBlock(text string) bool {
-	trimmed := strings.TrimSpace(text)
-	if trimmed == "" {
-		return false
-	}
-	citationStripped := citationGlyphPattern.ReplaceAllString(trimmed, "")
-	citationStripped = turnCitationPattern.ReplaceAllString(citationStripped, "")
-	citationStripped = strings.Trim(citationStripped, " []().,;:|")
-	if citationStripped == "" {
-		return true
-	}
-	return strings.Count(trimmed, "cite") >= 2 && countWords(citationStripped) <= 6
-}
-
-func containsCitationMarkup(text string) bool {
-	return citationGlyphPattern.MatchString(text) || turnCitationPattern.MatchString(text)
-}
-
-func tableLinesOrRaw(raw string) []string {
-	lines := strings.Split(raw, "\n")
-	output := make([]string, 0, len(lines))
-	for _, line := range lines {
-		if strings.TrimSpace(line) != "" {
-			output = append(output, line)
-		}
-	}
-	return output
-}
-
-func summarizeMarkdownTable(lines []string) string {
-	if len(lines) == 0 {
-		return "A table appears here and is omitted from spoken playback."
-	}
-	headers := markdownTableCells(lines[0])
-	if len(headers) > 0 {
-		return fmt.Sprintf("A table appears here with columns: %s.", strings.Join(headers, ", "))
-	}
-	return "A table appears here and is summarized for spoken playback."
-}
-
-func markdownTableCells(line string) []string {
-	parts := strings.Split(strings.Trim(line, "| "), "|")
-	cells := make([]string, 0, len(parts))
-	for _, part := range parts {
-		cell := cleanMarkdownInline(part)
-		if cell != "" {
-			cells = append(cells, cell)
-		}
-	}
-	return cells
-}
-
-func preparedSourceSpeechText(blocks []NarrationBlock) string {
-	parts := make([]string, 0, len(blocks))
-	for _, block := range blocks {
-		if block.SpeakMode == NarrationSpeakModeSkip {
-			continue
-		}
-		text := strings.TrimSpace(block.SpokenText)
-		if text != "" {
-			parts = append(parts, text)
-		}
-	}
-	return strings.Join(parts, "\n\n")
-}
-
-func countPreparedSegments(blocks []NarrationBlock) int {
-	total := 0
-	for _, block := range blocks {
-		if block.SpeakMode != NarrationSpeakModeSkip {
-			total += len(block.Segments)
-		}
-	}
-	return total
-}
-
-func summarizePreparedSource(blocks []NarrationBlock) PreparedSourceSummary {
-	var summary PreparedSourceSummary
-	for _, block := range blocks {
-		switch block.Kind {
-		case NarrationBlockKindHeading, NarrationBlockKindSubheading:
-			summary.HeadingCount += 1
-		case NarrationBlockKindCitation:
-			if block.SpeakMode == NarrationSpeakModeSkip {
-				summary.CitationSkipCount += 1
-			}
-		}
-		if hasWarning(block.Warnings, "citation_removed") {
-			summary.CitationSkipCount += 1
-		}
-		if block.SpeakMode == NarrationSpeakModeSkip {
-			summary.SkippedBlockCount += 1
-		} else {
-			summary.SpokenBlockCount += 1
-			summary.SentenceSegmentCount += len(block.Segments)
-		}
-	}
-	return summary
-}
-
-func summarizePreparedSourcePayload(source PreparedSource) PreparedSource {
-	source.Text = ""
-	source.SpeechText = ""
-	for index := range source.Blocks {
-		source.Blocks[index].Text = truncateString(source.Blocks[index].Text, 220)
-		source.Blocks[index].SpokenText = truncateString(source.Blocks[index].SpokenText, 220)
-	}
-	return source
-}
-
-func skippedSourceItem(block NarrationBlock, reason string) SkippedSourceItem {
-	return SkippedSourceItem{
-		ID:     block.ID,
-		Kind:   block.Kind,
-		Text:   truncateString(block.Text, 240),
-		Reason: reason,
-		Offset: block.StartOffset,
-	}
-}
-
-func inferPreparedSourceTitle(text string, fallback string) string {
-	if title := markdownFirstHeading(text); title != "" {
-		return title
-	}
-	for _, line := range strings.Split(text, "\n") {
-		if matches := markdownHeadingLine.FindStringSubmatch(strings.TrimSpace(line)); len(matches) == 3 {
-			return cleanMarkdownInline(matches[2])
-		}
-	}
-	return strings.TrimSpace(fallback)
-}
-
-func detectPreparedSourceFormat(sourceName string, contentType string, input string) string {
-	lowerName := strings.ToLower(strings.TrimSpace(sourceName))
-	lowerType := strings.ToLower(strings.TrimSpace(contentType))
-	switch {
-	case strings.Contains(lowerType, "markdown") || strings.HasSuffix(lowerName, ".md") || strings.HasSuffix(lowerName, ".markdown"):
-		return "markdown"
-	case strings.Contains(lowerType, "html") || strings.HasSuffix(lowerName, ".html") || strings.HasSuffix(lowerName, ".htm"):
-		return "html"
-	case strings.HasSuffix(lowerName, ".csv") || strings.HasSuffix(lowerName, ".json") || strings.HasSuffix(lowerName, ".log"):
-		return "structured"
-	case strings.Contains(strings.TrimSpace(input), "\n# ") || strings.HasPrefix(strings.TrimSpace(input), "# "):
-		return "markdown"
-	default:
-		return "plain"
-	}
-}
-
-func markdownFirstHeading(input string) string {
-	source := []byte(input)
-	reader := text.NewReader(source)
-	document := goldmark.New(
-		goldmark.WithExtensions(extension.GFM),
-		goldmark.WithParserOptions(parser.WithAutoHeadingID()),
-	).Parser().Parse(reader)
-	title := ""
-	_ = ast.Walk(document, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
-		if title != "" || !entering {
-			return ast.WalkContinue, nil
-		}
-		heading, ok := node.(*ast.Heading)
-		if !ok || heading.Level > 3 {
-			return ast.WalkContinue, nil
-		}
-		title = cleanMarkdownInline(string(heading.Text(source)))
-		if title != "" {
-			return ast.WalkStop, nil
-		}
-		return ast.WalkContinue, nil
-	})
-	return title
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
-}
-
-func labelForBlock(kind NarrationBlockKind, text string) string {
-	trimmed := strings.TrimSpace(text)
-	if trimmed == "" {
-		return string(kind)
-	}
-	return truncateString(trimmed, 70)
-}
-
-func confidenceForBlock(kind NarrationBlockKind, mode NarrationSpeakMode) float64 {
-	if mode == NarrationSpeakModeSkip {
-		return 0.98
-	}
-	switch kind {
-	case NarrationBlockKindTable:
-		return 0.82
-	case NarrationBlockKindDirective, NarrationBlockKindEmbedded:
-		return 0.72
-	}
-	return 0.94
-}
-
-func countWords(text string) int {
-	return len(strings.Fields(strings.TrimSpace(text)))
-}
-
-func hasWarning(warnings []string, warning string) bool {
-	for _, item := range warnings {
-		if item == warning {
-			return true
-		}
-	}
-	return false
-}
-
-func removeWarning(warnings []string, warning string) []string {
-	if len(warnings) == 0 {
-		return warnings
-	}
-	output := make([]string, 0, len(warnings))
-	for _, item := range warnings {
-		if item != warning {
-			output = append(output, item)
-		}
-	}
-	if len(output) == 0 {
-		return nil
-	}
-	return output
-}
-
-func uniqueStrings(values []string) []string {
-	seen := make(map[string]struct{}, len(values))
-	output := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		output = append(output, value)
-	}
-	return output
-}
-
-func truncateString(value string, maxRunes int) string {
-	if maxRunes <= 0 || utf8.RuneCountInString(value) <= maxRunes {
-		return value
-	}
-	runes := []rune(value)
-	return strings.TrimSpace(string(runes[:maxRunes-1])) + "…"
-}
-
-func filenameFromURL(parsed *url.URL, contentType string) string {
-	name := path.Base(parsed.Path)
-	if name == "." || name == "/" || name == "" {
-		name = "source"
-	}
-	if ext := filepath.Ext(name); ext == "" {
-		if extensions, err := mime.ExtensionsByType(contentType); err == nil && len(extensions) > 0 {
-			name += extensions[0]
-		}
-	}
-	return name
-}
-
-func ensureFilenameExtension(name string, extension string) string {
-	if strings.EqualFold(filepath.Ext(name), extension) {
-		return name
-	}
-	return strings.TrimSuffix(name, filepath.Ext(name)) + extension
-}
-
-func isPrivateOrLocalIP(ip net.IP) bool {
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified()
-}
-
-func progressTargetForPreparedSource(sourceID string) string {
-	return "prepared:" + strings.TrimSpace(sourceID)
-}
-
-func progressTargetForBookScope(bookID string, scope *BookScope) string {
-	parts := []string{"book", strings.TrimSpace(bookID)}
-	if scope != nil {
-		parts = append(parts, string(scope.Type), strconv.Itoa(scope.ChapterIndex), strconv.Itoa(scope.PageStart), strconv.Itoa(scope.PageEnd))
-	}
-	return strings.Join(parts, ":")
-}
-
-func jsonUnmarshal(data []byte, output any) error {
-	decoder := jsonDecoder(bytes.NewReader(data))
-	return decoder.Decode(output)
-}
-
-func jsonDecoder(reader io.Reader) interface{ Decode(any) error } {
-	return json.NewDecoder(reader)
 }

@@ -1,12 +1,17 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import {
   getProjectBundleSummary,
   importProjectBundle,
   previewProjectBundle,
   projectBundleDownloadUrl,
 } from "./api";
+import {
+  PRIVACY_NOTICES,
+  PrivacyBoundaryPanel,
+  projectExportPrivacyBoundary,
+  projectImportPrivacyBoundary,
+} from "./features/privacy";
 import { useReaderModalLifecycle } from "./features/reader-accessibility";
-import { formatDuration } from "./format";
 import type {
   BundleImportMode,
   ProjectBundleImportResult,
@@ -14,8 +19,46 @@ import type {
   ProjectBundleSummary,
   VoiceProject,
 } from "./types";
+import {
+  BundleContentRow,
+  BundlePreviewCard,
+  ExportOptionalContent,
+  ExportReviewSummary,
+  ExportWarnings,
+  formatBytes,
+  ImportResult,
+  PanelError,
+  PanelNote,
+  SectionHeading,
+  StepRail,
+} from "./BundlePanelsHelpers";
 
 export type BundlePanelMode = "export" | "import";
+
+export interface BundleOperationActivity {
+  cancelLabel: string;
+  canCancel: boolean;
+  detail: string;
+  id: string;
+  label: string;
+  status: "idle" | "running" | "attention" | "complete" | "cancelled";
+}
+
+export interface BundleOperationReport {
+  conflicts?: ProjectBundlePreview["conflicts"];
+  dependencies?: ProjectBundlePreview["dependencies"];
+  detail: string;
+  excluded?: ProjectBundleSummary["excluded"];
+  generatedAudio?: number;
+  generatedAudioIncluded?: boolean;
+  kind: BundlePanelMode;
+  omittedGeneratedAudio?: number;
+  status: "blocked" | "ready" | "running" | "warning";
+  title: string;
+  updatedAt: string;
+  validation?: ProjectBundlePreview["validation"];
+  warnings?: string[];
+}
 
 export function BundleFlowPanel({
   activeProjectId,
@@ -24,6 +67,8 @@ export function BundleFlowPanel({
   mode,
   projects,
   onClose,
+  onOperationActivityChange,
+  onOperationReportChange,
   onImported,
 }: Readonly<{
   activeProjectId: string;
@@ -32,6 +77,8 @@ export function BundleFlowPanel({
   mode: BundlePanelMode;
   projects: VoiceProject[];
   onClose: () => void;
+  onOperationActivityChange?: (activity: BundleOperationActivity | null) => void;
+  onOperationReportChange?: (report: BundleOperationReport) => void;
   onImported: (result: ProjectBundleImportResult) => Promise<void> | void;
 }>) {
   const panelRef = useRef<HTMLElement | null>(null);
@@ -41,7 +88,10 @@ export function BundleFlowPanel({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 p-0 sm:p-4" role="presentation">
+    <div
+      className="fixed inset-0 z-50 bg-[var(--vs-surface-overlay)] p-0 sm:p-4"
+      role="presentation"
+    >
       <section
         aria-label={mode === "export" ? "Export project bundle" : "Import project bundle"}
         aria-modal="true"
@@ -69,11 +119,18 @@ export function BundleFlowPanel({
           </button>
         </header>
         {mode === "export" ? (
-          <ExportBundleFlow activeProjectId={activeProjectId} onClose={onClose} />
+          <ExportBundleFlow
+            activeProjectId={activeProjectId}
+            onClose={onClose}
+            onOperationActivityChange={onOperationActivityChange}
+            onOperationReportChange={onOperationReportChange}
+          />
         ) : (
           <ImportBundleFlow
             activeProjectId={activeProjectId}
             projects={projects}
+            onOperationActivityChange={onOperationActivityChange}
+            onOperationReportChange={onOperationReportChange}
             onImported={onImported}
           />
         )}
@@ -85,27 +142,41 @@ export function BundleFlowPanel({
 function ExportBundleFlow({
   activeProjectId,
   onClose,
-}: Readonly<{ activeProjectId: string; onClose: () => void }>) {
+  onOperationActivityChange,
+  onOperationReportChange,
+}: Readonly<{
+  activeProjectId: string;
+  onClose: () => void;
+  onOperationActivityChange?: (activity: BundleOperationActivity | null) => void;
+  onOperationReportChange?: (report: BundleOperationReport) => void;
+}>) {
   const [activeStep, setActiveStep] = useState<ExportBundleStep>("Contents");
   const [summary, setSummary] = useState<ProjectBundleSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [includeGeneratedAudio, setIncludeGeneratedAudio] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     let isCancelled = false;
     setIsLoading(true);
     setError(null);
-    void getProjectBundleSummary(activeProjectId)
+    onOperationActivityChange?.(bundleActivity("export", "running", "Preparing export manifest."));
+    void getProjectBundleSummary(activeProjectId, { includeGeneratedAudio })
       .then((nextSummary) => {
         if (!isCancelled) {
           setSummary(nextSummary);
+          onOperationActivityChange?.(
+            bundleActivity("export", "complete", "Export manifest is ready for review."),
+          );
+          onOperationReportChange?.(bundleReportFromSummary(nextSummary));
         }
       })
       .catch((caughtError: unknown) => {
         if (!isCancelled) {
-          setError(
-            caughtError instanceof Error ? caughtError.message : "Unable to summarize bundle",
-          );
+          const message =
+            caughtError instanceof Error ? caughtError.message : "Unable to summarize bundle";
+          setError(message);
+          onOperationActivityChange?.(bundleActivity("export", "attention", message));
         }
       })
       .finally(() => {
@@ -116,7 +187,7 @@ function ExportBundleFlow({
     return () => {
       isCancelled = true;
     };
-  }, [activeProjectId]);
+  }, [activeProjectId, includeGeneratedAudio, onOperationActivityChange, onOperationReportChange]);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-5">
@@ -130,12 +201,19 @@ function ExportBundleFlow({
       />
       {isLoading ? <PanelNote>Preparing bundle summary...</PanelNote> : null}
       {error ? <PanelError>{error}</PanelError> : null}
-      <ExportStepContent activeStep={activeStep} summary={summary} />
+      <ExportStepContent
+        activeStep={activeStep}
+        includeGeneratedAudio={includeGeneratedAudio}
+        summary={summary}
+        onIncludeGeneratedAudioChange={setIncludeGeneratedAudio}
+      />
       <ExportFlowFooter
         activeProjectId={activeProjectId}
         activeStep={activeStep}
+        includeGeneratedAudio={includeGeneratedAudio}
         summary={summary}
         onClose={onClose}
+        onOperationActivityChange={onOperationActivityChange}
         onStepChange={setActiveStep}
       />
     </div>
@@ -144,15 +222,35 @@ function ExportBundleFlow({
 
 type ExportBundleStep = "Contents" | "Review" | "Export";
 
+type ExportBundleContentGroups = Readonly<{
+  includedItems: ProjectBundleSummary["contents"];
+  optionalItems: ProjectBundleSummary["contents"];
+}>;
+
+function splitExportBundleContents(
+  contents: ProjectBundleSummary["contents"],
+): ExportBundleContentGroups {
+  return {
+    includedItems: contents.filter((item) => item.included),
+    optionalItems: contents.filter((item) => !item.included),
+  };
+}
+
 function ExportStepContent({
   activeStep,
+  includeGeneratedAudio,
   summary,
-}: Readonly<{ activeStep: ExportBundleStep; summary: ProjectBundleSummary | null }>) {
+  onIncludeGeneratedAudioChange,
+}: Readonly<{
+  activeStep: ExportBundleStep;
+  includeGeneratedAudio: boolean;
+  summary: ProjectBundleSummary | null;
+  onIncludeGeneratedAudioChange: (includeGeneratedAudio: boolean) => void;
+}>) {
   if (!summary) {
     return null;
   }
-  const includedItems = summary.contents.filter((item) => item.included);
-  const optionalItems = summary.contents.filter((item) => !item.included);
+  const { includedItems, optionalItems } = splitExportBundleContents(summary.contents);
 
   if (activeStep === "Contents") {
     return (
@@ -161,6 +259,11 @@ function ExportStepContent({
           <SectionHeading
             subtitle="Default bundles include the portable assets needed to evaluate this project on another machine."
             title="Bundle contents"
+          />
+          <GeneratedAudioExportToggle
+            includeGeneratedAudio={includeGeneratedAudio}
+            summary={summary}
+            onChange={onIncludeGeneratedAudioChange}
           />
           <div className="grid gap-2">
             {[...includedItems, ...optionalItems].map((item) => (
@@ -176,6 +279,16 @@ function ExportStepContent({
     return (
       <div className="grid gap-5">
         <ExportReviewSummary summary={summary} />
+        <PrivacyBoundaryPanel
+          boundaries={projectExportPrivacyBoundary()}
+          compact
+          title="Bundle data boundary"
+        />
+        <GeneratedAudioExportToggle
+          includeGeneratedAudio={includeGeneratedAudio}
+          summary={summary}
+          onChange={onIncludeGeneratedAudioChange}
+        />
         <section className="grid gap-3">
           <SectionHeading
             subtitle="Default bundles are portable: script, normalized text, generated audio, references, waveform peaks, telemetry, reports, run config, and reading settings."
@@ -188,6 +301,7 @@ function ExportStepContent({
           </div>
         </section>
         <ExportOptionalContent optionalItems={optionalItems} />
+        <ExportExcludedContent excludedItems={summary.excluded ?? []} />
         <ExportWarnings warnings={summary.warnings ?? []} />
       </div>
     );
@@ -203,84 +317,84 @@ function ExportStepContent({
         <p className="vs-muted text-sm">
           {summary.fileName} · {formatBytes(summary.estimatedBytes)}
         </p>
+        <p className="vs-muted text-xs">
+          Generated audio {summary.generatedAudioIncluded ? "included" : "excluded"} for this
+          download.
+        </p>
       </section>
     </div>
   );
 }
 
-function ExportReviewSummary({ summary }: Readonly<{ summary: ProjectBundleSummary }>) {
-  return (
-    <section className="grid gap-3 rounded-lg border p-4 vs-surface">
-      <div className="flex min-w-0 items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h3 className="truncate text-lg font-semibold" title={summary.projectName}>
-            {summary.projectName}
-          </h3>
-          <p className="vs-muted mt-1 text-sm">
-            {summary.chapterCount.toString()} chapter{summary.chapterCount === 1 ? "" : "s"} ·{" "}
-            {summary.profileCount.toString()} voice{summary.profileCount === 1 ? "" : "s"} ·{" "}
-            {formatDuration(summary.durationMs)}
-          </p>
-        </div>
-        <span className="rounded-full border px-3 py-1 text-xs font-semibold vs-border">
-          {formatBytes(summary.estimatedBytes)}
-        </span>
-      </div>
-      <div className="grid gap-2 sm:grid-cols-3">
-        <BundleStat label="Generated audio" value={summary.generatedAudio.toString()} />
-        <BundleStat label="Manifest" value={summary.version.replace("voice-studio.", "")} />
-        <BundleStat label="Compatibility" value="Portable v1" />
-      </div>
-    </section>
-  );
-}
-
-function ExportOptionalContent({
-  optionalItems,
-}: Readonly<{ optionalItems: ProjectBundleSummary["contents"] }>) {
-  return (
-    <details className="rounded-lg border p-4 vs-surface">
-      <summary className="cursor-pointer text-sm font-semibold">Advanced optional content</summary>
-      <div className="mt-3 grid gap-2">
-        {optionalItems.length === 0 ? (
-          <p className="vs-muted text-sm">No optional archival content is selected.</p>
-        ) : (
-          optionalItems.map((item) => <BundleContentRow item={item} key={item.key} />)
-        )}
-      </div>
-    </details>
-  );
-}
-
-function ExportWarnings({ warnings }: Readonly<{ warnings: string[] }>) {
-  if (warnings.length === 0) {
+function ExportExcludedContent({
+  excludedItems,
+}: Readonly<{ excludedItems: ProjectBundleSummary["contents"] }>) {
+  if (excludedItems.length === 0) {
     return null;
   }
   return (
-    <section className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-      <p className="font-semibold">Review before sharing</p>
-      <ul className="mt-2 grid gap-1">
-        {warnings.map((warning) => (
-          <li className="break-words" key={warning}>
-            {warning}
-          </li>
+    <section className="grid gap-3 rounded-lg border p-4 vs-surface">
+      <SectionHeading
+        subtitle="Sensitive runtime details and machine-local artifacts are kept out of portable bundles."
+        title="Excluded from bundle"
+      />
+      <div className="grid gap-2">
+        {excludedItems.map((item) => (
+          <BundleContentRow item={item} key={item.key} />
         ))}
-      </ul>
+      </div>
     </section>
+  );
+}
+
+function GeneratedAudioExportToggle({
+  includeGeneratedAudio,
+  summary,
+  onChange,
+}: Readonly<{
+  includeGeneratedAudio: boolean;
+  summary: ProjectBundleSummary;
+  onChange: (includeGeneratedAudio: boolean) => void;
+}>) {
+  const omittedCount = summary.omittedGeneratedAudio ?? 0;
+  const omittedBytes = summary.omittedGeneratedBytes ?? 0;
+  return (
+    <label className="flex items-start gap-3 rounded-md border p-3 text-sm vs-border vs-raised">
+      <input
+        checked={includeGeneratedAudio}
+        className="mt-1"
+        type="checkbox"
+        onChange={(event) => {
+          onChange(event.currentTarget.checked);
+        }}
+      />
+      <span className="grid gap-1">
+        <span className="font-semibold">Include generated audio</span>
+        <span className="vs-muted text-xs leading-5">
+          {includeGeneratedAudio
+            ? `${summary.generatedAudio.toString()} audio file(s) are included for offline playback.`
+            : `${omittedCount.toString()} audio file(s), ${formatBytes(omittedBytes)}, will be omitted and can be regenerated after import.`}
+        </span>
+      </span>
+    </label>
   );
 }
 
 function ExportFlowFooter({
   activeProjectId,
   activeStep,
+  includeGeneratedAudio,
   summary,
   onClose,
+  onOperationActivityChange,
   onStepChange,
 }: Readonly<{
   activeProjectId: string;
   activeStep: ExportBundleStep;
+  includeGeneratedAudio: boolean;
   summary: ProjectBundleSummary | null;
   onClose: () => void;
+  onOperationActivityChange?: (activity: BundleOperationActivity | null) => void;
   onStepChange: (step: ExportBundleStep) => void;
 }>) {
   const showBack = activeStep === "Review" || activeStep === "Export";
@@ -308,17 +422,24 @@ function ExportFlowFooter({
       ) : null}
       {showDownload ? (
         <a
-          className={`inline-flex h-10 items-center rounded-md px-4 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 vs-accent-bg ${
+          className={`inline-flex h-10 items-center rounded-md px-4 text-sm font-semibold text-[var(--vs-action-primary-text)] shadow-sm shadow-[var(--vs-shadow)] vs-accent-bg ${
             summary ? "" : "pointer-events-none opacity-50"
           }`}
           download={summary?.fileName ?? "voice-studio.voice-studio.zip"}
-          href={projectBundleDownloadUrl(activeProjectId)}
+          href={projectBundleDownloadUrl(activeProjectId, { includeGeneratedAudio })}
+          onClick={() => {
+            if (summary) {
+              onOperationActivityChange?.(
+                bundleActivity("export", "complete", "Bundle download started."),
+              );
+            }
+          }}
         >
           Download Bundle
         </a>
       ) : (
         <button
-          className="h-10 rounded-md px-4 text-sm font-semibold text-white disabled:opacity-50 vs-accent-bg"
+          className="h-10 rounded-md px-4 text-sm font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50 vs-accent-bg"
           disabled={!summary}
           onClick={() => {
             onStepChange(nextStep);
@@ -335,10 +456,14 @@ function ExportFlowFooter({
 function ImportBundleFlow({
   activeProjectId,
   projects,
+  onOperationActivityChange,
+  onOperationReportChange,
   onImported,
 }: Readonly<{
   activeProjectId: string;
   projects: VoiceProject[];
+  onOperationActivityChange?: (activity: BundleOperationActivity | null) => void;
+  onOperationReportChange?: (report: BundleOperationReport) => void;
   onImported: (result: ProjectBundleImportResult) => Promise<void> | void;
 }>) {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -370,19 +495,36 @@ function ImportBundleFlow({
     let isCancelled = false;
     setIsPreviewing(true);
     setError(null);
+    onOperationActivityChange?.(
+      bundleActivity("import", "running", "Previewing bundle before import."),
+    );
     void previewProjectBundle(file)
       .then((nextPreview) => {
         if (!isCancelled) {
           setPreview(nextPreview);
           setActiveStep("Review");
+          setMode(nextPreview.recommendedMode ?? "copy");
           if (nextPreview.errors && nextPreview.errors.length > 0) {
             setError(nextPreview.errors.join(" "));
           }
+          onOperationActivityChange?.(
+            bundleActivity(
+              "import",
+              nextPreview.valid ? "complete" : "attention",
+              nextPreview.valid
+                ? "Import preview is ready for conflict review."
+                : "Import preview found blocking validation issues.",
+            ),
+          );
+          onOperationReportChange?.(bundleReportFromPreview(nextPreview));
         }
       })
       .catch((caughtError: unknown) => {
         if (!isCancelled) {
-          setError(caughtError instanceof Error ? caughtError.message : "Unable to preview bundle");
+          const message =
+            caughtError instanceof Error ? caughtError.message : "Unable to preview bundle";
+          setError(message);
+          onOperationActivityChange?.(bundleActivity("import", "attention", message));
         }
       })
       .finally(() => {
@@ -393,9 +535,11 @@ function ImportBundleFlow({
     return () => {
       isCancelled = true;
     };
-  }, [file]);
+  }, [file, onOperationActivityChange, onOperationReportChange]);
 
-  const canImport = Boolean(file && preview?.valid && !isImporting);
+  const canImport = Boolean(
+    file && preview?.valid && !isImporting && importModeResolvesPreview(preview, mode),
+  );
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-5">
@@ -433,6 +577,8 @@ function ImportBundleFlow({
         preview={preview}
         targetProjectId={targetProjectId}
         onError={setError}
+        onOperationActivityChange={onOperationActivityChange}
+        onOperationReportChange={onOperationReportChange}
         onImported={onImported}
         onImportingChange={setIsImporting}
         onResult={setResult}
@@ -498,6 +644,7 @@ function ImportStepContent({
   return (
     <ImportModeStep
       mode={mode}
+      preview={preview}
       projects={projects}
       targetProjectId={targetProjectId}
       onModeChange={onModeChange}
@@ -520,66 +667,83 @@ function ImportChooseStep({
   onDragActiveChange: (isActive: boolean) => void;
 }>) {
   return (
-    <section
-      aria-label="Drop or choose a Voice Studio bundle"
-      className={`grid min-h-48 place-items-center rounded-xl border border-dashed p-6 text-center transition ${
-        isDragActive ? "border-orange-400 bg-orange-500/10" : "vs-border vs-surface"
-      }`}
-      onDragLeave={() => {
-        onDragActiveChange(false);
-      }}
-      onDragOver={(event) => {
-        event.preventDefault();
-        onDragActiveChange(true);
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        onDragActiveChange(false);
-        acceptFile(event.dataTransfer.files.item(0));
-      }}
-    >
-      <div className="max-w-md">
-        <p className="text-lg font-semibold">Drop a `.voice-studio.zip` bundle</p>
-        <p className="vs-muted mt-2 text-sm">
-          Preview validates the manifest before it touches your projects.
-        </p>
-        <button
-          className="mt-4 h-10 rounded-md border px-4 text-sm font-semibold transition hover:bg-[var(--vs-raised)] vs-border"
-          onClick={() => {
-            inputRef.current?.click();
-          }}
-          type="button"
-        >
-          Browse Bundle
-        </button>
-        <input
-          ref={inputRef}
-          accept=".voice-studio.zip,.zip"
-          className="sr-only"
-          type="file"
-          onChange={(event) => {
-            acceptFile(event.currentTarget.files?.item(0));
-            event.currentTarget.value = "";
-          }}
-        />
-        {file ? (
-          <p className="vs-muted mt-3 truncate text-xs" title={file.name}>
-            {file.name} · {formatBytes(file.size)}
+    <div className="grid gap-4">
+      <section
+        aria-label="Drop or choose a Voice Studio bundle"
+        className={`grid min-h-48 place-items-center rounded-xl border border-dashed p-6 text-center transition ${
+          isDragActive
+            ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
+            : "vs-border vs-surface"
+        }`}
+        onDragLeave={() => {
+          onDragActiveChange(false);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          onDragActiveChange(true);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          onDragActiveChange(false);
+          acceptFile(event.dataTransfer.files.item(0));
+        }}
+      >
+        <div className="max-w-md">
+          <p className="text-lg font-semibold">Drop a `.voice-studio.zip` bundle</p>
+          <p className="vs-muted mt-2 text-sm">
+            Preview validates the manifest before it touches your projects.
           </p>
-        ) : null}
-      </div>
-    </section>
+          <button
+            className="mt-4 h-10 rounded-md border px-4 text-sm font-semibold transition hover:bg-[var(--vs-raised)] vs-border"
+            onClick={() => {
+              inputRef.current?.click();
+            }}
+            type="button"
+          >
+            Browse Bundle
+          </button>
+          <input
+            ref={inputRef}
+            accept=".voice-studio.zip,.zip"
+            className="sr-only"
+            type="file"
+            onChange={(event) => {
+              acceptFile(event.currentTarget.files?.item(0));
+              event.currentTarget.value = "";
+            }}
+          />
+          {file ? (
+            <p className="vs-muted mt-3 truncate text-xs" title={file.name}>
+              {file.name} · {formatBytes(file.size)}
+            </p>
+          ) : null}
+        </div>
+      </section>
+      <PrivacyBoundaryPanel
+        boundaries={projectImportPrivacyBoundary()}
+        compact
+        title="Import data boundary"
+      />
+      <p
+        className="vs-muted rounded-md border p-3 text-xs leading-5 vs-border vs-surface"
+        data-privacy-notice={PRIVACY_NOTICES.projectBundleImport.id}
+      >
+        {PRIVACY_NOTICES.projectBundleImport.message}
+      </p>
+    </div>
   );
 }
 
 function ImportModeStep({
   mode,
+  preview,
   projects,
   targetProjectId,
   onModeChange,
   onTargetProjectChange,
 }: Readonly<{
   mode: BundleImportMode;
+  preview: ProjectBundlePreview | null;
   projects: VoiceProject[];
   targetProjectId: string;
   onModeChange: (mode: BundleImportMode) => void;
@@ -591,6 +755,11 @@ function ImportModeStep({
         subtitle="The safe default keeps imported work separate so it can be evaluated independently."
         title="Conflict handling"
       />
+      <p className="vs-muted rounded-md border p-3 text-xs leading-5 vs-border">
+        {importModeResolvesPreview(preview, mode)
+          ? "Selected resolution covers the previewed conflicts."
+          : "Select a resolution supported by the blocking conflicts before import."}
+      </p>
       <label className="grid gap-1 text-sm">
         <span className="vs-muted text-xs font-semibold uppercase tracking-wide">Import mode</span>
         <select
@@ -600,9 +769,15 @@ function ImportModeStep({
           }}
           value={mode}
         >
-          <option value="copy">Import as new project</option>
-          <option value="merge">Merge into selected project</option>
-          <option value="replace">Replace selected project</option>
+          <option disabled={!importModeAvailable(preview, "copy")} value="copy">
+            Duplicate as new project
+          </option>
+          <option disabled={!importModeAvailable(preview, "merge")} value="merge">
+            Merge into selected project
+          </option>
+          <option disabled={!importModeAvailable(preview, "replace")} value="replace">
+            Replace selected project
+          </option>
         </select>
       </label>
       {mode === "copy" ? null : (
@@ -629,20 +804,26 @@ function ImportModeStep({
   );
 }
 
-function ImportResult({ result }: Readonly<{ result: ProjectBundleImportResult | null }>) {
-  if (!result) {
-    return null;
+function importModeAvailable(
+  preview: ProjectBundlePreview | null,
+  mode: BundleImportMode,
+): boolean {
+  return !preview?.availableImportModes || preview.availableImportModes.includes(mode);
+}
+
+function importModeResolvesPreview(
+  preview: ProjectBundlePreview | null,
+  mode: BundleImportMode,
+): boolean {
+  if (!preview) {
+    return false;
   }
-  return (
-    <section className="mt-5 rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900">
-      <p className="font-semibold">Imported {result.project.name}</p>
-      <p className="mt-1">
-        {result.jobs.length.toString()} chapter{result.jobs.length === 1 ? "" : "s"} and{" "}
-        {result.profiles.length.toString()} voice profile
-        {result.profiles.length === 1 ? "" : "s"} are available.
-      </p>
-    </section>
-  );
+  return (preview.conflicts ?? []).every((conflict) => {
+    if (!conflict.blocking) {
+      return true;
+    }
+    return !conflict.resolutions || conflict.resolutions.includes(mode);
+  });
 }
 
 function ImportFlowFooter({
@@ -654,6 +835,8 @@ function ImportFlowFooter({
   preview,
   targetProjectId,
   onError,
+  onOperationActivityChange,
+  onOperationReportChange,
   onImported,
   onImportingChange,
   onResult,
@@ -667,6 +850,8 @@ function ImportFlowFooter({
   preview: ProjectBundlePreview | null;
   targetProjectId: string;
   onError: (error: string | null) => void;
+  onOperationActivityChange?: (activity: BundleOperationActivity | null) => void;
+  onOperationReportChange?: (report: BundleOperationReport) => void;
   onImported: (result: ProjectBundleImportResult) => Promise<void> | void;
   onImportingChange: (isImporting: boolean) => void;
   onResult: (result: ProjectBundleImportResult) => void;
@@ -688,7 +873,7 @@ function ImportFlowFooter({
       ) : null}
       {activeStep === "Choose Bundle" ? (
         <button
-          className="h-10 rounded-md px-4 text-sm font-semibold text-white disabled:opacity-50 vs-accent-bg"
+          className="h-10 rounded-md px-4 text-sm font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50 vs-accent-bg"
           disabled={!preview}
           onClick={() => {
             onStepChange("Review");
@@ -700,7 +885,7 @@ function ImportFlowFooter({
       ) : null}
       {activeStep === "Review" ? (
         <button
-          className="h-10 rounded-md px-4 text-sm font-semibold text-white disabled:opacity-50 vs-accent-bg"
+          className="h-10 rounded-md px-4 text-sm font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50 vs-accent-bg"
           disabled={!preview?.valid}
           onClick={() => {
             onStepChange("Import");
@@ -716,8 +901,11 @@ function ImportFlowFooter({
           file={file}
           isImporting={isImporting}
           mode={mode}
+          preview={preview}
           targetProjectId={targetProjectId}
           onError={onError}
+          onOperationActivityChange={onOperationActivityChange}
+          onOperationReportChange={onOperationReportChange}
           onImported={onImported}
           onImportingChange={onImportingChange}
           onResult={onResult}
@@ -732,8 +920,11 @@ function ImportButton({
   file,
   isImporting,
   mode,
+  preview,
   targetProjectId,
   onError,
+  onOperationActivityChange,
+  onOperationReportChange,
   onImported,
   onImportingChange,
   onResult,
@@ -742,15 +933,18 @@ function ImportButton({
   file: File | null;
   isImporting: boolean;
   mode: BundleImportMode;
+  preview: ProjectBundlePreview | null;
   targetProjectId: string;
   onError: (error: string | null) => void;
+  onOperationActivityChange?: (activity: BundleOperationActivity | null) => void;
+  onOperationReportChange?: (report: BundleOperationReport) => void;
   onImported: (result: ProjectBundleImportResult) => Promise<void> | void;
   onImportingChange: (isImporting: boolean) => void;
   onResult: (result: ProjectBundleImportResult) => void;
 }>) {
   return (
     <button
-      className="h-10 rounded-md px-4 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 disabled:opacity-50 vs-accent-bg"
+      className="h-10 rounded-md px-4 text-sm font-semibold text-[var(--vs-action-primary-text)] shadow-sm shadow-[var(--vs-shadow)] disabled:opacity-50 vs-accent-bg"
       disabled={!canImport}
       onClick={() => {
         if (!file) {
@@ -758,13 +952,25 @@ function ImportButton({
         }
         onImportingChange(true);
         onError(null);
+        onOperationActivityChange?.(
+          bundleActivity("import", "running", "Importing bundle into local storage."),
+        );
         void importProjectBundle(file, mode, mode === "copy" ? undefined : targetProjectId)
           .then(async (nextResult) => {
             onResult(nextResult);
             await onImported(nextResult);
+            onOperationActivityChange?.(
+              bundleActivity("import", "complete", `Imported ${nextResult.project.name}.`),
+            );
+            if (preview) {
+              onOperationReportChange?.(bundleReportFromPreview(preview, "ready"));
+            }
           })
           .catch((caughtError: unknown) => {
-            onError(caughtError instanceof Error ? caughtError.message : "Unable to import bundle");
+            const message =
+              caughtError instanceof Error ? caughtError.message : "Unable to import bundle";
+            onError(message);
+            onOperationActivityChange?.(bundleActivity("import", "attention", message));
           })
           .finally(() => {
             onImportingChange(false);
@@ -777,173 +983,57 @@ function ImportButton({
   );
 }
 
-function BundlePreviewCard({ preview }: Readonly<{ preview: ProjectBundlePreview }>) {
-  const compatibility = preview.compatibility.length > 0 ? preview.compatibility : ["No flags"];
-  return (
-    <section className="mt-5 grid gap-3 rounded-lg border p-4 vs-surface">
-      <div className="flex min-w-0 items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h3 className="truncate text-lg font-semibold" title={preview.projectName}>
-            {preview.projectName ?? "Unnamed bundle"}
-          </h3>
-          <p className="vs-muted mt-1 text-sm">
-            {String(preview.chapterCount ?? 0)} chapter
-            {preview.chapterCount === 1 ? "" : "s"} · {String(preview.profileCount ?? 0)} voice
-            {preview.profileCount === 1 ? "" : "s"} · {formatBytes(preview.estimatedBytes ?? 0)}
-          </p>
-        </div>
-        <span
-          className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-            preview.valid
-              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-              : "border-red-300 bg-red-50 text-red-700"
-          }`}
-        >
-          {preview.valid ? "Valid" : "Blocked"}
-        </span>
-      </div>
-      <div className="grid gap-2 sm:grid-cols-3">
-        <BundleStat
-          label="Quality"
-          value={`${String(Math.round(preview.quality.overallScore * 100))}%`}
-        />
-        <BundleStat label="Duration" value={formatDuration(preview.quality.generatedDurationMs)} />
-        <BundleStat label="Generated audio" value={String(preview.generatedAudio ?? 0)} />
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {compatibility.map((flag) => (
-          <span
-            className="rounded-full border px-2.5 py-1 text-xs font-semibold vs-border"
-            key={flag}
-          >
-            {flag}
-          </span>
-        ))}
-      </div>
-      {preview.warnings && preview.warnings.length > 0 ? (
-        <ul className="grid gap-1 text-sm text-amber-700">
-          {preview.warnings.map((warning) => (
-            <li className="break-words" key={warning}>
-              {warning}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </section>
-  );
+function bundleActivity(
+  kind: BundlePanelMode,
+  status: BundleOperationActivity["status"],
+  detail: string,
+): BundleOperationActivity {
+  return {
+    cancelLabel: "Cancel",
+    canCancel: false,
+    detail,
+    id: `bundle:${kind}`,
+    label: kind === "export" ? "Bundle export" : "Bundle import",
+    status,
+  };
 }
 
-function StepRail({
-  activeStep,
-  enabledSteps,
-  onStepChange,
-  steps,
-}: Readonly<{
-  activeStep: string;
-  enabledSteps: string[];
-  steps: [string, string, string];
-  onStepChange: (step: string) => void;
-}>) {
-  return (
-    <ol className="mb-5 grid grid-cols-3 overflow-hidden rounded-lg border text-sm font-semibold vs-border">
-      {steps.map((step) => {
-        const isEnabled = enabledSteps.includes(step);
-        return (
-          <li key={step}>
-            <button
-              className={stepRailButtonClass(step, activeStep, isEnabled)}
-              disabled={!isEnabled}
-              onClick={() => {
-                onStepChange(step);
-              }}
-              title={isEnabled ? step : `${step} unlocks after the previous step`}
-              type="button"
-            >
-              {step}
-            </button>
-          </li>
-        );
-      })}
-    </ol>
-  );
+function bundleReportFromSummary(summary: ProjectBundleSummary): BundleOperationReport {
+  return {
+    detail: `${summary.fileName} · ${formatBytes(summary.estimatedBytes)} · generated audio ${
+      summary.generatedAudioIncluded ? "included" : "excluded"
+    }.`,
+    excluded: summary.excluded,
+    generatedAudio: summary.generatedAudio,
+    generatedAudioIncluded: summary.generatedAudioIncluded,
+    kind: "export",
+    omittedGeneratedAudio: summary.omittedGeneratedAudio,
+    status: summary.warnings && summary.warnings.length > 0 ? "warning" : "ready",
+    title: `Export manifest for ${summary.projectName}`,
+    updatedAt: summary.createdAt,
+    warnings: summary.warnings,
+  };
 }
 
-function stepRailButtonClass(step: string, activeStep: string, isEnabled: boolean): string {
-  const base = "h-full w-full px-3 py-2 text-center transition";
-  if (step === activeStep) {
-    return `${base} bg-orange-500 text-white`;
-  }
-  if (isEnabled) {
-    return `${base} vs-surface hover:bg-[var(--vs-raised)]`;
-  }
-  return `${base} cursor-not-allowed opacity-45 vs-surface`;
-}
-
-function SectionHeading({ subtitle, title }: Readonly<{ subtitle: string; title: string }>) {
-  return (
-    <div>
-      <h3 className="text-sm font-semibold">{title}</h3>
-      <p className="vs-muted mt-1 text-sm leading-6">{subtitle}</p>
-    </div>
-  );
-}
-
-function BundleContentRow({ item }: Readonly<{ item: ProjectBundleSummary["contents"][number] }>) {
-  return (
-    <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md border p-3 vs-raised">
-      <span
-        className={`grid h-6 w-6 place-items-center rounded-full text-xs font-bold ${
-          item.included ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-500"
-        }`}
-      >
-        {item.included ? "✓" : "·"}
-      </span>
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold" title={item.label}>
-          {item.label}
-        </p>
-        <p className="vs-muted text-xs">{item.required ? "Required" : "Optional"}</p>
-      </div>
-      <span className="vs-muted shrink-0 text-xs">
-        {item.estimatedBytes ? formatBytes(item.estimatedBytes) : ""}
-      </span>
-    </div>
-  );
-}
-
-function BundleStat({ label, value }: Readonly<{ label: string; value: string }>) {
-  return (
-    <div className="rounded-md border p-3 vs-raised">
-      <dt className="vs-muted text-xs font-semibold uppercase tracking-wide">{label}</dt>
-      <dd className="mt-1 truncate text-sm font-semibold" title={value}>
-        {value}
-      </dd>
-    </div>
-  );
-}
-
-function PanelNote({ children }: Readonly<{ children: ReactNode }>) {
-  return <p className="mt-5 rounded-lg border p-4 text-sm vs-surface">{children}</p>;
-}
-
-function PanelError({ children }: Readonly<{ children: ReactNode }>) {
-  return (
-    <p className="mt-5 rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800">
-      {children}
-    </p>
-  );
-}
-
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return "0 B";
-  }
-  const units = ["B", "KB", "MB", "GB"];
-  let value = bytes;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+function bundleReportFromPreview(
+  preview: ProjectBundlePreview,
+  status: BundleOperationReport["status"] = preview.valid ? "ready" : "blocked",
+): BundleOperationReport {
+  return {
+    conflicts: preview.conflicts,
+    dependencies: preview.dependencies,
+    detail: `${preview.projectName ?? "Unnamed bundle"} · ${String(preview.chapterCount ?? 0)} chapter(s) · ${formatBytes(
+      preview.estimatedBytes ?? 0,
+    )}.`,
+    excluded: preview.excluded ?? preview.manifest?.excluded,
+    generatedAudio: preview.generatedAudio,
+    generatedAudioIncluded: preview.manifest?.generatedAudioIncluded,
+    kind: "import",
+    omittedGeneratedAudio: preview.manifest?.omittedGeneratedAudio,
+    status,
+    title: `Import preview for ${preview.projectName ?? "bundle"}`,
+    updatedAt: new Date().toISOString(),
+    validation: preview.validation,
+    warnings: preview.warnings,
+  };
 }

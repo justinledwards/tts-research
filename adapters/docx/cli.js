@@ -9,6 +9,7 @@ async function main() {
     throw new Error("sourcePath is required for DOCX adapter.");
   }
   const result = await emitDOCXAdapterFromFile(sourcePath, {
+    contractFixtureIds: payload.contractFixtureIds,
     generatedAt: payload.generatedAt,
     projectId: payload.projectId,
     sourceId: payload.sourceId,

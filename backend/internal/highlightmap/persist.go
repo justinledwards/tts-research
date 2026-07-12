@@ -9,9 +9,11 @@ import (
 )
 
 const (
-	HighlightMapFilename   = "highlight-map.json"
-	FragmentTimingFilename = "fragment-timing.json"
-	TokenTimingFilename    = "token-timing.json"
+	HighlightMapFilename     = "highlight-map.json"
+	HighlightMapV2Filename   = "highlight-map.v2.json"
+	FragmentTimingFilename   = "fragment-timing.json"
+	TokenTimingFilename      = "token-timing.json"
+	AlignmentQualityFilename = "alignment-quality.json"
 )
 
 func PersistArtifacts(
@@ -36,6 +38,30 @@ func ReadHighlightMap(jobDir string) (HighlightMap, error) {
 	var payload HighlightMap
 	err := readJSON(filepath.Join(jobDir, HighlightMapFilename), &payload)
 	return payload, err
+}
+
+func PersistHighlightMapV2(jobDir string, highlightMap HighlightMapV2) error {
+	if err := os.MkdirAll(jobDir, 0o755); err != nil {
+		return err
+	}
+	return writeAtomicJSON(filepath.Join(jobDir, HighlightMapV2Filename), highlightMap)
+}
+
+func ReadHighlightMapV2(jobDir string) (HighlightMapV2, error) {
+	var payload HighlightMapV2
+	err := readJSON(filepath.Join(jobDir, HighlightMapV2Filename), &payload)
+	return payload, err
+}
+
+func PersistAlignmentQuality(jobDir string, report any) error {
+	if err := os.MkdirAll(jobDir, 0o755); err != nil {
+		return err
+	}
+	return writeAtomicJSON(filepath.Join(jobDir, AlignmentQualityFilename), report)
+}
+
+func ReadAlignmentQuality(jobDir string, payload any) error {
+	return readJSON(filepath.Join(jobDir, AlignmentQualityFilename), payload)
 }
 
 func ReadFragmentTiming(jobDir string) (alignment.FragmentTimingArtifact, error) {

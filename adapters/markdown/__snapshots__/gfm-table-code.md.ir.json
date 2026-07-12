@@ -4,7 +4,7 @@
     {
       "confidence": 0.98,
       "endOffset": 16,
-      "id": "block-0001",
+      "id": "markdown-heading-gfm-table-codemdheadinggfm-structures-gfm-structures-b34ae47dcb59",
       "index": 1,
       "kind": "heading",
       "label": "GFM Structures",
@@ -15,18 +15,23 @@
         "columnStart": 1,
         "lineEnd": 1,
         "lineStart": 1,
-        "sourceSlice": "# GFM Structures"
+        "sourceSlice": "# GFM Structures",
+        "fingerprint": "5e9161c5561a560dfe1995e7c6452e5b",
+        "identityAnchor": "gfm-table-code.md|heading|GFM Structures|# GFM Structures",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:0"
       },
       "speakMode": "speak",
       "spokenText": "GFM Structures",
       "startOffset": 0,
       "text": "# GFM Structures",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000001024"
     },
     {
       "confidence": 0.98,
       "endOffset": 89,
-      "id": "block-0002",
+      "id": "markdown-table-gfm-table-codemdtablegfm-structures-metric-value-latency-12ms-quality-good-2c62de777ea9",
       "index": 2,
       "kind": "table",
       "label": "Table",
@@ -40,18 +45,23 @@
         "columnStart": 1,
         "lineEnd": 6,
         "lineStart": 3,
-        "sourceSlice": "| Metric | Value |\n| --- | ---: |\n| Latency | 12ms |\n| Quality | Good |"
+        "sourceSlice": "| Metric | Value |\n| --- | ---: |\n| Latency | 12ms |\n| Quality | Good |",
+        "fingerprint": "ca6512ba8905f3228700d131b175a43c",
+        "identityAnchor": "gfm-table-code.md|table|GFM Structures|| Metric | Value | | --- | ---: | | Latency | 12ms | | Quality | Good |",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:18"
       },
       "speakMode": "speak",
       "spokenText": "| Metric | Value |\n| --- | ---: |\n| Latency | 12ms |\n| Quality | Good |",
       "startOffset": 18,
       "text": "| Metric | Value |\n| --- | ---: |\n| Latency | 12ms |\n| Quality | Good |",
-      "warnings": ["table_policy"]
+      "warnings": ["table_policy"],
+      "orderKey": "000000019457"
     },
     {
       "confidence": 0.98,
       "endOffset": 121,
-      "id": "block-0003",
+      "id": "markdown-code-gfm-table-codemdcodegfm-structuresgo-fmtprintlnhello-e1bbf8feeca9",
       "index": 3,
       "kind": "code",
       "label": "Code sample",
@@ -64,18 +74,23 @@
         "columnStart": 1,
         "lineEnd": 10,
         "lineStart": 8,
-        "sourceSlice": "```go\nfmt.Println(\"hello\")\n```"
+        "sourceSlice": "```go\nfmt.Println(\"hello\")\n```",
+        "fingerprint": "e99507da102bde47c070da87ff2e7907",
+        "identityAnchor": "gfm-table-code.md|code|GFM Structures|```go fmt.Println(\"hello\") ```",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:91"
       },
       "speakMode": "speak",
       "spokenText": "fmt.Println(\"hello\")",
       "startOffset": 91,
       "text": "```go\nfmt.Println(\"hello\")\n```",
-      "warnings": ["code_policy"]
+      "warnings": ["code_policy"],
+      "orderKey": "000000094210"
     },
     {
       "confidence": 0.98,
       "endOffset": 140,
-      "id": "block-0004",
+      "id": "markdown-body-gfm-table-codemdbodygfm-structures-x-parsed-task-103d0f613763",
       "index": 4,
       "kind": "body",
       "label": "Parsed task",
@@ -88,18 +103,23 @@
         "columnStart": 1,
         "lineEnd": 12,
         "lineStart": 12,
-        "sourceSlice": "- [x] Parsed task"
+        "sourceSlice": "- [x] Parsed task",
+        "fingerprint": "0622ec11388fbc9cb094137c5cf0ba91",
+        "identityAnchor": "gfm-table-code.md|body|GFM Structures|- [x] Parsed task",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:123"
       },
       "speakMode": "speak",
       "spokenText": "Parsed task",
       "startOffset": 123,
       "text": "- [x] Parsed task",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000126979"
     },
     {
       "confidence": 0.98,
       "endOffset": 156,
-      "id": "block-0005",
+      "id": "markdown-body-gfm-table-codemdbodygfm-structures-open-task-0930b3366f30",
       "index": 5,
       "kind": "body",
       "label": "Open task",
@@ -112,13 +132,18 @@
         "columnStart": 1,
         "lineEnd": 13,
         "lineStart": 13,
-        "sourceSlice": "- [ ] Open task"
+        "sourceSlice": "- [ ] Open task",
+        "fingerprint": "a4b1d981e5001e5328481addfddc7de1",
+        "identityAnchor": "gfm-table-code.md|body|GFM Structures|- [ ] Open task",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:141"
       },
       "speakMode": "speak",
       "spokenText": "Open task",
       "startOffset": 141,
       "text": "- [ ] Open task",
-      "warnings": []
+      "warnings": [],
+      "orderKey": "000000145412"
     }
   ],
   "document": {
@@ -150,11 +175,15 @@
           "columnStart": 1,
           "lineEnd": 1,
           "lineStart": 1,
-          "sourceSlice": "# GFM Structures"
+          "sourceSlice": "# GFM Structures",
+          "fingerprint": "5e9161c5561a560dfe1995e7c6452e5b",
+          "identityAnchor": "gfm-table-code.md|heading|GFM Structures|# GFM Structures",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:0"
         },
-        "nodeId": "block-0001",
+        "nodeId": "markdown-heading-gfm-table-codemdheadinggfm-structures-gfm-structures-b34ae47dcb59",
         "normalisedText": "# GFM Structures",
-        "orderKey": "00000001",
+        "orderKey": "000000001024",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -172,6 +201,13 @@
           "offsets": {
             "end": 16,
             "start": 0
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "gfm-table-code"
         },
@@ -217,11 +253,15 @@
           "columnStart": 1,
           "lineEnd": 6,
           "lineStart": 3,
-          "sourceSlice": "| Metric | Value |\n| --- | ---: |\n| Latency | 12ms |\n| Quality | Good |"
+          "sourceSlice": "| Metric | Value |\n| --- | ---: |\n| Latency | 12ms |\n| Quality | Good |",
+          "fingerprint": "ca6512ba8905f3228700d131b175a43c",
+          "identityAnchor": "gfm-table-code.md|table|GFM Structures|| Metric | Value | | --- | ---: | | Latency | 12ms | | Quality | Good |",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:18"
         },
-        "nodeId": "block-0002",
+        "nodeId": "markdown-table-gfm-table-codemdtablegfm-structures-metric-value-latency-12ms-quality-good-2c62de777ea9",
         "normalisedText": "| Metric | Value | | --- | ---: | | Latency | 12ms | | Quality | Good |",
-        "orderKey": "00000002",
+        "orderKey": "000000019457",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -239,6 +279,13 @@
           "offsets": {
             "end": 89,
             "start": 18
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "gfm-table-code"
         },
@@ -283,11 +330,15 @@
           "columnStart": 1,
           "lineEnd": 10,
           "lineStart": 8,
-          "sourceSlice": "```go\nfmt.Println(\"hello\")\n```"
+          "sourceSlice": "```go\nfmt.Println(\"hello\")\n```",
+          "fingerprint": "e99507da102bde47c070da87ff2e7907",
+          "identityAnchor": "gfm-table-code.md|code|GFM Structures|```go fmt.Println(\"hello\") ```",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:91"
         },
-        "nodeId": "block-0003",
+        "nodeId": "markdown-code-gfm-table-codemdcodegfm-structuresgo-fmtprintlnhello-e1bbf8feeca9",
         "normalisedText": "```go fmt.Println(\"hello\") ```",
-        "orderKey": "00000003",
+        "orderKey": "000000094210",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -305,6 +356,13 @@
           "offsets": {
             "end": 121,
             "start": 91
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "gfm-table-code"
         },
@@ -349,11 +407,15 @@
           "columnStart": 1,
           "lineEnd": 12,
           "lineStart": 12,
-          "sourceSlice": "- [x] Parsed task"
+          "sourceSlice": "- [x] Parsed task",
+          "fingerprint": "0622ec11388fbc9cb094137c5cf0ba91",
+          "identityAnchor": "gfm-table-code.md|body|GFM Structures|- [x] Parsed task",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:123"
         },
-        "nodeId": "block-0004",
+        "nodeId": "markdown-body-gfm-table-codemdbodygfm-structures-x-parsed-task-103d0f613763",
         "normalisedText": "- [x] Parsed task",
-        "orderKey": "00000004",
+        "orderKey": "000000126979",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -371,6 +433,13 @@
           "offsets": {
             "end": 140,
             "start": 123
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "gfm-table-code"
         },
@@ -415,11 +484,15 @@
           "columnStart": 1,
           "lineEnd": 13,
           "lineStart": 13,
-          "sourceSlice": "- [ ] Open task"
+          "sourceSlice": "- [ ] Open task",
+          "fingerprint": "a4b1d981e5001e5328481addfddc7de1",
+          "identityAnchor": "gfm-table-code.md|body|GFM Structures|- [ ] Open task",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:141"
         },
-        "nodeId": "block-0005",
+        "nodeId": "markdown-body-gfm-table-codemdbodygfm-structures-open-task-0930b3366f30",
         "normalisedText": "- [ ] Open task",
-        "orderKey": "00000005",
+        "orderKey": "000000145412",
         "parentId": "",
         "provenance": {
           "format": "markdown",
@@ -437,6 +510,13 @@
           "offsets": {
             "end": 156,
             "start": 141
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
           },
           "sourceId": "gfm-table-code"
         },

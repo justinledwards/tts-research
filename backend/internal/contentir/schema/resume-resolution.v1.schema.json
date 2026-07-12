@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tts-research.local/schemas/resume-resolution.v1.schema.json",
+  "title": "ResumeResolution v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "resolutionId",
+    "progressId",
+    "sourceId",
+    "requestedAt",
+    "decision",
+    "reason",
+    "resolvedReadalongManifestId",
+    "resolvedLocatorEnvelope"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "resume-resolution.v1"
+    },
+    "resolutionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "progressId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requestedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "decision": {
+      "enum": [
+        "auto_resume_current",
+        "auto_resume_degraded",
+        "resume_audio_only",
+        "resume_source_only",
+        "offer_retry",
+        "offer_old_vs_repaired",
+        "auto_resume_remapped",
+        "blocked_failed"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "resolvedReadalongManifestId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "resolvedLocatorEnvelope": {
+      "$ref": "locator-envelope.v1.schema.json"
+    },
+    "revisionMapId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "staleProgressId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "retryArtifactId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "offers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

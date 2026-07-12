@@ -1,53 +1,126 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState } from "react";
+import type { BundleOperationReport } from "./BundlePanels";
+import { StatusChip } from "./design";
+import {
+  buildSourceAssetModels,
+  buildSpeechPolicyAssetModel,
+  buildVoiceAssetModels,
+  type SourceAssetModel,
+  type SpeechPolicyAssetModel,
+  type VoiceAssetModel,
+} from "./features/assets/assetModels";
+import { resolveDefaultBookScope } from "./features/book-cinema/model";
+import {
+  COMMAND_CENTER_ROUTES,
+  commandCenterGeneratedAudioState,
+  filterTemporaryWorkSessions,
+  sortCommandCenterProjects,
+  type TemporaryWorkFilter,
+  temporarySessionAudioReadiness,
+  temporarySessionStorageUsage,
+  visibleCommandCenterJobs,
+  visibleTemporaryCommandCenterJobs,
+} from "./features/command-center";
+import {
+  TEMPORARY_SOURCE_COPY,
+  temporarySourceFailureCopy,
+} from "./features/temporary-source-copy";
+import { temporaryPromotionDisabledReason } from "./features/featureFlags";
+import {
+  buildHealthReport,
+  type HealthReport,
+  type HealthReportCard,
+} from "./features/health-report";
 import { useReaderModalLifecycle } from "./features/reader-accessibility";
+import type { SettingsCommandTarget } from "./features/settings/model";
+import type { NarrationStatusModel } from "./features/status-strip";
 import { formatDuration } from "./format";
+import { SPEECH_POLICY_PROFILE_OPTIONS, speechPolicyProfileLabel } from "./speechPolicy";
 import type {
+  AdapterDiagnostics,
+  BookScope,
   BookSource,
   CustomSpeechPolicyProfile,
+  PreparedSource,
+  ProjectStorageSummary,
+  SpeechPolicyOverrides,
   SpeechPolicyProfile,
   SystemMetrics,
+  TemporarySourceSession,
+  TemporaryStorageUsageSummary,
+  TTSEngineDiagnostics,
   VoiceJob,
   VoiceProfile,
   VoiceProfileSource,
   VoiceProject,
 } from "./types";
-import { SPEECH_POLICY_PROFILE_OPTIONS, speechPolicyProfileLabel } from "./speechPolicy";
-import type { CancellableActivitySummary } from "./voiceStudioViewModels";
+import {
+  buildWorkspaceActivitySummaries,
+  type CommandCenterSectionId,
+  CreateProjectRow,
+  commandCenterSectionDescription,
+  commandCenterSectionHeadline,
+  DrawerStat,
+  EmptyDrawerText,
+  formatBytes,
+  formatDate,
+  ProjectLibraryRow,
+  resolveProjectQualityScore,
+  WorkspaceActivityRow,
+  type WorkspaceActivitySummary,
+  WorkspaceDashboardSummary,
+  WorkspaceSection,
+} from "./WorkspaceDrawerHelpers";
 
-type WorkspaceActivitySummary = CancellableActivitySummary & {
-  onCancel?: () => void;
-};
-
-const WORKSPACE_SECTIONS = [
-  { id: "projects", label: "Projects", detail: "Project library and chapter sets" },
-  { id: "activity", label: "Activity", detail: "Live work and cancellation" },
-  { id: "voices", label: "Voices", detail: "Saved profiles and selection" },
-  { id: "sources", label: "Sources", detail: "Books, URLs, and media" },
-  { id: "imports", label: "Imports", detail: "Portable bundles" },
-  { id: "reports", label: "Reports", detail: "Health and diagnostics" },
-] as const;
-
-type WorkspaceSectionId = (typeof WORKSPACE_SECTIONS)[number]["id"];
+interface GenerateNarrationOptions {
+  useCurrentReviewSession?: boolean;
+}
 
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export function WorkspaceDrawer({
   activeProjectId,
+  activeScopeLabel,
+  activeSection,
+  activeSourceLabel,
+  adapterDiagnostics,
+  adapterDiagnosticsError,
   bookSources,
+  bundleActivity,
+  bundleReport,
+  canCreate,
+  hydrationBusy = false,
   isOpen,
   job,
   metrics,
   metricsError,
+  narrationStatusModel,
+  preparedSources,
   projectError,
   projectJobs,
+  projectStorage,
+  projectStorageError,
   projects,
   profileSource,
   profiles,
+  returnWorkspaceLabel,
   customSpeechPolicyProfiles,
+  selectedBookScope,
   speechPolicyProfile,
+  speechPolicyOverrides,
   speechPolicyProfiles,
+  sourceFallbackLabel,
+  selectedBookSourceId,
+  selectedPreparedSourceId,
+  selectedEngineId,
   selectedProfileId,
   cancelingProfileSourceId,
   cancelingTargetKey,
+  ttsEngineError,
+  ttsEngines,
+  temporarySources,
+  temporaryStorageUsage,
+  temporaryPromotionEnabled = true,
+  temporaryWorkEnabled = true,
   onCreateProject,
   onCancelJob,
   onCancelProfileSource,
@@ -57,28 +130,76 @@ export function WorkspaceDrawer({
   onExportOpen,
   onImportOpen,
   onOpenSettings,
+  onOpenIntake,
+  onOpenQuickListen,
+  quickListenEnabled = true,
+  onOpenVoiceDashboard,
+  onOpenVoiceCloning,
+  onClearExpiredTemporarySources,
+  onDiscardTemporarySource,
+  onKeepTemporarySource,
+  onOpenTemporarySource,
   onRenameProject,
+  onRenameBookSource,
+  onRenamePreparedSource,
+  onRenameVoiceProfile,
+  onSectionChange,
   onSelectProject,
   onSelectProfile,
+  onClearVoiceProfile,
+  onDeleteBookSource,
+  onDeletePreparedSource,
+  onDeleteVoiceProfile,
+  onDeleteVoiceJob,
+  onGenerateBookSourceNarration,
+  onGeneratePreparedSourceNarration,
   onSpeechPolicyProfileChange,
+  onUseBookSource,
+  onUsePreparedSource,
 }: Readonly<{
   activeProjectId: string;
+  activeScopeLabel: string;
+  activeSection?: CommandCenterSectionId;
+  activeSourceLabel: string;
+  adapterDiagnostics: Record<string, AdapterDiagnostics> | null;
+  adapterDiagnosticsError: string | null;
   bookSources: BookSource[];
+  bundleActivity: WorkspaceActivitySummary | null;
+  bundleReport: BundleOperationReport | null;
+  canCreate: boolean;
+  hydrationBusy?: boolean;
   isOpen: boolean;
   job: VoiceJob | null;
   metrics: SystemMetrics | null;
   metricsError: string | null;
+  narrationStatusModel: NarrationStatusModel;
+  preparedSources: PreparedSource[];
   projectError: string | null;
   projectJobs: VoiceJob[];
+  projectStorage: ProjectStorageSummary | null;
+  projectStorageError: string | null;
   projects: VoiceProject[];
   profileSource: VoiceProfileSource | null;
   profiles: VoiceProfile[];
+  returnWorkspaceLabel: string;
   customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
+  selectedBookScope: BookScope | null;
   speechPolicyProfile: string;
+  speechPolicyOverrides: SpeechPolicyOverrides;
   speechPolicyProfiles: SpeechPolicyProfile[];
+  sourceFallbackLabel: string | null;
+  selectedBookSourceId: string | null;
+  selectedPreparedSourceId: string | null;
+  selectedEngineId: string;
   selectedProfileId: string;
   cancelingProfileSourceId: string | null;
   cancelingTargetKey: string | null;
+  ttsEngineError: string | null;
+  ttsEngines: TTSEngineDiagnostics[];
+  temporarySources: TemporarySourceSession[];
+  temporaryStorageUsage: TemporaryStorageUsageSummary | null;
+  temporaryPromotionEnabled?: boolean;
+  temporaryWorkEnabled?: boolean;
   onCreateProject: (name: string) => Promise<void>;
   onCancelJob: () => Promise<void>;
   onCancelProfileSource: (sourceId: string) => Promise<void>;
@@ -87,38 +208,175 @@ export function WorkspaceDrawer({
   onDeleteProject: (id: string) => Promise<void>;
   onExportOpen: () => void;
   onImportOpen: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings: (target?: SettingsCommandTarget | null) => void;
+  onOpenIntake: () => void;
+  onOpenQuickListen: () => void;
+  quickListenEnabled?: boolean;
+  onOpenVoiceDashboard: () => void;
+  onOpenVoiceCloning: () => void;
+  onClearExpiredTemporarySources: () => Promise<void>;
+  onDiscardTemporarySource: (session: TemporarySourceSession) => Promise<void>;
+  onKeepTemporarySource: (session: TemporarySourceSession) => void;
+  onOpenTemporarySource: (session: TemporarySourceSession) => Promise<void>;
   onRenameProject: (id: string, name: string) => Promise<void>;
+  onRenameBookSource: (id: string, name: string) => Promise<void>;
+  onRenamePreparedSource: (id: string, name: string) => Promise<void>;
+  onRenameVoiceProfile: (id: string, name: string) => Promise<void>;
+  onSectionChange?: (section: CommandCenterSectionId) => void;
   onSelectProject: (id: string) => void;
   onSelectProfile: (profileId: string) => void;
+  onClearVoiceProfile: () => void;
+  onDeleteBookSource: (id: string) => Promise<void>;
+  onDeletePreparedSource: (id: string) => Promise<void>;
+  onDeleteVoiceProfile: (id: string) => Promise<void>;
+  onDeleteVoiceJob: (id: string) => Promise<void>;
+  onGenerateBookSourceNarration: (
+    book: BookSource,
+    scope: BookScope,
+    options?: GenerateNarrationOptions,
+  ) => void;
+  onGeneratePreparedSourceNarration: (
+    source: PreparedSource,
+    options?: GenerateNarrationOptions,
+  ) => void;
   onSpeechPolicyProfileChange: (profile: string) => void;
+  onUseBookSource: (book: BookSource, scope: BookScope) => void;
+  onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
 }>) {
   const drawerRef = useRef<HTMLElement | null>(null);
   useReaderModalLifecycle(drawerRef, { closeOnEscape: true, isOpen, onClose });
-  const [activeSection, setActiveSection] = useState<WorkspaceSectionId>("projects");
+  const [localActiveSection, setLocalActiveSection] = useState<CommandCenterSectionId>("overview");
   const [isCreatingProject, setIsCreatingProject] = useState(false);
-  const visibleJobs = useMemo(() => {
-    if (!job) {
-      return projectJobs;
-    }
-    if (projectJobs.some((item) => item.id === job.id)) {
-      return projectJobs;
-    }
-    return [job, ...projectJobs];
-  }, [job, projectJobs]);
-  const activitySummaries = useMemo(
+  const [inspectedAssetKey, setInspectedAssetKey] = useState<string | null>(null);
+  const [temporaryWorkFilter, setTemporaryWorkFilter] = useState<TemporaryWorkFilter>("all");
+  const effectiveActiveSection = activeSection ?? localActiveSection;
+  const visibleJobs = useMemo(
+    () => visibleCommandCenterJobs({ activeProjectId, job, projectJobs }),
+    [activeProjectId, job, projectJobs],
+  );
+  const temporaryJobs = useMemo(
+    () => visibleTemporaryCommandCenterJobs({ job, projectJobs }),
+    [job, projectJobs],
+  );
+  const visibleTemporarySources = useMemo(
+    () => filterTemporaryWorkSessions(temporarySources, temporaryWorkFilter),
+    [temporarySources, temporaryWorkFilter],
+  );
+  const reportBookSource = useMemo(
     () =>
-      buildWorkspaceActivitySummaries({
-        cancelingProfileSourceId,
-        cancelingTargetKey,
+      selectedBookSourceId
+        ? (bookSources.find((book) => book.id === selectedBookSourceId) ?? null)
+        : null,
+    [bookSources, selectedBookSourceId],
+  );
+  const reportPreparedSource = useMemo(
+    () =>
+      selectedPreparedSourceId
+        ? (preparedSources.find((source) => source.id === selectedPreparedSourceId) ?? null)
+        : null,
+    [preparedSources, selectedPreparedSourceId],
+  );
+  const healthReport = useMemo(
+    () =>
+      buildHealthReport({
+        adapterDiagnostics,
+        adapterDiagnosticsError,
+        canCreate,
         job,
-        onCancelJob,
-        onCancelProfileSource,
-        onCancelProfileTarget,
-        profileSource,
-        profiles,
+        metrics,
+        metricsError,
+        projectJobs: visibleJobs,
+        projectStorage,
+        projectStorageError,
+        selectedBookSource: reportBookSource,
+        selectedEngineId,
+        selectedPreparedSource: reportPreparedSource,
+        sourceFallbackLabel:
+          !reportBookSource && !reportPreparedSource ? sourceFallbackLabel : null,
+        statusChips: narrationStatusModel.chips,
+        temporaryJobs,
+        temporarySources,
+        temporaryStorageUsage,
+        ttsEngineError,
+        ttsEngines,
       }),
     [
+      adapterDiagnostics,
+      adapterDiagnosticsError,
+      canCreate,
+      job,
+      metrics,
+      metricsError,
+      narrationStatusModel.chips,
+      projectStorage,
+      projectStorageError,
+      reportBookSource,
+      reportPreparedSource,
+      selectedEngineId,
+      sourceFallbackLabel,
+      temporaryJobs,
+      temporarySources,
+      temporaryStorageUsage,
+      ttsEngineError,
+      ttsEngines,
+      visibleJobs,
+    ],
+  );
+  const sourceAssetModels = useMemo(
+    () =>
+      buildSourceAssetModels({
+        activeBookSourceId: selectedBookSourceId,
+        activePreparedSourceId: selectedPreparedSourceId,
+        bookSources,
+        jobs: visibleJobs,
+        preparedSources,
+        projectId: activeProjectId,
+        selectedBookScope,
+      }),
+    [
+      activeProjectId,
+      bookSources,
+      preparedSources,
+      selectedBookScope,
+      selectedBookSourceId,
+      selectedPreparedSourceId,
+      visibleJobs,
+    ],
+  );
+  const voiceAssetModels = useMemo(
+    () =>
+      buildVoiceAssetModels({
+        jobs: visibleJobs,
+        profiles,
+        selectedProfileId,
+      }),
+    [profiles, selectedProfileId, visibleJobs],
+  );
+  const speechPolicyAsset = useMemo(
+    () =>
+      buildSpeechPolicyAssetModel({
+        bookSources,
+        customProfiles: customSpeechPolicyProfiles,
+        preparedSources,
+        sessionOverrides: speechPolicyOverrides,
+        speechPolicyProfile,
+        speechPolicyProfiles,
+      }),
+    [
+      bookSources,
+      customSpeechPolicyProfiles,
+      preparedSources,
+      speechPolicyOverrides,
+      speechPolicyProfile,
+      speechPolicyProfiles,
+    ],
+  );
+  const sortedProjects = useMemo(
+    () => sortCommandCenterProjects(projects, activeProjectId),
+    [activeProjectId, projects],
+  );
+  const activitySummaries = useMemo(() => {
+    const baseActivities = buildWorkspaceActivitySummaries({
       cancelingProfileSourceId,
       cancelingTargetKey,
       job,
@@ -127,64 +385,122 @@ export function WorkspaceDrawer({
       onCancelProfileTarget,
       profileSource,
       profiles,
-    ],
-  );
+      temporaryJobs,
+      temporarySources,
+    });
+    if (!bundleActivity) {
+      return baseActivities;
+    }
+    return [
+      bundleActivity,
+      ...baseActivities.filter((activity) => activity.id !== bundleActivity.id),
+    ];
+  }, [
+    bundleActivity,
+    cancelingProfileSourceId,
+    cancelingTargetKey,
+    job,
+    onCancelJob,
+    onCancelProfileSource,
+    onCancelProfileTarget,
+    profileSource,
+    profiles,
+    temporaryJobs,
+    temporarySources,
+  ]);
 
   if (!isOpen) {
     return null;
   }
 
-  const gpu = metrics?.gpus?.[0];
   const providerStatus = metrics
     ? `${metrics.serviceVersion || "backend"} online`
     : (metricsError ?? "Provider status pending");
   const activeProject = projects.find((project) => project.id === activeProjectId);
+  const commandCenterRoutes = temporaryWorkEnabled
+    ? COMMAND_CENTER_ROUTES
+    : COMMAND_CENTER_ROUTES.filter((section) => section.id !== "temporary");
+  const visibleActiveSection =
+    !temporaryWorkEnabled && effectiveActiveSection === "temporary"
+      ? "overview"
+      : effectiveActiveSection;
   const activeSectionLabel =
-    WORKSPACE_SECTIONS.find((section) => section.id === activeSection)?.label ?? "Projects";
-  const sectionCounts: Record<WorkspaceSectionId, string> = {
-    activity: activitySummaries.length.toString(),
-    imports: "",
+    commandCenterRoutes.find((section) => section.id === visibleActiveSection)?.label ?? "Overview";
+  const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId) ?? null;
+  const totalSources = sourceAssetModels.length;
+  const generatedDurationMs = visibleJobs.reduce((total, item) => total + item.durationMs, 0);
+  const generatedAudioState = commandCenterGeneratedAudioState(visibleJobs);
+  const currentWorkSource = `${activeSourceLabel} · ${activeScopeLabel}`;
+  const selectedVoiceLabel = selectedProfile?.name ?? "Default";
+  const sectionCounts: Record<CommandCenterSectionId, string> = {
+    activity: activitySummaries.length > 0 ? activitySummaries.length.toString() : "",
+    assets: (
+      totalSources +
+      voiceAssetModels.length +
+      speechPolicyAsset.customPresetCount +
+      (profileSource ? 1 : 0)
+    ).toString(),
+    importsExports: "",
+    overview: "",
     projects: projects.length.toString(),
-    reports: metrics || metricsError ? "1" : "",
-    sources: (bookSources.length + (profileSource ? 1 : 0)).toString(),
-    voices: profiles.length.toString(),
+    temporary: temporarySources.length > 0 ? temporarySources.length.toString() : "",
+    reports:
+      metrics ||
+      metricsError ||
+      projectStorage ||
+      projectStorageError ||
+      temporaryStorageUsage ||
+      bundleReport
+        ? "1"
+        : "",
+  };
+
+  const setActiveSection = (section: CommandCenterSectionId) => {
+    setLocalActiveSection(section);
+    onSectionChange?.(section);
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-zinc-950/25" role="presentation">
+    <div className="fixed inset-0 z-40 bg-[var(--vs-surface-overlay)]" role="presentation">
       <aside
-        aria-label="Workspace"
+        aria-label="Command Center"
+        aria-busy={hydrationBusy ? "true" : undefined}
         aria-modal="true"
-        className="vs-app flex h-full w-full max-w-[920px] flex-col border-r shadow-2xl md:w-[86vw] xl:w-[920px]"
+        className="vs-app vs-workbench mx-auto flex h-full w-full max-w-6xl flex-col border-r shadow-2xl md:w-[92vw] xl:w-[1120px]"
+        data-hydration-busy={hydrationBusy ? "true" : undefined}
         ref={drawerRef}
         role="dialog"
         tabIndex={-1}
       >
-        <header className="flex items-center justify-between border-b px-5 py-4 vs-border">
+        <header className="flex items-center justify-between gap-4 border-b px-5 py-4 vs-work-surface">
           <div className="min-w-0">
             <p className="vs-muted text-xs font-medium uppercase tracking-wide">
-              Workspace & Activity
+              Project and activity management
             </p>
-            <h2 className="truncate text-lg font-semibold">Voice Studio</h2>
+            <h2 className="truncate text-lg font-semibold">Command Center</h2>
           </div>
           <button
-            aria-label="Close workspace"
+            aria-label={`Return to ${returnWorkspaceLabel}`}
             className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-surface)] vs-border"
+            data-testid="ui-action-command-center-return"
             onClick={onClose}
             type="button"
           >
-            Close
+            Return to {returnWorkspaceLabel}
           </button>
         </header>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[230px_minmax(0,1fr)]">
           <nav className="border-b p-4 vs-border md:border-r md:border-b-0">
-            <div className="grid gap-3 rounded-md border p-3 vs-border vs-surface">
+            <div className="grid gap-3 rounded-md border p-3 vs-metadata-surface">
               <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">
-                Command Center
+                Current work
               </p>
               <div className="grid gap-2">
                 <DrawerStat label="Project" value={activeProject?.name ?? "Draft"} />
+                <DrawerStat label="Source / scope" value={currentWorkSource} />
+                <DrawerStat label="Voice" value={selectedVoiceLabel} />
+                <DrawerStat label="Generated audio" value={generatedAudioState} />
                 <DrawerStat
                   label="Background work"
                   value={
@@ -193,17 +509,24 @@ export function WorkspaceDrawer({
                       : "Idle"
                   }
                 />
-                <DrawerStat label="Backend" value={metrics ? "Online" : "Pending"} />
               </div>
             </div>
             <div className="mt-4 grid gap-1.5">
-              {WORKSPACE_SECTIONS.map((section) => (
+              {commandCenterRoutes.map((section) => (
                 <button
+                  aria-current={visibleActiveSection === section.id ? "page" : undefined}
                   className={`grid min-w-0 gap-1 rounded-md border px-3 py-2 text-left transition ${
-                    activeSection === section.id
-                      ? "border-orange-300 bg-orange-500 text-white shadow-sm"
-                      : "vs-border vs-raised hover:bg-[var(--vs-surface)]"
+                    visibleActiveSection === section.id
+                      ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)] shadow-sm"
+                      : "vs-work-surface hover:bg-[var(--vs-surface)]"
                   }`}
+                  data-testid={`ui-action-command-center-section-${section.id}`}
+                  data-ui-action-owner="command-center"
+                  data-ui-noop-reason={
+                    visibleActiveSection === section.id
+                      ? "Command Center section is already selected."
+                      : undefined
+                  }
                   key={section.id}
                   onClick={() => {
                     setActiveSection(section.id);
@@ -215,8 +538,8 @@ export function WorkspaceDrawer({
                     {sectionCounts[section.id] ? (
                       <span
                         className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.65rem] ${
-                          activeSection === section.id
-                            ? "border-white/35 text-white"
+                          visibleActiveSection === section.id
+                            ? "border-[var(--vs-selected-border)] text-[var(--vs-selected-text)]"
                             : "vs-border vs-muted"
                         }`}
                       >
@@ -226,7 +549,9 @@ export function WorkspaceDrawer({
                   </span>
                   <span
                     className={`truncate text-[0.68rem] ${
-                      activeSection === section.id ? "text-white/80" : "vs-muted"
+                      visibleActiveSection === section.id
+                        ? "text-[var(--vs-selected-text)]"
+                        : "vs-muted"
                     }`}
                   >
                     {section.detail}
@@ -241,68 +566,275 @@ export function WorkspaceDrawer({
               <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">
                 {activeSectionLabel}
               </p>
-              <h3 className="text-xl font-semibold">{workspaceSectionHeadline(activeSection)}</h3>
+              <h3 className="text-xl font-semibold">
+                {commandCenterSectionHeadline(visibleActiveSection)}
+              </h3>
               <p className="vs-muted text-sm leading-6">
-                {workspaceSectionDescription(activeSection)}
+                {commandCenterSectionDescription(visibleActiveSection)}
               </p>
             </div>
 
-            {activeSection === "projects" ? (
+            {visibleActiveSection === "overview" ? (
+              <CommandCenterOverview
+                activityCount={activitySummaries.length}
+                activeProjectName={activeProject?.name ?? "Draft"}
+                activeScopeLabel={activeScopeLabel}
+                activeSourceLabel={activeSourceLabel}
+                generatedAudioState={generatedAudioState}
+                generatedDurationMs={generatedDurationMs}
+                projectStorage={projectStorage}
+                projectStorageError={projectStorageError}
+                projectsCount={projects.length}
+                providerStatus={providerStatus}
+                selectedProfile={selectedProfile}
+                temporaryCount={temporarySources.length}
+                temporaryStorageUsage={temporaryStorageUsage}
+                onExportOpen={onExportOpen}
+                onImportOpen={onImportOpen}
+                onOpenActivity={() => {
+                  setActiveSection("activity");
+                }}
+                onOpenAssets={() => {
+                  setActiveSection("assets");
+                }}
+                onOpenProjects={() => {
+                  setActiveSection("projects");
+                }}
+                onOpenReports={() => {
+                  setActiveSection("reports");
+                }}
+                onOpenTemporary={
+                  temporaryWorkEnabled
+                    ? () => {
+                        setActiveSection("temporary");
+                      }
+                    : undefined
+                }
+              />
+            ) : null}
+
+            {visibleActiveSection === "projects" ? (
               <WorkspaceSection
                 actions={
-                  <button
-                    className="h-9 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg"
-                    disabled={isCreatingProject}
-                    onClick={() => {
-                      setIsCreatingProject(true);
-                    }}
-                    type="button"
-                  >
-                    New Project
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="h-9 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50 vs-accent-bg"
+                      disabled={isCreatingProject}
+                      onClick={() => {
+                        setIsCreatingProject(true);
+                      }}
+                      type="button"
+                    >
+                      New Project
+                    </button>
+                  </div>
                 }
-                id="workspace-projects"
+                id="command-center-projects"
                 title={`Projects (${projects.length.toString()})`}
               >
-                <div className="grid gap-3">
-                  {isCreatingProject ? (
-                    <CreateProjectRow
-                      onCancel={() => {
-                        setIsCreatingProject(false);
-                      }}
-                      onCreateProject={onCreateProject}
-                      onCreated={() => {
-                        setIsCreatingProject(false);
-                      }}
-                    />
-                  ) : null}
-                  {projectError ? (
-                    <p className="break-words rounded-md border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-700">
-                      {projectError}
-                    </p>
-                  ) : null}
-                  {projects.length > 0 ? (
-                    projects.map((project) => (
-                      <ProjectLibraryRow
-                        activeProjectId={activeProjectId}
-                        key={project.id}
-                        project={project}
-                        visibleJobs={project.id === activeProjectId ? visibleJobs : []}
-                        onDeleteProject={onDeleteProject}
-                        onExportProject={onExportOpen}
-                        onRenameProject={onRenameProject}
-                        onSelectProject={onSelectProject}
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(17rem,0.42fr)]">
+                  <div className="grid gap-3">
+                    {isCreatingProject ? (
+                      <CreateProjectRow
+                        onCancel={() => {
+                          setIsCreatingProject(false);
+                        }}
+                        onCreateProject={onCreateProject}
+                        onCreated={() => {
+                          setIsCreatingProject(false);
+                        }}
                       />
-                    ))
-                  ) : (
-                    <EmptyDrawerText>No projects yet. Create one to start fresh.</EmptyDrawerText>
-                  )}
+                    ) : null}
+                    {projectError ? (
+                      <p className="break-words rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] p-3 text-xs leading-5 text-[var(--vs-status-danger)]">
+                        {projectError}
+                      </p>
+                    ) : null}
+                    <WorkspaceDashboardSummary
+                      detail={
+                        projectStorageError ??
+                        `${formatBytes(projectStorage?.totalBytes ?? 0)} in current project storage`
+                      }
+                      label={activeProject?.name ?? "Draft"}
+                      value={`${totalSources.toString()} sources`}
+                    />
+                    {sortedProjects.length > 0 ? (
+                      sortedProjects.map((project) => (
+                        <ProjectLibraryRow
+                          activeProjectId={activeProjectId}
+                          key={project.id}
+                          project={project}
+                          visibleJobs={project.id === activeProjectId ? visibleJobs : []}
+                          onDeleteProject={onDeleteProject}
+                          onExportProject={onExportOpen}
+                          onRenameProject={onRenameProject}
+                          onSelectProject={onSelectProject}
+                        />
+                      ))
+                    ) : (
+                      <div className="grid gap-3 rounded-md border p-4 vs-border vs-surface">
+                        <EmptyDrawerText>
+                          No projects yet. Create a durable project when you want a separate library
+                          {quickListenEnabled
+                            ? ", or start Quick Listen as a temporary source."
+                            : "."}
+                        </EmptyDrawerText>
+                        <div className="flex flex-wrap gap-2">
+                          {quickListenEnabled ? (
+                            <button
+                              className="h-9 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] vs-accent-bg"
+                              data-testid="ui-action-empty-workspace-quick-listen"
+                              onClick={onOpenQuickListen}
+                              type="button"
+                            >
+                              Quick Listen
+                            </button>
+                          ) : null}
+                          <button
+                            className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+                            onClick={() => {
+                              setIsCreatingProject(true);
+                            }}
+                            type="button"
+                          >
+                            New Project
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <GeneratedAudioList
+                    visibleJobs={visibleJobs}
+                    onDeleteVoiceJob={onDeleteVoiceJob}
+                  />
                 </div>
               </WorkspaceSection>
             ) : null}
 
-            {activeSection === "activity" ? (
-              <WorkspaceSection id="workspace-activity" title="Activity">
+            {visibleActiveSection === "temporary" ? (
+              <WorkspaceSection
+                actions={
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
+                      data-confirm={TEMPORARY_SOURCE_COPY.confirmation.clearExpired}
+                      data-disabled-reason={
+                        (temporaryStorageUsage?.expiredCount ?? 0) > 0
+                          ? undefined
+                          : TEMPORARY_SOURCE_COPY.empty.noExpired
+                      }
+                      data-testid="ui-action-temporary-source-clear-expired"
+                      data-ui-action-owner="temporary-source"
+                      data-ui-action-surface="Command Center"
+                      disabled={(temporaryStorageUsage?.expiredCount ?? 0) === 0}
+                      title={
+                        (temporaryStorageUsage?.expiredCount ?? 0) > 0
+                          ? undefined
+                          : TEMPORARY_SOURCE_COPY.empty.noExpired
+                      }
+                      onClick={() => {
+                        void onClearExpiredTemporarySources();
+                      }}
+                      type="button"
+                    >
+                      {TEMPORARY_SOURCE_COPY.actions.clearExpired}
+                    </button>
+                    {quickListenEnabled ? (
+                      <button
+                        className="h-9 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] vs-accent-bg"
+                        data-testid="ui-action-temporary-source-start-quick-listen"
+                        data-ui-action-owner="temporary-source"
+                        data-ui-action-surface="Command Center"
+                        onClick={onOpenQuickListen}
+                        type="button"
+                      >
+                        Quick Listen
+                      </button>
+                    ) : null}
+                  </div>
+                }
+                id="command-center-temporary"
+                title="Temporary Work"
+              >
+                <TemporaryWorkShelf
+                  activeFilter={temporaryWorkFilter}
+                  jobs={temporaryJobs}
+                  sessions={visibleTemporarySources}
+                  totalSessions={temporarySources.length}
+                  storageUsage={temporaryStorageUsage}
+                  promotionEnabled={temporaryPromotionEnabled}
+                  onDiscard={onDiscardTemporarySource}
+                  onFilterChange={setTemporaryWorkFilter}
+                  onKeep={onKeepTemporarySource}
+                  onOpen={onOpenTemporarySource}
+                />
+              </WorkspaceSection>
+            ) : null}
+
+            {visibleActiveSection === "assets" ? (
+              <WorkspaceSection
+                actions={
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+                      data-testid="ui-action-command-center-intake"
+                      data-ui-action-surface="Command Center"
+                      onClick={onOpenIntake}
+                      type="button"
+                    >
+                      Intake
+                    </button>
+                    <button
+                      className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+                      data-testid="ui-action-voice-dashboard-open-drawer"
+                      data-ui-action-surface="Command Center"
+                      onClick={onOpenVoiceDashboard}
+                      type="button"
+                    >
+                      Voice Asset Detail
+                    </button>
+                  </div>
+                }
+                id="command-center-assets"
+                title="Assets"
+              >
+                <AssetManagementPanel
+                  activeSourceLabel={activeSourceLabel}
+                  activeScopeLabel={activeScopeLabel}
+                  inspectedAssetKey={inspectedAssetKey}
+                  profileSource={profileSource}
+                  sourceAssets={sourceAssetModels}
+                  speechPolicyAsset={speechPolicyAsset}
+                  speechPolicyProfile={speechPolicyProfile}
+                  speechPolicyProfiles={speechPolicyProfiles}
+                  customSpeechPolicyProfiles={customSpeechPolicyProfiles}
+                  voiceAssets={voiceAssetModels}
+                  bookSources={bookSources}
+                  preparedSources={preparedSources}
+                  selectedBookScope={selectedBookScope}
+                  selectedVoiceLabel={selectedVoiceLabel}
+                  onClearVoiceProfile={onClearVoiceProfile}
+                  onDeleteBookSource={onDeleteBookSource}
+                  onDeletePreparedSource={onDeletePreparedSource}
+                  onDeleteVoiceProfile={onDeleteVoiceProfile}
+                  onGenerateBookSourceNarration={onGenerateBookSourceNarration}
+                  onGeneratePreparedSourceNarration={onGeneratePreparedSourceNarration}
+                  onInspectAsset={setInspectedAssetKey}
+                  onOpenIntake={onOpenIntake}
+                  onOpenVoiceCloning={onOpenVoiceCloning}
+                  onRenameBookSource={onRenameBookSource}
+                  onRenamePreparedSource={onRenamePreparedSource}
+                  onRenameVoiceProfile={onRenameVoiceProfile}
+                  onSelectProfile={onSelectProfile}
+                  onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
+                  onUseBookSource={onUseBookSource}
+                  onUsePreparedSource={onUsePreparedSource}
+                />
+              </WorkspaceSection>
+            ) : null}
+
+            {visibleActiveSection === "activity" ? (
+              <WorkspaceSection id="command-center-activity" title="Activity">
                 <div className="grid gap-3">
                   {activitySummaries.length > 0 ? (
                     activitySummaries.map((activity) => (
@@ -318,129 +850,8 @@ export function WorkspaceDrawer({
               </WorkspaceSection>
             ) : null}
 
-            {activeSection === "voices" ? (
-              <>
-                <WorkspaceSection id="workspace-voices" title="Voices">
-                  <div className="grid gap-2 md:grid-cols-2">
-                    {profiles.length > 0 ? (
-                      profiles.slice(0, 8).map((profile) => (
-                        <button
-                          className={`min-w-0 rounded-md border p-3 text-left text-sm transition ${
-                            profile.id === selectedProfileId
-                              ? "border-orange-300 bg-orange-500/10"
-                              : "vs-raised hover:bg-[var(--vs-surface)]"
-                          }`}
-                          key={profile.id}
-                          onClick={() => {
-                            onSelectProfile(profile.id);
-                            onClose();
-                          }}
-                          type="button"
-                        >
-                          <span className="block truncate font-semibold" title={profile.name}>
-                            {profile.name}
-                          </span>
-                          <span className="vs-muted mt-1 block truncate text-xs">
-                            {profile.language} ·{" "}
-                            {formatDuration(profile.referenceDurationMs ?? profile.durationMs)}
-                          </span>
-                        </button>
-                      ))
-                    ) : (
-                      <EmptyDrawerText>No saved voice profiles yet.</EmptyDrawerText>
-                    )}
-                  </div>
-                </WorkspaceSection>
-
-                <WorkspaceSection id="workspace-speech" title="Speech Policy">
-                  <div className="grid gap-2 rounded-md border p-4 vs-surface">
-                    <label className="grid gap-1 text-sm font-semibold">
-                      <span>Market profile</span>
-                      <select
-                        className="h-10 rounded-md border bg-[var(--vs-raised)] px-3 text-sm outline-none vs-border"
-                        onChange={(event) => {
-                          onSpeechPolicyProfileChange(event.currentTarget.value);
-                        }}
-                        value={speechPolicyProfile}
-                      >
-                        {(speechPolicyProfiles.length > 0
-                          ? speechPolicyProfiles.map((profile) => profile.name)
-                          : SPEECH_POLICY_PROFILE_OPTIONS
-                        ).map((profile) => (
-                          <option key={profile} value={profile}>
-                            {speechPolicyProfileLabel(profile)}
-                          </option>
-                        ))}
-                        {customSpeechPolicyProfiles.length > 0 ? (
-                          <optgroup label="Custom profiles">
-                            {customSpeechPolicyProfiles.map((profile) => (
-                              <option key={profile.id} value={profile.id}>
-                                {profile.name}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ) : null}
-                      </select>
-                    </label>
-                  </div>
-                </WorkspaceSection>
-              </>
-            ) : null}
-
-            {activeSection === "sources" ? (
-              <WorkspaceSection id="workspace-sources" title="Sources">
-                <div className="grid gap-3">
-                  {profileSource ? (
-                    <div className="rounded-md border p-4 vs-raised">
-                      <div className="flex min-w-0 items-center justify-between gap-3">
-                        <p
-                          className="min-w-0 truncate text-sm font-semibold"
-                          title={profileSource.sourceFile}
-                        >
-                          {profileSource.sourceFile}
-                        </p>
-                        <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs vs-border">
-                          {profileSource.status}
-                        </span>
-                      </div>
-                      <p className="vs-muted mt-2 text-xs">
-                        {profileSource.candidates.length} detected voice
-                        {profileSource.candidates.length === 1 ? "" : "s"} ·{" "}
-                        {profileSource.progressMessage}
-                      </p>
-                    </div>
-                  ) : null}
-                  {bookSources.length > 0 ? (
-                    <div className="grid gap-2">
-                      {bookSources.slice(0, 5).map((book) => (
-                        <div className="min-w-0 rounded-md border p-3 vs-raised" key={book.id}>
-                          <div className="flex min-w-0 items-center justify-between gap-3">
-                            <p
-                              className="min-w-0 truncate text-sm font-semibold"
-                              title={book.title ?? book.sourceFile}
-                            >
-                              {book.title ?? book.sourceFile}
-                            </p>
-                            <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs capitalize vs-border">
-                              {book.kind}
-                            </span>
-                          </div>
-                          <p className="vs-muted mt-1 truncate text-xs" title={book.sourceFile}>
-                            {book.wordCount.toLocaleString()} words · {book.status}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                  {!profileSource && bookSources.length === 0 ? (
-                    <EmptyDrawerText>No source analysis or book source staged.</EmptyDrawerText>
-                  ) : null}
-                </div>
-              </WorkspaceSection>
-            ) : null}
-
-            {activeSection === "imports" ? (
-              <WorkspaceSection id="workspace-imports" title="Imports">
+            {visibleActiveSection === "importsExports" ? (
+              <WorkspaceSection id="command-center-imports-exports" title="Imports and Exports">
                 <div className="grid gap-3 rounded-md border p-4 vs-surface">
                   <p className="text-sm font-semibold">Shareable project bundles</p>
                   <p className="vs-muted text-sm leading-6">
@@ -450,13 +861,15 @@ export function WorkspaceDrawer({
                   <div className="flex flex-wrap gap-2">
                     <button
                       className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+                      data-testid="ui-action-command-center-import"
                       onClick={onImportOpen}
                       type="button"
                     >
                       Import Bundle
                     </button>
                     <button
-                      className="h-9 rounded-md px-3 text-xs font-semibold text-white vs-accent-bg"
+                      className="h-9 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] vs-accent-bg"
+                      data-testid="ui-action-command-center-export"
                       onClick={onExportOpen}
                       type="button"
                     >
@@ -467,23 +880,15 @@ export function WorkspaceDrawer({
               </WorkspaceSection>
             ) : null}
 
-            {activeSection === "reports" ? (
-              <WorkspaceSection id="workspace-reports" title="Reports">
-                <div className="grid gap-3 rounded-md border p-4 vs-surface">
-                  <p className="font-semibold">{providerStatus}</p>
-                  <p className="vs-muted text-xs">
-                    {gpu
-                      ? `${gpu.name} · ${String(gpu.memoryUsedMiB)}/${String(gpu.memoryTotalMiB)} MiB`
-                      : "GPU telemetry unavailable"}
-                  </p>
-                  <button
-                    className="h-9 rounded-md border px-3 text-sm font-semibold hover:bg-[var(--vs-raised)] vs-border"
-                    onClick={onOpenSettings}
-                    type="button"
-                  >
-                    Open diagnostics
-                  </button>
-                </div>
+            {visibleActiveSection === "reports" ? (
+              <WorkspaceSection id="command-center-reports" title="Reports">
+                <HealthReportsPanel
+                  bundleReport={bundleReport}
+                  report={healthReport}
+                  onOpenDiagnostics={() => {
+                    onOpenSettings({ groupId: "diagnostics", layerId: "expert", scope: "machine" });
+                  }}
+                />
               </WorkspaceSection>
             ) : null}
           </div>
@@ -493,553 +898,1708 @@ export function WorkspaceDrawer({
   );
 }
 
-function DrawerStat({ label, value }: Readonly<{ label: string; value: string }>) {
+function TemporaryWorkShelf({
+  activeFilter,
+  jobs,
+  sessions,
+  storageUsage,
+  totalSessions,
+  promotionEnabled,
+  onDiscard,
+  onFilterChange,
+  onKeep,
+  onOpen,
+}: Readonly<{
+  activeFilter: TemporaryWorkFilter;
+  jobs: VoiceJob[];
+  sessions: TemporarySourceSession[];
+  storageUsage: TemporaryStorageUsageSummary | null;
+  totalSessions: number;
+  promotionEnabled: boolean;
+  onDiscard: (session: TemporarySourceSession) => Promise<void>;
+  onFilterChange: (filter: TemporaryWorkFilter) => void;
+  onKeep: (session: TemporarySourceSession) => void;
+  onOpen: (session: TemporarySourceSession) => Promise<void>;
+}>) {
+  const filters: readonly { id: TemporaryWorkFilter; label: string }[] = [
+    { id: "all", label: "All" },
+    { id: "active", label: "Active" },
+    { id: "generatedAudio", label: TEMPORARY_SOURCE_COPY.terms.generatedTemporaryAudio },
+    { id: "failed", label: "Failed" },
+    { id: "expired", label: "Expired" },
+    { id: "promoted", label: "Promoted" },
+  ];
   return (
-    <div className="grid gap-0.5">
-      <span className="vs-muted truncate text-[0.65rem] font-semibold uppercase tracking-[0.14em]">
-        {label}
-      </span>
-      <span className="truncate text-sm font-semibold" title={value}>
-        {value}
-      </span>
+    <div className="grid gap-4">
+      <div className="grid gap-3 md:grid-cols-4">
+        <WorkspaceDashboardSummary
+          detail={`${formatBytes(storageUsage?.totalBytes ?? 0)} across recent temporary sources`}
+          label="Storage usage"
+          value={formatBytes(storageUsage?.totalBytes ?? 0)}
+        />
+        <WorkspaceDashboardSummary
+          detail={`${(storageUsage?.expiredCount ?? 0).toString()} expired temporary source(s) can be cleared`}
+          label="Expiry"
+          value={`${totalSessions.toString()} recent`}
+        />
+        <WorkspaceDashboardSummary
+          detail={`${formatBytes(storageUsage?.audioBytes ?? 0)} generated temporary audio`}
+          label="Temporary audio"
+          value={formatBytes(storageUsage?.audioBytes ?? 0)}
+        />
+        <WorkspaceDashboardSummary
+          detail={`${jobs.filter((item) => item.status === "failed").length.toString()} failed temporary job(s)`}
+          label="Job diagnostics"
+          value={`${jobs.length.toString()} job(s)`}
+        />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {filters.map((filter) => (
+          <button
+            aria-pressed={activeFilter === filter.id}
+            className={`h-8 rounded-md border px-3 text-xs font-semibold ${
+              activeFilter === filter.id
+                ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)]"
+                : "hover:bg-[var(--vs-raised)] vs-border"
+            }`}
+            key={filter.id}
+            onClick={() => {
+              onFilterChange(filter.id);
+            }}
+            type="button"
+          >
+            {filter.label}
+          </button>
+        ))}
+      </div>
+      <div className="grid gap-3">
+        {sessions.length > 0 ? (
+          sessions.map((session) => (
+            <TemporarySourceCard
+              jobs={jobs}
+              key={session.id}
+              session={session}
+              storageUsage={temporarySessionStorageUsage(session, storageUsage?.sessions)}
+              onDiscard={onDiscard}
+              onKeep={onKeep}
+              onOpen={onOpen}
+              promotionEnabled={promotionEnabled}
+            />
+          ))
+        ) : (
+          <EmptyDrawerText>
+            {totalSessions === 0
+              ? TEMPORARY_SOURCE_COPY.launcher.noRecent
+              : "No temporary sources match this filter."}
+          </EmptyDrawerText>
+        )}
+      </div>
     </div>
   );
 }
 
-function workspaceSectionHeadline(section: WorkspaceSectionId): string {
-  const headlines: Record<WorkspaceSectionId, string> = {
-    activity: "Background work that can be understood and stopped",
-    imports: "Move projects in and out without leaving the studio",
-    projects: "Project library and current chapter context",
-    reports: "System health, diagnostics, and provider readiness",
-    sources: "Reusable source material and voice reference media",
-    voices: "Saved voice profiles and speech policy",
-  };
-  return headlines[section];
-}
-
-function workspaceSectionDescription(section: WorkspaceSectionId): string {
-  const descriptions: Record<WorkspaceSectionId, string> = {
-    activity:
-      "Every long-running task belongs here with plain status, last-known detail, and a cancellation path when the backend supports it.",
-    imports:
-      "Bundle operations are grouped here so the header can stay compact and the workbench can stay focused on source and review.",
-    projects:
-      "Open, rename, export, or protect projects from one stable command surface without disturbing the current workbench.",
-    reports:
-      "A short operational view for backend status, GPU telemetry, and the route into deeper diagnostics.",
-    sources:
-      "Books, prepared files, URLs, and reference media are collected here as reusable project material.",
-    voices:
-      "Voice selection and speech policy live together because they shape how narration is produced.",
-  };
-  return descriptions[section];
-}
-
-function WorkspaceActivityRow({
-  activity,
+function TemporarySourceCard({
+  jobs,
+  session,
+  storageUsage,
+  onDiscard,
+  onKeep,
+  onOpen,
+  promotionEnabled,
 }: Readonly<{
-  activity: WorkspaceActivitySummary;
+  jobs: VoiceJob[];
+  session: TemporarySourceSession;
+  storageUsage: ReturnType<typeof temporarySessionStorageUsage>;
+  onDiscard: (session: TemporarySourceSession) => Promise<void>;
+  onKeep: (session: TemporarySourceSession) => void;
+  onOpen: (session: TemporarySourceSession) => Promise<void>;
+  promotionEnabled: boolean;
 }>) {
+  const audioReadiness = temporarySessionAudioReadiness(session, jobs);
+  const isDiscarded = session.status === "discarded";
+  const isPromoted = session.status === "promoted" || session.promotionStatus === "promoted";
+  const reopenDisabledReason = isDiscarded
+    ? TEMPORARY_SOURCE_COPY.errors.discardedCannotOpen
+    : undefined;
+  let keepDisabledReason: string | undefined;
+  if (isDiscarded) {
+    keepDisabledReason = TEMPORARY_SOURCE_COPY.errors.discardedCannotKeep;
+  } else if (isPromoted) {
+    keepDisabledReason = "Temporary source is already kept in a project.";
+  } else if (!promotionEnabled) {
+    keepDisabledReason = temporaryPromotionDisabledReason();
+  }
+  let discardDisabledReason: string | undefined;
+  if (isDiscarded) {
+    discardDisabledReason = "Temporary source was already discarded.";
+  } else if (isPromoted) {
+    discardDisabledReason =
+      "Temporary source is already kept in a project, so Discard temporary source is unavailable here.";
+  }
+  const expiryWarning = temporaryExpiryWarning(session.expiresAt);
   return (
-    <div className="grid gap-3 rounded-md border p-4 vs-raised">
-      <div className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+    <article
+      className="grid gap-3 rounded-md border p-4 vs-management-surface"
+      data-temporary-source-session-id={session.id}
+      data-testid={`temporary-source-card-${session.id}`}
+    >
+      <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <p className="min-w-0 truncate text-sm font-semibold" title={activity.label}>
-              {activity.label}
-            </p>
-            <span
-              className={`rounded-full px-2 py-0.5 text-[0.65rem] font-semibold ${workspaceActivityStatusClass(activity.status)}`}
+            <p
+              className="min-w-0 truncate text-sm font-semibold"
+              title={temporarySessionTitle(session)}
             >
-              {activity.status}
-            </span>
+              {temporarySessionTitle(session)}
+            </p>
+            <StatusPill>Temporary Source</StatusPill>
+            <StatusPill>{session.status}</StatusPill>
           </div>
-          <p className="vs-muted mt-1 break-words text-xs leading-5">{activity.detail}</p>
+          <p className="vs-muted mt-1 break-words text-xs leading-5">
+            {temporarySourceTypeLabel(session)} · expires {formatDate(session.expiresAt)} · last
+            opened {formatDate(session.lastAccessedAt)}
+          </p>
+          {expiryWarning ? (
+            <p className="mt-2 rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] px-3 py-2 text-xs font-semibold text-[var(--vs-status-warning)]">
+              {expiryWarning}
+            </p>
+          ) : null}
+          {session.error || session.sourceReadiness?.state === "failed" ? (
+            <p className="mt-2 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-status-danger-bg)] px-3 py-2 text-xs text-[var(--vs-status-danger)]">
+              {temporarySourceFailureCopy(
+                session.failureCode,
+                session.error ?? session.sourceReadiness?.detail,
+              )}
+            </p>
+          ) : null}
         </div>
-        {activity.canCancel && activity.onCancel ? (
+        <div className="grid gap-2 sm:flex sm:flex-wrap md:justify-end">
           <button
-            className="h-9 rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+            className="min-h-11 rounded-md px-3 text-xs font-semibold text-[var(--vs-action-primary-text)] disabled:opacity-50 vs-accent-bg sm:h-9 sm:min-h-0"
+            data-disabled-reason={reopenDisabledReason}
+            data-testid={`ui-action-temporary-source-reopen-${session.id}`}
+            data-ui-action-owner="temporary-source"
+            data-ui-action-surface="Command Center"
+            disabled={isDiscarded}
             onClick={() => {
-              activity.onCancel?.();
+              void onOpen(session);
             }}
+            title={reopenDisabledReason}
             type="button"
           >
-            {activity.cancelLabel}
+            {TEMPORARY_SOURCE_COPY.actions.open}
           </button>
+          <button
+            className="min-h-11 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border sm:h-9 sm:min-h-0"
+            data-disabled-reason={keepDisabledReason}
+            data-testid={`ui-action-temporary-source-keep-${session.id}`}
+            data-ui-action-owner="temporary-source"
+            data-ui-action-surface="Command Center"
+            disabled={isDiscarded || isPromoted || !promotionEnabled}
+            onClick={() => {
+              onKeep(session);
+            }}
+            title={keepDisabledReason}
+            type="button"
+          >
+            {TEMPORARY_SOURCE_COPY.actions.keep}
+          </button>
+          <button
+            className="min-h-11 rounded-md border border-[var(--vs-status-danger-border)] bg-[var(--vs-surface-primary)] px-3 text-xs font-semibold text-[var(--vs-status-danger)] hover:bg-[var(--vs-action-destructive-hover)] disabled:opacity-50 sm:h-9 sm:min-h-0"
+            data-confirm={TEMPORARY_SOURCE_COPY.confirmation.discard}
+            data-disabled-reason={discardDisabledReason}
+            data-testid={`ui-action-temporary-source-discard-${session.id}`}
+            data-ui-action-owner="temporary-source"
+            data-ui-action-surface="Command Center"
+            disabled={isDiscarded || isPromoted}
+            onClick={() => {
+              void onDiscard(session);
+            }}
+            title={discardDisabledReason}
+            type="button"
+          >
+            {TEMPORARY_SOURCE_COPY.actions.discard}
+          </button>
+        </div>
+      </div>
+      <DetailGrid
+        rows={[
+          ["Source type", temporarySourceTypeLabel(session)],
+          ["Audio readiness", audioReadiness],
+          ["Storage", formatBytes(storageUsage?.bytes ?? 0)],
+          [
+            "Artifacts",
+            (Array.isArray(session.artifacts) ? session.artifacts.length : 0).toLocaleString(),
+          ],
+          ["Words", session.wordCount.toLocaleString()],
+          ["Promotion", session.promotionStatus],
+        ]}
+      />
+    </article>
+  );
+}
+
+function temporaryExpiryWarning(expiresAt: string): string | null {
+  const expiresTime = new Date(expiresAt).getTime();
+  if (!Number.isFinite(expiresTime)) {
+    return null;
+  }
+  const hoursRemaining = (expiresTime - Date.now()) / (60 * 60 * 1000);
+  if (hoursRemaining <= 0) {
+    return "Expired temporary work is ready for cleanup.";
+  }
+  if (hoursRemaining <= 6) {
+    return `Expires in about ${Math.max(1, Math.ceil(hoursRemaining)).toString()} hour(s).`;
+  }
+  return null;
+}
+
+function temporarySessionTitle(session: TemporarySourceSession): string {
+  return session.title ?? session.sourceName;
+}
+
+function temporarySourceTypeLabel(session: TemporarySourceSession): string {
+  if (session.sourceUrl) {
+    return "Webpage";
+  }
+  if (session.sourceContentType?.includes("pdf") || session.kind === "pdf") {
+    return "PDF";
+  }
+  if (session.kind === "file" || session.sourceBytes) {
+    return "File";
+  }
+  return session.kind === "text" ? "Pasted text" : session.kind;
+}
+
+function CommandCenterOverview({
+  activityCount,
+  activeProjectName,
+  activeScopeLabel,
+  activeSourceLabel,
+  generatedAudioState,
+  generatedDurationMs,
+  projectStorage,
+  projectStorageError,
+  projectsCount,
+  providerStatus,
+  selectedProfile,
+  temporaryCount,
+  temporaryStorageUsage,
+  onExportOpen,
+  onImportOpen,
+  onOpenActivity,
+  onOpenAssets,
+  onOpenProjects,
+  onOpenReports,
+  onOpenTemporary,
+}: Readonly<{
+  activityCount: number;
+  activeProjectName: string;
+  activeScopeLabel: string;
+  activeSourceLabel: string;
+  generatedAudioState: string;
+  generatedDurationMs: number;
+  projectStorage: ProjectStorageSummary | null;
+  projectStorageError: string | null;
+  projectsCount: number;
+  providerStatus: string;
+  selectedProfile: VoiceProfile | null;
+  temporaryCount: number;
+  temporaryStorageUsage: TemporaryStorageUsageSummary | null;
+  onExportOpen: () => void;
+  onImportOpen: () => void;
+  onOpenActivity: () => void;
+  onOpenAssets: () => void;
+  onOpenProjects: () => void;
+  onOpenReports: () => void;
+  onOpenTemporary?: () => void;
+}>) {
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <OverviewStat
+          detail={`${projectsCount.toString()} total projects`}
+          label="Current project"
+          value={activeProjectName}
+        />
+        <OverviewStat detail={activeScopeLabel} label="Active source" value={activeSourceLabel} />
+        <OverviewStat
+          detail={formatDuration(generatedDurationMs)}
+          label="Generated audio"
+          value={generatedAudioState}
+        />
+        <OverviewStat
+          detail={selectedProfile?.status ?? "provider voice"}
+          label="Voice"
+          value={selectedProfile?.name ?? "Default"}
+        />
+        <OverviewStat
+          detail={`${formatBytes(temporaryStorageUsage?.totalBytes ?? 0)} temporary storage`}
+          label="Temporary work"
+          value={temporaryCount > 0 ? `${temporaryCount.toString()} recent` : "None"}
+        />
+      </div>
+      <div className="grid gap-3 rounded-md border p-4 vs-management-surface">
+        <p className="text-sm font-semibold">Management routes</p>
+        <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-4">
+          <OverviewRouteButton
+            detail="Open, rename, export, or protect projects."
+            onClick={onOpenProjects}
+          >
+            Projects
+          </OverviewRouteButton>
+          <OverviewRouteButton
+            detail="Manage sources, voice assets, and policy."
+            onClick={onOpenAssets}
+          >
+            Assets
+          </OverviewRouteButton>
+          {onOpenTemporary ? (
+            <OverviewRouteButton
+              detail="Review recent temporary work, storage, and lifecycle actions."
+              onClick={onOpenTemporary}
+            >
+              Temporary Work
+            </OverviewRouteButton>
+          ) : null}
+          <OverviewRouteButton
+            detail={
+              activityCount > 0
+                ? `${activityCount.toString()} active item(s).`
+                : "No active background work."
+            }
+            onClick={onOpenActivity}
+          >
+            Activity
+          </OverviewRouteButton>
+          <OverviewRouteButton
+            detail="Preview import and export project bundles."
+            onClick={onImportOpen}
+          >
+            Import Bundle
+          </OverviewRouteButton>
+          <OverviewRouteButton detail="Export the active project bundle." onClick={onExportOpen}>
+            Export Current
+          </OverviewRouteButton>
+          <OverviewRouteButton detail={providerStatus} onClick={onOpenReports}>
+            Reports
+          </OverviewRouteButton>
+        </div>
+      </div>
+      <StorageBreakdown projectStorage={projectStorage} projectStorageError={projectStorageError} />
+    </div>
+  );
+}
+
+function OverviewStat({
+  detail,
+  label,
+  value,
+}: Readonly<{ detail: string; label: string; value: string }>) {
+  return (
+    <div className="min-w-0 rounded-md border p-4 vs-work-surface">
+      <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">{label}</p>
+      <p className="mt-2 truncate text-lg font-semibold" title={value}>
+        {value}
+      </p>
+      <p className="vs-muted mt-1 truncate text-xs" title={detail}>
+        {detail}
+      </p>
+    </div>
+  );
+}
+
+function OverviewRouteButton({
+  children,
+  detail,
+  onClick,
+}: Readonly<{ children: string; detail: string; onClick: () => void }>) {
+  return (
+    <button
+      className="grid min-h-24 min-w-0 content-start gap-2 rounded-md border p-3 text-left transition hover:border-[var(--vs-selected-border)] hover:text-[var(--vs-selected-text)] vs-work-surface"
+      onClick={onClick}
+      type="button"
+    >
+      <span className="text-sm font-semibold">{children}</span>
+      <span className="vs-muted text-xs leading-5">{detail}</span>
+    </button>
+  );
+}
+
+function AssetManagementPanel({
+  activeScopeLabel,
+  activeSourceLabel,
+  bookSources,
+  customSpeechPolicyProfiles,
+  inspectedAssetKey,
+  preparedSources,
+  profileSource,
+  selectedBookScope,
+  selectedVoiceLabel,
+  sourceAssets,
+  speechPolicyAsset,
+  speechPolicyProfile,
+  speechPolicyProfiles,
+  voiceAssets,
+  onClearVoiceProfile,
+  onDeleteBookSource,
+  onDeletePreparedSource,
+  onDeleteVoiceProfile,
+  onGenerateBookSourceNarration,
+  onGeneratePreparedSourceNarration,
+  onInspectAsset,
+  onOpenIntake,
+  onOpenVoiceCloning,
+  onRenameBookSource,
+  onRenamePreparedSource,
+  onRenameVoiceProfile,
+  onSelectProfile,
+  onSpeechPolicyProfileChange,
+  onUseBookSource,
+  onUsePreparedSource,
+}: Readonly<{
+  activeScopeLabel: string;
+  activeSourceLabel: string;
+  bookSources: BookSource[];
+  customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
+  inspectedAssetKey: string | null;
+  preparedSources: PreparedSource[];
+  profileSource: VoiceProfileSource | null;
+  selectedBookScope: BookScope | null;
+  selectedVoiceLabel: string;
+  sourceAssets: SourceAssetModel[];
+  speechPolicyAsset: SpeechPolicyAssetModel;
+  speechPolicyProfile: string;
+  speechPolicyProfiles: SpeechPolicyProfile[];
+  voiceAssets: VoiceAssetModel[];
+  onClearVoiceProfile: () => void;
+  onDeleteBookSource: (id: string) => Promise<void>;
+  onDeletePreparedSource: (id: string) => Promise<void>;
+  onDeleteVoiceProfile: (id: string) => Promise<void>;
+  onGenerateBookSourceNarration: (
+    book: BookSource,
+    scope: BookScope,
+    options?: GenerateNarrationOptions,
+  ) => void;
+  onGeneratePreparedSourceNarration: (
+    source: PreparedSource,
+    options?: GenerateNarrationOptions,
+  ) => void;
+  onInspectAsset: (assetKey: string) => void;
+  onOpenIntake: () => void;
+  onOpenVoiceCloning: () => void;
+  onRenameBookSource: (id: string, name: string) => Promise<void>;
+  onRenamePreparedSource: (id: string, name: string) => Promise<void>;
+  onRenameVoiceProfile: (id: string, name: string) => Promise<void>;
+  onSelectProfile: (profileId: string) => void;
+  onSpeechPolicyProfileChange: (profile: string) => void;
+  onUseBookSource: (book: BookSource, scope: BookScope) => void;
+  onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
+}>) {
+  const activeSource = sourceAssets.find((asset) => asset.availability === "active") ?? null;
+  const activeVoice =
+    voiceAssets.find((asset) => asset.availability === "active") ?? voiceAssets[0];
+  const selectedAssetKey = inspectedAssetKey ?? activeSource?.assetKey ?? "policy:project";
+  const inspectedSource = sourceAssets.find((asset) => asset.assetKey === selectedAssetKey) ?? null;
+  const inspectedVoice = voiceAssets.find((asset) => asset.assetKey === selectedAssetKey) ?? null;
+  const inspectPolicy =
+    selectedAssetKey === "policy:project" || (!inspectedSource && !inspectedVoice);
+
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        <ActiveAssetSummary
+          detail={activeSource ? activeSource.selectedScope : activeScopeLabel}
+          label="Active source"
+          value={activeSource?.title ?? activeSourceLabel}
+        />
+        <ActiveAssetSummary
+          detail={activeVoice.readinessLabel}
+          label="Active voice"
+          value={activeVoice.title || selectedVoiceLabel}
+        />
+        <ActiveAssetSummary
+          detail={speechPolicyAsset.inheritedLabel}
+          label="Speech policy"
+          value={speechPolicyAsset.projectDefaultLabel}
+        />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(20rem,0.95fr)]">
+        <div className="grid gap-4">
+          <SourceAssetsSection
+            bookSources={bookSources}
+            models={sourceAssets}
+            preparedSources={preparedSources}
+            profileSource={profileSource}
+            selectedBookScope={selectedBookScope}
+            onInspectAsset={onInspectAsset}
+            onGenerateBookSourceNarration={onGenerateBookSourceNarration}
+            onGeneratePreparedSourceNarration={onGeneratePreparedSourceNarration}
+            onOpenIntake={onOpenIntake}
+            onUseBookSource={onUseBookSource}
+            onUsePreparedSource={onUsePreparedSource}
+          />
+          <VoiceAssetsSection
+            models={voiceAssets}
+            onClearVoiceProfile={onClearVoiceProfile}
+            onInspectAsset={onInspectAsset}
+            onOpenVoiceCloning={onOpenVoiceCloning}
+            onSelectProfile={onSelectProfile}
+          />
+          <SpeechPolicyAssetsSection
+            customSpeechPolicyProfiles={customSpeechPolicyProfiles}
+            model={speechPolicyAsset}
+            speechPolicyProfile={speechPolicyProfile}
+            speechPolicyProfiles={speechPolicyProfiles}
+            onInspectAsset={onInspectAsset}
+            onSpeechPolicyProfileChange={onSpeechPolicyProfileChange}
+          />
+        </div>
+        <div className="grid content-start gap-3 rounded-md border p-4 vs-border vs-surface">
+          <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">
+            Asset detail
+          </p>
+          {inspectedSource ? (
+            <SourceAssetDetail
+              asset={inspectedSource}
+              bookSources={bookSources}
+              preparedSources={preparedSources}
+              selectedBookScope={selectedBookScope}
+              onDeleteBookSource={onDeleteBookSource}
+              onDeletePreparedSource={onDeletePreparedSource}
+              onOpenIntake={onOpenIntake}
+              onRenameBookSource={onRenameBookSource}
+              onRenamePreparedSource={onRenamePreparedSource}
+              onUseBookSource={onUseBookSource}
+              onUsePreparedSource={onUsePreparedSource}
+            />
+          ) : null}
+          {inspectedVoice ? (
+            <VoiceAssetDetail
+              asset={inspectedVoice}
+              onClearVoiceProfile={onClearVoiceProfile}
+              onDeleteVoiceProfile={onDeleteVoiceProfile}
+              onOpenVoiceCloning={onOpenVoiceCloning}
+              onRenameVoiceProfile={onRenameVoiceProfile}
+              onSelectProfile={onSelectProfile}
+            />
+          ) : null}
+          {inspectPolicy ? <PolicyAssetDetail model={speechPolicyAsset} /> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActiveAssetSummary({
+  detail,
+  label,
+  value,
+}: Readonly<{ detail: string; label: string; value: string }>) {
+  return (
+    <div className="min-w-0 rounded-md border p-3 vs-border vs-raised">
+      <p className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.16em]">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold" title={value}>
+        {value}
+      </p>
+      <p className="vs-muted mt-1 truncate text-xs" title={detail}>
+        {detail}
+      </p>
+    </div>
+  );
+}
+
+function SourceAssetsSection({
+  bookSources,
+  models,
+  preparedSources,
+  profileSource,
+  selectedBookScope,
+  onInspectAsset,
+  onGenerateBookSourceNarration,
+  onGeneratePreparedSourceNarration,
+  onOpenIntake,
+  onUseBookSource,
+  onUsePreparedSource,
+}: Readonly<{
+  bookSources: BookSource[];
+  models: SourceAssetModel[];
+  preparedSources: PreparedSource[];
+  profileSource: VoiceProfileSource | null;
+  selectedBookScope: BookScope | null;
+  onInspectAsset: (assetKey: string) => void;
+  onGenerateBookSourceNarration: (
+    book: BookSource,
+    scope: BookScope,
+    options?: GenerateNarrationOptions,
+  ) => void;
+  onGeneratePreparedSourceNarration: (
+    source: PreparedSource,
+    options?: GenerateNarrationOptions,
+  ) => void;
+  onOpenIntake: () => void;
+  onUseBookSource: (book: BookSource, scope: BookScope) => void;
+  onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
+}>) {
+  return (
+    <div className="grid content-start gap-3 rounded-md border p-4 vs-border vs-surface">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold">Source Assets</p>
+        <button
+          className="h-8 rounded-md border px-2.5 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+          onClick={onOpenIntake}
+          type="button"
+        >
+          Add Source
+        </button>
+      </div>
+      {profileSource ? (
+        <div className="rounded-md border p-3 vs-raised">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <p className="min-w-0 truncate text-sm font-semibold" title={profileSource.sourceFile}>
+              {profileSource.sourceFile}
+            </p>
+            <StatusPill>{profileSource.status}</StatusPill>
+          </div>
+          <p className="vs-muted mt-2 text-xs">
+            Voice cloning intake · {profileSource.candidates.length} detected voice
+            {profileSource.candidates.length === 1 ? "" : "s"} · {profileSource.progressMessage}
+          </p>
+        </div>
+      ) : null}
+      {models.length > 0 ? (
+        models.map((asset) => (
+          <SourceAssetRow
+            asset={asset}
+            bookSources={bookSources}
+            key={asset.assetKey}
+            preparedSources={preparedSources}
+            selectedBookScope={selectedBookScope}
+            onInspectAsset={onInspectAsset}
+            onGenerateBookSourceNarration={onGenerateBookSourceNarration}
+            onGeneratePreparedSourceNarration={onGeneratePreparedSourceNarration}
+            onUseBookSource={onUseBookSource}
+            onUsePreparedSource={onUsePreparedSource}
+          />
+        ))
+      ) : (
+        <EmptyDrawerText>No source analysis or book source staged.</EmptyDrawerText>
+      )}
+    </div>
+  );
+}
+
+function SourceAssetRow({
+  asset,
+  bookSources,
+  preparedSources,
+  selectedBookScope,
+  onInspectAsset,
+  onGenerateBookSourceNarration,
+  onGeneratePreparedSourceNarration,
+  onUseBookSource,
+  onUsePreparedSource,
+}: Readonly<{
+  asset: SourceAssetModel;
+  bookSources: BookSource[];
+  preparedSources: PreparedSource[];
+  selectedBookScope: BookScope | null;
+  onInspectAsset: (assetKey: string) => void;
+  onGenerateBookSourceNarration: (
+    book: BookSource,
+    scope: BookScope,
+    options?: GenerateNarrationOptions,
+  ) => void;
+  onGeneratePreparedSourceNarration: (
+    source: PreparedSource,
+    options?: GenerateNarrationOptions,
+  ) => void;
+  onUseBookSource: (book: BookSource, scope: BookScope) => void;
+  onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
+}>) {
+  const useDisabledReason = sourceAssetUseDisabledReason(asset);
+  const generateDisabledReason = sourceAssetGenerateDisabledReason(asset);
+  return (
+    <div
+      className={`min-w-0 rounded-md border p-3 ${
+        asset.isActive ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]" : "vs-raised"
+      }`}
+    >
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <p className="min-w-0 truncate text-sm font-semibold" title={asset.title}>
+          {asset.title}
+        </p>
+        <StatusPill>{asset.availabilityLabel}</StatusPill>
+      </div>
+      <p className="vs-muted mt-1 truncate text-xs" title={sourceAssetRowDetail(asset)}>
+        {sourceAssetRowDetail(asset)}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <AssetButton
+          testId={`ui-action-asset-source-inspect-${asset.assetKey}`}
+          onClick={() => {
+            onInspectAsset(asset.assetKey);
+          }}
+        >
+          Inspect
+        </AssetButton>
+        <AssetButton
+          disabled={Boolean(useDisabledReason)}
+          disabledReason={useDisabledReason}
+          selected={asset.isActive}
+          testId={`ui-action-asset-source-use-${asset.assetKey}`}
+          onClick={() => {
+            applySourceAsset(asset, bookSources, preparedSources, selectedBookScope, {
+              onUseBookSource,
+              onUsePreparedSource,
+            });
+          }}
+        >
+          Use in narration
+        </AssetButton>
+        <AssetButton
+          disabled={Boolean(generateDisabledReason)}
+          disabledReason={generateDisabledReason}
+          testId={`ui-action-asset-source-generate-${asset.assetKey}`}
+          onClick={() => {
+            generateSourceAsset(asset, bookSources, preparedSources, selectedBookScope, {
+              onGenerateBookSourceNarration,
+              onGeneratePreparedSourceNarration,
+            });
+          }}
+        >
+          Generate narration
+        </AssetButton>
+      </div>
+    </div>
+  );
+}
+
+function VoiceAssetsSection({
+  models,
+  onClearVoiceProfile,
+  onInspectAsset,
+  onOpenVoiceCloning,
+  onSelectProfile,
+}: Readonly<{
+  models: VoiceAssetModel[];
+  onClearVoiceProfile: () => void;
+  onInspectAsset: (assetKey: string) => void;
+  onOpenVoiceCloning: () => void;
+  onSelectProfile: (profileId: string) => void;
+}>) {
+  return (
+    <div className="grid content-start gap-3 rounded-md border p-4 vs-border vs-surface">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold">Voice Assets</p>
+        <button
+          className="h-8 rounded-md border px-2.5 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+          onClick={onOpenVoiceCloning}
+          type="button"
+        >
+          Voice Cloning
+        </button>
+      </div>
+      {models.map((asset) => (
+        <div
+          className={`min-w-0 rounded-md border p-3 ${
+            asset.availability === "active"
+              ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)]"
+              : "vs-raised"
+          }`}
+          key={asset.assetKey}
+        >
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <p className="min-w-0 truncate text-sm font-semibold" title={asset.title}>
+              {asset.title}
+            </p>
+            <StatusPill>{asset.activeStateLabel}</StatusPill>
+          </div>
+          <p className="vs-muted mt-1 truncate text-xs" title={voiceAssetRowDetail(asset)}>
+            {voiceAssetRowDetail(asset)}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <AssetButton
+              testId={`ui-action-asset-voice-inspect-${asset.assetKey}`}
+              onClick={() => {
+                onInspectAsset(asset.assetKey);
+              }}
+            >
+              Inspect
+            </AssetButton>
+            <AssetButton
+              disabled={asset.availability === "active"}
+              disabledReason={
+                asset.availability === "active"
+                  ? "Already using this voice for narration."
+                  : undefined
+              }
+              selected={asset.availability === "active"}
+              testId={`ui-action-asset-voice-use-${asset.assetKey}`}
+              onClick={() => {
+                if (asset.type === "default") {
+                  onClearVoiceProfile();
+                  return;
+                }
+                onSelectProfile(asset.id);
+              }}
+            >
+              {asset.type === "default" ? "Use default" : "Use saved voice"}
+            </AssetButton>
+          </div>
+        </div>
+      ))}
+      {models.every((asset) => asset.type === "default") ? (
+        <EmptyDrawerText>No saved voice profiles yet.</EmptyDrawerText>
+      ) : null}
+    </div>
+  );
+}
+
+function SpeechPolicyAssetsSection({
+  customSpeechPolicyProfiles,
+  model,
+  speechPolicyProfile,
+  speechPolicyProfiles,
+  onInspectAsset,
+  onSpeechPolicyProfileChange,
+}: Readonly<{
+  customSpeechPolicyProfiles: CustomSpeechPolicyProfile[];
+  model: SpeechPolicyAssetModel;
+  speechPolicyProfile: string;
+  speechPolicyProfiles: SpeechPolicyProfile[];
+  onInspectAsset: (assetKey: string) => void;
+  onSpeechPolicyProfileChange: (profile: string) => void;
+}>) {
+  return (
+    <div className="grid gap-3 rounded-md border p-4 vs-border vs-surface">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold">Speech Policy Assets</p>
+        <AssetButton
+          testId="ui-action-asset-policy-inspect"
+          onClick={() => {
+            onInspectAsset("policy:project");
+          }}
+        >
+          Inspect
+        </AssetButton>
+      </div>
+      <WorkspaceDashboardSummary
+        detail={`${model.sourcePinCount.toString()} source pin(s) · ${model.sessionOverrideCount.toString()} session override field(s)`}
+        label={model.projectDefaultLabel}
+        value={model.requiresConfirmation ? "Requires confirmation" : "Inherited"}
+      />
+      <label className="grid gap-1 text-sm font-semibold">
+        <span>Project default</span>
+        <select
+          className="h-10 rounded-md border bg-[var(--vs-raised)] px-3 text-sm outline-none vs-border"
+          onChange={(event) => {
+            const nextProfile = event.currentTarget.value;
+            if (
+              nextProfile !== speechPolicyProfile &&
+              model.requiresConfirmation &&
+              !confirmAssetAction(
+                "Change project default? Source-specific speech policy pins and overrides will remain unchanged.",
+              )
+            ) {
+              return;
+            }
+            onSpeechPolicyProfileChange(nextProfile);
+          }}
+          value={speechPolicyProfile}
+        >
+          {(speechPolicyProfiles.length > 0
+            ? speechPolicyProfiles.map((profile) => profile.name)
+            : SPEECH_POLICY_PROFILE_OPTIONS
+          ).map((profile) => (
+            <option key={profile} value={profile}>
+              {speechPolicyProfileLabel(profile)}
+            </option>
+          ))}
+          {customSpeechPolicyProfiles.length > 0 ? (
+            <optgroup label="Custom profiles">
+              {customSpeechPolicyProfiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name}
+                </option>
+              ))}
+            </optgroup>
+          ) : null}
+        </select>
+      </label>
+      {model.requiresConfirmation ? (
+        <p className="rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] p-3 text-xs leading-5 text-[var(--vs-status-warning)]">
+          Changing the project default requires confirmation because source-specific overrides stay
+          pinned.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function SourceAssetDetail({
+  asset,
+  bookSources,
+  preparedSources,
+  selectedBookScope,
+  onDeleteBookSource,
+  onDeletePreparedSource,
+  onOpenIntake,
+  onRenameBookSource,
+  onRenamePreparedSource,
+  onUseBookSource,
+  onUsePreparedSource,
+}: Readonly<{
+  asset: SourceAssetModel;
+  bookSources: BookSource[];
+  preparedSources: PreparedSource[];
+  selectedBookScope: BookScope | null;
+  onDeleteBookSource: (id: string) => Promise<void>;
+  onDeletePreparedSource: (id: string) => Promise<void>;
+  onOpenIntake: () => void;
+  onRenameBookSource: (id: string, name: string) => Promise<void>;
+  onRenamePreparedSource: (id: string, name: string) => Promise<void>;
+  onUseBookSource: (book: BookSource, scope: BookScope) => void;
+  onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
+}>) {
+  return (
+    <div className="grid gap-4">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h4 className="min-w-0 truncate text-lg font-semibold" title={asset.title}>
+            {asset.title}
+          </h4>
+          <StatusPill>{asset.availabilityLabel}</StatusPill>
+          <StatusPill>{asset.policyPinLabel}</StatusPill>
+        </div>
+        <p className="vs-muted mt-1 text-sm leading-6">{asset.lifecycleDetail}</p>
+      </div>
+      <DetailGrid
+        rows={[
+          ["Type", asset.typeLabel],
+          ["Word count", `${asset.envelope.wordCount?.toLocaleString() ?? "Unknown"} words`],
+          ["Structure", asset.structureLabel],
+          ["Extraction", asset.extractionStateLabel],
+          ["Readiness", `${asset.readinessLabel} · ${asset.readinessDetail}`],
+          ["Last prepared", formatDate(asset.lastPreparedAt)],
+          ["Last used", asset.usage.lastUsedAt ? formatDate(asset.usage.lastUsedAt) : "Never"],
+          ["Usage", asset.reuseLabel],
+          ["Policy scope", asset.policyPinLabel],
+          ["Provenance", asset.provenance],
+        ]}
+      />
+      <div className="flex flex-wrap gap-2">
+        <AssetButton
+          disabled={!asset.routeState.canReview}
+          onClick={() => {
+            applySourceAsset(asset, bookSources, preparedSources, selectedBookScope, {
+              onUseBookSource,
+              onUsePreparedSource,
+            });
+          }}
+        >
+          Reuse for narration
+        </AssetButton>
+        <AssetButton onClick={onOpenIntake}>Open Intake</AssetButton>
+        <AssetButton
+          onClick={() => {
+            const nextName = promptAssetName("Rename source asset", asset.title);
+            if (!nextName) {
+              return;
+            }
+            void (asset.owner === "book"
+              ? onRenameBookSource(asset.id, nextName)
+              : onRenamePreparedSource(asset.id, nextName));
+          }}
+        >
+          Rename
+        </AssetButton>
+        <DangerAssetButton
+          onClick={() => {
+            const message =
+              asset.availability === "active"
+                ? `${asset.deleteConfirmation} It is active, so narration will fall back to draft text.`
+                : asset.deleteConfirmation;
+            if (!confirmAssetAction(message)) {
+              return;
+            }
+            void (asset.owner === "book"
+              ? onDeleteBookSource(asset.id)
+              : onDeletePreparedSource(asset.id));
+          }}
+        >
+          Delete
+        </DangerAssetButton>
+      </div>
+    </div>
+  );
+}
+
+function VoiceAssetDetail({
+  asset,
+  onClearVoiceProfile,
+  onDeleteVoiceProfile,
+  onOpenVoiceCloning,
+  onRenameVoiceProfile,
+  onSelectProfile,
+}: Readonly<{
+  asset: VoiceAssetModel;
+  onClearVoiceProfile: () => void;
+  onDeleteVoiceProfile: (id: string) => Promise<void>;
+  onOpenVoiceCloning: () => void;
+  onRenameVoiceProfile: (id: string, name: string) => Promise<void>;
+  onSelectProfile: (profileId: string) => void;
+}>) {
+  return (
+    <div className="grid gap-4">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h4 className="min-w-0 truncate text-lg font-semibold" title={asset.title}>
+            {asset.title}
+          </h4>
+          {asset.labels.map((label) => (
+            <StatusPill key={label}>{label}</StatusPill>
+          ))}
+        </div>
+        <p className="vs-muted mt-1 text-sm leading-6">{asset.readinessDetail}</p>
+      </div>
+      <DetailGrid
+        rows={[
+          ["Provider", asset.providerLabel],
+          ["Engine", asset.engineLabel],
+          ["Readiness", asset.readinessLabel],
+          ["Language", asset.language],
+          ["Profile path", asset.profilePath],
+          ["Reference path", asset.referencePath],
+          ["Source", asset.sourceLabel],
+          ["Last used", asset.usage.lastUsedAt ? formatDate(asset.usage.lastUsedAt) : "Never"],
+          ["Usage", usageCountLabel(asset.usage.usageCount)],
+        ]}
+      />
+      <div className="flex flex-wrap gap-2">
+        <AssetButton
+          onClick={() => {
+            if (asset.type === "default") {
+              onClearVoiceProfile();
+              return;
+            }
+            onSelectProfile(asset.id);
+          }}
+        >
+          {asset.type === "default" ? "Use default voice" : "Use saved voice"}
+        </AssetButton>
+        <AssetButton onClick={onOpenVoiceCloning}>Open Voice Cloning</AssetButton>
+        {asset.type === "profile" ? (
+          <>
+            <AssetButton
+              onClick={() => {
+                const nextName = promptAssetName("Rename voice profile", asset.title);
+                if (nextName) {
+                  void onRenameVoiceProfile(asset.id, nextName);
+                }
+              }}
+            >
+              Rename
+            </AssetButton>
+            <DangerAssetButton
+              onClick={() => {
+                const message =
+                  asset.availability === "active"
+                    ? `${asset.deleteConfirmation ?? ""} It is active, so narration will fall back to the default voice.`
+                    : (asset.deleteConfirmation ?? "");
+                if (message && confirmAssetAction(message)) {
+                  void onDeleteVoiceProfile(asset.id);
+                }
+              }}
+            >
+              Delete
+            </DangerAssetButton>
+          </>
         ) : null}
       </div>
     </div>
   );
 }
 
-function buildWorkspaceActivitySummaries({
-  cancelingProfileSourceId,
-  cancelingTargetKey,
-  job,
-  onCancelJob,
-  onCancelProfileSource,
-  onCancelProfileTarget,
-  profileSource,
-  profiles,
-}: Readonly<{
-  cancelingProfileSourceId: string | null;
-  cancelingTargetKey: string | null;
-  job: VoiceJob | null;
-  onCancelJob: () => Promise<void>;
-  onCancelProfileSource: (sourceId: string) => Promise<void>;
-  onCancelProfileTarget: (profileId: string, targetId: string) => Promise<void>;
-  profileSource: VoiceProfileSource | null;
-  profiles: VoiceProfile[];
-}>): WorkspaceActivitySummary[] {
-  const activities: WorkspaceActivitySummary[] = [];
-  if (job && !isTerminalJobStatus(job.status)) {
-    activities.push({
-      cancelLabel: "Cancel Run",
-      canCancel: true,
-      detail:
-        `${job.progress.message || "Narration is running."} ${job.progress.detail || ""}`.trim(),
-      id: `job:${job.id}`,
-      label: "Narration pipeline",
-      onCancel: () => {
-        void onCancelJob();
-      },
-      status: "running",
-    });
-  }
-
-  if (profileSource && isActiveProfileSource(profileSource)) {
-    const isCanceling = cancelingProfileSourceId === profileSource.id;
-    activities.push({
-      cancelLabel: isCanceling ? "Cancelling..." : "Cancel Analysis",
-      canCancel: !isCanceling,
-      detail: `${profileSource.sourceFile} · ${profileSource.progressMessage || profileSource.status}`,
-      id: `source:${profileSource.id}`,
-      label: "Voice source analysis",
-      onCancel: () => {
-        void onCancelProfileSource(profileSource.id);
-      },
-      status: "running",
-    });
-  }
-
-  for (const profile of profiles) {
-    for (const [targetId, target] of Object.entries(profile.cloneTargets ?? {})) {
-      const artifact = profile.cloneArtifacts?.[targetId];
-      const isActiveTarget =
-        ["queued", "building", "validating"].includes(target.status) ||
-        artifact?.status === "building";
-      if (!isActiveTarget) {
-        continue;
-      }
-      const targetKey = `${profile.id}:${targetId}`;
-      const isCanceling = cancelingTargetKey === targetKey;
-      activities.push({
-        cancelLabel: isCanceling ? "Cancelling..." : "Cancel Target",
-        canCancel: !isCanceling,
-        detail: `${profile.name} · ${target.label ?? targetId} · ${target.status}`,
-        id: `target:${targetKey}`,
-        label: "Voice clone target",
-        onCancel: () => {
-          void onCancelProfileTarget(profile.id, targetId);
-        },
-        status: "running",
-      });
-    }
-  }
-  return activities;
-}
-
-function isTerminalJobStatus(status: string): boolean {
-  return status === "completed" || status === "failed" || status === "cancelled";
-}
-
-function isActiveProfileSource(source: VoiceProfileSource): boolean {
-  return source.status !== "ready" && source.status !== "failed" && source.status !== "cancelled";
-}
-
-function workspaceActivityStatusClass(status: WorkspaceActivitySummary["status"]): string {
-  if (status === "running") {
-    return "bg-orange-100 text-orange-700";
-  }
-  if (status === "attention") {
-    return "bg-amber-100 text-amber-800";
-  }
-  if (status === "complete") {
-    return "bg-emerald-100 text-emerald-700";
-  }
-  if (status === "cancelled") {
-    return "bg-zinc-100 text-zinc-600";
-  }
-  return "bg-zinc-100 text-zinc-600";
-}
-
-function CreateProjectRow({
-  onCancel,
-  onCreateProject,
-  onCreated,
-}: Readonly<{
-  onCancel: () => void;
-  onCreateProject: (name: string) => Promise<void>;
-  onCreated: () => void;
-}>) {
-  const [name, setName] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  const submitCreate = () => {
-    const nextName = name.trim();
-    if (nextName.length === 0 || isSaving) {
-      return;
-    }
-    setIsSaving(true);
-    void onCreateProject(nextName)
-      .then(() => {
-        setName("");
-        onCreated();
-      })
-      .finally(() => {
-        setIsSaving(false);
-      });
-  };
-
+function PolicyAssetDetail({ model }: Readonly<{ model: SpeechPolicyAssetModel }>) {
   return (
-    <form
-      className="grid min-w-0 gap-3 rounded-md border border-orange-200 bg-orange-500/5 p-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-        submitCreate();
-      }}
-    >
-      <div className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto]">
-        <input
-          aria-label="New project name"
-          className="min-w-0 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-sm font-semibold vs-border"
-          onChange={(event) => {
-            setName(event.currentTarget.value);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
-              event.stopPropagation();
-              onCancel();
-            }
-          }}
-          placeholder="Project name"
-          ref={inputRef}
-          title={name}
-          value={name}
-        />
-        <button
-          className="h-9 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg"
-          disabled={name.trim().length === 0 || isSaving}
-          type="submit"
-        >
-          {isSaving ? "Creating..." : "Create"}
-        </button>
-        <button
-          className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
-          disabled={isSaving}
-          onClick={onCancel}
-          type="button"
-        >
-          Cancel
-        </button>
+    <div className="grid gap-4">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h4 className="text-lg font-semibold">Speech policy preset</h4>
+          {model.statusLabels.map((label) => (
+            <StatusPill key={label}>{label}</StatusPill>
+          ))}
+        </div>
+        <p className="vs-muted mt-1 text-sm leading-6">
+          Project defaults are inherited by unpinned sources. Source-specific overrides are kept
+          separate and are not changed silently.
+        </p>
       </div>
-      <p className="vs-muted text-xs">
-        New projects start blank for source text, chapters, playback, and staged sources.
-      </p>
-    </form>
-  );
-}
-
-function ProjectLibraryRow({
-  activeProjectId,
-  project,
-  visibleJobs,
-  onDeleteProject,
-  onExportProject,
-  onRenameProject,
-  onSelectProject,
-}: Readonly<{
-  activeProjectId: string;
-  project: VoiceProject;
-  visibleJobs: VoiceJob[];
-  onDeleteProject: (id: string) => Promise<void>;
-  onExportProject: () => void;
-  onRenameProject: (id: string, name: string) => Promise<void>;
-  onSelectProject: (id: string) => void;
-}>) {
-  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [isSavingName, setIsSavingName] = useState(false);
-  const [draftName, setDraftName] = useState(project.name);
-  const nameInputRef = useRef<HTMLInputElement | null>(null);
-  const generatedDurationMs = visibleJobs.reduce((total, item) => total + item.durationMs, 0);
-  const primaryVoice =
-    visibleJobs.find((item) => item.voiceProfileName)?.voiceProfileName ?? "Default";
-  const qualityScore = resolveProjectQualityScore(visibleJobs);
-  const isActive = project.id === activeProjectId;
-  const isDefault = project.id === "default";
-
-  useEffect(() => {
-    if (!isEditingName) {
-      setDraftName(project.name);
-    }
-  }, [isEditingName, project.name]);
-
-  useEffect(() => {
-    if (isEditingName) {
-      nameInputRef.current?.focus();
-      nameInputRef.current?.select();
-    }
-  }, [isEditingName]);
-
-  const submitRename = () => {
-    const nextName = draftName.trim();
-    if (nextName.length === 0 || isSavingName) {
-      return;
-    }
-    if (nextName === project.name) {
-      setIsEditingName(false);
-      return;
-    }
-    setIsSavingName(true);
-    void onRenameProject(project.id, nextName).finally(() => {
-      setIsSavingName(false);
-      setIsEditingName(false);
-    });
-  };
-
-  return (
-    <div
-      className={`relative grid min-w-0 gap-3 overflow-hidden rounded-md border p-3 pl-4 text-left transition ${
-        isActive ? "border-orange-300 bg-orange-500/5" : "vs-raised hover:bg-[var(--vs-surface)]"
-      }`}
-    >
-      {isActive ? <span className="absolute inset-y-0 left-0 w-1 bg-orange-500" /> : null}
-      <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-        <div className="min-w-0">
-          {isEditingName ? (
-            <form
-              className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                submitRename();
-              }}
-            >
-              <input
-                aria-label={`Rename ${project.name}`}
-                className="min-w-0 rounded-md border bg-[var(--vs-raised)] px-3 py-2 text-sm font-semibold vs-border"
-                onChange={(event) => {
-                  setDraftName(event.currentTarget.value);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setDraftName(project.name);
-                    setIsEditingName(false);
-                  }
-                }}
-                ref={nameInputRef}
-                title={draftName}
-                value={draftName}
-              />
-              <button
-                className="h-9 rounded-md px-3 text-xs font-semibold text-white disabled:opacity-50 vs-accent-bg"
-                disabled={draftName.trim().length === 0 || isSavingName}
-                type="submit"
-              >
-                Save
-              </button>
-              <button
-                className="h-9 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:opacity-50 vs-border"
-                disabled={isSavingName}
-                onClick={() => {
-                  setDraftName(project.name);
-                  setIsEditingName(false);
-                }}
-                type="button"
-              >
-                Cancel
-              </button>
-            </form>
-          ) : (
-            <div className="flex min-w-0 items-center gap-2">
-              <button
-                className="min-w-0 truncate text-left text-base font-semibold hover:text-orange-700"
-                onClick={() => {
-                  onSelectProject(project.id);
-                }}
-                title={project.name}
-                type="button"
-              >
-                {project.name}
-              </button>
-              <button
-                aria-label={`Rename ${project.name}`}
-                className="grid h-7 w-7 shrink-0 place-items-center rounded-md border text-xs hover:bg-[var(--vs-raised)] vs-border"
-                onClick={() => {
-                  setDraftName(project.name);
-                  setIsEditingName(true);
-                }}
-                title="Rename project"
-                type="button"
-              >
-                ✎
-              </button>
-            </div>
-          )}
-          <p className="vs-muted mt-1 flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-xs">
-            <span>{visibleJobs.length.toString()} chapters</span>
-            <span>·</span>
-            <span>{formatDuration(generatedDurationMs)}</span>
-            <span>·</span>
-            <span className="min-w-0 truncate" title={primaryVoice}>
-              {primaryVoice}
-            </span>
-            <span>·</span>
-            <span>{qualityScore}</span>
-            <span>·</span>
-            <span>Updated {formatDate(project.updatedAt)}</span>
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 md:justify-end">
-          {isDefault ? (
-            <span
-              className="rounded-full border px-2.5 py-1 text-xs font-semibold vs-border"
-              title="The default project can be renamed or reused, but it cannot be deleted."
-            >
-              Default
-            </span>
-          ) : null}
-          <button
-            aria-label={isActive ? `Current project ${project.name}` : `Open ${project.name}`}
-            className="h-8 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
-            onClick={() => {
-              onSelectProject(project.id);
-            }}
-            type="button"
-          >
-            {isActive ? "Current" : "Open"}
-          </button>
-          <button
-            aria-label={`Export ${project.name}`}
-            className="h-8 rounded-md border px-3 text-xs font-semibold hover:bg-[var(--vs-raised)] disabled:cursor-not-allowed disabled:opacity-45 vs-border"
-            disabled={!isActive}
-            onClick={onExportProject}
-            title={isActive ? "Export this project" : "Open this project before exporting"}
-            type="button"
-          >
-            Export
-          </button>
-          <button
-            aria-label={`Delete ${project.name}`}
-            className="h-8 rounded-md border border-red-200 px-3 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-45"
-            disabled={isDefault || isDeleting}
-            onClick={() => {
-              setIsConfirmingDelete(true);
-            }}
-            title={
-              isDefault
-                ? "The default project is protected. Rename or reuse it instead."
-                : "Delete project"
-            }
-            type="button"
-          >
-            {isDefault ? "Protected" : "Delete"}
-          </button>
-        </div>
-      </div>
-      {isConfirmingDelete ? (
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
-          <p className="font-semibold">Delete “{project.name}”?</p>
-          <p className="mt-1 text-xs leading-5">
-            This removes this project’s jobs, generated audio, books, prepared sources, and
-            listening progress. Voice profiles stay in your library.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              className="h-8 rounded-md bg-red-600 px-3 text-xs font-semibold text-white disabled:opacity-50"
-              disabled={isDeleting}
-              onClick={() => {
-                setIsDeleting(true);
-                void onDeleteProject(project.id).finally(() => {
-                  setIsDeleting(false);
-                  setIsConfirmingDelete(false);
-                });
-              }}
-              type="button"
-            >
-              {isDeleting ? "Deleting..." : "Delete project"}
-            </button>
-            <button
-              className="h-8 rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-700"
-              disabled={isDeleting}
-              onClick={() => {
-                setIsConfirmingDelete(false);
-              }}
-              type="button"
-            >
-              Keep project
-            </button>
-          </div>
-        </div>
-      ) : null}
+      <DetailGrid
+        rows={[
+          ["Project default", model.projectDefaultLabel],
+          ["Session overrides", model.sessionOverrideCount.toLocaleString()],
+          ["Source pins", model.sourcePinCount.toLocaleString()],
+          ["Custom presets", model.customPresetCount.toLocaleString()],
+          ["Machine scope", model.machineDefaultLabel],
+          ["Default change", model.requiresConfirmation ? "Requires confirmation" : "Inherited"],
+        ]}
+      />
     </div>
   );
 }
 
-function WorkspaceSection({
-  actions,
-  children,
-  id,
-  title,
-}: Readonly<{ actions?: ReactNode; children: ReactNode; id: string; title: string }>) {
+function DetailGrid({ rows }: Readonly<{ rows: [string, string][] }>) {
   return (
-    <section className="mb-8 scroll-mt-6 last:mb-0" id={id}>
-      <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
-        <h3 className="vs-muted min-w-0 truncate text-xs font-semibold uppercase tracking-wide">
-          {title}
-        </h3>
-        {actions}
-      </div>
+    <dl className="grid gap-2">
+      {rows.map(([label, value]) => (
+        <div className="grid gap-1 rounded-md border p-3 vs-metadata-surface" key={label}>
+          <dt className="vs-muted text-[0.65rem] font-semibold uppercase tracking-[0.14em]">
+            {label}
+          </dt>
+          <dd className="break-words text-sm font-medium">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function StatusPill({ children }: Readonly<{ children: string }>) {
+  return (
+    <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold capitalize vs-metadata-surface">
       {children}
-    </section>
+    </span>
   );
 }
 
-function EmptyDrawerText({ children }: Readonly<{ children: ReactNode }>) {
+function AssetButton({
+  children,
+  disabled = false,
+  disabledReason,
+  onClick,
+  selected = false,
+  testId,
+}: Readonly<{
+  children: string;
+  disabled?: boolean;
+  disabledReason?: string;
+  onClick: () => void;
+  selected?: boolean;
+  testId?: string;
+}>) {
   return (
-    <p className="vs-muted rounded-md border border-dashed p-4 text-sm vs-border">{children}</p>
+    <button
+      className={`h-8 rounded-md border px-2.5 text-xs font-semibold hover:bg-[var(--vs-surface)] disabled:cursor-not-allowed disabled:border-[var(--vs-action-disabled-border)] disabled:bg-[var(--vs-action-disabled-bg)] disabled:text-[var(--vs-action-disabled-text)] ${
+        selected
+          ? "border-[var(--vs-selected-border)] bg-[var(--vs-selected)] text-[var(--vs-selected-text)]"
+          : "vs-border"
+      }`}
+      data-disabled-reason={disabledReason}
+      data-selected={selected ? "true" : undefined}
+      data-testid={testId}
+      data-ui-noop-reason={selected ? (disabledReason ?? "Already selected.") : undefined}
+      disabled={disabled}
+      onClick={onClick}
+      title={disabled && disabledReason ? disabledReason : undefined}
+      type="button"
+    >
+      {children}
+    </button>
   );
 }
 
-function resolveProjectQualityScore(jobs: VoiceJob[]): string {
-  const scores = jobs
-    .map((item) => item.voiceCheck.similarity)
-    .filter((value) => Number.isFinite(value) && value > 0);
-  if (scores.length === 0) {
-    return "pending";
-  }
-  const average = scores.reduce((sum, value) => sum + value, 0) / scores.length;
-  return `${Math.round(average * 100).toString()}%`;
+function DangerAssetButton({
+  children,
+  disabled = false,
+  disabledReason,
+  onClick,
+  testId,
+}: Readonly<{
+  children: string;
+  disabled?: boolean;
+  disabledReason?: string;
+  onClick: () => void;
+  testId?: string;
+}>) {
+  return (
+    <button
+      className="h-8 rounded-md border border-[var(--vs-action-destructive-border)] bg-[var(--vs-action-destructive-bg)] px-2.5 text-xs font-semibold text-[var(--vs-action-destructive)] hover:bg-[var(--vs-action-destructive-hover)] disabled:cursor-not-allowed disabled:border-[var(--vs-action-disabled-border)] disabled:bg-[var(--vs-action-disabled-bg)] disabled:text-[var(--vs-action-disabled-text)]"
+      data-disabled-reason={disabledReason}
+      data-testid={testId}
+      disabled={disabled}
+      onClick={onClick}
+      title={disabled && disabledReason ? disabledReason : undefined}
+      type="button"
+    >
+      {children}
+    </button>
+  );
 }
 
-function formatDate(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return "recently";
+function sourceAssetRowDetail(asset: SourceAssetModel): string {
+  return [
+    asset.typeLabel,
+    `${asset.envelope.wordCount?.toLocaleString() ?? "Unknown"} words`,
+    asset.readinessLabel,
+    asset.policyPinLabel,
+    asset.reuseLabel,
+  ].join(" · ");
+}
+
+function voiceAssetRowDetail(asset: VoiceAssetModel): string {
+  return [
+    asset.providerLabel,
+    asset.engineLabel,
+    asset.readinessLabel,
+    usageCountLabel(asset.usage.usageCount),
+  ].join(" · ");
+}
+
+function usageCountLabel(count: number): string {
+  if (count === 0) {
+    return "Never used";
   }
-  return parsed.toLocaleDateString(undefined, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return `Used ${count.toLocaleString()} time${count === 1 ? "" : "s"}`;
+}
+
+function sourceAssetUseDisabledReason(asset: SourceAssetModel): string | undefined {
+  if (asset.isActive) {
+    return "Already using this source for narration.";
+  }
+  return asset.routeState.canReview
+    ? undefined
+    : (asset.routeState.reviewDisabledReason ?? asset.enabledDisabledReason);
+}
+
+function sourceAssetGenerateDisabledReason(asset: SourceAssetModel): string | undefined {
+  return asset.routeState.canReview
+    ? undefined
+    : (asset.routeState.reviewDisabledReason ?? asset.enabledDisabledReason);
+}
+
+function applySourceAsset(
+  asset: SourceAssetModel,
+  bookSources: BookSource[],
+  preparedSources: PreparedSource[],
+  selectedBookScope: BookScope | null,
+  actions: {
+    onUseBookSource: (book: BookSource, scope: BookScope) => void;
+    onUsePreparedSource: (source: PreparedSource) => Promise<void> | void;
+  },
+) {
+  if (asset.owner === "book") {
+    const book = bookSources.find((source) => source.id === asset.id);
+    if (book) {
+      actions.onUseBookSource(
+        book,
+        asset.isActive && selectedBookScope ? selectedBookScope : resolveDefaultBookScope(book),
+      );
+    }
+    return;
+  }
+  const source = preparedSources.find((item) => item.id === asset.id);
+  if (source) {
+    void actions.onUsePreparedSource(source);
+  }
+}
+
+function generateSourceAsset(
+  asset: SourceAssetModel,
+  bookSources: BookSource[],
+  preparedSources: PreparedSource[],
+  selectedBookScope: BookScope | null,
+  actions: {
+    onGenerateBookSourceNarration: (
+      book: BookSource,
+      scope: BookScope,
+      options?: GenerateNarrationOptions,
+    ) => void;
+    onGeneratePreparedSourceNarration: (
+      source: PreparedSource,
+      options?: GenerateNarrationOptions,
+    ) => void;
+  },
+) {
+  if (asset.owner === "book") {
+    const book = bookSources.find((source) => source.id === asset.id);
+    if (book) {
+      const scope =
+        asset.isActive && selectedBookScope ? selectedBookScope : resolveDefaultBookScope(book);
+      actions.onGenerateBookSourceNarration(book, scope, {
+        useCurrentReviewSession: asset.isActive,
+      });
+    }
+    return;
+  }
+  const source = preparedSources.find((item) => item.id === asset.id);
+  if (source) {
+    actions.onGeneratePreparedSourceNarration(source, {
+      useCurrentReviewSession: asset.isActive,
+    });
+  }
+}
+
+function confirmAssetAction(message: string): boolean {
+  if (typeof globalThis.confirm !== "function") {
+    return true;
+  }
+  return globalThis.confirm(message);
+}
+
+function promptAssetName(label: string, currentName: string): string | null {
+  if (typeof globalThis.prompt !== "function") {
+    return null;
+  }
+  const nextName = globalThis.prompt(label, currentName)?.trim() ?? "";
+  return nextName.length > 0 && nextName !== currentName ? nextName : null;
+}
+
+function GeneratedAudioList({
+  visibleJobs,
+  onDeleteVoiceJob,
+}: Readonly<{ visibleJobs: VoiceJob[]; onDeleteVoiceJob: (id: string) => Promise<void> }>) {
+  return (
+    <div className="grid content-start gap-3 rounded-md border p-4 vs-border vs-surface">
+      <p className="text-sm font-semibold">Generated Audio</p>
+      {visibleJobs.length > 0 ? (
+        visibleJobs.slice(0, 8).map((item) => {
+          const deleteDisabledReason = generatedAudioDeleteDisabledReason(item);
+          const title = generatedAudioTitle(item);
+          return (
+            <div className="grid gap-3 rounded-md border p-3 vs-raised" key={item.id}>
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="min-w-0 truncate text-sm font-semibold" title={item.inputText}>
+                    {title}
+                  </p>
+                  <p className="vs-muted mt-1 truncate text-xs" title={generatedAudioDetail(item)}>
+                    {generatedAudioDetail(item)}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs capitalize vs-border">
+                  {item.status}
+                </span>
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <DangerAssetButton
+                  disabled={Boolean(deleteDisabledReason)}
+                  disabledReason={deleteDisabledReason}
+                  testId={`ui-action-generated-audio-delete-${item.id}`}
+                  onClick={() => {
+                    if (
+                      !confirmAssetAction(
+                        `Delete narration "${title}"? This removes generated audio and timing artifacts but keeps the source asset.`,
+                      )
+                    ) {
+                      return;
+                    }
+                    void onDeleteVoiceJob(item.id);
+                  }}
+                >
+                  Delete
+                </DangerAssetButton>
+              </div>
+            </div>
+          );
+        })
+      ) : (
+        <EmptyDrawerText>
+          No generated audio is attached to the current project yet.
+        </EmptyDrawerText>
+      )}
+    </div>
+  );
+}
+
+function generatedAudioDeleteDisabledReason(item: VoiceJob): string | undefined {
+  return item.status === "completed" || item.status === "failed" || item.status === "cancelled"
+    ? undefined
+    : "Cancel this run before deleting.";
+}
+
+function generatedAudioTitle(item: VoiceJob): string {
+  const inputText = item.inputText.trim();
+  if (inputText.length > 0) {
+    return inputText;
+  }
+  return item.voiceProfileName ?? item.voice;
+}
+
+function generatedAudioDetail(item: VoiceJob): string {
+  return [
+    generatedAudioSourceLabel(item),
+    generatedAudioSegmentProgress(item),
+    formatDuration(item.durationMs),
+    generatedAudioVoiceLabel(item),
+    `${resolveProjectQualityScore([item])} check`,
+    `Updated ${formatDate(item.updatedAt || item.createdAt)}`,
+  ].join(" - ");
+}
+
+function generatedAudioSourceLabel(item: VoiceJob): string {
+  if (item.bookSourceId) {
+    return item.bookScope ? `Book source ${item.bookScope.type}` : "Book source";
+  }
+  if (item.preparedSourceId) {
+    return "Prepared source";
+  }
+  if (item.progressTargetId) {
+    return item.progressTargetId;
+  }
+  return item.sourceKind ?? "Draft source";
+}
+
+function generatedAudioSegmentProgress(item: VoiceJob): string {
+  const ready = item.audioReadySegments ?? 0;
+  const total =
+    item.retries.totalSegments > 0 ? item.retries.totalSegments : (item.segments?.length ?? 0);
+  if (total <= 0) {
+    return "segments pending";
+  }
+  return `${ready.toString()} of ${total.toString()} segments ready`;
+}
+
+function generatedAudioVoiceLabel(item: VoiceJob): string {
+  return item.voiceProfileName ?? item.ttsVoice ?? item.voice;
+}
+
+function HealthReportsPanel({
+  bundleReport,
+  report,
+  onOpenDiagnostics,
+}: Readonly<{
+  bundleReport: BundleOperationReport | null;
+  report: HealthReport;
+  onOpenDiagnostics: () => void;
+}>) {
+  const reportCards = [
+    report.overall,
+    report.provider,
+    report.sourceExtraction,
+    report.job,
+    report.storage,
+    report.temporaryStorage,
+    report.temporaryDiagnostics,
+    report.temporaryCleanup,
+    report.backend,
+  ];
+  const failedGeneration =
+    report.provider.readiness === "failedJob" || report.job.value === "Failed generation";
+  const terminalReason =
+    report.job.facts.find((fact) => fact.label === "Terminal reason")?.value ??
+    report.provider.facts.find((fact) => fact.label === "Terminal reason")?.value ??
+    "n/a";
+  const failureKind =
+    report.job.facts.find((fact) => fact.label === "Failure kind")?.value ??
+    report.provider.facts.find((fact) => fact.label === "Failure kind")?.value ??
+    "n/a";
+  return (
+    <div className="grid gap-3">
+      <div className="rounded-md border p-4 vs-work-surface">
+        <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="vs-muted text-xs font-semibold uppercase tracking-wide">Health report</p>
+            <h3 className="mt-1 text-base font-semibold">{report.overall.value}</h3>
+            <p className="vs-muted mt-1 text-sm leading-6">{report.overall.detail}</p>
+          </div>
+          <StatusChip tone={report.overall.tone}>
+            {report.canNarrateNow ? "Can narrate now" : "Needs attention"}
+          </StatusChip>
+        </div>
+      </div>
+      {failedGeneration ? (
+        <div className="rounded-md border p-4 text-sm text-[var(--vs-status-danger)] vs-alert-surface">
+          <p className="font-semibold">Failed generation</p>
+          <p className="mt-1 leading-6">
+            Terminal reason: {terminalReason}. Failure kind: {failureKind}.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a
+              className="rounded-md border px-3 py-2 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+              href="#command-center-report-job-health"
+            >
+              View job health
+            </a>
+            <button
+              className="rounded-md border px-3 py-2 text-xs font-semibold hover:bg-[var(--vs-raised)] vs-border"
+              onClick={onOpenDiagnostics}
+              type="button"
+            >
+              Open Expert Diagnostics
+            </button>
+          </div>
+        </div>
+      ) : null}
+      <div className="grid gap-2 lg:grid-cols-2">
+        {reportCards.map((card) => (
+          <HealthReportCardRow card={card} key={card.label} />
+        ))}
+      </div>
+      {bundleReport ? <BundleOperationReportCard report={bundleReport} /> : null}
+      {report.statusChips.length > 0 ? (
+        <div className="rounded-md border p-4 vs-management-surface">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-semibold">Status strip blockers</p>
+            <StatusChip tone="metadata">{report.statusChips.length.toString()}</StatusChip>
+          </div>
+          <div className="mt-3 grid gap-2">
+            {report.statusChips.map((chip) => (
+              <div
+                className="flex min-w-0 items-start justify-between gap-3 rounded-md border px-3 py-2 vs-work-surface"
+                key={`${chip.label}-${chip.value}`}
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold" title={chip.label}>
+                    {chip.label}
+                  </p>
+                  <p className="vs-muted mt-1 line-clamp-2 text-xs leading-5">{chip.detail}</p>
+                </div>
+                <StatusChip className="py-0.5" tone={chip.tone}>
+                  {chip.value}
+                </StatusChip>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <div className="flex justify-end">
+        <button
+          className="h-9 rounded-md border px-3 text-sm font-semibold hover:bg-[var(--vs-raised)] vs-border"
+          onClick={onOpenDiagnostics}
+          type="button"
+        >
+          Open Expert Diagnostics
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function BundleOperationReportCard({ report }: Readonly<{ report: BundleOperationReport }>) {
+  const validationCount = report.validation?.length ?? 0;
+  const dependencyCount = report.dependencies?.length ?? 0;
+  const conflictCount = report.conflicts?.length ?? 0;
+  const excludedCount = report.excluded?.length ?? 0;
+  const warnings = report.warnings ?? [];
+  let statusTone: "danger" | "warning" | "success" = "success";
+  if (report.status === "blocked") {
+    statusTone = "danger";
+  } else if (report.status === "warning") {
+    statusTone = "warning";
+  }
+
+  return (
+    <article className="rounded-md border p-4 vs-management-surface">
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="vs-muted text-xs font-semibold uppercase tracking-wide">
+            Latest bundle report
+          </p>
+          <h3 className="mt-1 truncate text-base font-semibold" title={report.title}>
+            {report.title}
+          </h3>
+          <p className="vs-muted mt-1 break-words text-sm leading-6">{report.detail}</p>
+        </div>
+        <StatusChip tone={statusTone}>{report.status}</StatusChip>
+      </div>
+      <DetailGrid
+        rows={[
+          ["Generated audio", report.generatedAudioIncluded === false ? "Excluded" : "Included"],
+          ["Audio files", String(report.generatedAudio ?? 0)],
+          ["Omitted audio", String(report.omittedGeneratedAudio ?? 0)],
+          ["Validation", validationCount.toLocaleString()],
+          ["Dependencies", dependencyCount.toLocaleString()],
+          ["Conflicts", conflictCount.toLocaleString()],
+          ["Exclusions", excludedCount.toLocaleString()],
+          ["Updated", formatDate(report.updatedAt)],
+        ]}
+      />
+      {warnings.length > 0 ? (
+        <div className="mt-3 rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] p-3 text-xs text-[var(--vs-status-warning)]">
+          <p className="font-semibold">Bundle warnings</p>
+          <ul className="mt-2 grid gap-1">
+            {warnings.slice(0, 5).map((warning) => (
+              <li className="break-words" key={warning}>
+                {warning}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function HealthReportCardRow({ card }: Readonly<{ card: HealthReportCard }>) {
+  return (
+    <article
+      className="rounded-md border p-4 vs-work-surface"
+      id={`command-center-report-${healthReportAnchor(card.label)}`}
+    >
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold" title={card.label}>
+            {card.label}
+          </p>
+          <p className="vs-muted mt-1 text-sm leading-6">{card.detail}</p>
+        </div>
+        <StatusChip tone={card.tone}>{card.value}</StatusChip>
+      </div>
+    </article>
+  );
+}
+
+function healthReportAnchor(label: string): string {
+  return label
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/(^-|-$)/g, "");
+}
+
+function StorageBreakdown({
+  projectStorage,
+  projectStorageError,
+}: Readonly<{
+  projectStorage: ProjectStorageSummary | null;
+  projectStorageError: string | null;
+}>) {
+  return (
+    <div className="grid gap-3 rounded-md border p-4 vs-border vs-surface">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <p className="text-sm font-semibold">Storage</p>
+        <span className="rounded-full border px-2.5 py-1 text-xs font-semibold vs-border">
+          {formatBytes(projectStorage?.totalBytes ?? 0)}
+        </span>
+      </div>
+      {projectStorageError ? (
+        <p className="rounded-md border border-[var(--vs-status-warning-border)] bg-[var(--vs-status-warning-bg)] p-3 text-xs text-[var(--vs-status-warning)]">
+          {projectStorageError}
+        </p>
+      ) : null}
+      <div className="grid gap-2 text-sm">
+        <StorageFact
+          label="Generated audio"
+          value={formatBytes(projectStorage?.generatedAudioBytes ?? 0)}
+        />
+        <StorageFact label="Jobs" value={formatBytes(projectStorage?.jobBytes ?? 0)} />
+        <StorageFact
+          label="Sources"
+          value={formatBytes(
+            (projectStorage?.bookSourceBytes ?? 0) + (projectStorage?.preparedSourceBytes ?? 0),
+          )}
+        />
+      </div>
+    </div>
+  );
+}
+
+function StorageFact({ label, value }: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-3 rounded-md border px-3 py-2 vs-border">
+      <span className="vs-muted min-w-0 truncate text-xs font-semibold">{label}</span>
+      <span className="shrink-0 text-xs font-semibold">{value}</span>
+    </div>
+  );
 }

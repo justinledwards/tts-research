@@ -57,6 +57,32 @@ func SilentWAV(durationMS int) ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
+func SpeechLikeWAV(durationMS int) ([]byte, error) {
+	if durationMS <= 0 {
+		return nil, errors.New("duration must be positive")
+	}
+
+	sampleCount := int(math.Ceil(float64(sampleRate) * float64(durationMS) / 1000))
+	data := make([]byte, sampleCount*channelCount*bytesPerSample)
+	fadeSamples := max(1, sampleRate*24/1000)
+	for sample := 0; sample < sampleCount; sample++ {
+		remaining := sampleCount - sample - 1
+		envelope := minFloat(1, minFloat(float64(sample)/float64(fadeSamples), float64(remaining)/float64(fadeSamples)))
+		if envelope < 0 {
+			envelope = 0
+		}
+		phase := 2 * math.Pi * 220 * float64(sample) / sampleRate
+		value := int16(math.Round(math.Sin(phase) * 7200 * envelope))
+		binary.LittleEndian.PutUint16(data[sample*bytesPerSample:], uint16(value))
+	}
+
+	return BuildPCM16WAV(data, WAVSpec{
+		SampleRate:    sampleRate,
+		ChannelCount:  channelCount,
+		BitsPerSample: bitsPerSample,
+	}), nil
+}
+
 type WAVSpec struct {
 	SampleRate    int
 	ChannelCount  int
@@ -218,6 +244,13 @@ func runeLen(value string) int {
 		count += 1
 	}
 	return count
+}
+
+func minFloat(left float64, right float64) float64 {
+	if left < right {
+		return left
+	}
+	return right
 }
 
 func writeString(buffer *bytes.Buffer, value string) {

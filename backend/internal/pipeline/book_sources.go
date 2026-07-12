@@ -125,24 +125,66 @@ func (service *Service) CreateBookSourceWithOptions(
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
+	sourceRevisionID := bookSourceRevisionID(book.ID)
+	if incrementalBookSourceKind(kind) {
+		if len(sourcePaths) == 0 {
+			return BookSource{}, fmt.Errorf("%s incremental extraction requires a persisted source file", kind)
+		}
+		if _, revision, err := service.PersistSourceLifecycle(sourceLifecycleRequestFromBookSource(book, sourcePaths[0], sourceRevisionID)); err != nil {
+			return BookSource{}, fmt.Errorf("persist %s source lifecycle: %w", kind, err)
+		} else {
+			sourceRevisionID = revision.RevisionID
+		}
+	}
+	var incrementalCompletionStatus SourceLifecycleWorkStatus
 	document, extractErr := service.extractBookSourceIR(ctx, kind, sourcePaths, sourceFileName, book, now, options)
 	if extractErr != nil {
 		book.Status = BookSourceStatusFailed
 		book.Error = extractErr.Error()
+		readiness := bookSourceFailedReadiness(book, SourceReadinessFailureExtraction, extractErr.Error())
+		book.SourceReadiness = &readiness
+		if incrementalBookSourceKind(kind) {
+			if statusErr := service.UpdateSourceLifecycleWorkStatus(book.ID, sourceRevisionID, SourceLifecycleWorkStatusFailed); statusErr != nil {
+				return BookSource{}, statusErr
+			}
+		}
 	} else {
 		book = BookSourceFromIR(document, book)
+		readiness := bookSourceNeedsMetadataReadiness(book)
+		book.SourceReadiness = &readiness
+		if incrementalBookSourceKind(kind) {
+			if err := service.persistIncrementalBookSourceManifests(ctx, book, document, sourceRevisionID, now); err != nil {
+				_ = service.UpdateSourceLifecycleWorkStatus(book.ID, sourceRevisionID, SourceLifecycleWorkStatusFailed)
+				return BookSource{}, fmt.Errorf("persist %s incremental manifest snapshots: %w", kind, err)
+			}
+			incrementalCompletionStatus = SourceLifecycleWorkStatusComplete
+			if len(incrementalDocumentWarnings(document)) > 0 {
+				incrementalCompletionStatus = SourceLifecycleWorkStatusCompleteWithWarnings
+			}
+		}
 	}
 
 	service.updateBookSource(storedBookSource{BookSource: book})
 	if err := service.writeBookSourceMetadata(book); err != nil {
+		if incrementalBookSourceKind(kind) && extractErr == nil {
+			_ = service.UpdateSourceLifecycleWorkStatus(book.ID, sourceRevisionID, SourceLifecycleWorkStatusFailed)
+		}
 		return BookSource{}, err
 	}
 	if extractErr == nil {
 		if err := service.writeBookSourceContentIRDocument(book.ID, document); err != nil {
+			if incrementalBookSourceKind(kind) {
+				_ = service.UpdateSourceLifecycleWorkStatus(book.ID, sourceRevisionID, SourceLifecycleWorkStatusFailed)
+			}
 			return BookSource{}, err
 		}
 	} else {
 		if err := service.writeBookSourceContentIR(book); err != nil {
+			return BookSource{}, err
+		}
+	}
+	if incrementalBookSourceKind(kind) && extractErr == nil {
+		if err := service.UpdateSourceLifecycleWorkStatus(book.ID, sourceRevisionID, incrementalCompletionStatus); err != nil {
 			return BookSource{}, err
 		}
 	}
@@ -169,6 +211,7 @@ func (service *Service) listProjectBookSources(projectID string, summary bool) (
 		if book.ProjectID == project.ID {
 			nextBook := book.BookSource
 			ensureBookStructureMetadata(&nextBook)
+			nextBook = ensureBookSourceReadiness(nextBook)
 			if summary {
 				nextBook = summarizeBookSource(nextBook)
 			}
@@ -192,6 +235,7 @@ func (service *Service) GetBookSource(id string) (BookSource, error) {
 	}
 	nextBook := book.BookSource
 	ensureBookStructureMetadata(&nextBook)
+	nextBook = ensureBookSourceReadiness(nextBook)
 	return nextBook, nil
 }
 
@@ -234,6 +278,38 @@ func (service *Service) UpdateBookSourceSpeechPolicy(id string, request SourceSp
 	}
 	book.UpdatedAt = time.Now().UTC()
 	ensureBookStructureMetadata(&book)
+	book = ensureBookSourceReadiness(book)
+	service.updateBookSource(storedBookSource{BookSource: book})
+	if err := service.writeBookSourceMetadata(book); err != nil {
+		return BookSource{}, err
+	}
+	return book, nil
+}
+
+func (service *Service) ConfirmBookSourceReadiness(id string, request SourceReadinessConfirmationRequest) (BookSource, error) {
+	service.mu.RLock()
+	stored, ok := service.books[strings.TrimSpace(id)]
+	service.mu.RUnlock()
+	if !ok {
+		return BookSource{}, ErrBookSourceNotFound
+	}
+	book := stored.BookSource
+	ensureBookStructureMetadata(&book)
+	if book.Status != BookSourceStatusReady {
+		readiness := bookSourceFailedReadiness(book, SourceReadinessFailureExtraction, book.Error)
+		book.SourceReadiness = &readiness
+		return book, nil
+	}
+	now := time.Now().UTC()
+	if title := strings.TrimSpace(request.Title); title != "" {
+		book.Title = title
+	}
+	if profile := strings.TrimSpace(request.SpeechPolicyProfile); profile != "" {
+		book.SourceSpeechPolicyProfile = profile
+	}
+	readiness := confirmedBookSourceReadiness(book, request, now)
+	book.SourceReadiness = &readiness
+	book.UpdatedAt = now
 	service.updateBookSource(storedBookSource{BookSource: book})
 	if err := service.writeBookSourceMetadata(book); err != nil {
 		return BookSource{}, err
@@ -259,7 +335,7 @@ func (service *Service) bookSourceScopeContent(
 	}
 	spans := bookScopeSpans(book, scope)
 	section := findBookSectionForScope(book, scope)
-	warnings := make([]string, 0)
+	warnings := append([]string(nil), book.Warnings...)
 	if section != nil {
 		warnings = append(warnings, section.Warnings...)
 	}
@@ -290,6 +366,23 @@ func (service *Service) bookScopePolicySource(
 	request SpeechPolicyPreviewRequest,
 ) (PreparedSource, []string) {
 	blocks, warnings := service.bookScopeBlocks(book, scope, text)
+	return service.bookPolicySourceForBlocks(book, blocks, request), warnings
+}
+
+func (service *Service) bookTextPolicySource(
+	book BookSource,
+	text string,
+	request SpeechPolicyPreviewRequest,
+) (PreparedSource, []string) {
+	blocks, _, warnings := prepareNarrationBlocks(text, service.options.SourcePrepSentenceMaxRunes)
+	return service.bookPolicySourceForBlocks(book, blocks, request), warnings
+}
+
+func (service *Service) bookPolicySourceForBlocks(
+	book BookSource,
+	blocks []NarrationBlock,
+	request SpeechPolicyPreviewRequest,
+) PreparedSource {
 	profileName := strings.TrimSpace(request.Profile)
 	project, err := service.GetProject(book.ProjectID)
 	if err == nil && profileName != "" {
@@ -308,9 +401,9 @@ func (service *Service) bookScopePolicySource(
 			source,
 			speechPolicyEvaluatorForSource(project, book.SourceSpeechPolicyProfile, book.SourceSpeechPolicyOverrides, profileName, request.Overrides),
 			service.options.SourcePrepSentenceMaxRunes,
-		), warnings
+		)
 	}
-	return applySpeechPolicyToPreparedSource(source, profileName, request.Overrides, service.options.SourcePrepSentenceMaxRunes), warnings
+	return applySpeechPolicyToPreparedSource(source, profileName, request.Overrides, service.options.SourcePrepSentenceMaxRunes)
 }
 
 func (service *Service) bookScopeBlocks(
@@ -394,13 +487,25 @@ func (service *Service) CreateBookNarrationJob(
 	if err != nil {
 		return VoiceJob{}, err
 	}
-	policySource, warnings := service.bookScopePolicySource(book, scope, narrationText, SpeechPolicyPreviewRequest{
+	useRequestSpeechText := false
+	if trimmedSpeechText := strings.TrimSpace(request.SpeechText); trimmedSpeechText != "" {
+		narrationText = trimmedSpeechText
+		useRequestSpeechText = true
+	}
+	policyRequest := SpeechPolicyPreviewRequest{
 		Profile:        request.SpeechPolicyProfile,
 		Overrides:      request.SpeechPolicyOverrides,
 		VoiceProfileID: request.VoiceProfileID,
 		Locale:         request.Locale,
 		TTSEngine:      request.TTSEngine,
-	})
+	}
+	var policySource PreparedSource
+	var warnings []string
+	if useRequestSpeechText {
+		policySource, warnings = service.bookTextPolicySource(book, narrationText, policyRequest)
+	} else {
+		policySource, warnings = service.bookScopePolicySource(book, scope, narrationText, policyRequest)
+	}
 	narrationText = strings.TrimSpace(policySource.SpeechText)
 	if narrationText == "" {
 		return VoiceJob{}, ErrEmptyText
@@ -451,536 +556,6 @@ func (service *Service) BookCinemaDiagnostics() BookCinemaDiagnostics {
 		PythonPath:               service.options.BookPDFPythonPath,
 		PythonScript:             service.options.BookPDFExtractorScriptPath,
 		Adapters:                 service.AdapterDiagnostics(),
-	}
-}
-
-func resolveBookNarrationScope(book BookSource, requested *BookScope) (string, *BookScope, error) {
-	if requested == nil || requested.Type == "" || requested.Type == BookScopeTypeBook {
-		scope := &BookScope{Type: BookScopeTypeBook, Label: "Full book"}
-		return book.Text, scope, nil
-	}
-	switch requested.Type {
-	case BookScopeTypeChapter:
-		for _, chapter := range book.Chapters {
-			if chapter.Index == requested.ChapterIndex {
-				text := strings.TrimSpace(chapter.Text)
-				if text == "" && chapter.PageStart > 0 && chapter.PageEnd >= chapter.PageStart {
-					text = strings.TrimSpace(pagesText(book.Pages, chapter.PageStart, chapter.PageEnd))
-				}
-				if text == "" {
-					return "", nil, fmt.Errorf("chapter %d has no readable text", requested.ChapterIndex)
-				}
-				scope := &BookScope{
-					Type:         BookScopeTypeChapter,
-					ChapterIndex: chapter.Index,
-					Label:        chapter.Title,
-				}
-				if strings.TrimSpace(scope.Label) == "" {
-					scope.Label = fmt.Sprintf("Chapter %d", chapter.Index)
-				}
-				return text, scope, nil
-			}
-		}
-		return "", nil, fmt.Errorf("chapter %d was not found in book source", requested.ChapterIndex)
-	case BookScopeTypePages:
-		pageStart := requested.PageStart
-		pageEnd := requested.PageEnd
-		if pageStart <= 0 || pageEnd <= 0 || pageEnd < pageStart {
-			return "", nil, fmt.Errorf("invalid PDF page range")
-		}
-		selectedPages := make([]BookSourcePage, 0, pageEnd-pageStart+1)
-		for _, page := range book.Pages {
-			if page.Index >= pageStart && page.Index <= pageEnd {
-				selectedPages = append(selectedPages, page)
-			}
-		}
-		if len(selectedPages) == 0 {
-			return "", nil, fmt.Errorf("pages %d-%d were not found in book source", pageStart, pageEnd)
-		}
-		parts := make([]string, 0, len(selectedPages))
-		for _, page := range selectedPages {
-			if text := strings.TrimSpace(page.Text); text != "" {
-				parts = append(parts, text)
-			}
-		}
-		text := strings.Join(parts, "\n\n")
-		if strings.TrimSpace(text) == "" {
-			return "", nil, fmt.Errorf("pages %d-%d have no readable text", pageStart, pageEnd)
-		}
-		label := fmt.Sprintf("Pages %d-%d", pageStart, pageEnd)
-		if pageStart == pageEnd {
-			label = fmt.Sprintf("Page %d", pageStart)
-		}
-		return text, &BookScope{
-			Type:      BookScopeTypePages,
-			PageStart: pageStart,
-			PageEnd:   pageEnd,
-			Label:     label,
-		}, nil
-	default:
-		return "", nil, fmt.Errorf("unsupported book narration scope: %s", requested.Type)
-	}
-}
-
-func pagesText(pages []BookSourcePage, pageStart int, pageEnd int) string {
-	parts := make([]string, 0, pageEnd-pageStart+1)
-	for _, page := range pages {
-		if page.Index >= pageStart && page.Index <= pageEnd {
-			if text := strings.TrimSpace(page.Text); text != "" {
-				parts = append(parts, text)
-			}
-		}
-	}
-	return strings.Join(parts, "\n\n")
-}
-
-func cloneBookScope(scope *BookScope) *BookScope {
-	if scope == nil {
-		return nil
-	}
-	cloned := *scope
-	return &cloned
-}
-
-func cloneReadingPosition(position *ReadingPosition) *ReadingPosition {
-	if position == nil {
-		return nil
-	}
-	cloned := *position
-	if position.Locator != nil {
-		locator := *position.Locator
-		cloned.Locator = &locator
-	}
-	if position.LocatorEnvelope != nil {
-		envelope := *position.LocatorEnvelope
-		cloned.LocatorEnvelope = &envelope
-	}
-	return &cloned
-}
-
-func summarizeBookSource(book BookSource) BookSource {
-	book.Text = ""
-	book.WordSpans = nil
-	if len(book.Pages) > 0 {
-		pages := make([]BookSourcePage, len(book.Pages))
-		copy(pages, book.Pages)
-		for index := range pages {
-			pages[index].Text = ""
-		}
-		book.Pages = pages
-	}
-	if len(book.Chapters) > 0 {
-		chapters := make([]BookSourceChapter, len(book.Chapters))
-		copy(chapters, book.Chapters)
-		for index := range chapters {
-			chapters[index].Text = ""
-		}
-		book.Chapters = chapters
-	}
-	return book
-}
-
-func ensureBookStructureMetadata(book *BookSource) {
-	if book == nil {
-		return
-	}
-	if strings.TrimSpace(book.StructureVersion) == "" && (len(book.Chapters) > 0 || len(book.Pages) > 0) {
-		book.StructureVersion = bookSourceStructureVersion
-	}
-	if len(book.Sections) == 0 {
-		if len(book.Chapters) > 0 {
-			book.Sections = sectionsFromChapters(book.Chapters)
-		} else if len(book.Pages) > 0 {
-			book.Sections = sectionsFromPages(book.Pages, 2)
-		}
-	}
-	if len(book.ReadingOrder) == 0 && len(book.Sections) > 0 {
-		book.ReadingOrder = make([]string, 0, len(book.Sections))
-		for _, section := range book.Sections {
-			book.ReadingOrder = append(book.ReadingOrder, section.ID)
-		}
-	}
-	if strings.TrimSpace(book.DefaultSectionID) == "" {
-		book.DefaultSectionID = firstNarratableSectionID(book.Sections)
-	}
-	if book.ChapterCount == 0 && len(book.Chapters) > 0 {
-		book.ChapterCount = countNarratableChapters(book.Chapters)
-	}
-}
-
-func sectionsFromChapters(chapters []BookSourceChapter) []BookSourceSection {
-	sections := make([]BookSourceSection, 0, len(chapters))
-	for _, chapter := range chapters {
-		role := normalizeBookSectionRole(chapter.Role, chapter.Title, chapter.SourceHref)
-		isNarratable := chapter.IsNarratable || role == bookSectionRoleBody
-		id := strings.TrimSpace(chapter.ID)
-		if id == "" {
-			id = fmt.Sprintf("chapter-%d", chapter.Index)
-		}
-		sections = append(sections, BookSourceSection{
-			ID:                  id,
-			Index:               len(sections),
-			Title:               chapterTitle(chapter.Title, chapter.Index),
-			Role:                role,
-			IsNarratable:        isNarratable,
-			Kind:                "chapter",
-			ChapterIndex:        chapter.Index,
-			PageStart:           chapter.PageStart,
-			PageEnd:             chapter.PageEnd,
-			SourceHref:          chapter.SourceHref,
-			WordCount:           chapter.WordCount,
-			EstimatedDurationMS: estimateBookDurationMS(chapter.WordCount),
-			Warnings:            chapter.Warnings,
-		})
-	}
-	return sections
-}
-
-func sectionsFromPages(pages []BookSourcePage, spreadSize int) []BookSourceSection {
-	if spreadSize <= 0 {
-		spreadSize = 2
-	}
-	sections := make([]BookSourceSection, 0)
-	for index := 0; index < len(pages); index += spreadSize {
-		start := pages[index].Index
-		end := pages[min(index+spreadSize-1, len(pages)-1)].Index
-		wordCount := 0
-		for _, page := range pages[index:min(index+spreadSize, len(pages))] {
-			wordCount += page.WordCount
-		}
-		rangeText := pagesText(pages, start, end)
-		isNarratable := wordCount > 0 && !looksLikePDFTableOfContents(rangeText)
-		role := bookSectionRoleBody
-		if !isNarratable && wordCount > 0 {
-			role = bookSectionRoleFrontmatter
-		}
-		label := pageRangeLabel(start, end)
-		sections = append(sections, BookSourceSection{
-			ID:                  fmt.Sprintf("pages-%d-%d", start, end),
-			Index:               len(sections),
-			Title:               label,
-			Role:                role,
-			IsNarratable:        isNarratable,
-			Kind:                "pages",
-			PageStart:           start,
-			PageEnd:             end,
-			WordCount:           wordCount,
-			EstimatedDurationMS: estimateBookDurationMS(wordCount),
-		})
-	}
-	return sections
-}
-
-func firstNarratableSectionID(sections []BookSourceSection) string {
-	for _, section := range sections {
-		if section.IsNarratable {
-			return section.ID
-		}
-	}
-	if len(sections) > 0 {
-		return sections[0].ID
-	}
-	return ""
-}
-
-func countNarratableChapters(chapters []BookSourceChapter) int {
-	count := 0
-	for _, chapter := range chapters {
-		if chapter.IsNarratable || chapter.Role == "" {
-			count++
-		}
-	}
-	return count
-}
-
-func bookScopeSpans(book BookSource, scope *BookScope) []BookSourceWordSpan {
-	if scope == nil {
-		return book.WordSpans
-	}
-	spans := book.WordSpans
-	switch scope.Type {
-	case BookScopeTypeChapter:
-		filtered := make([]BookSourceWordSpan, 0)
-		for _, span := range spans {
-			if span.Chapter == scope.ChapterIndex {
-				filtered = append(filtered, span)
-			}
-		}
-		return filtered
-	case BookScopeTypePages:
-		filtered := make([]BookSourceWordSpan, 0)
-		for _, span := range spans {
-			if span.PageIndex >= scope.PageStart && span.PageIndex <= scope.PageEnd {
-				filtered = append(filtered, span)
-			}
-		}
-		return filtered
-	default:
-		return spans
-	}
-}
-
-func findBookSectionForScope(book BookSource, scope *BookScope) *BookSourceSection {
-	if scope == nil {
-		return nil
-	}
-	for _, section := range book.Sections {
-		if scope.Type == BookScopeTypeChapter && section.ChapterIndex == scope.ChapterIndex {
-			nextSection := section
-			return &nextSection
-		}
-		if scope.Type == BookScopeTypePages &&
-			section.PageStart == scope.PageStart &&
-			section.PageEnd == scope.PageEnd {
-			nextSection := section
-			return &nextSection
-		}
-	}
-	return nil
-}
-
-func estimateBookDurationMS(wordCount int) int {
-	if wordCount <= 0 {
-		return 0
-	}
-	const wordsPerMinute = 155
-	return int(float64(wordCount) / wordsPerMinute * 60_000)
-}
-
-func chapterTitle(title string, index int) string {
-	if strings.TrimSpace(title) != "" {
-		return strings.TrimSpace(title)
-	}
-	return fmt.Sprintf("Chapter %d", index)
-}
-
-func pageRangeLabel(start int, end int) string {
-	if start == end {
-		return fmt.Sprintf("Page %d", start)
-	}
-	return fmt.Sprintf("Pages %d-%d", start, end)
-}
-
-func commandAvailable(commandName string) bool {
-	_, err := exec.LookPath(commandName)
-	return err == nil
-}
-
-func (service *Service) pythonPDFExtractorAvailable() bool {
-	scriptPath, err := service.pdfAdapterCLIPath()
-	if err != nil {
-		return false
-	}
-	pythonPath := service.pdfAdapterPythonPath()
-	command := exec.Command(pythonPath, scriptPath, "--check")
-	return command.Run() == nil
-}
-
-func (service *Service) reloadBookSources() {
-	baseDir, err := filepath.Abs(service.options.BookSourceDir)
-	if err != nil {
-		return
-	}
-	entries, err := os.ReadDir(baseDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			_ = os.MkdirAll(baseDir, 0o755)
-		}
-		return
-	}
-
-	books := make(map[string]storedBookSource)
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		metadataBytes, readErr := os.ReadFile(filepath.Join(baseDir, entry.Name(), bookSourceMetadataFilename))
-		if readErr != nil {
-			continue
-		}
-		var book BookSource
-		if err := jsonUnmarshalBook(metadataBytes, &book); err != nil {
-			continue
-		}
-		if strings.TrimSpace(book.ID) == "" {
-			continue
-		}
-		if strings.TrimSpace(book.ProjectID) == "" {
-			book.ProjectID = defaultProjectID
-		}
-		if book.CreatedAt.IsZero() {
-			book.CreatedAt = time.Now().UTC()
-		}
-		if book.UpdatedAt.IsZero() {
-			book.UpdatedAt = book.CreatedAt
-		}
-		books[book.ID] = storedBookSource{BookSource: book}
-	}
-
-	service.mu.Lock()
-	service.books = books
-	service.mu.Unlock()
-}
-
-func (service *Service) updateBookSource(book storedBookSource) {
-	service.mu.Lock()
-	service.books[book.ID] = book
-	service.mu.Unlock()
-}
-
-func (service *Service) writeBookSourceMetadata(book BookSource) error {
-	outputDir, err := filepath.Abs(filepath.Join(service.options.BookSourceDir, book.ID))
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(outputDir, 0o755); err != nil {
-		return err
-	}
-	return writeJSON(filepath.Join(outputDir, bookSourceMetadataFilename), book)
-}
-
-func (service *Service) importBundleBookSource(book BookSource, projectID string) error {
-	now := time.Now().UTC()
-	book.ID = newID()
-	book.ProjectID = projectID
-	book.CreatedAt = now
-	book.UpdatedAt = now
-	if book.Status == "" {
-		book.Status = BookSourceStatusReady
-	}
-	service.updateBookSource(storedBookSource{BookSource: book})
-	if err := service.writeBookSourceMetadata(book); err != nil {
-		return err
-	}
-	return service.writeBookSourceContentIR(book)
-}
-
-func (service *Service) removeProjectBookSources(projectID string) error {
-	service.mu.RLock()
-	bookIDs := make([]string, 0)
-	for id, book := range service.books {
-		if book.ProjectID == projectID {
-			bookIDs = append(bookIDs, id)
-		}
-	}
-	service.mu.RUnlock()
-
-	for _, id := range bookIDs {
-		outputDir, err := filepath.Abs(filepath.Join(service.options.BookSourceDir, id))
-		if err == nil {
-			_ = os.RemoveAll(outputDir)
-		}
-		service.mu.Lock()
-		delete(service.books, id)
-		service.mu.Unlock()
-	}
-	return nil
-}
-
-func detectBookSourceKind(sourceFileName string) (BookSourceKind, error) {
-	switch strings.ToLower(filepath.Ext(sourceFileName)) {
-	case ".pdf":
-		return BookSourceKindPDF, nil
-	case ".epub":
-		return BookSourceKindEPUB, nil
-	case ".docx":
-		return BookSourceKindDOCX, nil
-	case ".md", ".markdown":
-		return BookSourceKindMarkdown, nil
-	case ".html", ".htm", ".zip":
-		return BookSourceKindHTML, nil
-	case ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp":
-		return BookSourceKindImage, nil
-	default:
-		return "", fmt.Errorf("unsupported book source type; upload a PDF, EPUB, DOCX, Markdown, HTML, zipped HTML package, or image")
-	}
-}
-
-func detectBookSourceKindFromUploads(uploads []BookSourceUpload) (BookSourceKind, error) {
-	if len(uploads) == 0 {
-		return "", fmt.Errorf("book source upload is required")
-	}
-	if len(uploads) == 1 {
-		return detectBookSourceKind(uploads[0].Filename)
-	}
-	for _, upload := range uploads {
-		kind, err := detectBookSourceKind(upload.Filename)
-		if err != nil {
-			return "", err
-		}
-		if kind != BookSourceKindImage {
-			return "", fmt.Errorf("multiple book source files must be ordered images")
-		}
-	}
-	return BookSourceKindImage, nil
-}
-
-func normalizeBookSourceImportOptions(options BookSourceImportOptions) BookSourceImportOptions {
-	return BookSourceImportOptions{
-		ImportProfile: normalizeBookImportProfile(options.ImportProfile),
-		PDFTableMode:  normalizePDFTableMode(options.PDFTableMode),
-	}
-}
-
-func normalizeBookImportProfile(profile BookImportProfile) BookImportProfile {
-	switch profile {
-	case BookImportProfileScholarly:
-		return BookImportProfileScholarly
-	default:
-		return BookImportProfileAuto
-	}
-}
-
-func normalizePDFTableMode(mode PDFTableMode) PDFTableMode {
-	switch mode {
-	case PDFTableModeOff, PDFTableModeStructured:
-		return mode
-	default:
-		return PDFTableModeAuto
-	}
-}
-
-func bookSourceUploadName(uploads []BookSourceUpload, kind BookSourceKind) string {
-	if len(uploads) == 1 {
-		return strings.TrimSpace(uploads[0].Filename)
-	}
-	if kind == BookSourceKindImage {
-		return fmt.Sprintf("%d image pages", len(uploads))
-	}
-	return "Book source"
-}
-
-func bookSourceUploadBytes(uploads []BookSourceUpload) int64 {
-	var total int64
-	for _, upload := range uploads {
-		total += upload.Bytes
-	}
-	return total
-}
-
-func storedBookSourceFilename(filename string, index int, total int) string {
-	extension := strings.ToLower(filepath.Ext(filename))
-	if extension == "" {
-		extension = ".bin"
-	}
-	if total <= 1 {
-		return "source" + extension
-	}
-	return fmt.Sprintf("source-%04d%s", index+1, extension)
-}
-
-func imageExtensionForContentType(contentType string) string {
-	switch strings.ToLower(strings.TrimSpace(contentType)) {
-	case "image/jpeg", "image/jpg":
-		return ".jpg"
-	case "image/tiff":
-		return ".tiff"
-	case "image/bmp":
-		return ".bmp"
-	case "image/webp":
-		return ".webp"
-	default:
-		return ".png"
 	}
 }
 

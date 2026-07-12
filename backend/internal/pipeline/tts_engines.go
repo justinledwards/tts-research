@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/justinedwards/tts-research/backend/internal/agents"
+	"github.com/justinedwards/tts-research/backend/internal/providers"
 	"github.com/justinedwards/tts-research/backend/internal/ssml"
 )
 
@@ -132,16 +133,23 @@ func (service *Service) ListTTSEngines() []TTSEngineDiagnostics {
 	service.mu.RLock()
 	defer service.mu.RUnlock()
 
+	autoDiagnostics := TTSEngineDiagnostics{
+		ID:                TTSEngineAuto,
+		Label:             "Auto",
+		Status:            "ready",
+		Default:           false,
+		Local:             true,
+		SupportsVoice:     true,
+		SupportsReference: true,
+		Reason:            "Chooses Kokoro for dependable long-form reading and Kokoro Clone when a voice profile is selected.",
+		Setup:             "Use Auto unless you are evaluating a specific model.",
+	}
+	if registration, ok := service.ttsEngines[service.defaultTTS]; ok {
+		autoDiagnostics.Metadata = registration.Diagnostics.Metadata
+		autoDiagnostics.SupportsSSML = registration.Diagnostics.SupportsSSML
+	}
 	engines := make([]TTSEngineDiagnostics, 0, len(service.ttsEngines)+1)
-	engines = append(engines, TTSEngineDiagnostics{
-		ID:      TTSEngineAuto,
-		Label:   "Auto",
-		Status:  "ready",
-		Default: false,
-		Local:   true,
-		Reason:  "Chooses Kokoro for dependable long-form reading and Kokoro Clone when a voice profile is selected.",
-		Setup:   "Use Auto unless you are evaluating a specific model.",
-	})
+	engines = append(engines, ttsEngineDiagnosticsWithCapabilities(autoDiagnostics))
 	for id, registration := range service.ttsEngines {
 		diagnostics := registration.Diagnostics
 		diagnostics.ID = id
@@ -153,7 +161,7 @@ func (service *Service) ListTTSEngines() []TTSEngineDiagnostics {
 				diagnostics.Status = "ready"
 			}
 		}
-		engines = append(engines, diagnostics)
+		engines = append(engines, ttsEngineDiagnosticsWithCapabilities(diagnostics))
 	}
 	sort.SliceStable(engines, func(left int, right int) bool {
 		order := map[string]int{
@@ -179,6 +187,21 @@ func (service *Service) ListTTSEngines() []TTSEngineDiagnostics {
 		return engines[left].Label < engines[right].Label
 	})
 	return engines
+}
+
+func ttsEngineDiagnosticsWithCapabilities(diagnostics TTSEngineDiagnostics) TTSEngineDiagnostics {
+	diagnostics.Capabilities = providers.CapabilitiesForDiagnostics(providers.DiagnosticInput{
+		ID:                diagnostics.ID,
+		Label:             diagnostics.Label,
+		Status:            diagnostics.Status,
+		Local:             diagnostics.Local,
+		SupportsVoice:     diagnostics.SupportsVoice,
+		SupportsReference: diagnostics.SupportsReference,
+		SupportsArtifacts: diagnostics.SupportsArtifacts,
+		SupportsSSML:      diagnostics.SupportsSSML,
+		Metadata:          diagnostics.Metadata,
+	})
+	return diagnostics
 }
 
 func (service *Service) resolveTTSEngine(engineID string, isReferenceProfile bool) (string, TTSAgent, error) {

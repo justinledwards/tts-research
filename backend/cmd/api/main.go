@@ -16,8 +16,6 @@ import (
 	"github.com/justinedwards/tts-research/backend/internal/pipeline"
 )
 
-const maxSafeWorkerCount = 2
-
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	optimizer, err := optimizerFromEnv()
@@ -64,247 +62,10 @@ func main() {
 		}()
 	}
 
-	segmentMaxRunes, err := envIntWithDefault("VOICE_SEGMENT_MAX_RUNES", 300)
+	service, err := pipelineServiceFromEnv(logger, optimizer, ttsAgent, checker)
 	if err != nil {
-		logger.Error("invalid pipeline configuration", "error", err)
 		os.Exit(1)
 	}
-	segmentWorkers, err := envIntWithDefault("VOICE_SEGMENT_WORKERS", 2)
-	if err != nil {
-		logger.Error("invalid pipeline configuration", "error", err)
-		os.Exit(1)
-	}
-	referenceWorkerCount, err := envIntWithDefault("KOKOCLONE_WORKER_COUNT", 2)
-	if err != nil {
-		logger.Error("invalid tts configuration", "error", err)
-		os.Exit(1)
-	}
-	studioSegmentWorkers, err := envIntWithDefault("VOICE_SEGMENT_WORKERS_STUDIO", 2)
-	if err != nil {
-		logger.Error("invalid pipeline configuration", "error", err)
-		os.Exit(1)
-	}
-	studioSegmentMaxRunes, err := envIntWithDefault("VOICE_SEGMENT_MAX_RUNES_STUDIO", 0)
-	if err != nil {
-		logger.Error("invalid pipeline configuration", "error", err)
-		os.Exit(1)
-	}
-	studioSegmentWorkersAdaptive, err := envIntWithDefault("VOICE_SEGMENT_WORKERS_STUDIO_ADAPTIVE", 2)
-	if err != nil {
-		logger.Error("invalid pipeline configuration", "error", err)
-		os.Exit(1)
-	}
-	studioSegmentMaxRunesAdaptive, err := envIntWithDefault("VOICE_SEGMENT_MAX_RUNES_STUDIO_ADAPTIVE", 0)
-	if err != nil {
-		logger.Error("invalid pipeline configuration", "error", err)
-		os.Exit(1)
-	}
-	sourcePrepSentenceMaxRunes, err := envIntWithDefault("VOICE_SOURCE_PREP_SENTENCE_MAX_RUNES", 0)
-	if err != nil {
-		logger.Error("invalid pipeline configuration", "error", err)
-		os.Exit(1)
-	}
-	maxProfileBytes, err := envInt64WithDefault("VOICE_PROFILE_MAX_BYTES", 0)
-	if err != nil {
-		logger.Error("invalid pipeline configuration", "error", err)
-		os.Exit(1)
-	}
-	voiceProfileReferenceMaxSeconds, err := envIntWithDefault("VOICE_PROFILE_REFERENCE_MAX_SECONDS", 60)
-	if err != nil {
-		logger.Error("invalid pipeline configuration", "error", err)
-		os.Exit(1)
-	}
-	voiceProfileReferenceMinSeconds, err := envIntWithDefault("VOICE_PROFILE_REFERENCE_MIN_SECONDS", 20)
-	if err != nil {
-		logger.Error("invalid pipeline configuration", "error", err)
-		os.Exit(1)
-	}
-	voiceProfileReferenceTargetSeconds, err := envIntWithDefault("VOICE_PROFILE_REFERENCE_TARGET_SECONDS", 45)
-	if err != nil {
-		logger.Error("invalid pipeline configuration", "error", err)
-		os.Exit(1)
-	}
-	voiceProfileLikenessTimeoutSeconds, err := envIntWithDefault("VOICE_PROFILE_LIKENESS_TIMEOUT_SECONDS", 120)
-	if err != nil {
-		logger.Error("invalid pipeline configuration", "error", err)
-		os.Exit(1)
-	}
-	voiceProfileDiarizationToken := strings.TrimSpace(os.Getenv("PYANNOTE_AUTH_TOKEN"))
-	if voiceProfileDiarizationToken == "" {
-		voiceProfileDiarizationToken = strings.TrimSpace(os.Getenv("HF_TOKEN"))
-	}
-	bookPDFRequireTextExtractor, err := envBoolWithDefault("VOICE_BOOK_PDF_REQUIRE_TEXT_EXTRACTOR", false)
-	if err != nil {
-		logger.Error("invalid book source configuration", "error", err)
-		os.Exit(1)
-	}
-	sourceURLAllowPrivate, err := envBoolWithDefault("VOICE_SOURCE_URL_ALLOW_PRIVATE", false)
-	if err != nil {
-		logger.Error("invalid source URL configuration", "error", err)
-		os.Exit(1)
-	}
-	alignmentEnabled, err := envBoolWithDefault("ALIGNMENT_ENABLED", false)
-	if err != nil {
-		logger.Error("invalid alignment configuration", "error", err)
-		os.Exit(1)
-	}
-	alignmentTimeoutSeconds, err := envIntWithDefault("ALIGNMENT_TIMEOUT_SECONDS", 120)
-	if err != nil {
-		logger.Error("invalid alignment configuration", "error", err)
-		os.Exit(1)
-	}
-	segmentWorkers = clampWorkerCount("VOICE_SEGMENT_WORKERS", segmentWorkers, maxSafeWorkerCount, logger)
-	studioSegmentWorkers = clampWorkerCount("VOICE_SEGMENT_WORKERS_STUDIO", studioSegmentWorkers, maxSafeWorkerCount, logger)
-	studioSegmentWorkersAdaptive = clampWorkerCount(
-		"VOICE_SEGMENT_WORKERS_STUDIO_ADAPTIVE",
-		studioSegmentWorkersAdaptive,
-		maxSafeWorkerCount,
-		logger,
-	)
-	referenceWorkerCount = clampWorkerCount("KOKOCLONE_WORKER_COUNT", referenceWorkerCount, maxSafeWorkerCount, logger)
-
-	logger.Info(
-		"pipeline configuration",
-		"requestedSegmentWorkers",
-		segmentWorkers,
-		"requestedSegmentMaxRunes",
-		segmentMaxRunes,
-		"requestedStudioSegmentWorkers",
-		studioSegmentWorkers,
-		"requestedStudioSegmentMaxRunes",
-		studioSegmentMaxRunes,
-		"requestedStudioAdaptiveSegmentWorkers",
-		studioSegmentWorkersAdaptive,
-		"requestedStudioAdaptiveSegmentMaxRunes",
-		studioSegmentMaxRunesAdaptive,
-		"requestedSourcePrepSentenceMaxRunes",
-		sourcePrepSentenceMaxRunes,
-		"requestedReferenceWorkerCount",
-		referenceWorkerCount,
-		"voiceProfileReferenceMinSeconds",
-		voiceProfileReferenceMinSeconds,
-		"voiceProfileReferenceTargetSeconds",
-		voiceProfileReferenceTargetSeconds,
-		"voiceProfileReferenceMaxSeconds",
-		voiceProfileReferenceMaxSeconds,
-		"voiceProfileDiarizationModel",
-		envWithDefault("VOICE_PROFILE_DIARIZATION_MODEL", "pyannote/speaker-diarization-community-1"),
-		"voiceProfileDiarizationModelPath",
-		strings.TrimSpace(os.Getenv("VOICE_PROFILE_DIARIZATION_MODEL_PATH")),
-		"voiceProfileDiarizationLocalModelDir",
-		strings.TrimSpace(os.Getenv("VOICE_PROFILE_DIARIZATION_LOCAL_MODEL_DIR")),
-		"voiceProfileDiarizationConfigured",
-		voiceProfileDiarizationToken != "" ||
-			strings.TrimSpace(os.Getenv("VOICE_PROFILE_DIARIZATION_MODEL_PATH")) != "" ||
-			strings.TrimSpace(os.Getenv("VOICE_PROFILE_DIARIZATION_LOCAL_MODEL_DIR")) != "",
-		"voiceProfileDenoiseProvider",
-		envWithDefault("VOICE_PROFILE_DENOISE_PROVIDER", "ffmpeg"),
-		"voiceProfileDenoiseStrength",
-		envWithDefault("VOICE_PROFILE_DENOISE_STRENGTH", "balanced"),
-		"bookPdfPythonPath",
-		envWithDefault("VOICE_BOOK_PDF_PYTHON_PATH", "./.venv/bin/python"),
-		"bookPdfExtractorScript",
-		envWithDefault("VOICE_BOOK_PDF_EXTRACTOR_SCRIPT_PATH", "./adapters/pdf/cli.py"),
-		"bookPdfRequireTextExtractor",
-		bookPDFRequireTextExtractor,
-		"studioInheritsFromDefault",
-		studioSegmentWorkers == 0 && studioSegmentMaxRunes == 0,
-	)
-
-	service := pipeline.NewService(
-		optimizer,
-		ttsAgent,
-		checker,
-		pipeline.Options{
-			MaxRetries:                           3,
-			SegmentMaxRunes:                      segmentMaxRunes,
-			SegmentWorkers:                       segmentWorkers,
-			StudioSegmentMaxRunes:                studioSegmentMaxRunes,
-			StudioSegmentWorkers:                 studioSegmentWorkers,
-			StudioSegmentWorkersAdaptive:         studioSegmentWorkersAdaptive,
-			StudioSegmentMaxRunesAdaptive:        studioSegmentMaxRunesAdaptive,
-			SourcePrepSentenceMaxRunes:           sourcePrepSentenceMaxRunes,
-			ReferenceWorkerCount:                 referenceWorkerCount,
-			JobDataDir:                           envWithDefault("VOICE_JOB_DATA_DIR", "./data/jobs"),
-			ProjectDataDir:                       envWithDefault("VOICE_PROJECT_DATA_DIR", "./data/projects"),
-			BookSourceDir:                        envWithDefault("VOICE_BOOK_SOURCE_DATA_DIR", "./data/book-sources"),
-			SourcePrepDir:                        envWithDefault("VOICE_SOURCE_PREP_DATA_DIR", "./data/source-preps"),
-			ProgressDataDir:                      envWithDefault("VOICE_PROGRESS_DATA_DIR", "./data/progress"),
-			PlaybackSessionDir:                   envWithDefault("VOICE_PLAYBACK_SESSION_DATA_DIR", "./data/playback-sessions"),
-			VoiceDataDir:                         envWithDefault("VOICE_DATA_DIR", "./data/voices"),
-			FFMPEGPath:                           envWithDefault("FFMPEG_PATH", "ffmpeg"),
-			SourceURLAllowPrivate:                sourceURLAllowPrivate,
-			BookPDFPythonPath:                    envWithDefault("VOICE_BOOK_PDF_PYTHON_PATH", "./.venv/bin/python"),
-			BookPDFExtractorScriptPath:           envWithDefault("VOICE_BOOK_PDF_EXTRACTOR_SCRIPT_PATH", "./adapters/pdf/cli.py"),
-			BookPDFRequireTextExtractor:          bookPDFRequireTextExtractor,
-			VoiceProfileDir:                      envWithDefault("VOICE_PROFILE_DATA_DIR", "./data/voice-profiles"),
-			VoiceProfileSourceDir:                envWithDefault("VOICE_PROFILE_SOURCE_DATA_DIR", "./data/voice-profile-sources"),
-			MaxProfileBytes:                      maxProfileBytes,
-			VoiceProfileReferenceMinSeconds:      voiceProfileReferenceMinSeconds,
-			VoiceProfileReferenceTargetSeconds:   voiceProfileReferenceTargetSeconds,
-			VoiceProfileReferenceMaxSeconds:      voiceProfileReferenceMaxSeconds,
-			VoiceProfileDiarizationModel:         envWithDefault("VOICE_PROFILE_DIARIZATION_MODEL", "pyannote/speaker-diarization-community-1"),
-			VoiceProfileDiarizationModelPath:     strings.TrimSpace(os.Getenv("VOICE_PROFILE_DIARIZATION_MODEL_PATH")),
-			VoiceProfileDiarizationLocalModelDir: strings.TrimSpace(os.Getenv("VOICE_PROFILE_DIARIZATION_LOCAL_MODEL_DIR")),
-			VoiceProfileDiarizationToken:         voiceProfileDiarizationToken,
-			VoiceProfileCredentialsPath:          envWithDefault("VOICE_PROFILE_CREDENTIALS_PATH", "./data/local-credentials/huggingface.json"),
-			VoiceProfileAnalysisPythonPath:       envWithDefault("VOICE_PROFILE_ANALYSIS_PYTHON_PATH", "python3"),
-			VoiceProfileAnalysisScriptPath:       envWithDefault("VOICE_PROFILE_ANALYSIS_SCRIPT_PATH", "./scripts/profile_analyze.py"),
-			VoiceProfileAnalysisStrategyVersion:  envWithDefault("VOICE_PROFILE_ANALYSIS_STRATEGY_VERSION", "speaker-aware-v1"),
-			VoiceProfileDenoiseProvider:          envWithDefault("VOICE_PROFILE_DENOISE_PROVIDER", "ffmpeg"),
-			VoiceProfileDenoiseStrength:          envWithDefault("VOICE_PROFILE_DENOISE_STRENGTH", "balanced"),
-			VoiceProfileEmbeddingModel:           envWithDefault("VOICE_PROFILE_EMBEDDING_MODEL", "pyannote/embedding"),
-			VoiceProfileEmbeddingScriptPath:      envWithDefault("VOICE_PROFILE_EMBEDDING_SCRIPT_PATH", "./scripts/profile_likeness.py"),
-			VoiceProfileLikenessCalibrationText:  envWithDefault("VOICE_PROFILE_LIKENESS_CALIBRATION_TEXT", "This is a short voice clone calibration sample for measuring speaker likeness."),
-			VoiceProfileLikenessTimeoutSeconds:   voiceProfileLikenessTimeoutSeconds,
-			VoiceProfileArtifactPythonPath:       envWithDefault("VOICE_PROFILE_ARTIFACT_PYTHON_PATH", "./.venv-voice-embed/bin/python"),
-			VoiceProfileArtifactScriptPath:       envWithDefault("VOICE_PROFILE_ARTIFACT_SCRIPT_PATH", "./scripts/profile_embed_artifact.py"),
-			VoiceProfileArtifactTimeoutSeconds:   envIntWithFallback("VOICE_PROFILE_ARTIFACT_TIMEOUT_SECONDS", 3600),
-			VoiceProfileArtifactSteps:            envIntWithFallback("VOICE_PROFILE_ARTIFACT_STEPS", 0),
-			ResearchModules:                      researchModuleConfigsFromEnv(),
-			ResearchModulePromptDisabled:         envBoolWithFallback("RESEARCH_MODULE_PROMPT_DISABLED", false),
-			ResearchModuleCloneTimeoutSeconds:    envIntWithFallback("RESEARCH_MODULE_CLONE_TIMEOUT_SECONDS", 180),
-			Alignment: pipeline.AlignmentOptions{
-				Enabled:          alignmentEnabled,
-				Preferred:        alignmentPreferredFromEnv(),
-				MFABin:           envWithDefault("ALIGNMENT_MFA_BIN", "mfa"),
-				MFADictionary:    strings.TrimSpace(os.Getenv("ALIGNMENT_MFA_DICTIONARY")),
-				MFAAcousticModel: strings.TrimSpace(os.Getenv("ALIGNMENT_MFA_ACOUSTIC_MODEL")),
-				AeneasPython:     envWithDefault("ALIGNMENT_AENEAS_PYTHON", "python3"),
-				GentleURL:        strings.TrimSpace(os.Getenv("ALIGNMENT_GENTLE_URL")),
-				TimeoutSeconds:   alignmentTimeoutSeconds,
-			},
-			DefaultTTSEngine: defaultTTSEngineFromEnv(),
-			TTSEngines:       ttsEngineRegistrationsFromEnv(ttsAgent),
-		},
-	)
-	serviceOptions := service.Options()
-
-	logger.Info(
-		"pipeline configuration (resolved)",
-		"segmentWorkers",
-		serviceOptions.SegmentWorkers,
-		"segmentMaxRunes",
-		serviceOptions.SegmentMaxRunes,
-		"studioSegmentWorkers",
-		serviceOptions.StudioSegmentWorkers,
-		"studioSegmentMaxRunes",
-		serviceOptions.StudioSegmentMaxRunes,
-		"studioAdaptiveSegmentWorkers",
-		serviceOptions.StudioSegmentWorkersAdaptive,
-		"studioAdaptiveSegmentMaxRunes",
-		serviceOptions.StudioSegmentMaxRunesAdaptive,
-		"sourcePrepSentenceMaxRunes",
-		serviceOptions.SourcePrepSentenceMaxRunes,
-		"resolvedReferenceWorkerCount",
-		referenceWorkerCount,
-		"voiceProfileReferenceMinSeconds",
-		serviceOptions.VoiceProfileReferenceMinSeconds,
-		"voiceProfileReferenceTargetSeconds",
-		serviceOptions.VoiceProfileReferenceTargetSeconds,
-		"voiceProfileReferenceMaxSeconds",
-		serviceOptions.VoiceProfileReferenceMaxSeconds,
-	)
 
 	app := httpapi.NewRouter(service)
 	port := envWithDefault("BACKEND_PORT", "8080")
@@ -403,7 +164,7 @@ func ttsAgentFromEnv() (pipeline.TTSAgent, error) {
 			return nil, err
 		}
 
-		timeout, err := envIntWithDefault("KOKORO_TIMEOUT_SECONDS", 180)
+		timeout, err := envIntWithDefault("KOKORO_TIMEOUT_SECONDS", 3600)
 		if err != nil {
 			return nil, err
 		}
@@ -437,12 +198,14 @@ func ttsAgentFromEnv() (pipeline.TTSAgent, error) {
 		if strings.TrimSpace(embedPythonPath) == "" {
 			embedPythonPath = strings.TrimSpace(referencePythonPath)
 		}
-		if err := ensurePythonCanImportModule(embedPythonPath, "kokoro"); err != nil {
-			return nil, fmt.Errorf(
-				"kokoro embed synthesis runtime misconfiguration: resolved interpreter %q cannot import kokoro (checked at startup). Configure KOKORO_EMBED_PYTHON_PATH (preferred) or KOKORO_PYTHON_PATH to a Python environment with kokoro installed: %w",
-				embedPythonPath,
-				err,
-			)
+		if envBoolWithFallback("KOKORO_IMPORT_CHECK_ON_START", false) {
+			if err := ensurePythonCanImportModule(embedPythonPath, "kokoro"); err != nil {
+				return nil, fmt.Errorf(
+					"kokoro embed synthesis runtime misconfiguration: resolved interpreter %q cannot import kokoro (checked at startup). Configure KOKORO_EMBED_PYTHON_PATH (preferred) or KOKORO_PYTHON_PATH to a Python environment with kokoro installed: %w",
+					embedPythonPath,
+					err,
+				)
+			}
 		}
 
 		return agents.NewKokoroTTSAgent(agents.KokoroConfig{
@@ -513,6 +276,9 @@ func ttsEngineRegistrationsFromEnv(defaultAgent pipeline.TTSAgent) []pipeline.TT
 				Languages:     []string{"en", "ja", "zh", "es", "fr", "hi", "it", "pt"},
 				ModelCache:    envWithDefault("KOKORO_DATA_DIR", "./data/kokoro"),
 				Setup:         setup,
+				Metadata: map[string]string{
+					"runtimeProvider": provider,
+				},
 			},
 		})
 	}
@@ -590,7 +356,7 @@ func supertonicRegistrationFromEnv() pipeline.TTSEngineRegistration {
 	if err != nil {
 		autoDownload = false
 	}
-	timeout, err := envIntWithDefault("SUPERTONIC_TIMEOUT_SECONDS", 180)
+	timeout, err := envIntWithDefault("SUPERTONIC_TIMEOUT_SECONDS", 3600)
 	if err != nil {
 		timeout = 180
 	}
@@ -793,7 +559,7 @@ func checkerFromEnv() (pipeline.VoiceChecker, error) {
 
 	switch provider {
 	case "qwen", "qwen-asr":
-		timeout, err := envIntWithDefault("QWEN_ASR_TIMEOUT_SECONDS", 240)
+		timeout, err := envIntWithDefault("QWEN_ASR_TIMEOUT_SECONDS", 3600)
 		if err != nil {
 			return nil, err
 		}
@@ -899,6 +665,29 @@ func alignmentPreferredFromEnv() []alignment.TimingSource {
 		return []alignment.TimingSource{alignment.TimingSourceMFA, alignment.TimingSourceAeneas, alignment.TimingSourceGentle}
 	}
 	return preferred
+}
+
+func alignmentModeFromEnv(alignmentEnabled bool) alignment.AlignmentMode {
+	raw := strings.ToLower(strings.TrimSpace(os.Getenv("ALIGNMENT_MODE")))
+	switch raw {
+	case "off":
+		return alignment.AlignmentModeOff
+	case "provider-only":
+		return alignment.AlignmentModeProviderOnly
+	case "provider-plus-validation":
+		return alignment.AlignmentModeProviderPlusValidation
+	case "local-forced-alignment":
+		return alignment.AlignmentModeLocalForcedAlignment
+	case "local-forced-alignment-required":
+		return alignment.AlignmentModeLocalForcedRequired
+	case "heuristic-fallback":
+		return alignment.AlignmentModeHeuristicFallback
+	default:
+		if alignmentEnabled {
+			return alignment.AlignmentModeProviderPlusValidation
+		}
+		return alignment.AlignmentModeProviderOnly
+	}
 }
 
 func clampWorkerCount(name string, requested, max int, logger *slog.Logger) int {

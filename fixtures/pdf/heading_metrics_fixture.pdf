@@ -1,0 +1,50 @@
+%PDF-1.4
+% TTS_RESEARCH_PDF_FIXTURE: {
+%   "title": "Heading Metrics Fixture",
+%   "tagged": false,
+%   "pages": [
+%     {
+%       "index": 1,
+%       "label": "Page 1",
+%       "blocks": [
+%         {
+%           "kind": "body",
+%           "text": "Cache and Cache Coherency",
+%           "fontSize": 22,
+%           "fontBold": true,
+%           "bbox": {"x": 40, "y": 52, "width": 280, "height": 28},
+%           "confidence": 0.92,
+%           "readingOrder": 0
+%         },
+%         {
+%           "kind": "body",
+%           "text": "Executive summary",
+%           "fontSize": 17,
+%           "fontBold": true,
+%           "bbox": {"x": 40, "y": 88, "width": 220, "height": 22},
+%           "confidence": 0.91,
+%           "readingOrder": 1
+%         },
+%         {
+%           "kind": "body",
+%           "text": "A cache is a small fast storage structure placed close to execution units.",
+%           "fontSize": 11,
+%           "fontBold": false,
+%           "bbox": {"x": 40, "y": 126, "width": 440, "height": 42},
+%           "confidence": 0.9,
+%           "readingOrder": 2
+%         },
+%         {
+%           "kind": "body",
+%           "text": "Plain body opening",
+%           "fontSize": 11,
+%           "fontBold": false,
+%           "bbox": {"x": 40, "y": 180, "width": 190, "height": 20},
+%           "confidence": 0.9,
+%           "readingOrder": 3
+%         }
+%       ]
+%     }
+%   ]
+% }
+%%EOF

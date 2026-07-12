@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "readalong-manifest.v1",
+  "manifestId": "ram-md-002",
+  "sourceId": "contract-markdown",
+  "sourceRevisionId": "sr-md-002",
+  "extractionRevisionId": "er-md-002",
+  "readingUnitManifestId": "rum-md-002",
+  "manifestRevision": 2,
+  "state": "current",
+  "generatedAt": "2026-05-17T01:12:05Z",
+  "unitIds": ["unit-md-0001"],
+  "speechPlanIds": ["contract-markdown"],
+  "audioArtifactIds": ["audio-md-checked", "audio-md-interrupted"],
+  "highlightMapIds": ["contract-audio-word"],
+  "artifactCompatibilityIds": ["compat-md-checked"],
+  "syncFidelityDecisionIds": ["sync-md-exact", "sync-md-low-resource"],
+  "progressIds": ["progress-md-current", "progress-md-remapped"],
+  "repairOverlayIds": ["repair-md-001"]
+}

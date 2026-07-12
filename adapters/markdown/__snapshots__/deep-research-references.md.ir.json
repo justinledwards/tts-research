@@ -1,0 +1,808 @@
+{
+  "adapterVersion": "markdown-adapter-v2",
+  "blocks": [
+    {
+      "confidence": 0.98,
+      "endOffset": 22,
+      "id": "markdown-heading-deep-research-referencesmdheadingdeep-research-export-deep-research-export-3c5788e5b69b",
+      "index": 1,
+      "kind": "heading",
+      "label": "Deep Research Export",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/0",
+        "columnEnd": 23,
+        "columnStart": 1,
+        "lineEnd": 1,
+        "lineStart": 1,
+        "sourceSlice": "# Deep Research Export",
+        "fingerprint": "42fff683a43658805250e655ab0f8f07",
+        "identityAnchor": "deep-research-references.md|heading|Deep Research Export|# Deep Research Export",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:0"
+      },
+      "speakMode": "speak",
+      "spokenText": "Deep Research Export",
+      "startOffset": 0,
+      "text": "# Deep Research Export",
+      "warnings": [],
+      "orderKey": "000000001024"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 81,
+      "id": "markdown-body-deep-research-referencesmdbodydeep-research-exportthe-narrative-section-should-remain-available-for-speech-ccbb1421478e",
+      "index": 2,
+      "kind": "body",
+      "label": "The narrative section should remain available for speech.",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/1",
+        "columnEnd": 58,
+        "columnStart": 1,
+        "lineEnd": 3,
+        "lineStart": 3,
+        "sourceSlice": "The narrative section should remain available for speech.",
+        "fingerprint": "efea6fabd4fb396abf53d3e295e5f5aa",
+        "identityAnchor": "deep-research-references.md|body|Deep Research Export|The narrative section should remain available for speech.",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:24"
+      },
+      "speakMode": "speak",
+      "spokenText": "The narrative section should remain available for speech.",
+      "startOffset": 24,
+      "text": "The narrative section should remain available for speech.",
+      "warnings": [],
+      "orderKey": "000000025601"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 93,
+      "id": "markdown-reference-deep-research-referencesmdreferencedeep-research-exportreferences-a52848021f82",
+      "index": 3,
+      "kind": "reference",
+      "label": "References",
+      "language": "",
+      "metadata": {
+        "referenceSection": true,
+        "referenceSectionLabel": "References",
+        "referenceSectionMode": "implicit",
+        "referenceSectionHeading": true,
+        "astPath": "/children/2",
+        "columnEnd": 11,
+        "columnStart": 1,
+        "lineEnd": 5,
+        "lineStart": 5,
+        "sourceSlice": "References",
+        "fingerprint": "ba569d1f7c313e015b24548ccef2d6d9",
+        "identityAnchor": "deep-research-references.md|reference|Deep Research Export|References",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:83"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 83,
+      "text": "References",
+      "warnings": ["reference_section", "reference_on_demand"],
+      "orderKey": "000000086018"
+    },
+    {
+      "confidence": 0.72,
+      "endOffset": 133,
+      "id": "markdown-embedded-deep-research-referencesmdembeddeddeep-research-export-deep-research-referencesstart-aba12a5a611f",
+      "index": 4,
+      "kind": "embedded",
+      "label": "HTML embedded html",
+      "language": "",
+      "metadata": {
+        "embeddedFamily": "html",
+        "embeddedName": "html",
+        "astPath": "/children/3",
+        "columnEnd": 40,
+        "columnStart": 1,
+        "lineEnd": 6,
+        "lineStart": 6,
+        "sourceSlice": "<!-- deep-research-references:start -->",
+        "fingerprint": "ae717376ea8cc2958c7c28ceec31c134",
+        "identityAnchor": "deep-research-references.md|embedded|Deep Research Export|<!-- deep-research-references:start -->",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:94"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 94,
+      "text": "<!-- deep-research-references:start -->",
+      "warnings": ["embedded_fallback"],
+      "orderKey": "000000097283"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 381,
+      "id": "markdown-reference-deep-research-referencesmdreferencedeep-research-exporthttpsopentelemetryiodocswhat-is-opentelemetry-httpswwwcsumdedubenpapersshneiderman1996eyespdf-httpswwww3orgtrtrace-context-httpswwwnasagovhuman-systems-integration-divisionnasa-task-load-index-tlx-c4389cca54b7",
+      "index": 5,
+      "kind": "reference",
+      "label": "Reference section",
+      "language": "",
+      "metadata": {
+        "referenceSection": true,
+        "referenceSectionLabel": "deep-research-references",
+        "referenceSectionMode": "marker",
+        "astPath": "/children/4",
+        "columnEnd": 86,
+        "columnStart": 1,
+        "lineEnd": 11,
+        "lineStart": 8,
+        "sourceSlice": "    https://opentelemetry.io/docs/what-is-opentelemetry/\n    https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf\n    https://www.w3.org/TR/trace-context/\n    https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/",
+        "fingerprint": "c9909385e45012202e0d39a384a13b30",
+        "identityAnchor": "deep-research-references.md|reference|Deep Research Export|https://opentelemetry.io/docs/what-is-opentelemetry/ https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf https://www.w3.org/TR/trace-context/ https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:135"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 135,
+      "text": "    https://opentelemetry.io/docs/what-is-opentelemetry/\n    https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf\n    https://www.w3.org/TR/trace-context/\n    https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/",
+      "warnings": ["reference_section", "reference_on_demand"],
+      "orderKey": "000000139268"
+    },
+    {
+      "confidence": 0.72,
+      "endOffset": 420,
+      "id": "markdown-embedded-deep-research-referencesmdembeddeddeep-research-export-deep-research-referencesend-d73bdb6732af",
+      "index": 6,
+      "kind": "embedded",
+      "label": "HTML embedded html",
+      "language": "",
+      "metadata": {
+        "embeddedFamily": "html",
+        "embeddedName": "html",
+        "astPath": "/children/5",
+        "columnEnd": 38,
+        "columnStart": 1,
+        "lineEnd": 13,
+        "lineStart": 13,
+        "sourceSlice": "<!-- deep-research-references:end -->",
+        "fingerprint": "1e741e25cd568eec01272f26cbb92748",
+        "identityAnchor": "deep-research-references.md|embedded|Deep Research Export|<!-- deep-research-references:end -->",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:383"
+      },
+      "speakMode": "skip",
+      "spokenText": "",
+      "startOffset": 383,
+      "text": "<!-- deep-research-references:end -->",
+      "warnings": ["embedded_fallback"],
+      "orderKey": "000000393221"
+    },
+    {
+      "confidence": 0.98,
+      "endOffset": 491,
+      "id": "markdown-body-deep-research-referencesmdbodydeep-research-exportthis-paragraph-follows-the-reference-list-and-should-still-be-spoken-429abab6e23e",
+      "index": 7,
+      "kind": "body",
+      "label": "This paragraph follows the reference list and should",
+      "language": "",
+      "metadata": {
+        "astPath": "/children/6",
+        "columnEnd": 70,
+        "columnStart": 1,
+        "lineEnd": 15,
+        "lineStart": 15,
+        "sourceSlice": "This paragraph follows the reference list and should still be spoken.",
+        "fingerprint": "0a4f2ca90c6b2cf0ae43541fd2155eb5",
+        "identityAnchor": "deep-research-references.md|body|Deep Research Export|This paragraph follows the reference list and should still be spoken.",
+        "identityVersion": "stable-unit-identity.v1",
+        "orderAnchor": "byte:422"
+      },
+      "speakMode": "speak",
+      "spokenText": "This paragraph follows the reference list and should still be spoken.",
+      "startOffset": 422,
+      "text": "This paragraph follows the reference list and should still be spoken.",
+      "warnings": [],
+      "orderKey": "000000433158"
+    }
+  ],
+  "document": {
+    "adapterVersion": "markdown-adapter-v2",
+    "generatedAt": "1970-01-01T00:00:00.000Z",
+    "id": "deep-research-references",
+    "metadata": {
+      "capabilities": {
+        "commonmark": true,
+        "directives": true,
+        "frontmatter": true,
+        "gfm": true,
+        "mdx": true,
+        "mystSafeSubset": true
+      },
+      "frontmatter": []
+    },
+    "nodes": [
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "# Deep Research Export",
+        "kind": "heading",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/0",
+          "columnEnd": 23,
+          "columnStart": 1,
+          "lineEnd": 1,
+          "lineStart": 1,
+          "sourceSlice": "# Deep Research Export",
+          "fingerprint": "42fff683a43658805250e655ab0f8f07",
+          "identityAnchor": "deep-research-references.md|heading|Deep Research Export|# Deep Research Export",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:0"
+        },
+        "nodeId": "markdown-heading-deep-research-referencesmdheadingdeep-research-export-deep-research-export-3c5788e5b69b",
+        "normalisedText": "# Deep Research Export",
+        "orderKey": "000000001024",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/0",
+              "columnEnd": 23,
+              "columnStart": 1,
+              "lineEnd": 1,
+              "lineStart": 1,
+              "path": "deep-research-references.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 22,
+            "start": 0
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "deep-research-references"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "heading",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "Deep Research Export",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "The narrative section should remain available for speech.",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/1",
+          "columnEnd": 58,
+          "columnStart": 1,
+          "lineEnd": 3,
+          "lineStart": 3,
+          "sourceSlice": "The narrative section should remain available for speech.",
+          "fingerprint": "efea6fabd4fb396abf53d3e295e5f5aa",
+          "identityAnchor": "deep-research-references.md|body|Deep Research Export|The narrative section should remain available for speech.",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:24"
+        },
+        "nodeId": "markdown-body-deep-research-referencesmdbodydeep-research-exportthe-narrative-section-should-remain-available-for-speech-ccbb1421478e",
+        "normalisedText": "The narrative section should remain available for speech.",
+        "orderKey": "000000025601",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/1",
+              "columnEnd": 58,
+              "columnStart": 1,
+              "lineEnd": 3,
+              "lineStart": 3,
+              "path": "deep-research-references.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 81,
+            "start": 24
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "deep-research-references"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "The narrative section should remain available for speech.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "References",
+        "kind": "reference",
+        "lang": "und",
+        "metadata": {
+          "referenceSection": true,
+          "referenceSectionLabel": "References",
+          "referenceSectionMode": "implicit",
+          "referenceSectionHeading": true,
+          "astPath": "/children/2",
+          "columnEnd": 11,
+          "columnStart": 1,
+          "lineEnd": 5,
+          "lineStart": 5,
+          "sourceSlice": "References",
+          "fingerprint": "ba569d1f7c313e015b24548ccef2d6d9",
+          "identityAnchor": "deep-research-references.md|reference|Deep Research Export|References",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:83"
+        },
+        "nodeId": "markdown-reference-deep-research-referencesmdreferencedeep-research-exportreferences-a52848021f82",
+        "normalisedText": "References",
+        "orderKey": "000000086018",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/2",
+              "columnEnd": 11,
+              "columnStart": 1,
+              "lineEnd": 5,
+              "lineStart": 5,
+              "path": "deep-research-references.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 93,
+            "start": 83
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "deep-research-references"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "reference",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["reference_section", "reference_on_demand"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.72,
+        "dir": "ltr",
+        "displayText": "<!-- deep-research-references:start -->",
+        "kind": "embedded",
+        "lang": "und",
+        "metadata": {
+          "embeddedFamily": "html",
+          "embeddedName": "html",
+          "astPath": "/children/3",
+          "columnEnd": 40,
+          "columnStart": 1,
+          "lineEnd": 6,
+          "lineStart": 6,
+          "sourceSlice": "<!-- deep-research-references:start -->",
+          "fingerprint": "ae717376ea8cc2958c7c28ceec31c134",
+          "identityAnchor": "deep-research-references.md|embedded|Deep Research Export|<!-- deep-research-references:start -->",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:94"
+        },
+        "nodeId": "markdown-embedded-deep-research-referencesmdembeddeddeep-research-export-deep-research-referencesstart-aba12a5a611f",
+        "normalisedText": "<!-- deep-research-references:start -->",
+        "orderKey": "000000097283",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/3",
+              "columnEnd": 40,
+              "columnStart": 1,
+              "lineEnd": 6,
+              "lineStart": 6,
+              "path": "deep-research-references.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 133,
+            "start": 94
+          },
+          "extraction": {
+            "confidence": 0.72,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "deep-research-references"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "embedded",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["embedded_fallback"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "https://opentelemetry.io/docs/what-is-opentelemetry/\n    https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf\n    https://www.w3.org/TR/trace-context/\n    https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/",
+        "kind": "reference",
+        "lang": "und",
+        "metadata": {
+          "referenceSection": true,
+          "referenceSectionLabel": "deep-research-references",
+          "referenceSectionMode": "marker",
+          "astPath": "/children/4",
+          "columnEnd": 86,
+          "columnStart": 1,
+          "lineEnd": 11,
+          "lineStart": 8,
+          "sourceSlice": "    https://opentelemetry.io/docs/what-is-opentelemetry/\n    https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf\n    https://www.w3.org/TR/trace-context/\n    https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/",
+          "fingerprint": "c9909385e45012202e0d39a384a13b30",
+          "identityAnchor": "deep-research-references.md|reference|Deep Research Export|https://opentelemetry.io/docs/what-is-opentelemetry/ https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf https://www.w3.org/TR/trace-context/ https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:135"
+        },
+        "nodeId": "markdown-reference-deep-research-referencesmdreferencedeep-research-exporthttpsopentelemetryiodocswhat-is-opentelemetry-httpswwwcsumdedubenpapersshneiderman1996eyespdf-httpswwww3orgtrtrace-context-httpswwwnasagovhuman-systems-integration-divisionnasa-task-load-index-tlx-c4389cca54b7",
+        "normalisedText": "https://opentelemetry.io/docs/what-is-opentelemetry/ https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf https://www.w3.org/TR/trace-context/ https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/",
+        "orderKey": "000000139268",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/4",
+              "columnEnd": 86,
+              "columnStart": 1,
+              "lineEnd": 11,
+              "lineStart": 8,
+              "path": "deep-research-references.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 381,
+            "start": 135
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "deep-research-references"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "reference",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["reference_section", "reference_on_demand"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.72,
+        "dir": "ltr",
+        "displayText": "<!-- deep-research-references:end -->",
+        "kind": "embedded",
+        "lang": "und",
+        "metadata": {
+          "embeddedFamily": "html",
+          "embeddedName": "html",
+          "astPath": "/children/5",
+          "columnEnd": 38,
+          "columnStart": 1,
+          "lineEnd": 13,
+          "lineStart": 13,
+          "sourceSlice": "<!-- deep-research-references:end -->",
+          "fingerprint": "1e741e25cd568eec01272f26cbb92748",
+          "identityAnchor": "deep-research-references.md|embedded|Deep Research Export|<!-- deep-research-references:end -->",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:383"
+        },
+        "nodeId": "markdown-embedded-deep-research-referencesmdembeddeddeep-research-export-deep-research-referencesend-d73bdb6732af",
+        "normalisedText": "<!-- deep-research-references:end -->",
+        "orderKey": "000000393221",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/5",
+              "columnEnd": 38,
+              "columnStart": 1,
+              "lineEnd": 13,
+              "lineStart": 13,
+              "path": "deep-research-references.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 420,
+            "start": 383
+          },
+          "extraction": {
+            "confidence": 0.72,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "deep-research-references"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "embedded",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "skip",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "skip",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": ["embedded_fallback"]
+      },
+      {
+        "adapterVersion": "markdown-adapter-v2",
+        "confidence": 0.98,
+        "dir": "ltr",
+        "displayText": "This paragraph follows the reference list and should still be spoken.",
+        "kind": "body",
+        "lang": "und",
+        "metadata": {
+          "astPath": "/children/6",
+          "columnEnd": 70,
+          "columnStart": 1,
+          "lineEnd": 15,
+          "lineStart": 15,
+          "sourceSlice": "This paragraph follows the reference list and should still be spoken.",
+          "fingerprint": "0a4f2ca90c6b2cf0ae43541fd2155eb5",
+          "identityAnchor": "deep-research-references.md|body|Deep Research Export|This paragraph follows the reference list and should still be spoken.",
+          "identityVersion": "stable-unit-identity.v1",
+          "orderAnchor": "byte:422"
+        },
+        "nodeId": "markdown-body-deep-research-referencesmdbodydeep-research-exportthis-paragraph-follows-the-reference-list-and-should-still-be-spoken-429abab6e23e",
+        "normalisedText": "This paragraph follows the reference list and should still be spoken.",
+        "orderKey": "000000433158",
+        "parentId": "",
+        "provenance": {
+          "format": "markdown",
+          "locator": {
+            "markdown": {
+              "astPath": "/children/6",
+              "columnEnd": 70,
+              "columnStart": 1,
+              "lineEnd": 15,
+              "lineStart": 15,
+              "path": "deep-research-references.md"
+            },
+            "type": "markdown"
+          },
+          "offsets": {
+            "end": 491,
+            "start": 422
+          },
+          "extraction": {
+            "confidence": 0.98,
+            "extractor": "markdown",
+            "extractorVersion": "markdown-adapter-v2",
+            "step": "markdown-ast-to-content-ir",
+            "supportTier": "core"
+          },
+          "sourceId": "deep-research-references"
+        },
+        "rights": {
+          "notes": "",
+          "status": "unknown"
+        },
+        "role": "body",
+        "script": "Latn",
+        "speech": {
+          "policyHint": {
+            "emphasis": "",
+            "mode": "speak",
+            "pauseAfterMs": 0,
+            "pauseBeforeMs": 0
+          },
+          "speechPolicy": {
+            "explanation": "Policy has not been evaluated yet.",
+            "mode": "speak",
+            "profile": "Enterprise"
+          }
+        },
+        "speechText": "This paragraph follows the reference list and should still be spoken.",
+        "ui": {
+          "highlightUnitHint": "node",
+          "progressionHint": "linear"
+        },
+        "warnings": []
+      }
+    ],
+    "projectId": "",
+    "schemaVersion": "content-ir.v1",
+    "sourceId": "deep-research-references",
+    "sourceName": "deep-research-references.md",
+    "sourceType": "preparedSource"
+  },
+  "metadata": {
+    "capabilities": {
+      "commonmark": true,
+      "directives": true,
+      "frontmatter": true,
+      "gfm": true,
+      "mdx": true,
+      "mystSafeSubset": true
+    },
+    "frontmatter": []
+  },
+  "parseMode": "strict",
+  "skippedItems": [
+    {
+      "id": "markdown-reference-deep-research-referencesmdreferencedeep-research-exportreferences-a52848021f82",
+      "kind": "reference",
+      "offset": 83,
+      "reason": "reference marker available through citation policy",
+      "text": "References"
+    },
+    {
+      "id": "markdown-embedded-deep-research-referencesmdembeddeddeep-research-export-deep-research-referencesstart-aba12a5a611f",
+      "kind": "embedded",
+      "offset": 94,
+      "reason": "embedded construct kept as safe fallback",
+      "text": "<!-- deep-research-references:start -->"
+    },
+    {
+      "id": "markdown-reference-deep-research-referencesmdreferencedeep-research-exporthttpsopentelemetryiodocswhat-is-opentelemetry-httpswwwcsumdedubenpapersshneiderman1996eyespdf-httpswwww3orgtrtrace-context-httpswwwnasagovhuman-systems-integration-divisionnasa-task-load-index-tlx-c4389cca54b7",
+      "kind": "reference",
+      "offset": 135,
+      "reason": "reference marker available through citation policy",
+      "text": "    https://opentelemetry.io/docs/what-is-opentelemetry/\n    https://www.cs.umd.edu/~ben/papers/Shneiderman1996eyes.pdf\n    https://www.w3.org/TR/trace-context/\n    https://www.nasa.gov/human-systems-integration-division/nasa-task-load-index-tlx/"
+    },
+    {
+      "id": "markdown-embedded-deep-research-referencesmdembeddeddeep-research-export-deep-research-referencesend-d73bdb6732af",
+      "kind": "embedded",
+      "offset": 383,
+      "reason": "embedded construct kept as safe fallback",
+      "text": "<!-- deep-research-references:end -->"
+    }
+  ],
+  "title": "Deep Research Export",
+  "warnings": ["markdown_mdx_parse_recovered"]
+}

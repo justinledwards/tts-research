@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "read-along-fidelity-fixtures.v1",
+  "fixtures": [
+    {
+      "id": "epub-multiple-chapters",
+      "kind": "epub",
+      "description": "EPUB contract fixture with chapter locators for source/scope resume checks.",
+      "path": "../contracts/epub.content-ir.v1.json"
+    },
+    {
+      "id": "docx-headings-lists",
+      "kind": "docx",
+      "description": "DOCX contract fixture with paragraph locators for document read-along checks.",
+      "path": "../contracts/docx.content-ir.v1.json"
+    },
+    {
+      "id": "pdf-short-long-pages",
+      "kind": "pdf",
+      "description": "PDF contract fixture with page locators for short and long page resume checks.",
+      "path": "../contracts/pdf.content-ir.v1.json"
+    },
+    {
+      "id": "markdown-citations",
+      "kind": "markdown",
+      "description": "Markdown fixture with citations and line locators.",
+      "path": "markdown-citations.md"
+    },
+    {
+      "id": "website-skipped-chrome",
+      "kind": "website",
+      "description": "Website article fixture with navigation and footer chrome skipped by default.",
+      "path": "website-skipped-chrome.html"
+    }
+  ]
+}

@@ -1,0 +1,757 @@
+{
+  "schemaVersion": "tts-research.responsive-cinema-contract.v1",
+  "status": "owner_accepted_peer_pending",
+  "source": {
+    "peerResponsePath": "docs/reviews/chatgpt-responsive-architecture-response-v1.md",
+    "peerResponseSha256": "6778a6fe0833313f7ea679379fb6a4962e0e2d3cfc3ea2e3525dc6bf20a4e1f7",
+    "requiredFirstLineMarker": "TTS_RESPONSIVE_ARCHITECTURE_REQUEST_CHANGES",
+    "reviewArchiveSha256": "fef0fa919baf138a194c59d88e79400595b3040ea6b5c8f26afe20a44d1b3b8f"
+  },
+  "ownerDecision": {
+    "decidedAt": "2026-07-10T19:51:37+02:00",
+    "authority": "acting_product_owner",
+    "decision": "accept_rsp_01_through_rsp_15_in_repo_strangler_remake",
+    "repositoryStrategy": "continue_in_current_repository",
+    "newRepositoryAuthorized": false,
+    "peerV2Required": true
+  },
+  "authorization": {
+    "ownerAccepted": true,
+    "peerApproved": false,
+    "linearCreationAuthorized": false,
+    "productImplementationAuthorized": false,
+    "graphUnblockedIssues": ["RSP-01"],
+    "authorizedIssues": []
+  },
+  "ownerInvariants": [
+    {
+      "id": "cinema-source-ready-before-audio",
+      "statement": "Cinema is source-ready before audio.",
+      "releaseBlocking": true
+    },
+    {
+      "id": "reading-only-before-narration",
+      "statement": "Reading-only mode is available before narration.",
+      "releaseBlocking": true
+    },
+    {
+      "id": "first-playable-same-session",
+      "statement": "The first playable segment adds transport and read-along to the same Cinema session.",
+      "releaseBlocking": true
+    },
+    {
+      "id": "preview-audition-voice-only",
+      "statement": "Preview/Audition is restricted to voice-cloning and voice-comparison workflows.",
+      "releaseBlocking": true
+    },
+    {
+      "id": "responsive-performance-release-blocking",
+      "statement": "Responsive performance is release-blocking.",
+      "releaseBlocking": true
+    }
+  ],
+  "ownership": [
+    {
+      "domain": "sourceRevisionAndPreprocessing",
+      "serverAuthority": "Existing source lifecycle service",
+      "clientAuthority": "SourceSessionStore",
+      "stableIdentity": ["sourceId", "revisionId", "contentHash"],
+      "maxClientAuthorities": 1
+    },
+    {
+      "domain": "narrationExecution",
+      "serverAuthority": "Pipeline/job service",
+      "clientAuthority": "NarrationRunStore mirror",
+      "stableIdentity": ["runId"],
+      "binding": "immutable source revision and configuration",
+      "maxClientAuthorities": 1
+    },
+    {
+      "domain": "playableMediaManifest",
+      "serverAuthority": "Persisted segment/artifact manifest",
+      "clientAuthority": "Manifest slice inside NarrationRunStore",
+      "stableIdentity": ["runId", "manifestVersion", "segmentIndex", "artifactId"],
+      "maxClientAuthorities": 1
+    },
+    {
+      "domain": "playbackCursorAndIntent",
+      "serverAuthority": "Optional durable progress endpoint",
+      "clientAuthority": "PlaybackSessionController",
+      "stableIdentity": ["sourceRevisionId", "runId"],
+      "maxClientAuthorities": 1
+    },
+    {
+      "domain": "syncFidelity",
+      "serverAuthority": "Backend timing/mapping decision evidence",
+      "clientAuthority": "SyncFidelityStore or NarrationRunStore projection",
+      "stableIdentity": ["runId", "segmentIndex", "timingRevision"],
+      "maxClientAuthorities": 1
+    },
+    {
+      "domain": "openReaderCinemaSession",
+      "serverAuthority": null,
+      "clientAuthority": "CinemaSession",
+      "stableIdentity": ["sourceId", "revisionId", "contentHash", "locator"],
+      "maxClientAuthorities": 1
+    },
+    {
+      "domain": "voicePreviewAudition",
+      "serverAuthority": "Voice-preview service",
+      "clientAuthority": "VoiceAuditionSession",
+      "stableIdentity": ["previewId"],
+      "forbiddenIdentity": ["runId"],
+      "maxClientAuthorities": 1
+    }
+  ],
+  "sourceContract": {
+    "serverStates": ["absent", "preprocessing", "ready", "failed", "superseded/stale", "archived"],
+    "serverTransitions": [
+      ["absent", "preprocessing"],
+      ["preprocessing", "ready"],
+      ["preprocessing", "failed"],
+      ["ready", "superseded/stale"],
+      ["ready", "archived"]
+    ],
+    "clientStates": ["summary", "hydrating", "readable", "renderDegraded"],
+    "clientTransitions": [
+      ["summary", "hydrating"],
+      ["hydrating", "readable"],
+      ["readable", "renderDegraded"]
+    ],
+    "revisionIdentityFields": ["sourceId", "revisionId", "contentHash"],
+    "cinemaPinsRevision": true,
+    "silentRevisionSubstitutionAllowed": false,
+    "summaryDto": {
+      "canonicalFixtureSourceCount": 26,
+      "maxRawBytes": 65536,
+      "maxBaseBytes": 8192,
+      "maxPerSourceBytes": 2304,
+      "requiredFields": [
+        "sourceId",
+        "revisionId",
+        "contentHash",
+        "label",
+        "type",
+        "status",
+        "usefulCounts",
+        "timestamps",
+        "boundedDisplayMetadata"
+      ],
+      "forbiddenFields": [
+        "blocks",
+        "text",
+        "speechText",
+        "transcript",
+        "skippedItems",
+        "unboundedMetadata"
+      ]
+    }
+  },
+  "narrationRunContract": {
+    "executionStates": [
+      "idle",
+      "accepted",
+      "queued",
+      "optimizing",
+      "synthesizing",
+      "checking",
+      "completed",
+      "cancelRequested",
+      "cancelled",
+      "interruptedRetriable",
+      "failed"
+    ],
+    "nominalTransitions": [
+      ["idle", "accepted"],
+      ["accepted", "queued"],
+      ["queued", "optimizing"],
+      ["optimizing", "synthesizing"],
+      ["synthesizing", "checking"],
+      ["checking", "completed"]
+    ],
+    "activeStates": ["accepted", "queued", "optimizing", "synthesizing", "checking"],
+    "branches": [
+      {
+        "from": "anyActive",
+        "to": "cancelRequested",
+        "then": "cancelled"
+      },
+      {
+        "from": "anyActive",
+        "to": "interruptedRetriable",
+        "then": "failed"
+      },
+      {
+        "from": "anyActive",
+        "to": "failed"
+      }
+    ],
+    "playabilityEncodedAsRunPhase": false,
+    "bindingFields": [
+      "runId",
+      "sourceId",
+      "sourceRevisionId",
+      "sourceContentHash",
+      "voiceProfileVersion",
+      "engineId",
+      "engineConfigurationHash",
+      "speechPolicyHash",
+      "segmentationPolicyVersion",
+      "audioFormat"
+    ],
+    "bindingImmutable": true,
+    "retryCreatesNewRunId": true,
+    "reuseRequiresCompatibilityKey": true
+  },
+  "mediaManifestContract": {
+    "fields": [
+      "runId",
+      "manifestVersion",
+      "readySegmentCount",
+      "totalSegmentCount",
+      "contiguousPlayableThroughIndex",
+      "contiguousPlayableDurationMs",
+      "complete",
+      "segments"
+    ],
+    "segmentFields": [
+      "index",
+      "textHash",
+      "status",
+      "artifactId",
+      "artifactGeneration",
+      "artifactCompatibilityKey",
+      "audioUrl",
+      "durationMs",
+      "provisional",
+      "replaceable",
+      "checkedAt",
+      "timingRevision"
+    ],
+    "segmentStates": ["pending", "synthesizing", "playable", "superseded", "failed"],
+    "capabilities": {
+      "canPlayAudio": "contiguousPlayableDurationMs > 0",
+      "canContinueWithoutBuffering": "decodedDurationAheadMs >= configuredBufferFloor",
+      "isFullyGenerated": "all required segments have terminal usable artifacts",
+      "hasFinalAssembly": "optional final artifact exists"
+    },
+    "onlyContiguousCompatiblePrefixAutoPlayable": true,
+    "finalAssemblyRequiredForPlayback": false,
+    "firstSegmentPolicy": {
+      "targetEstimatedSpeechSeconds": [4, 8],
+      "hardTargetMaximumSeconds": 12,
+      "normallySplitAboveSeconds": 12,
+      "longSentenceClausePhraseFallbackRequired": true,
+      "publishImmediatelyAfterValidProvisionalArtifact": true,
+      "checkingAndFinalAssemblyIndependent": true,
+      "replacementAtSafeBoundary": true
+    }
+  },
+  "eventContract": {
+    "transport": "SSE",
+    "durable": true,
+    "monotonicPerRun": true,
+    "envelopeFields": [
+      "schemaVersion",
+      "eventId",
+      "runId",
+      "sequence",
+      "occurredAt",
+      "sourceId",
+      "sourceRevisionId",
+      "type",
+      "payload"
+    ],
+    "eventTypes": [
+      "run.accepted",
+      "run.phaseChanged",
+      "manifest.segmentPlayable",
+      "manifest.segmentReplaced",
+      "manifest.segmentFailed",
+      "sync.updated",
+      "run.cancelRequested",
+      "run.cancelled",
+      "run.interrupted",
+      "run.failed",
+      "run.completed",
+      "heartbeat"
+    ],
+    "snapshotFields": ["snapshotSequence"],
+    "sseIdMatchesSequenceCursor": true,
+    "reconnectInputs": ["Last-Event-ID", "afterSequence"],
+    "audioBytesOverSse": false,
+    "persistBeforePublish": ["artifact", "manifest", "runSnapshot", "sequenceRecord"],
+    "reducerRules": [
+      {
+        "condition": "sequence <= appliedSequence",
+        "action": "ignore duplicate/stale"
+      },
+      {
+        "condition": "sequence === appliedSequence + 1",
+        "action": "apply once"
+      },
+      {
+        "condition": "sequence > appliedSequence + 1",
+        "action": "record gap, fetch authoritative snapshot, replace remote run/manifest projection, then process buffered later events"
+      }
+    ],
+    "reconciliationPreserves": [
+      "Cinema locator",
+      "playback cursor",
+      "playback rate",
+      "play intent"
+    ],
+    "terminalEventDoesNotClosePlaybackSession": true
+  },
+  "playbackContract": {
+    "sessionIdentityFields": ["sourceRevisionId", "runId"],
+    "maxActiveControllersPerSession": 1,
+    "maxAudioOwnersPerSession": 1,
+    "states": [
+      "readingOnly",
+      "awaitingAudio",
+      "playable",
+      "playing",
+      "paused",
+      "buffering",
+      "ended"
+    ],
+    "fields": [
+      "state",
+      "cursorSec",
+      "rate",
+      "playIntent",
+      "activeSegmentIndex",
+      "decodedThroughSec",
+      "controllerInstanceId"
+    ],
+    "manifestAppendCapable": true,
+    "arrivalCompletedModeSwitchAllowed": false,
+    "finalAssemblyMayReplaceController": false,
+    "controlProxiesShareController": true,
+    "bufferingPreservesReading": true,
+    "safeReplacementPreservesCurrentDecodedArtifact": true,
+    "checkpointFields": [
+      "sourceId",
+      "sourceRevisionId",
+      "runId",
+      "locator",
+      "cursorSec",
+      "playbackRate",
+      "followPreference",
+      "updatedAt"
+    ],
+    "restoreState": "paused",
+    "persistDecodedBuffers": false,
+    "incompatibleCheckpointFallback": "readingOnly"
+  },
+  "syncContract": {
+    "levels": ["sourceOnly", "audioOnly", "phraseFollow", "trustedWordFollow"],
+    "independentFromRunFailure": true,
+    "timingFailureResult": "audioOnly",
+    "downgradeMayDisable": ["unsupported highlight precision"],
+    "downgradeMayNotDisable": ["reading", "audio"],
+    "transitionMayRemountReaderOrPlayer": false
+  },
+  "uxContract": {
+    "cinema": {
+      "availabilityDerivation": "sourceRevisionReady || sourceSummaryReadyForImmediateShellHydration",
+      "forbiddenDependencies": [
+        "generatedAudioLifecycle === \"ready\"",
+        "narration terminal completion",
+        "final assembled audio",
+        "ASR checking",
+        "timing fidelity"
+      ],
+      "availability": [
+        {
+          "condition": "No source selected",
+          "result": "Visible but disabled with “Choose a source.”"
+        },
+        {
+          "condition": "Source preprocessing",
+          "result": "Visible with “Preparing source”; reading controls unavailable until a readable revision exists."
+        },
+        {
+          "condition": "Source revision ready and detail resident",
+          "result": "Enabled immediately, regardless of narration state."
+        },
+        {
+          "condition": "Source revision ready but only summary resident",
+          "result": "Enabled; opens the Cinema shell immediately and hydrates the reader projection."
+        },
+        {
+          "condition": "Narration absent",
+          "result": "Fully usable in reading-only mode."
+        },
+        {
+          "condition": "Narration queued/generating/checking",
+          "result": "Fully usable; generation status is non-modal."
+        },
+        {
+          "condition": "Narration failed/cancelled",
+          "result": "Fully usable; failure/cancellation is shown without closing Cinema."
+        },
+        {
+          "condition": "Event stream disconnected",
+          "result": "Fully usable from resident source state."
+        },
+        {
+          "condition": "New source revision exists",
+          "result": "Existing Cinema remains pinned and displays a stale/superseded notice."
+        }
+      ]
+    },
+    "readingOnlyInteractions": [
+      "Open and close Cinema.",
+      "Scroll and navigate headings/blocks/pages.",
+      "Search within the source.",
+      "Select passages.",
+      "Create or use bookmarks and reading position.",
+      "Change reader theme, font, spacing, and layout.",
+      "Enter supported reader/Theatre presentation modes.",
+      "Reopen at the persisted locator.",
+      "Inspect source metadata that does not require narration.",
+      "Start or cancel narration without leaving the reader."
+    ],
+    "regularNarrationTransportOwner": "reader/Cinema session",
+    "firstPlayableAddsToSameSession": ["transport", "read-along"],
+    "previewAudition": {
+      "allowedWorkflows": ["voice-cloning", "voice-comparison"],
+      "identityField": "previewId",
+      "forbiddenInputs": ["runId", "VoiceJob"],
+      "regularNarrationSurfaces": ["Review", "Reader", "Cinema", "Teleprompt", "Theatre"]
+    }
+  },
+  "responsiveContract": {
+    "viewportWidthsCssPx": [390, 1100, 1440, 1920],
+    "releaseBlocking": true,
+    "maxDominantActionsPerSurface": 1,
+    "maxDuplicateVisibleActionLabels": 0,
+    "maxHorizontalOverflow": 0,
+    "maxControlContentOcclusions": 0,
+    "maxPrimaryActionHitTestInterceptions": 0,
+    "primaryActionHitTest": "document.elementFromPoint at center and actionable regions resolves to control or descendant",
+    "modalBackgroundInertRequired": true,
+    "nonModalDrawerMustReserveOrAdaptLayout": true,
+    "readAlongLayersMayInterceptUnrelatedControls": false,
+    "minimumTouchTargetCssPx": [44, 44]
+  },
+  "performanceContract": {
+    "releaseBlocking": true,
+    "extendsExistingThresholdsWithoutLoosening": true,
+    "machineClass": {
+      "id": "local-cpu-modest-v1",
+      "logicalCpuRange": [4, 8],
+      "minMemoryGiB": 16,
+      "storage": "SSD",
+      "gpuRequired": false
+    },
+    "productionFrontendBuildRequired": true,
+    "localhostOnly": true,
+    "discardedWarmupRuns": 1,
+    "minMeasuredRuns": 10,
+    "statistics": ["p50", "p95", "maximum"],
+    "requiredRawArtifactBindings": [
+      "sourceSha",
+      "buildSha",
+      "machineMetadata",
+      "fixtureId",
+      "providerEngineConfiguration",
+      "thresholdFileHash",
+      "coldWarmCacheState"
+    ],
+    "missingResultIsPass": false,
+    "negativeBudgetFixturesRequired": true,
+    "budgets": [
+      {
+        "id": "preparedSourceListServerTime",
+        "metric": "Prepared-source list server time",
+        "measurementWindow": "Request accepted → response bytes completed, canonical 26-source fixture",
+        "p50Max": 50,
+        "p95Max": 150,
+        "unit": "ms",
+        "additionalGate": "Raw JSON ≤64 KiB and ≤8 KiB base + 2.25 KiB/source"
+      },
+      {
+        "id": "sourceListClientIngestion",
+        "metric": "Source-list client ingestion",
+        "measurementWindow": "Fetch start → normalized summary store committed",
+        "p50Max": 75,
+        "p95Max": 200,
+        "unit": "ms",
+        "additionalGate": "One effective request per project/cache key"
+      },
+      {
+        "id": "selectedSourceDetailHydration",
+        "metric": "Selected-source detail hydration",
+        "measurementWindow": "Detail request → reader projection committed",
+        "p50Max": 120,
+        "p95Max": 300,
+        "unit": "ms",
+        "additionalGate": "Stale response cannot replace newer selection"
+      },
+      {
+        "id": "readySourceToCinemaEnabled",
+        "metric": "Ready source → Cinema enabled",
+        "measurementWindow": "Source-ready store commit → enabled action painted",
+        "p50Max": 16,
+        "p95Max": 50,
+        "unit": "ms",
+        "additionalGate": "No narration dependency"
+      },
+      {
+        "id": "residentDataCinemaOpen",
+        "metric": "Resident-data Cinema open",
+        "measurementWindow": "Input event → interactive Cinema paint",
+        "p50Max": 50,
+        "p95Max": 100,
+        "unit": "ms",
+        "additionalGate": "Reader focus target available"
+      },
+      {
+        "id": "firstUsefulColdShell",
+        "metric": "First useful cold shell",
+        "measurementWindow": "Navigation start → first primary interaction usable",
+        "p50Max": 650,
+        "p95Max": 1000,
+        "unit": "ms",
+        "additionalGate": "Optional diagnostics/rich renderers excluded"
+      },
+      {
+        "id": "visibleActionAcknowledgement",
+        "metric": "Visible action acknowledgement",
+        "measurementWindow": "Input event → visible pressed/pending/status response",
+        "p50Max": 16,
+        "p95Max": 75,
+        "unit": "ms",
+        "additionalGate": "Existing global hard limit remains 100 ms"
+      },
+      {
+        "id": "playbackCommandAcknowledgement",
+        "metric": "Playback command acknowledgement",
+        "measurementWindow": "Input event → controller state/audio effect observed",
+        "p50Max": 16,
+        "p95Max": 50,
+        "unit": "ms",
+        "additionalGate": "Retains existing threshold"
+      },
+      {
+        "id": "narrationRequestAcceptance",
+        "metric": "Narration request acceptance",
+        "measurementWindow": "Start input → accepted run visible with runId",
+        "p50Max": 50,
+        "p95Max": 150,
+        "unit": "ms",
+        "additionalGate": "No source/navigation blocking"
+      },
+      {
+        "id": "warmLocalFirstPlayable",
+        "metric": "Warm local first playable",
+        "measurementWindow": "Run accepted → first segment artifact durably committed",
+        "p50Max": 10,
+        "p95Max": 20,
+        "unit": "s",
+        "additionalGate": "Canonical local fixture and warmed engine"
+      },
+      {
+        "id": "coldLocalFirstPlayable",
+        "metric": "Cold local first playable",
+        "measurementWindow": "Run accepted → first segment artifact durably committed",
+        "p50Max": 20,
+        "p95Max": 35,
+        "unit": "s",
+        "additionalGate": "Cold engine/model state reported separately"
+      },
+      {
+        "id": "progressiveAdvantage",
+        "metric": "Progressive advantage",
+        "measurementWindow": "Run accepted → first playable, divided by run accepted → terminal completion",
+        "p50Max": null,
+        "p95Max": 0.35,
+        "unit": "ratio",
+        "additionalGate": "Applies to sources with estimated speech ≥30 s"
+      },
+      {
+        "id": "artifactCommitToSseFlush",
+        "metric": "Artifact commit → SSE flush",
+        "measurementWindow": "Durable segment commit → event bytes flushed",
+        "p50Max": 25,
+        "p95Max": 100,
+        "unit": "ms",
+        "additionalGate": "Sequence included"
+      },
+      {
+        "id": "eventReceiptToEnabledTransport",
+        "metric": "Event receipt → enabled transport",
+        "measurementWindow": "Event callback → enabled transport painted",
+        "p50Max": 32,
+        "p95Max": 100,
+        "unit": "ms",
+        "additionalGate": "Same Cinema/controller instance"
+      },
+      {
+        "id": "commitToEnabledTransport",
+        "metric": "Commit → enabled transport",
+        "measurementWindow": "Durable segment commit → enabled transport painted",
+        "p50Max": 100,
+        "p95Max": 250,
+        "unit": "ms",
+        "additionalGate": "Replaces the brief’s 500 ms candidate"
+      },
+      {
+        "id": "reconnectConvergence",
+        "metric": "Reconnect convergence",
+        "measurementWindow": "Network restored → authoritative sequence/store convergence",
+        "p50Max": 250,
+        "p95Max": 1000,
+        "unit": "ms",
+        "additionalGate": "No cursor/session reset"
+      },
+      {
+        "id": "predecodedIntersegmentGap",
+        "metric": "Predecoded intersegment gap",
+        "measurementWindow": "End of segment → next audible segment",
+        "p50Max": 20,
+        "p95Max": 50,
+        "unit": "ms",
+        "additionalGate": "When the next compatible segment is decoded"
+      },
+      {
+        "id": "cursorContinuity",
+        "metric": "Cursor continuity",
+        "measurementWindow": "Before append/promotion → after append/promotion",
+        "p50Max": null,
+        "p95Max": null,
+        "unit": "ms",
+        "additionalGate": "Maximum regression or jump attributable to transition: 20 ms"
+      },
+      {
+        "id": "mainThreadGenerationSession",
+        "metric": "Main-thread generation session",
+        "measurementWindow": "60-second generation/playback/navigation fixture",
+        "p50Max": null,
+        "p95Max": null,
+        "unit": "count",
+        "additionalGate": "Zero long tasks ≥50 ms"
+      },
+      {
+        "id": "overlayGeometry",
+        "metric": "Overlay geometry",
+        "measurementWindow": "Four required viewport widths",
+        "p50Max": null,
+        "p95Max": null,
+        "unit": "count",
+        "additionalGate": "Zero occlusions and zero primary-action hit-test interceptions"
+      }
+    ],
+    "existingBundleGates": {
+      "maxInitialJsRawBytes": 523700,
+      "maxInitialJsGzipBytes": 160000,
+      "maxInitialCssGzipBytes": 15000,
+      "maxLargestAsyncApplicationChunkGzipBytes": 110000
+    }
+  },
+  "instrumentation": {
+    "frontendMarks": [
+      "app_navigation_start",
+      "shell_interactive",
+      "source_list_request_start",
+      "source_list_response_end",
+      "source_list_store_commit",
+      "source_detail_request_start",
+      "source_session_readable",
+      "cinema_action_enabled",
+      "cinema_open_input",
+      "cinema_interactive",
+      "narration_start_input",
+      "narration_start_ack",
+      "narration_run_accepted",
+      "narration_event_received",
+      "narration_event_reduced",
+      "segment_playable_committed_client",
+      "transport_enabled",
+      "playback_controller_created",
+      "playback_command_input",
+      "playback_effect_observed",
+      "segment_append_received",
+      "segment_append_scheduled",
+      "sync_fidelity_changed",
+      "event_stream_disconnected",
+      "event_reconcile_started",
+      "event_reconciled"
+    ],
+    "frontendDimensions": [
+      "traceId",
+      "sourceId",
+      "sourceRevisionId",
+      "runId",
+      "segmentIndex",
+      "eventSequence",
+      "controllerInstanceId",
+      "coldWarmState",
+      "engine",
+      "performanceMode"
+    ],
+    "frontendTools": [
+      "PerformanceObserver long tasks and Event Timing",
+      "Resource Timing",
+      "React Profiler",
+      "controller-instance counter"
+    ],
+    "sensitiveSourceOrVoiceMaterialAllowed": false,
+    "backendBoundaries": [
+      "HTTP request accepted/completed and response bytes",
+      "runAcceptedAt",
+      "segment plan created",
+      "segment synthesis started/completed",
+      "artifact durable commit completed",
+      "FirstPlayableAt",
+      "manifest update committed",
+      "event sequence allocated",
+      "event enqueued",
+      "SSE event flushed",
+      "cancellation requested/effective",
+      "snapshot/reconnect requested/completed",
+      "gap count",
+      "replayed event count",
+      "final assembly started/completed/failed"
+    ]
+  },
+  "recoveryContract": {
+    "cancellationPreserves": [
+      "reading",
+      "committed compatible segments",
+      "playable transport when prefix exists"
+    ],
+    "disconnectPreserves": ["reading", "buffered audio", "Cinema session", "playback controller"],
+    "failureClasses": {
+      "sourcePreprocessingFailure": "No new readable revision; older pinned readable revision may remain usable.",
+      "segmentSynthesisFailure": "Reading and committed prefix remain; playback buffers at first missing segment.",
+      "checkerFailure": "Provisional audio may remain playable with honest quality state when policy permits.",
+      "timingFailure": "Audio-only mode.",
+      "finalAssemblyFailure": "Segment playback remains usable.",
+      "eventStreamFailure": "Reconnect/snapshot; no session replacement.",
+      "richRendererFailure": "Plain reader projection.",
+      "persistenceFailureBeforePublication": "Do not publish event.",
+      "publicationFailureAfterPersistence": "Reconnect/snapshot discovers committed state."
+    }
+  },
+  "currentBaseline": {
+    "evidenceStatus": "known_failures_recorded_not_ci_expected_failures",
+    "recordedPreparedSourceListBytes": 4338805,
+    "recordedPreparedSourceCount": 26,
+    "estimatedCompactRepresentationBytes": 28962,
+    "recordedSseSnapshotCadenceMs": 1500,
+    "recordedMainJsGzipBytes": 260045,
+    "recordedCssGzipBytes": 21023,
+    "knownViolationIds": [
+      "RSP-BASELINE-TERMINAL-CINEMA-GATE",
+      "RSP-BASELINE-DUAL-PLAYBACK-OWNER",
+      "RSP-BASELINE-UNSEQUENCED-SNAPSHOT-SSE",
+      "RSP-BASELINE-OVERSIZED-SOURCE-LIST",
+      "RSP-BASELINE-BUNDLE-JS-GZIP",
+      "RSP-BASELINE-BUNDLE-CSS-GZIP"
+    ]
+  }
+}

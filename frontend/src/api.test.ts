@@ -1,39 +1,151 @@
 import { describe, expect, it } from "vitest";
 import {
   ApiRequestError,
+  audioSource,
   backendAssetUrl,
+  buildVoiceProfileArtifact,
   clearHuggingFaceToken,
+  confirmTemporarySourceReadiness,
   createCustomSpeechPolicyProfile,
   createPreparedSource,
-  buildVoiceProfileArtifact,
+  createTemporarySource,
+  createTemporarySourceJob,
+  createVoicePreview,
   deleteProject,
-  getProjectLexicon,
+  deleteVoiceJob,
   getAdapterCapabilities,
   getAdapterDiagnostics,
+  getBookSource,
   getContentIR,
   getContentIRSpeechPlan,
   getJobSpeechPlan,
+  getProjectLexicon,
+  getReaderWorkspace,
+  getTemporaryStorageUsageSummary,
   getVoiceProfileCredentials,
-  previewMathSpeech,
-  previewContentIRSpeechPolicy,
   isApiNotFoundError,
+  listTemporarySourceJobs,
+  listTemporarySources,
+  previewContentIRSpeechPolicy,
+  previewMathSpeech,
   previewPreparedSourceSpeechPolicy,
+  putReaderWorkspace,
+  ReaderWorkspacePreconditionError,
+  reopenTemporarySource,
   saveHuggingFaceToken,
+  subscribeToVoiceJob,
   updateBookSourceSpeechPolicy,
   updatePreparedSourceSpeechPolicy,
   upsertProjectLexiconEntry,
 } from "./api";
 
 describe("API errors", () => {
+  it("GETs one encoded book source without listing the project", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: string[] = [];
+    const exact = { id: "book/one", projectId: "project-1", sourceName: "Book One" };
+    globalThis.fetch = (input) => {
+      requests.push(fetchInputUrl(input));
+      return Promise.resolve(Response.json(exact));
+    };
+    try {
+      await expect(getBookSource("book/one")).resolves.toEqual(exact);
+      expect(requests).toEqual(["/api/book-sources/book%2Fone"]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("identifies structured 404 errors for stale local source state", () => {
     expect(isApiNotFoundError(new ApiRequestError(404, "not found"))).toBe(true);
     expect(isApiNotFoundError(new ApiRequestError(500, "server error"))).toBe(false);
+  });
+
+  it("GETs a reader workspace with its exact ETag", async () => {
+    const originalFetch = globalThis.fetch;
+    const exact = readerWorkspaceResponse();
+    globalThis.fetch = (input) => {
+      expect(fetchInputUrl(input)).toBe("/api/projects/project%2Fone/reader-workspace");
+      return Promise.resolve(Response.json(exact, { headers: { ETag: '"revision-7"' } }));
+    };
+    try {
+      await expect(getReaderWorkspace("project/one")).resolves.toEqual({
+        snapshot: exact,
+        etag: '"revision-7"',
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("PUTs a reader workspace with If-Match and exposes 412 server-current state", async () => {
+    const originalFetch = globalThis.fetch;
+    const current = readerWorkspaceResponse({ projectRevision: 8, playbackCursorMs: 9000 });
+    const requests: RequestInit[] = [];
+    globalThis.fetch = (_input, init) => {
+      requests.push(init ?? {});
+      return Promise.resolve(
+        Response.json(
+          { current, error: "stale", retryToken: '"revision-8"' },
+          { headers: { ETag: '"revision-8"' }, status: 412 },
+        ),
+      );
+    };
+    try {
+      const error = await putReaderWorkspace(
+        "project-1",
+        readerWorkspaceResponse(),
+        '"revision-7"',
+      ).catch((error_: unknown) => error_);
+      expect(requests[0]?.method).toBe("PUT");
+      expect(requests[0]?.headers).toEqual({
+        "Content-Type": "application/json",
+        "If-Match": '"revision-7"',
+      });
+      expect(error).toBeInstanceOf(ReaderWorkspacePreconditionError);
+      expect(error).toMatchObject({ current, etag: '"revision-8"', status: 412 });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("fails closed when a 412 omits both ETag and a non-empty retry token", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = () =>
+      Promise.resolve(
+        Response.json(
+          { current: readerWorkspaceResponse(), error: "stale", retryToken: "  " },
+          { status: 412 },
+        ),
+      );
+    try {
+      const error = await putReaderWorkspace(
+        "project-1",
+        readerWorkspaceResponse(),
+        '"revision-7"',
+      ).catch((error_: unknown) => error_);
+      expect(error).toBeInstanceOf(ApiRequestError);
+      expect(error).not.toBeInstanceOf(ReaderWorkspacePreconditionError);
+      expect(error).toMatchObject({ status: 412 });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   it("builds backend asset URLs for download links", () => {
     expect(backendAssetUrl("/api/voice-jobs/job/audio")).toBe("/api/voice-jobs/job/audio");
     expect(backendAssetUrl("api/voice-jobs/job/audio")).toBe("/api/voice-jobs/job/audio");
     expect(backendAssetUrl("https://example.com/audio.wav")).toBe("https://example.com/audio.wav");
+  });
+
+  it("falls back to partial audio when completed final audio URL is missing", () => {
+    expect(
+      audioSource({
+        audioPartialUrl: "/api/voice-jobs/job-1/audio/partial",
+        audioUrl: "",
+        status: "completed",
+      } as Parameters<typeof audioSource>[0]),
+    ).toBe("/api/voice-jobs/job-1/audio/partial");
   });
 
   it("explains stale backend project-delete routes", async () => {
@@ -50,6 +162,326 @@ describe("API errors", () => {
       await expect(deleteProject("project-1")).rejects.toThrow(
         /Restart the backend with mise start -- pnpm start:local/,
       );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("deletes generated narration jobs by id", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (input, init) => {
+      requests.push({ url: fetchInputUrl(input), init });
+      return Promise.resolve(new Response(null, { status: 204 }));
+    };
+
+    try {
+      await deleteVoiceJob("job-1");
+
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.url).toBe("/api/voice-jobs/job-1");
+      expect(requests[0]?.init?.method).toBe("DELETE");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("creates voice previews with raw audio metadata", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (_input, init) => {
+      const url = fetchInputUrl(_input);
+      requests.push({ url, init });
+      return Promise.resolve(
+        new Response(new Uint8Array([82, 73, 70, 70]), {
+          headers: {
+            "Content-Type": "audio/wav",
+            "X-Voice-Preview-Duration-Ms": "1200",
+            "X-Voice-Preview-Provider": "mock",
+            "X-Voice-Preview-Voice": "af_heart",
+          },
+          status: 200,
+        }),
+      );
+    };
+
+    try {
+      const preview = await createVoicePreview({
+        projectId: "project-1",
+        text: "Audition this selected block.",
+        ttsEngine: "auto",
+      });
+
+      expect(requests[0]?.url).toBe("/api/voice-previews");
+      expect(requests[0]?.init?.method).toBe("POST");
+      const requestBody = requests[0]?.init?.body;
+      expect(typeof requestBody).toBe("string");
+      expect(JSON.parse(requestBody as string)).toMatchObject({
+        projectId: "project-1",
+        text: "Audition this selected block.",
+        ttsEngine: "auto",
+      });
+      expect(preview.contentType).toBe("audio/wav");
+      expect(preview.durationMs).toBe(1200);
+      expect(preview.provider).toBe("mock");
+      expect(preview.voice).toBe("af_heart");
+      expect(preview.audio.size).toBe(4);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("creates temporary sources from URL JSON without a project id", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (input, init) => {
+      requests.push({ url: fetchInputUrl(input), init });
+      return Promise.resolve(
+        Response.json({
+          scope: "temporary",
+          sourceOwner: "temporary",
+          temporarySourceId: "temp-1",
+          source: {
+            id: "temp-1",
+            scope: "temporary",
+            temporarySourceId: "temp-1",
+            sourceOwner: "temporary",
+            status: "reviewable",
+            promotionStatus: "notPromoted",
+            kind: "url",
+            sourceName: "https://example.com/story",
+            wordCount: 10,
+            artifacts: [],
+            createdAt: "2026-06-11T17:00:00Z",
+            lastAccessedAt: "2026-06-11T17:00:00Z",
+            expiresAt: "2026-06-12T17:00:00Z",
+            updatedAt: "2026-06-11T17:00:00Z",
+          },
+        }),
+      );
+    };
+
+    try {
+      const source = await createTemporarySource({
+        kind: "url",
+        markdownParseMode: "strict",
+        sourceName: "https://example.com/story",
+        url: "https://example.com/story",
+      });
+
+      expect(source).toMatchObject({
+        id: "temp-1",
+        scope: "temporary",
+        sourceOwner: "temporary",
+        temporarySourceId: "temp-1",
+      });
+      expect(requests[0]?.url).toBe("/api/temporary-sources");
+      expect(requests[0]?.init?.method).toBe("POST");
+      expect(requests[0]?.init?.headers).toEqual({ "Content-Type": "application/json" });
+      const body = requests[0]?.init?.body;
+      expect(typeof body).toBe("string");
+      expect(JSON.parse(body as string)).toMatchObject({
+        kind: "url",
+        markdownParseMode: "strict",
+        url: "https://example.com/story",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("creates temporary source jobs through the temporary route", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (input, init) => {
+      requests.push({ url: fetchInputUrl(input), init });
+      return Promise.resolve(Response.json({ id: "job-temp", status: "queued", progress: {} }));
+    };
+
+    try {
+      await createTemporarySourceJob("temp-1", {
+        text: "Read this now.",
+        temporarySourceId: "temp-1",
+        ttsEngine: "auto",
+      });
+
+      expect(requests[0]?.url).toBe("/api/temporary-sources/temp-1/voice-jobs");
+      expect(requests[0]?.init?.method).toBe("POST");
+      const body = requests[0]?.init?.body;
+      expect(typeof body).toBe("string");
+      expect(JSON.parse(body as string)).toMatchObject({
+        temporarySourceId: "temp-1",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("lists recent temporary sources, reopens by id, lists jobs, and preserves storage byte maps", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (input, init) => {
+      const url = fetchInputUrl(input);
+      requests.push({ url, init });
+      if (url === "/api/temporary-sources") {
+        return Promise.resolve(
+          Response.json([
+            {
+              scope: "temporary",
+              sourceOwner: "temporary",
+              temporarySourceId: "temp-1",
+              source: temporarySourceResponse({ id: "temp-1" }),
+            },
+          ]),
+        );
+      }
+      if (url === "/api/temporary-sources/temp-1/reopen") {
+        return Promise.resolve(
+          Response.json({
+            scope: "temporary",
+            sourceOwner: "temporary",
+            temporarySourceId: "temp-1",
+            source: temporarySourceResponse({ id: "temp-1", status: "previewable" }),
+          }),
+        );
+      }
+      if (url === "/api/temporary-sources/jobs") {
+        return Promise.resolve(Response.json([{ id: "job-temp", status: "failed" }]));
+      }
+      return Promise.resolve(
+        Response.json({
+          artifactBytes: 32,
+          artifactTypeBytes: { generatedAudio: 16, source: 8 },
+          audioBytes: 16,
+          expiredCount: 0,
+          generatingCount: 1,
+          progressBytes: 4,
+          sessions: [
+            {
+              artifactTypeBytes: { generatedAudio: 16, source: 8 },
+              bytes: 28,
+              expiresAt: "2026-06-13T10:00:00Z",
+              lastAccessedAt: "2026-06-12T11:00:00Z",
+              status: "audio_ready",
+              temporarySourceId: "temp-1",
+            },
+          ],
+          sourceBytes: 8,
+          temporaryCount: 1,
+          totalBytes: 60,
+          updatedAt: "2026-06-12T11:00:00Z",
+        }),
+      );
+    };
+
+    try {
+      const sources = await listTemporarySources();
+      const reopened = await reopenTemporarySource("temp-1");
+      const jobs = await listTemporarySourceJobs();
+      const storage = await getTemporaryStorageUsageSummary();
+
+      expect(sources[0]).toMatchObject({ id: "temp-1", sourceOwner: "temporary" });
+      expect(reopened.status).toBe("previewable");
+      expect(jobs[0]?.id).toBe("job-temp");
+      expect(storage.artifactTypeBytes?.generatedAudio).toBe(16);
+      expect(storage.sessions[0]?.artifactTypeBytes?.source).toBe(8);
+      expect(requests.map((request) => request.url)).toEqual([
+        "/api/temporary-sources",
+        "/api/temporary-sources/temp-1/reopen",
+        "/api/temporary-sources/jobs",
+        "/api/temporary-sources/storage/summary",
+      ]);
+      expect(requests[1]?.init?.method).toBe("POST");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("confirms temporary source readiness through the temporary route", async () => {
+    const originalFetch = globalThis.fetch;
+    const requests: { url: string; init?: RequestInit }[] = [];
+    globalThis.fetch = (input, init) => {
+      requests.push({ url: fetchInputUrl(input), init });
+      return Promise.resolve(
+        Response.json({
+          id: "temp-1",
+          scope: "temporary",
+          temporarySourceId: "temp-1",
+          sourceOwner: "temporary",
+          status: "previewable",
+          promotionStatus: "notPromoted",
+          kind: "text",
+          sourceName: "Pasted note",
+          wordCount: 10,
+          artifacts: [],
+          createdAt: "2026-06-11T17:00:00Z",
+          lastAccessedAt: "2026-06-11T17:00:00Z",
+          expiresAt: "2026-06-12T17:00:00Z",
+          updatedAt: "2026-06-11T17:00:00Z",
+        }),
+      );
+    };
+
+    try {
+      await confirmTemporarySourceReadiness("temp-1", {
+        language: "en-US",
+        sourceType: "document",
+        title: "Pasted note",
+      });
+
+      expect(requests[0]?.url).toBe("/api/temporary-sources/temp-1/readiness/confirm");
+      expect(requests[0]?.init?.method).toBe("PATCH");
+      const body = requests[0]?.init?.body;
+      expect(typeof body).toBe("string");
+      expect(JSON.parse(body as string)).toMatchObject({
+        language: "en-US",
+        sourceType: "document",
+        title: "Pasted note",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("preserves structured 404s from voice preview failures", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = () =>
+      Promise.resolve(Response.json({ error: "project not found" }, { status: 404 }));
+
+    try {
+      await expect(
+        createVoicePreview({
+          projectId: "missing-project",
+          text: "Audition this selected block.",
+          ttsEngine: "auto",
+        }),
+      ).rejects.toMatchObject({
+        message: "project not found",
+        name: "ApiRequestError",
+        status: 404,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("preserves text bodies from stale voice preview routes", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = () =>
+      Promise.resolve(new Response("Cannot POST /api/voice-previews", { status: 404 }));
+
+    try {
+      await expect(
+        createVoicePreview({
+          projectId: "project-1",
+          text: "Audition this selected block.",
+          ttsEngine: "auto",
+        }),
+      ).rejects.toMatchObject({
+        message: "Cannot POST /api/voice-previews",
+        name: "ApiRequestError",
+        status: 404,
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -134,6 +566,73 @@ describe("API errors", () => {
         JSON.stringify({ timeoutSeconds: 60 }),
       );
     } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("falls back to polling when a voice job progress stream disconnects", async () => {
+    const originalEventSource = globalThis.EventSource as typeof EventSource | undefined;
+    const originalFetch = globalThis.fetch;
+    const sources: MockEventSource[] = [];
+    class MockEventSource {
+      static readonly CLOSED = 2;
+      readonly listeners = new Map<string, ((event: Event) => void)[]>();
+      readyState = 1;
+      readonly url: string;
+
+      constructor(url: string) {
+        this.url = url;
+        sources.push(this);
+      }
+
+      addEventListener(type: string, listener: (event: Event) => void) {
+        this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+      }
+
+      close() {
+        this.readyState = MockEventSource.CLOSED;
+      }
+
+      emit(type: string) {
+        for (const listener of this.listeners.get(type) ?? []) {
+          listener(new Event(type));
+        }
+      }
+    }
+    globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
+    const fetchUrls: string[] = [];
+    globalThis.fetch = (input) => {
+      fetchUrls.push(fetchInputUrl(input));
+      return Promise.resolve(
+        Response.json({
+          id: "job-1",
+          status: "completed",
+        }),
+      );
+    };
+    const jobs: unknown[] = [];
+    const errors: string[] = [];
+
+    try {
+      const unsubscribe = subscribeToVoiceJob(
+        "job-1",
+        (job) => jobs.push(job),
+        (error) => errors.push(error.message),
+      );
+      expect(sources[0]?.url).toBe("/api/voice-jobs/job-1/events");
+      sources[0]?.emit("error");
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+      unsubscribe();
+
+      expect(errors).toContain("Voice job progress stream disconnected");
+      expect(jobs).toMatchObject([{ id: "job-1", status: "completed" }]);
+      expect(fetchUrls).toEqual(["/api/voice-jobs/job-1"]);
+    } finally {
+      if (originalEventSource) {
+        globalThis.EventSource = originalEventSource;
+      } else {
+        Reflect.deleteProperty(globalThis, "EventSource");
+      }
       globalThis.fetch = originalFetch;
     }
   });
@@ -573,6 +1072,29 @@ describe("API errors", () => {
   });
 });
 
+function readerWorkspaceResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    schemaVersion: "reader_workspace_snapshot.v1" as const,
+    projectId: "project-1",
+    projectRevision: 7,
+    readMode: "paused" as const,
+    sourceId: "source-exact",
+    sourceRevisionId: "revision-exact",
+    sourceContentHash: "hash-exact",
+    runId: "run-exact",
+    runCompatibilityKey: "compat-exact",
+    mediaManifestVersion: 3,
+    timingRevision: 2,
+    syncFidelity: "exact_word" as const,
+    readerLocator: null,
+    playbackCursorMs: 4200,
+    playbackRate: 1.25,
+    followPreference: true,
+    updatedAt: "2026-07-11T10:00:00Z",
+    ...overrides,
+  };
+}
+
 function fetchInputUrl(input: RequestInfo | URL): string {
   if (typeof input === "string") {
     return input;
@@ -605,6 +1127,27 @@ function preparedSourceResponse(
     },
     createdAt: "2026-05-16T12:00:00Z",
     updatedAt: "2026-05-16T12:00:00Z",
+    ...overrides,
+  };
+}
+
+function temporarySourceResponse(overrides: Record<string, unknown> = {}) {
+  const id = typeof overrides.id === "string" ? overrides.id : "temp-1";
+  return {
+    artifacts: [],
+    createdAt: "2026-06-12T10:00:00Z",
+    expiresAt: "2026-06-13T10:00:00Z",
+    id,
+    kind: "text",
+    lastAccessedAt: "2026-06-12T11:00:00Z",
+    promotionStatus: "notPromoted",
+    scope: "temporary",
+    sourceName: "Temporary briefing",
+    sourceOwner: "temporary",
+    status: "reviewable",
+    temporarySourceId: id,
+    updatedAt: "2026-06-12T11:00:00Z",
+    wordCount: 3,
     ...overrides,
   };
 }

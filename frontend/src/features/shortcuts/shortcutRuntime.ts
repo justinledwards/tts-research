@@ -1,0 +1,18 @@
+export {
+  DEFAULT_SHORTCUT_PREFERENCES,
+  loadShortcutPreferences,
+  resetShortcutPreferences,
+  resolveGlobalShortcutCommand,
+  resolveShortcutCommandBinding,
+  saveShortcutPreferences,
+  shortcutAriaKeyShortcutsForCommand,
+  shortcutLabelForCommand,
+  shortcutTooltip,
+  shouldIgnoreGlobalShortcutTarget,
+  shouldIgnoreNarrationShortcutEvent,
+  shouldIgnoreNarrationShortcutTarget,
+  type ShortcutBinding,
+  type ShortcutCommandId,
+  type ShortcutPreferences,
+  type ResolvedShortcutCommand,
+} from "./shortcutRegistry";

@@ -1,0 +1,94 @@
+{
+  "schemaVersion": "tts-research.scanned-pdf-overlay-fixture.v1",
+  "fixture": {
+    "path": "fixtures/pdf/scanned_fixture.pdf",
+    "sha256": "25eeaa49a696c8d5f0fca7b80ec9ec11ebd6450c33f7a279a26555b0e56a5500",
+    "bytes": 84284,
+    "pages": 1,
+    "rasterOnly": true,
+    "embeddedImage": {
+      "width": 1937,
+      "height": 2740,
+      "color": "gray",
+      "bitsPerComponent": 8
+    }
+  },
+  "ocrProbe": {
+    "command": "pdftoppm -f 1 -singlefile -png -r 150 fixtures/pdf/scanned_fixture.pdf /tmp/rfa-scan && tesseract /tmp/rfa-scan.png stdout --psm 6",
+    "observedTranscriptPath": "fixtures/pdf/scanned_fixture.ocr.txt",
+    "silentPromotionAllowed": false
+  },
+  "expectedOverlay": {
+    "sourceRevision": "sha256:25eeaa49a696c8d5f0fca7b80ec9ec11ebd6450c33f7a279a26555b0e56a5500",
+    "page": 1,
+    "units": [
+      {
+        "nodeId": "scan-p1-part",
+        "role": "partHeading",
+        "normalizedBox": [0.22, 0.07, 0.56, 0.06],
+        "canonicalText": "PART II",
+        "observedOcrText": "[P A R T I |",
+        "confidence": 0.58,
+        "narrationDisposition": "reviewRequired"
+      },
+      {
+        "nodeId": "scan-p1-chapter",
+        "role": "chapterHeading",
+        "normalizedBox": [0.22, 0.14, 0.56, 0.07],
+        "canonicalText": "CHAPTER 3",
+        "observedOcrText": null,
+        "confidence": 0.31,
+        "narrationDisposition": "reviewRequired"
+      },
+      {
+        "nodeId": "scan-p1-title",
+        "role": "sectionHeading",
+        "normalizedBox": [0.2, 0.2, 0.6, 0.07],
+        "canonicalText": "DESIGNING FOR PEOPLE",
+        "observedOcrText": "DESIGNING FOR PEOPLE",
+        "confidence": 0.99,
+        "narrationDisposition": "speak"
+      },
+      {
+        "nodeId": "scan-p1-body-1",
+        "role": "paragraph",
+        "normalizedBox": [0.12, 0.3, 0.76, 0.15],
+        "canonicalText": "Good design begins with the people who must live with it. Tools should reveal their purpose, preserve context, and make recovery possible when work is interrupted.",
+        "confidence": 0.98,
+        "narrationDisposition": "speak"
+      },
+      {
+        "nodeId": "scan-p1-body-2",
+        "role": "paragraph",
+        "normalizedBox": [0.12, 0.46, 0.76, 0.18],
+        "canonicalText": "A reader should be able to continue on another device without guessing which source, voice, or position was last authoritative. When evidence is uncertain, the system must ask for review instead of narrating a convenient fiction.",
+        "confidence": 0.98,
+        "narrationDisposition": "speak"
+      },
+      {
+        "nodeId": "scan-p1-number",
+        "role": "omittedOrDegraded",
+        "normalizedBox": [0.46, 0.91, 0.08, 0.04],
+        "canonicalText": "42",
+        "confidence": 0.99,
+        "narrationDisposition": "skip"
+      }
+    ]
+  },
+  "requiredResolution": {
+    "reviewRequiredNodeIds": ["scan-p1-part", "scan-p1-chapter"],
+    "automaticNarrationBeforeResolution": false,
+    "resolutionMustCreateNewOverlayRevision": true,
+    "allowedResolvedDispositions": ["speak", "skip", "onDemand"],
+    "auditFields": [
+      "sourceNodeId",
+      "sourceEvidence",
+      "sourceOverlayRevision",
+      "reviewedOverlayRevision",
+      "reviewerId",
+      "resolvedRole",
+      "resolvedDisposition",
+      "resolvedAt"
+    ]
+  }
+}

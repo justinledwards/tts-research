@@ -1,0 +1,780 @@
+{
+  "schemaVersion": "tts-research.reader-first-linear-live.v1",
+  "verifiedAt": "2026-07-11T10:22:20Z",
+  "project": {
+    "id": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+    "name": "TTS-Research",
+    "url": "https://linear.app/niklas-olsson/project/tts-research-9683c18e447c",
+    "matchCount": 1
+  },
+  "team": {
+    "id": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+    "key": "QQP",
+    "name": "QQ-PWN",
+    "matchesProjectTeam": true
+  },
+  "capacity": {
+    "cap": 20,
+    "pagesRead": 1,
+    "hasNextPage": false,
+    "unarchivedCount": 20,
+    "activeCount": 19,
+    "activeIdentifiers": [
+      "QQP-614",
+      "QQP-615",
+      "QQP-616",
+      "QQP-617",
+      "QQP-618",
+      "QQP-619",
+      "QQP-620",
+      "QQP-621",
+      "QQP-622",
+      "QQP-623",
+      "QQP-624",
+      "QQP-625",
+      "QQP-626",
+      "QQP-627",
+      "QQP-628",
+      "QQP-629",
+      "QQP-630",
+      "QQP-631",
+      "QQP-632"
+    ],
+    "availableSlots": 0
+  },
+  "authorization": {
+    "ownerAccepted": true,
+    "peerApproved": true,
+    "linearCreationAuthorized": true,
+    "productImplementationAuthorized": true,
+    "graphUnblockedIssues": ["RFA-02"],
+    "authorizedIssues": ["RFA-02"]
+  },
+  "sourcePacket": "docs/project-management/linear/tts-research-reader-first-release-batch-draft.json",
+  "peerApproval": "docs/reviews/reader-first-release-peer-approval-v8.json",
+  "issues": [
+    {
+      "localId": "RFA-01",
+      "id": "8b4741fd-2cf8-4a91-be53-173daddbb1f5",
+      "identifier": "QQP-613",
+      "title": "[RFA-01] Freeze Reader-First lifecycle, identity, UX, and performance contract",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-613/rfa-01-freeze-reader-first-lifecycle-identity-ux-and-performance",
+      "state": "Done",
+      "stateType": "completed",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-02",
+      "id": "bcc7a896-6150-438d-9718-81c4dcf211fd",
+      "identifier": "QQP-614",
+      "title": "[RFA-02] Add server-authoritative project restoration snapshot and durable paused progress",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-614/rfa-02-add-server-authoritative-project-restoration-snapshot-and",
+      "state": "In Progress",
+      "stateType": "started",
+      "stateId": "8952b964-26ec-474c-838b-de6ecc3facb3",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-03",
+      "id": "f1eb77d9-5a27-4a1e-9be9-af350a4846db",
+      "identifier": "QQP-615",
+      "title": "[RFA-03] Add bounded source and job summaries with on-demand detail hydration",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-615/rfa-03-add-bounded-source-and-job-summaries-with-on-demand-detail",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-04",
+      "id": "f3c22211-4ecd-41b2-a7d6-2590bc1de155",
+      "identifier": "QQP-616",
+      "title": "[RFA-04] Define stable structural document IR and PDF heading/layout evidence",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-616/rfa-04-define-stable-structural-document-ir-and-pdf-headinglayout",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-05",
+      "id": "f906a85b-7df6-40ab-a18b-956cdf4d53d8",
+      "identifier": "QQP-617",
+      "title": "[RFA-05] Generate structure-aware speech plans with isolated heading units and pause semantics",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-617/rfa-05-generate-structure-aware-speech-plans-with-isolated-heading",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-06",
+      "id": "5a9b4806-eecf-4837-a5b9-454a496581dd",
+      "identifier": "QQP-618",
+      "title": "[RFA-06] Enforce bounded first-playable segmentation and durable segment publication",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-618/rfa-06-enforce-bounded-first-playable-segmentation-and-durable-segment",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-07",
+      "id": "9cbe9cc7-ad57-4da6-bba0-d5cfc98a22a1",
+      "identifier": "QQP-619",
+      "title": "[RFA-07] Normalize provider-native per-segment timing and capability evidence",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-619/rfa-07-normalize-provider-native-per-segment-timing-and-capability",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-08",
+      "id": "970b3f82-c8ea-416a-92c9-7fc2469f51f6",
+      "identifier": "QQP-620",
+      "title": "[RFA-08] Run concurrent Qwen forced alignment fallback and publish timing revisions",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-620/rfa-08-run-concurrent-qwen-forced-alignment-fallback-and-publish",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-09",
+      "id": "1e45b6ef-ed05-42c9-a9a8-9f245622ba7c",
+      "identifier": "QQP-621",
+      "title": "[RFA-09] Version immutable media/timing manifests and bounded segment/range delivery",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-621/rfa-09-version-immutable-mediatiming-manifests-and-bounded",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-10",
+      "id": "e5a66911-1275-43de-8cfd-2203f0a6efa0",
+      "identifier": "QQP-622",
+      "title": "[RFA-10] Publish sequenced replayable narration events after durable commits",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-622/rfa-10-publish-sequenced-replayable-narration-events-after-durable",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-11",
+      "id": "84d62070-67d7-4650-a004-4d33a158eddc",
+      "identifier": "QQP-623",
+      "title": "[RFA-11] Build SourceSessionStore and deterministic clean-browser Cinema ingress",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-623/rfa-11-build-sourcesessionstore-and-deterministic-clean-browser-cinema",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-12",
+      "id": "53719a8f-aca2-4fa8-86f6-111d09dac9e9",
+      "identifier": "QQP-624",
+      "title": "[RFA-12] Build canonical NarrationRunStore with replay/snapshot reconciliation",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-624/rfa-12-build-canonical-narrationrunstore-with-replaysnapshot",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-13",
+      "id": "e0eb3a2a-9c64-4e0f-9725-a2a4f25a508b",
+      "identifier": "QQP-625",
+      "title": "[RFA-13] Build one append-capable PlaybackSessionController",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-625/rfa-13-build-one-append-capable-playbacksessioncontroller",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-14",
+      "id": "ee8cb506-1b38-459f-8def-d00118bb6bfb",
+      "identifier": "QQP-626",
+      "title": "[RFA-14] Make Cinema own immediate reading and regular narration transport",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-626/rfa-14-make-cinema-own-immediate-reading-and-regular-narration",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-15",
+      "id": "a93a915a-2dba-480f-b00a-996642f46644",
+      "identifier": "QQP-627",
+      "title": "[RFA-15] Implement windowed trusted-word read-along with fidelity upgrades and downgrades",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-627/rfa-15-implement-windowed-trusted-word-read-along-with-fidelity",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-16",
+      "id": "7d63f557-dc56-43b7-9c44-c48b96078b9c",
+      "identifier": "QQP-628",
+      "title": "[RFA-16] Remove Preview Player from regular narration and isolate Audition identity",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-628/rfa-16-remove-preview-player-from-regular-narration-and-isolate",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-17",
+      "id": "9ac08870-4b14-449b-a252-ca317d96ab8e",
+      "identifier": "QQP-629",
+      "title": "[RFA-17] Repair artifact currentness, rebuild semantics, health severity, and retained-prefix recovery",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-629/rfa-17-repair-artifact-currentness-rebuild-semantics-health-severity",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-18",
+      "id": "6ce6ffd4-f766-40d2-baef-26bdf28b21fc",
+      "identifier": "QQP-630",
+      "title": "[RFA-18] Decompose application bootstrap/ownership and enforce lazy/browser budgets",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-630/rfa-18-decompose-application-bootstrapownership-and-enforce",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-19",
+      "id": "024a6c32-0657-4a21-a94a-8d522db6170c",
+      "identifier": "QQP-631",
+      "title": "[RFA-19] Prove cross-browser resume, reconnect, retry, repair, and migration continuity",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-631/rfa-19-prove-cross-browser-resume-reconnect-retry-repair-and-migration",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    },
+    {
+      "localId": "RFA-20",
+      "id": "45cb7ec6-4c02-4573-b7cd-e6b23e73dfa9",
+      "identifier": "QQP-632",
+      "title": "[RFA-20] Adjudicate the integrated Design for the Real World release gate",
+      "url": "https://linear.app/niklas-olsson/issue/QQP-632/rfa-20-adjudicate-the-integrated-design-for-the-real-world-release",
+      "state": "Backlog",
+      "stateType": "backlog",
+      "priority": 3
+    }
+  ],
+  "relations": [
+    {
+      "dependency": "RFA-01",
+      "dependent": "RFA-02",
+      "id": "cc76545e-d9bb-423a-9d8c-273038a933c0",
+      "type": "blocks",
+      "issueIdentifier": "QQP-613",
+      "relatedIssueIdentifier": "QQP-614"
+    },
+    {
+      "dependency": "RFA-01",
+      "dependent": "RFA-03",
+      "id": "64d4ba41-b927-48f1-92c4-a53db229dd1e",
+      "type": "blocks",
+      "issueIdentifier": "QQP-613",
+      "relatedIssueIdentifier": "QQP-615"
+    },
+    {
+      "dependency": "RFA-01",
+      "dependent": "RFA-04",
+      "id": "51b59189-338d-42cb-aac4-619a6413f26f",
+      "type": "blocks",
+      "issueIdentifier": "QQP-613",
+      "relatedIssueIdentifier": "QQP-616"
+    },
+    {
+      "dependency": "RFA-04",
+      "dependent": "RFA-05",
+      "id": "4db9c154-446b-4c0e-af84-85848eba87fa",
+      "type": "blocks",
+      "issueIdentifier": "QQP-616",
+      "relatedIssueIdentifier": "QQP-617"
+    },
+    {
+      "dependency": "RFA-02",
+      "dependent": "RFA-06",
+      "id": "5d07a8c9-6bfe-4c05-9366-640e1a4a55fd",
+      "type": "blocks",
+      "issueIdentifier": "QQP-614",
+      "relatedIssueIdentifier": "QQP-618"
+    },
+    {
+      "dependency": "RFA-05",
+      "dependent": "RFA-06",
+      "id": "53842823-275f-4ce5-ad66-ef44767dd6b2",
+      "type": "blocks",
+      "issueIdentifier": "QQP-617",
+      "relatedIssueIdentifier": "QQP-618"
+    },
+    {
+      "dependency": "RFA-01",
+      "dependent": "RFA-07",
+      "id": "4662114f-c964-4ffc-8d5b-5eeae1d31ee9",
+      "type": "blocks",
+      "issueIdentifier": "QQP-613",
+      "relatedIssueIdentifier": "QQP-619"
+    },
+    {
+      "dependency": "RFA-05",
+      "dependent": "RFA-07",
+      "id": "53a0c214-ee95-4618-b9c4-256ed5d0d88c",
+      "type": "blocks",
+      "issueIdentifier": "QQP-617",
+      "relatedIssueIdentifier": "QQP-619"
+    },
+    {
+      "dependency": "RFA-06",
+      "dependent": "RFA-08",
+      "id": "8a830bf3-7e2f-4f34-93eb-4eddb858c625",
+      "type": "blocks",
+      "issueIdentifier": "QQP-618",
+      "relatedIssueIdentifier": "QQP-620"
+    },
+    {
+      "dependency": "RFA-07",
+      "dependent": "RFA-08",
+      "id": "2f0df5a6-39ed-4982-903d-bae48711a25d",
+      "type": "blocks",
+      "issueIdentifier": "QQP-619",
+      "relatedIssueIdentifier": "QQP-620"
+    },
+    {
+      "dependency": "RFA-06",
+      "dependent": "RFA-09",
+      "id": "e3725e6b-8cf0-4248-901f-45a43cca6e63",
+      "type": "blocks",
+      "issueIdentifier": "QQP-618",
+      "relatedIssueIdentifier": "QQP-621"
+    },
+    {
+      "dependency": "RFA-07",
+      "dependent": "RFA-09",
+      "id": "c63b6086-1fe9-4a76-8800-367c00fa6455",
+      "type": "blocks",
+      "issueIdentifier": "QQP-619",
+      "relatedIssueIdentifier": "QQP-621"
+    },
+    {
+      "dependency": "RFA-01",
+      "dependent": "RFA-10",
+      "id": "b97651f5-3b04-4bf3-aef9-dfe94f0a3f2b",
+      "type": "blocks",
+      "issueIdentifier": "QQP-613",
+      "relatedIssueIdentifier": "QQP-622"
+    },
+    {
+      "dependency": "RFA-06",
+      "dependent": "RFA-10",
+      "id": "faac5cf4-667c-47b3-b1a4-1257911eb3ea",
+      "type": "blocks",
+      "issueIdentifier": "QQP-618",
+      "relatedIssueIdentifier": "QQP-622"
+    },
+    {
+      "dependency": "RFA-09",
+      "dependent": "RFA-10",
+      "id": "1af9e084-dd49-4bfe-ac65-cece6c3b84e9",
+      "type": "blocks",
+      "issueIdentifier": "QQP-621",
+      "relatedIssueIdentifier": "QQP-622"
+    },
+    {
+      "dependency": "RFA-02",
+      "dependent": "RFA-11",
+      "id": "d23e71bc-178f-4fca-a61d-dc5b524b6dfb",
+      "type": "blocks",
+      "issueIdentifier": "QQP-614",
+      "relatedIssueIdentifier": "QQP-623"
+    },
+    {
+      "dependency": "RFA-03",
+      "dependent": "RFA-11",
+      "id": "4df3690d-43d9-4bb5-973a-f2ee9013ebfe",
+      "type": "blocks",
+      "issueIdentifier": "QQP-615",
+      "relatedIssueIdentifier": "QQP-623"
+    },
+    {
+      "dependency": "RFA-06",
+      "dependent": "RFA-12",
+      "id": "28fa17bf-b972-470a-91e0-64cde5e29e16",
+      "type": "blocks",
+      "issueIdentifier": "QQP-618",
+      "relatedIssueIdentifier": "QQP-624"
+    },
+    {
+      "dependency": "RFA-09",
+      "dependent": "RFA-12",
+      "id": "23bd5a49-28d7-454b-b4c5-510c84eb3d70",
+      "type": "blocks",
+      "issueIdentifier": "QQP-621",
+      "relatedIssueIdentifier": "QQP-624"
+    },
+    {
+      "dependency": "RFA-10",
+      "dependent": "RFA-12",
+      "id": "3ad56132-4b55-4a6d-a5d6-10f29729932d",
+      "type": "blocks",
+      "issueIdentifier": "QQP-622",
+      "relatedIssueIdentifier": "QQP-624"
+    },
+    {
+      "dependency": "RFA-09",
+      "dependent": "RFA-13",
+      "id": "69f52a7e-47c3-4f11-9b25-b6ddc5e55ea4",
+      "type": "blocks",
+      "issueIdentifier": "QQP-621",
+      "relatedIssueIdentifier": "QQP-625"
+    },
+    {
+      "dependency": "RFA-12",
+      "dependent": "RFA-13",
+      "id": "eb11d6d8-7978-4233-a2aa-ed32efb178b1",
+      "type": "blocks",
+      "issueIdentifier": "QQP-624",
+      "relatedIssueIdentifier": "QQP-625"
+    },
+    {
+      "dependency": "RFA-11",
+      "dependent": "RFA-14",
+      "id": "682fc74a-4d6b-489c-9b8b-32a171ccf99a",
+      "type": "blocks",
+      "issueIdentifier": "QQP-623",
+      "relatedIssueIdentifier": "QQP-626"
+    },
+    {
+      "dependency": "RFA-12",
+      "dependent": "RFA-14",
+      "id": "b9d02436-4f8e-4322-9eaf-171136259fe2",
+      "type": "blocks",
+      "issueIdentifier": "QQP-624",
+      "relatedIssueIdentifier": "QQP-626"
+    },
+    {
+      "dependency": "RFA-13",
+      "dependent": "RFA-14",
+      "id": "2e4b2652-9b98-4b44-ab62-f1585c7431e7",
+      "type": "blocks",
+      "issueIdentifier": "QQP-625",
+      "relatedIssueIdentifier": "QQP-626"
+    },
+    {
+      "dependency": "RFA-07",
+      "dependent": "RFA-15",
+      "id": "cb30c461-2154-415a-9a06-7ce9714644d4",
+      "type": "blocks",
+      "issueIdentifier": "QQP-619",
+      "relatedIssueIdentifier": "QQP-627"
+    },
+    {
+      "dependency": "RFA-08",
+      "dependent": "RFA-15",
+      "id": "123e2eb2-a0d8-47ae-9dad-388eb2b2a13d",
+      "type": "blocks",
+      "issueIdentifier": "QQP-620",
+      "relatedIssueIdentifier": "QQP-627"
+    },
+    {
+      "dependency": "RFA-09",
+      "dependent": "RFA-15",
+      "id": "890503a9-9040-4225-ab5d-f86b6e0bea8b",
+      "type": "blocks",
+      "issueIdentifier": "QQP-621",
+      "relatedIssueIdentifier": "QQP-627"
+    },
+    {
+      "dependency": "RFA-13",
+      "dependent": "RFA-15",
+      "id": "fd18e238-0a11-4e18-8fc2-ab4d1d17a5cf",
+      "type": "blocks",
+      "issueIdentifier": "QQP-625",
+      "relatedIssueIdentifier": "QQP-627"
+    },
+    {
+      "dependency": "RFA-14",
+      "dependent": "RFA-15",
+      "id": "260e1069-70ab-4727-91d9-84a637f6dcd9",
+      "type": "blocks",
+      "issueIdentifier": "QQP-626",
+      "relatedIssueIdentifier": "QQP-627"
+    },
+    {
+      "dependency": "RFA-14",
+      "dependent": "RFA-16",
+      "id": "2bc958f5-ea48-4c9e-b4af-3832428ed492",
+      "type": "blocks",
+      "issueIdentifier": "QQP-626",
+      "relatedIssueIdentifier": "QQP-628"
+    },
+    {
+      "dependency": "RFA-02",
+      "dependent": "RFA-17",
+      "id": "ddadbbed-0e78-46d9-a12e-58abe226fdd5",
+      "type": "blocks",
+      "issueIdentifier": "QQP-614",
+      "relatedIssueIdentifier": "QQP-629"
+    },
+    {
+      "dependency": "RFA-09",
+      "dependent": "RFA-17",
+      "id": "4ec3a539-cca4-46d8-90f1-3760ffa709c5",
+      "type": "blocks",
+      "issueIdentifier": "QQP-621",
+      "relatedIssueIdentifier": "QQP-629"
+    },
+    {
+      "dependency": "RFA-12",
+      "dependent": "RFA-17",
+      "id": "57388537-c477-474b-a7a8-dd5bebb0de77",
+      "type": "blocks",
+      "issueIdentifier": "QQP-624",
+      "relatedIssueIdentifier": "QQP-629"
+    },
+    {
+      "dependency": "RFA-03",
+      "dependent": "RFA-18",
+      "id": "60dbfdcd-9314-489e-9b1a-5ebb187e1b02",
+      "type": "blocks",
+      "issueIdentifier": "QQP-615",
+      "relatedIssueIdentifier": "QQP-630"
+    },
+    {
+      "dependency": "RFA-11",
+      "dependent": "RFA-18",
+      "id": "0962dd76-ef84-4281-99c4-62a36fa9dff1",
+      "type": "blocks",
+      "issueIdentifier": "QQP-623",
+      "relatedIssueIdentifier": "QQP-630"
+    },
+    {
+      "dependency": "RFA-12",
+      "dependent": "RFA-18",
+      "id": "f55c3bcc-fa2d-470f-8741-304c58f059d9",
+      "type": "blocks",
+      "issueIdentifier": "QQP-624",
+      "relatedIssueIdentifier": "QQP-630"
+    },
+    {
+      "dependency": "RFA-13",
+      "dependent": "RFA-18",
+      "id": "84500c30-8866-41b6-8040-415c406559a9",
+      "type": "blocks",
+      "issueIdentifier": "QQP-625",
+      "relatedIssueIdentifier": "QQP-630"
+    },
+    {
+      "dependency": "RFA-16",
+      "dependent": "RFA-18",
+      "id": "8bbe59af-373f-4a99-925b-f4e39270fd0c",
+      "type": "blocks",
+      "issueIdentifier": "QQP-628",
+      "relatedIssueIdentifier": "QQP-630"
+    },
+    {
+      "dependency": "RFA-17",
+      "dependent": "RFA-18",
+      "id": "589995a4-f2b0-4496-b1ff-4289f6c12a17",
+      "type": "blocks",
+      "issueIdentifier": "QQP-629",
+      "relatedIssueIdentifier": "QQP-630"
+    },
+    {
+      "dependency": "RFA-02",
+      "dependent": "RFA-19",
+      "id": "2e42e83e-34c4-4c2d-84ae-e7fa1176a095",
+      "type": "blocks",
+      "issueIdentifier": "QQP-614",
+      "relatedIssueIdentifier": "QQP-631"
+    },
+    {
+      "dependency": "RFA-10",
+      "dependent": "RFA-19",
+      "id": "6a34a630-7c7e-41bd-b841-a03d945fb1ab",
+      "type": "blocks",
+      "issueIdentifier": "QQP-622",
+      "relatedIssueIdentifier": "QQP-631"
+    },
+    {
+      "dependency": "RFA-11",
+      "dependent": "RFA-19",
+      "id": "439cced8-8607-4481-b8ef-8161fca31c8d",
+      "type": "blocks",
+      "issueIdentifier": "QQP-623",
+      "relatedIssueIdentifier": "QQP-631"
+    },
+    {
+      "dependency": "RFA-12",
+      "dependent": "RFA-19",
+      "id": "3d6121b8-df3e-42e3-a48d-c5364e0dfa8e",
+      "type": "blocks",
+      "issueIdentifier": "QQP-624",
+      "relatedIssueIdentifier": "QQP-631"
+    },
+    {
+      "dependency": "RFA-13",
+      "dependent": "RFA-19",
+      "id": "1eb1b645-80fa-4705-a752-06e751efaf38",
+      "type": "blocks",
+      "issueIdentifier": "QQP-625",
+      "relatedIssueIdentifier": "QQP-631"
+    },
+    {
+      "dependency": "RFA-14",
+      "dependent": "RFA-19",
+      "id": "aa65f1bb-8b34-4b19-8369-1e4dfcc35770",
+      "type": "blocks",
+      "issueIdentifier": "QQP-626",
+      "relatedIssueIdentifier": "QQP-631"
+    },
+    {
+      "dependency": "RFA-15",
+      "dependent": "RFA-19",
+      "id": "4fc2acb2-9c9d-490c-bb32-315bf435b4eb",
+      "type": "blocks",
+      "issueIdentifier": "QQP-627",
+      "relatedIssueIdentifier": "QQP-631"
+    },
+    {
+      "dependency": "RFA-17",
+      "dependent": "RFA-19",
+      "id": "7f54f285-3ea0-489f-bade-e64390ad60ea",
+      "type": "blocks",
+      "issueIdentifier": "QQP-629",
+      "relatedIssueIdentifier": "QQP-631"
+    },
+    {
+      "dependency": "RFA-18",
+      "dependent": "RFA-19",
+      "id": "4b982c12-2cbc-401c-baec-7aa79fe4d74d",
+      "type": "blocks",
+      "issueIdentifier": "QQP-630",
+      "relatedIssueIdentifier": "QQP-631"
+    },
+    {
+      "dependency": "RFA-04",
+      "dependent": "RFA-20",
+      "id": "e37eb4ca-4220-4a66-9805-7997e58cf7e7",
+      "type": "blocks",
+      "issueIdentifier": "QQP-616",
+      "relatedIssueIdentifier": "QQP-632"
+    },
+    {
+      "dependency": "RFA-05",
+      "dependent": "RFA-20",
+      "id": "ccb2ae94-6360-4a4e-af58-586436108d6e",
+      "type": "blocks",
+      "issueIdentifier": "QQP-617",
+      "relatedIssueIdentifier": "QQP-632"
+    },
+    {
+      "dependency": "RFA-06",
+      "dependent": "RFA-20",
+      "id": "28f14dc5-7bfa-4fb3-924a-e4c9386c6e37",
+      "type": "blocks",
+      "issueIdentifier": "QQP-618",
+      "relatedIssueIdentifier": "QQP-632"
+    },
+    {
+      "dependency": "RFA-07",
+      "dependent": "RFA-20",
+      "id": "2726b90f-4f9a-428d-9b40-687db15dccf4",
+      "type": "blocks",
+      "issueIdentifier": "QQP-619",
+      "relatedIssueIdentifier": "QQP-632"
+    },
+    {
+      "dependency": "RFA-08",
+      "dependent": "RFA-20",
+      "id": "6785e7bd-e393-4203-a3c7-fe3a142b6605",
+      "type": "blocks",
+      "issueIdentifier": "QQP-620",
+      "relatedIssueIdentifier": "QQP-632"
+    },
+    {
+      "dependency": "RFA-09",
+      "dependent": "RFA-20",
+      "id": "7be0faa8-3317-4d89-ac08-8190b0b8ed35",
+      "type": "blocks",
+      "issueIdentifier": "QQP-621",
+      "relatedIssueIdentifier": "QQP-632"
+    },
+    {
+      "dependency": "RFA-10",
+      "dependent": "RFA-20",
+      "id": "0cc68054-d579-41fb-9356-41354157e995",
+      "type": "blocks",
+      "issueIdentifier": "QQP-622",
+      "relatedIssueIdentifier": "QQP-632"
+    },
+    {
+      "dependency": "RFA-11",
+      "dependent": "RFA-20",
+      "id": "a10c0118-0de0-4e84-a785-5e9a15d7f867",
+      "type": "blocks",
+      "issueIdentifier": "QQP-623",
+      "relatedIssueIdentifier": "QQP-632"
+    },
+    {
+      "dependency": "RFA-12",
+      "dependent": "RFA-20",
+      "id": "02164cd7-0f6a-419d-8450-0e16ec8bd1eb",
+      "type": "blocks",
+      "issueIdentifier": "QQP-624",
+      "relatedIssueIdentifier": "QQP-632"
+    },
+    {
+      "dependency": "RFA-13",
+      "dependent": "RFA-20",
+      "id": "d68ffa94-0e34-46fc-b67f-466ee91989aa",
+      "type": "blocks",
+      "issueIdentifier": "QQP-625",
+      "relatedIssueIdentifier": "QQP-632"
+    },
+    {
+      "dependency": "RFA-14",
+      "dependent": "RFA-20",
+      "id": "7653155a-f1ad-400b-af47-40feb6762352",
+      "type": "blocks",
+      "issueIdentifier": "QQP-626",
+      "relatedIssueIdentifier": "QQP-632"
+    },
+    {
+      "dependency": "RFA-15",
+      "dependent": "RFA-20",
+      "id": "2e9ce279-2a9c-4fce-bcd3-f7a9bd327923",
+      "type": "blocks",
+      "issueIdentifier": "QQP-627",
+      "relatedIssueIdentifier": "QQP-632"
+    },
+    {
+      "dependency": "RFA-16",
+      "dependent": "RFA-20",
+      "id": "1daa7eba-14d3-4ed8-a5ed-a4a855a9b173",
+      "type": "blocks",
+      "issueIdentifier": "QQP-628",
+      "relatedIssueIdentifier": "QQP-632"
+    },
+    {
+      "dependency": "RFA-17",
+      "dependent": "RFA-20",
+      "id": "7b07dc28-6030-4c66-87c8-c1f5d08c5af1",
+      "type": "blocks",
+      "issueIdentifier": "QQP-629",
+      "relatedIssueIdentifier": "QQP-632"
+    },
+    {
+      "dependency": "RFA-18",
+      "dependent": "RFA-20",
+      "id": "3ed3ddc1-bc05-4f48-9807-af7438d3e9be",
+      "type": "blocks",
+      "issueIdentifier": "QQP-630",
+      "relatedIssueIdentifier": "QQP-632"
+    },
+    {
+      "dependency": "RFA-19",
+      "dependent": "RFA-20",
+      "id": "54da34cd-b36a-4764-9468-fe3c70aba3de",
+      "type": "blocks",
+      "issueIdentifier": "QQP-631",
+      "relatedIssueIdentifier": "QQP-632"
+    }
+  ]
+}

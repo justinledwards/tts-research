@@ -50,7 +50,7 @@ func TestProfileSnapshotsAcrossSharedCorpus(t *testing.T) {
 			{"table", "rowLinear", "speak", "Table. Row 1. Metric: Latency; Value: 12ms."},
 			{"code", "syntaxAware", "literal", "A go code block with 1 line appears here. fmt.Println(\"hello\")"},
 			{"math", "semantic", "speak", "Math expression: x to the power of 2  plus  y  equals  4."},
-			{"citation", "inline", "speak", "[^1]: Research note."},
+			{"citation", "onDemand", "onDemand", ""},
 			{"image", "describeLong", "describeLong", "Image description: Architecture diagram."},
 			{"caption", "speak", "speak", "Figure: request flow overview"},
 			{"list", "announce", "speak", "List item: First item"},
@@ -62,7 +62,7 @@ func TestProfileSnapshotsAcrossSharedCorpus(t *testing.T) {
 			{"table", "summary", "summarise", "A table appears here with columns: Metric, Value."},
 			{"code", "summary", "summarise", "A go code block with 1 line appears here."},
 			{"math", "semantic", "speak", "Math expression: x to the power of 2  plus  y  equals  4."},
-			{"citation", "inline", "speak", "[^1]: Research note."},
+			{"citation", "onDemand", "onDemand", ""},
 			{"image", "describeShort", "describeShort", "Image: Architecture diagram."},
 			{"caption", "speak", "speak", "Figure: request flow overview"},
 			{"list", "announce", "speak", "List item: First item"},
@@ -86,7 +86,7 @@ func TestProfileSnapshotsAcrossSharedCorpus(t *testing.T) {
 			{"table", "summary", "summarise", "A table appears here with columns: Metric, Value."},
 			{"code", "literal", "literal", "fmt.Println(\"hello\")"},
 			{"math", "semantic", "speak", "Math expression: x to the power of 2  plus  y  equals  4."},
-			{"citation", "inline", "speak", "[^1]: Research note."},
+			{"citation", "onDemand", "onDemand", ""},
 			{"image", "describeShort", "describeShort", "Image: Architecture diagram."},
 			{"caption", "speak", "speak", "Figure: request flow overview"},
 			{"list", "announce", "speak", "List item: First item"},
@@ -109,6 +109,44 @@ func TestProfileSnapshotsAcrossSharedCorpus(t *testing.T) {
 
 	if !reflect.DeepEqual(actual, expected) {
 		t.Fatalf("profile snapshot mismatch\nactual: %#v\nexpected: %#v", actual, expected)
+	}
+}
+
+func TestBuiltInProfilesKeepReferencesOnDemandByDefault(t *testing.T) {
+	t.Parallel()
+
+	for _, profile := range Profiles() {
+		profile := profile
+		t.Run(string(profile.Name), func(t *testing.T) {
+			t.Parallel()
+
+			decision := NewEvaluator(profile.Name, Overrides{}).Evaluate(Element{
+				Kind: "reference",
+				Text: "https://example.com/reference",
+			})
+			if decision.Policy.Mode != string(ModeOnDemand) || decision.SpeechText != "" {
+				t.Fatalf("reference decision = %#v speech=%q, want on-demand without speech", decision.Policy, decision.SpeechText)
+			}
+		})
+	}
+}
+
+func TestArtifactCitationTokensUseSafeSpeech(t *testing.T) {
+	t.Parallel()
+
+	enterprise := NewEvaluator(ProfileEnterprise, Overrides{}).Evaluate(Element{Kind: "artifact_token", Text: "[cite][turn40search10]"})
+	if enterprise.Policy.Mode != string(ModeOnDemand) || enterprise.SpeechText != "" {
+		t.Fatalf("enterprise artifact decision = %#v, speech %q; want on-demand without speech", enterprise.Policy, enterprise.SpeechText)
+	}
+
+	accessibility := NewEvaluator(ProfileAccessibility, Overrides{CitationMode: CitationModeInline}).Evaluate(Element{Kind: "artifact_token", Text: "[cite][turn40search10]"})
+	if accessibility.Policy.Mode != string(ModeSpeak) || accessibility.SpeechText == "[cite][turn40search10]" || accessibility.SpeechText == "" {
+		t.Fatalf("accessibility artifact speech = %q, want safe non-empty label", accessibility.SpeechText)
+	}
+
+	literal := NewEvaluator(ProfileLanguageLearning, Overrides{Mode: ModeLiteral}).Evaluate(Element{Kind: "artifact_token", Text: "[cite][turn40search10]"})
+	if literal.Policy.Mode != string(ModeLiteral) || literal.SpeechText != "[cite][turn40search10]" {
+		t.Fatalf("literal artifact speech = %#v, want exact literal token only under explicit literal mode", literal)
 	}
 }
 
@@ -172,6 +210,43 @@ func TestLayeredEvaluatorReportsSourceAndSessionPrecedence(t *testing.T) {
 	}
 	if sessionWins.Policy.Explanation != "This code block is skipped because a session override sets code to skip." {
 		t.Fatalf("session explanation = %q", sessionWins.Policy.Explanation)
+	}
+}
+
+func TestLayeredEvaluatorAppliesScopedSettingsPrecedence(t *testing.T) {
+	t.Parallel()
+
+	evaluator := NewLayeredEvaluatorForSettings(
+		"project-enterprise",
+		"Project Enterprise",
+		ProfileByName(ProfileEnterprise).Settings,
+		Overrides{
+			CodeMode:  CodeModeLiteral,
+			TableMode: TableModeRowLinear,
+		},
+		Overrides{CodeMode: CodeModeSkip},
+		"profile",
+	)
+	settings := evaluator.Settings()
+	if settings.FootnoteMode != FootnoteModeOnDemand {
+		t.Fatalf("footnote mode = %q, want project default onDemand", settings.FootnoteMode)
+	}
+	if settings.TableMode != TableModeRowLinear {
+		t.Fatalf("table mode = %q, want source override rowLinear", settings.TableMode)
+	}
+	if settings.CodeMode != CodeModeSkip {
+		t.Fatalf("code mode = %q, want session override skip", settings.CodeMode)
+	}
+
+	table := evaluator.Evaluate(Element{Kind: "table", Text: "| Metric | Value |\n|---|---|\n| Latency | 12ms |"})
+	if table.Policy.Mode != string(ModeSpeak) ||
+		table.Policy.Explanation != "This table is spoken because a source override sets table to rowLinear." {
+		t.Fatalf("table decision = %#v, want source override row-linear speech", table.Policy)
+	}
+	code := evaluator.Evaluate(Element{Kind: "code", Text: "fmt.Println(\"hello\")"})
+	if code.Policy.Mode != string(ModeSkip) ||
+		code.Policy.Explanation != "This code block is skipped because a session override sets code to skip." {
+		t.Fatalf("code decision = %#v, want session override skip", code.Policy)
 	}
 }
 

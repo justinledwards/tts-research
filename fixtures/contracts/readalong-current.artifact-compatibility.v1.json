@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "artifact-compatibility.v1",
+  "compatibilityId": "compat-md-checked",
+  "artifactId": "audio-md-checked",
+  "sourceId": "contract-markdown",
+  "sourceRevisionId": "sr-md-002",
+  "targetSourceRevisionId": "sr-md-002",
+  "decision": "compatible",
+  "reuseAllowed": true,
+  "checkedAt": "2026-05-17T01:13:31Z",
+  "compatibleUnitIds": ["unit-md-0001"],
+  "staleUnitIds": [],
+  "reasons": ["artifact source revision and compatibility key match current manifest"]
+}

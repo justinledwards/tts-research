@@ -1,5 +1,14 @@
 # Contract Schema Changelog
 
+## highlight-map.v2
+
+Adds the canonical read-along timing artifact.
+
+- Uses `schemaVersion: "highlight-map.v2"`.
+- Binds each timing entry to source identity, scope, generated audio, speech plan, Content IR version, locator, node id, raw text, normalized text, spoken text, audio time, provider timing, aligned timing, timing source, confidence, drift budget, warnings, and fallback mode.
+- Supports word, phrase, sentence, and block timing levels.
+- Preserves `highlight-map.v1` for existing consumers while v2 becomes the contract for sync-quality validation.
+
 ## content-ir.v1
 
 First public release.

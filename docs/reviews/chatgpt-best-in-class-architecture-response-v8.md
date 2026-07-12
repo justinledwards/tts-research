@@ -1,0 +1,741 @@
+# ChatGPT TTS best-in-class architecture v8 response
+
+Conversation: `https://chatgpt.com/g/g-p-6a4c3396e3948191a15f9959895179d7-tts-research/c/6a50d28a-d148-83eb-b459-39630f09a1fd`
+
+Reviewed archive: `tts-best-in-class-v8-final-20260710T110608Z.zip`
+
+Archive SHA-256: `e79c59177b3024b34600302c403f74be6669d257a8acb06ee39e70a3944e84f3`
+
+Final verdict:
+
+`REQUEST_CHANGES TTS BEST-IN-CLASS ARCHITECTURE BATCH`
+
+`Linear creation may proceed: NO.`
+
+The exact final accessibility-tree response follows so every probe, observed result, expected result, and bounded repair remains durable without paraphrase loss.
+
+```text
+ [level=4]
+  - button "Worked for 46m 26s" [e162]
+  - paragraph: "REQUEST_CHANGES TTS BEST-IN-CLASS ARCHITECTURE BATCH Linear creation may proceed: NO."
+  - heading "Reproducible blockers" [level=2]
+  - heading "1. Route receiver state leaks across lexical shadowing" [level=3]
+  - paragraph:
+    - strong: Exact archive paths
+  - list:
+    - listitem:
+      - paragraph:
+        - code: backend/cmd/flow-route-inventory/main.go
+    - listitem:
+      - paragraph:
+        - code: backend/cmd/flow-route-inventory/main_test.go
+    - listitem:
+      - paragraph:
+        - code: scripts/validate-flow-registry.mjs
+  - paragraph:
+    - strong: Exact probe/fixture
+  - text: Go
+  - button "Copy" [e163]
+  - code: "package sample import \"github.com/gofiber/fiber/v3\" func routes(app *fiber.App) { router := app.Group(\"/outer\") { router := app.Group(\"/inner\") router.Get(\"/inside\", nil) } router.Get(\"/after\", nil) }"
+  - paragraph: "Run the command built directly from the archived source:"
+  - text: Bash
+  - button "Copy" [e164]
+  - code: go build -o /tmp/flow-route-inventory \ backend/cmd/flow-route-inventory/main.go /tmp/flow-route-inventory --root /path/to/fixture
+  - paragraph:
+    - strong: Observed result
+  - paragraph:
+    - text: Exit status
+    - code: "0"
+    - text: ", reporting:"
+  - button "Copy" [e165]
+  - code: GET /inner/inside GET /inner/after
+  - paragraph:
+    - text: The inner
+    - code: router :=
+    - text: overwrites the name-keyed receiver environment and is not restored when the block ends.
+  - paragraph:
+    - strong: Expected result
+  - button "Copy" [e166]
+  - code: GET /inner/inside GET /outer/after
+  - paragraph:
+    - text: A manifest containing
+    - code: /inner/after
+    - text: can currently pass exact route parity even though the runtime registration is
+    - code: /outer/after
+    - text: .
+  - paragraph:
+    - strong: Smallest bounded repair
+  - paragraph:
+    - text: Track receiver bindings by lexical identity or with a scope stack rather than identifier text alone. Restore shadowed bindings at block exit, including
+    - code: if
+    - text: /
+    - code: switch
+    - text: /type-switch initializers and loop-scoped declarations. Add the exact nested-block fixture and an
+    - code: if init
+    - text: shadow fixture.
+  - separator
+  - heading "2. Reachable route registrations in supported Go expressions and callable forms are silently omitted" [level=3]
+  - paragraph:
+    - strong: Exact archive paths
+  - list:
+    - listitem:
+      - paragraph:
+        - code: backend/cmd/flow-route-inventory/main.go
+    - listitem:
+      - paragraph:
+        - code: backend/cmd/flow-route-inventory/main_test.go
+    - listitem:
+      - paragraph:
+        - code: scripts/validate-flow-registry.mjs
+    - listitem:
+      - paragraph:
+        - code: docs/flows/manifest.json
+  - paragraph:
+    - strong: Exact probes/fixtures
+  - paragraph: Run each as a separate fixture.
+  - text: Go
+  - button "Copy" [e167]
+  - code: "package sample import \"github.com/gofiber/fiber/v3\" type registrar struct{} func (registrar) add(app *fiber.App) { app.Get(\"/hidden-method\", nil) } func routes(app *fiber.App) { app.Get(\"/visible\", nil) registrar{}.add(app) }"
+  - text: Go
+  - button "Copy" [e168]
+  - code: "package sample import \"github.com/gofiber/fiber/v3\" func routes(app *fiber.App) { app.Get(\"/visible\", nil) helper := func(router *fiber.App) { router.Get(\"/hidden-closure\", nil) } helper(app) }"
+  - text: Go
+  - button "Copy" [e169]
+  - code: "package sample import \"github.com/gofiber/fiber/v3\" func routes(app *fiber.App) { if app.Get(\"/hidden-condition\", nil) != nil { app.Get(\"/visible\", nil) } }"
+  - paragraph:
+    - strong: Observed result
+  - paragraph:
+    - text: Each fixture exits
+    - code: "0"
+    - text: "and reports only:"
+  - button "Copy" [e170]
+  - code: GET /visible
+  - paragraph:
+    - text: The invoked receiver method, invoked function literal, and route call in the
+    - code: if
+    - text: condition are omitted. An ordinary sibling registration was included to prove the file and root were analyzed.
+  - paragraph:
+    - strong: Expected result
+  - paragraph: Each hidden reachable registration must either be emitted or cause a nonzero fail-closed result. Successful inventory with an omitted route is invalid.
+  - paragraph:
+    - strong: Smallest bounded repair
+  - paragraph: Before returning success, account for every Fiber route-method call in the parsed files. Extend callable analysis to invoked receiver methods and function literals, and traverse condition/tag/argument/range/send expressions. Any route-method call that cannot be classified path-sensitively must fail closed. Add the three exact fixtures.
+  - separator
+  - heading "3. Repeated runtime route registrations are suppressed before duplicate detection" [level=3]
+  - paragraph:
+    - strong: Exact archive paths
+  - list:
+    - listitem:
+      - paragraph:
+        - code: backend/cmd/flow-route-inventory/main.go
+    - listitem:
+      - paragraph:
+        - code: backend/cmd/flow-route-inventory/main_test.go
+  - paragraph:
+    - strong: Exact probes/fixtures
+  - text: Go
+  - button "Copy" [e171]
+  - code: "package sample import \"github.com/gofiber/fiber/v3\" func helper(app *fiber.App) { app.Get(\"/duplicate\", nil) } func routes(app *fiber.App) { helper(app) helper(app) }"
+  - text: Go
+  - button "Copy" [e172]
+  - code: "package sample import \"github.com/gofiber/fiber/v3\" func routes(app *fiber.App) { for range []int{1, 2} { app.Get(\"/repeated\", nil) } }"
+  - paragraph:
+    - strong: Observed result
+  - paragraph:
+    - text: Both fixtures exit
+    - code: "0"
+    - text: "and report one route:"
+  - button "Copy" [e173]
+  - code: GET /duplicate
+  - paragraph: "and:"
+  - button "Copy" [e174]
+  - code: GET /repeated
+  - paragraph: The invocation cache suppresses the second helper execution, while route recording is deduplicated by AST position. The later duplicate-route check therefore never sees the runtime multiplicity.
+  - paragraph:
+    - strong: Expected result
+  - paragraph: Both fixtures must fail as duplicate runtime registrations. The inventory’s existing duplicate prohibition must apply when the same source registration executes more than once, not only when two different AST locations share a method and path.
+  - paragraph:
+    - strong: Smallest bounded repair
+  - paragraph: Separate pure return-value memoization from route-registration side effects. Reject a repeated invocation of a route-producing helper unless at-most-once execution is proven. Reject route registrations in loops that may execute more than once, or carry path-sensitive occurrence counts through bounded loops. Add both exact fixtures.
+  - separator
+  - heading "4. Statically unreachable route registrations are reported as runtime routes" [level=3]
+  - paragraph:
+    - strong: Exact archive paths
+  - list:
+    - listitem:
+      - paragraph:
+        - code: backend/cmd/flow-route-inventory/main.go
+    - listitem:
+      - paragraph:
+        - code: backend/cmd/flow-route-inventory/main_test.go
+    - listitem:
+      - paragraph:
+        - code: scripts/validate-flow-registry.mjs
+  - paragraph:
+    - strong: Exact probes/fixtures
+  - text: Go
+  - button "Copy" [e175]
+  - code: "package sample import \"github.com/gofiber/fiber/v3\" func routes(app *fiber.App) { if false { app.Get(\"/dead\", nil) } app.Get(\"/live\", nil) }"
+  - text: Go
+  - button "Copy" [e176]
+  - code: "package sample import \"github.com/gofiber/fiber/v3\" func routes(app *fiber.App) { panic(\"stop\") app.Get(\"/after-panic\", nil) }"
+  - paragraph:
+    - strong: Observed result
+  - paragraph:
+    - text: The first fixture exits
+    - code: "0"
+    - text: with both
+    - code: /dead
+    - text: and
+    - code: /live
+    - text: . The second exits
+    - code: "0"
+    - text: with
+    - code: /after-panic
+    - text: .
+  - paragraph:
+    - strong: Expected result
+  - paragraph:
+    - text: The first fixture must report only
+    - code: /live
+    - text: ; the second must not report
+    - code: /after-panic
+    - text: . Otherwise a manifest can successfully claim ownership of registrations that cannot occur at runtime.
+  - paragraph:
+    - strong: Smallest bounded repair
+  - paragraph:
+    - text: Prune branches whose conditions are statically true or false and terminate continuations after unconditional
+    - code: panic
+    - text: . Fail closed for other recognized process-terminating constructs that cannot be modeled safely. Add both exact fixtures.
+  - separator
+  - heading "5. Transition evidence still accepts statically unreachable and terminally unreachable assertions" [level=3]
+  - paragraph:
+    - strong: Exact archive paths
+  - list:
+    - listitem:
+      - paragraph:
+        - code: scripts/validate-flow-registry.mjs
+    - listitem:
+      - paragraph:
+        - code: scripts/validate-flow-registry.test.mjs
+    - listitem:
+      - paragraph:
+        - code: backend/cmd/flow-symbol-inventory/main.go
+    - listitem:
+      - paragraph:
+        - code: backend/cmd/flow-symbol-inventory/main_test.go
+    - listitem:
+      - paragraph:
+        - code: docs/flows/manifest.json
+  - paragraph:
+    - strong: Exact probes/fixtures
+  - paragraph: "For TypeScript, add this file:"
+  - text: TypeScript
+  - button "Copy" [e177]
+  - code: "import { test } from \"node:test\"; const flowAssert = (_marker: string): void => {}; if (0) { test(\"dead target\", () => { flowAssert(\"FLOW_ASSERT:APP-BOOT-001:APP-BOOT-001:T01:entry\"); }); }"
+  - paragraph:
+    - text: Add
+    - code: dead target
+    - text: as covered evidence for
+    - code: APP-BOOT-001:T01:entry
+    - text: ", remove that transition from its planned-evidence list, and run"
+    - code: validateFlowRegistry
+    - text: .
+  - paragraph: "Equivalent accepted variants were:"
+  - text: TypeScript
+  - button "Copy" [e178]
+  - code: "if (false as boolean) { test(\"target\", () => flowAssert(marker)); } test(\"target\", () => { if (0) flowAssert(marker); }); test(\"target\", () => { 0 && flowAssert(marker); });"
+  - paragraph: "For Go:"
+  - text: Go
+  - button "Copy" [e179]
+  - code: "package sample import \"testing\" func flowAssert(*testing.T, string) {} func TestTarget(t *testing.T) { if 1 == 2 { flowAssert(t, \"FLOW_ASSERT:APP-BOOT-001:APP-BOOT-001:T01:entry\") } }"
+  - paragraph: "Additional terminal probes:"
+  - text: Go
+  - button "Copy" [e180]
+  - code: "func TestTarget(t *testing.T) { t.Skip(\"skip\") flowAssert(t, \"FLOW_ASSERT:APP-BOOT-001:APP-BOOT-001:T01:entry\") }"
+  - paragraph:
+    - text: The same result occurs with
+    - code: t.SkipNow()
+    - text: and
+    - code: t.Fatal("stop")
+    - text: .
+  - paragraph:
+    - strong: Observed result
+  - paragraph:
+    - text: The full flow validator accepted the canonical-manifest mutation and classified the transition as covered. The direct TypeScript probes returned
+    - code: "caseAccepted: true"
+    - text: and
+    - code: "markerAccepted: true"
+    - text: . The Go inventory emitted each unreachable marker in
+    - code: TestTarget
+    - text: .
+  - paragraph:
+    - strong: Expected result
+  - paragraph: None of these assertions may establish transition coverage.
+  - paragraph:
+    - strong: Smallest bounded repair
+  - paragraph: "Extend the conservative constant evaluator:"
+  - list:
+    - listitem:
+      - paragraph:
+        - text: "TypeScript: unwrap"
+        - code: as
+        - text: ", type-assertion,"
+        - code: satisfies
+        - text: ", non-null, and parenthesized expressions; evaluate literal truthiness, comparisons, and short-circuit expressions."
+    - listitem:
+      - paragraph: "Go: evaluate constant comparisons and boolean expressions."
+    - listitem:
+      - paragraph:
+        - text: "Go test bodies: treat calls on the test parameter to"
+        - code: Skip
+        - text: ","
+        - code: Skipf
+        - text: ","
+        - code: SkipNow
+        - text: ","
+        - code: Fatal
+        - text: ","
+        - code: Fatalf
+        - text: ", and"
+        - code: FailNow
+        - text: as unconditional terminators.
+  - paragraph: Add every exact probe as a negative full-validator fixture.
+  - separator
+  - heading "6. Evidence and route inventories are not bound to the files actually selected by the canonical runners and Go build" [level=3]
+  - paragraph:
+    - strong: Exact archive paths
+  - list:
+    - listitem:
+      - paragraph:
+        - code: scripts/validate-flow-registry.mjs
+    - listitem:
+      - paragraph:
+        - code: scripts/validate-flow-registry.test.mjs
+    - listitem:
+      - paragraph:
+        - code: backend/cmd/flow-symbol-inventory/main.go
+    - listitem:
+      - paragraph:
+        - code: backend/cmd/flow-symbol-inventory/main_test.go
+    - listitem:
+      - paragraph:
+        - code: backend/cmd/flow-route-inventory/main.go
+    - listitem:
+      - paragraph:
+        - code: backend/cmd/flow-route-inventory/main_test.go
+    - listitem:
+      - paragraph:
+        - code: package.json
+    - listitem:
+      - paragraph:
+        - code: backend/go.mod
+    - listitem:
+      - paragraph:
+        - code: docs/flows/manifest.json
+  - paragraph:
+    - strong: Exact probes/fixtures
+  - paragraph: "TypeScript path deliberately excluded by the canonical script glob:"
+  - text: JavaScript
+  - button "Copy" [e181]
+  - code: "// scripts/not-a-test.mjs import { test } from \"node:test\"; const flowAssert = () => {}; test(\"target\", () => { flowAssert(\"FLOW_ASSERT:APP-BOOT-001:APP-BOOT-001:T01:entry\"); });"
+  - paragraph: "The configured script is:"
+  - button "Copy" [e182]
+  - code: node --test "scripts/**/*.test.mjs"
+  - paragraph: "Go source that is not a Go test file:"
+  - text: Go
+  - button "Copy" [e183]
+  - code: "// backend/probe.go package backend import \"testing\" func flowAssert(*testing.T, string) {} func TestTarget(t *testing.T) { flowAssert(t, \"FLOW_ASSERT:APP-BOOT-001:APP-BOOT-001:T01:entry\") }"
+  - paragraph: "Build-excluded Go test:"
+  - text: Go
+  - button "Copy" [e184]
+  - code: "//go:build linux && !linux package backend import \"testing\" func flowAssert(*testing.T, string) {} func TestTarget(t *testing.T) { flowAssert(t, \"FLOW_ASSERT:APP-BOOT-001:APP-BOOT-001:T01:entry\") }"
+  - paragraph: "Build-excluded route root:"
+  - text: Go
+  - button "Copy" [e185]
+  - code: "//go:build linux && !linux package sample import \"github.com/gofiber/fiber/v3\" func impossibleRoutes() { app := fiber.New() app.Get(\"/impossible-build\", nil) }"
+  - paragraph:
+    - text: with an ordinary live file registering
+    - code: /live
+    - text: .
+  - paragraph:
+    - strong: Observed result
+  - list:
+    - listitem:
+      - paragraph:
+        - text: The full flow validator accepted
+        - code: scripts/not-a-test.mjs
+        - text: as covered evidence.
+    - listitem:
+      - paragraph:
+        - text: It accepted
+        - code: backend/probe.go
+        - text: as a runnable
+        - code: TestTarget
+        - text: .
+    - listitem:
+      - paragraph:
+        - text: It accepted the impossible-build
+        - code: _test.go
+        - text: evidence.
+    - listitem:
+      - paragraph:
+        - text: Route inventory exited
+        - code: "0"
+        - text: and reported both
+        - code: /impossible-build
+        - text: and
+        - code: /live
+        - text: .
+  - paragraph:
+    - strong: Expected result
+  - paragraph:
+    - text: Evidence must count only when its file is selected by the exact canonical test command. Go evidence must come from an active
+    - code: _test.go
+    - text: file. Route and test inventories must honor the declared
+    - code: GOOS
+    - text: ","
+    - code: GOARCH
+    - text: ", and build tags."
+  - paragraph:
+    - strong: Smallest bounded repair
+  - paragraph:
+    - text: Bind TypeScript evidence paths to the applicable package script/test-runner include configuration. Emit Go test records only from active
+    - code: _test.go
+    - text: files. Select Go route and evidence files through
+    - code: go list
+    - text: or
+    - code: go/build.Context.MatchFile
+    - text: using the declared build target and tags. Add the four exact fixtures.
+  - separator
+  - heading "7. The Linear validator accepts noncanonical lifecycle, target, peer-gate, and creation state" [level=3]
+  - paragraph:
+    - strong: Exact archive paths
+  - list:
+    - listitem:
+      - paragraph:
+        - code: scripts/validate-linear-batch.mjs
+    - listitem:
+      - paragraph:
+        - code: scripts/validate-linear-batch.test.mjs
+    - listitem:
+      - paragraph:
+        - code: docs/project-management/linear/tts-research-best-in-class-batch-draft.json
+    - listitem:
+      - paragraph:
+        - code: docs/project-management/linear/tts-research-best-in-class-batch-draft.md
+    - listitem:
+      - paragraph:
+        - code: docs/project-management/linear/tts-research-project-setup.manifest.json
+  - paragraph:
+    - strong: Exact probe
+  - paragraph:
+    - text: Starting with
+    - code: loadInputs()
+    - text: "output, each of these mutations was accepted:"
+  - text: JavaScript
+  - button "Copy" [e186]
+  - code: packet.status = "approved";
+  - text: JavaScript
+  - button "Copy" [e187]
+  - code: packet.issues[0].status = "created"; packet.issues[0].creationDisposition = "create_now";
+  - text: JavaScript
+  - button "Copy" [e188]
+  - code: packet.requiredPeerMarker = "WRONG"; packet.projectId = "wrong-project"; packet.teamId = "wrong-team"; packet.creationGates = [];
+  - paragraph: "The status bypass also permits mutation evidence:"
+  - text: JavaScript
+  - button "Copy" [e189]
+  - code: "packet.status = \"approved\"; packet.issues[0].linear = { id: \"fake\", url: \"fake\" }; packet.capacitySnapshot.newIssuesCreatedNow = 1; packet.capacitySnapshot.activeUnarchivedAfter = packet.capacitySnapshot.activeUnarchivedBefore + 1; packet.capacitySnapshot.compliant = true;"
+  - paragraph:
+    - text: A temporary packet with matching regenerated Markdown passed both
+    - code: "run({write: true})"
+    - text: and the subsequent parity check.
+  - paragraph:
+    - strong: Observed result
+  - paragraph: All mutations were accepted. Changing the root status bypasses the candidate-only no-mutation checks because those checks are conditional on one user-controlled string.
+  - paragraph:
+    - strong: Expected result
+  - paragraph: "The current packet must require:"
+  - list:
+    - listitem:
+      - paragraph:
+        - text: root and issue status
+        - code: candidate_pending_chatgpt_v8_recheck
+        - text: ;
+    - listitem:
+      - paragraph:
+        - text: disposition
+        - code: create_after_chatgpt_agreement
+        - text: ;
+    - listitem:
+      - paragraph: null Linear bindings and zero creations;
+    - listitem:
+      - paragraph:
+        - text: project ID
+        - code: 010252d0-b34c-473d-82f2-05bc4d7bc685
+        - text: ;
+    - listitem:
+      - paragraph:
+        - text: team ID
+        - code: cdc92ef0-dc69-47b5-8896-312dbc1e2d93
+        - text: ;
+    - listitem:
+      - paragraph: the exact required peer marker and creation gates.
+  - paragraph: Any different lifecycle must be covered by a separate, explicitly validated schema version.
+  - paragraph:
+    - strong: Smallest bounded repair
+  - paragraph: Validate exact candidate lifecycle constants and enforce no-mutation invariants unconditionally for this schema, rather than branching on mutable status. Bind project/team IDs to the project-setup manifest and validate the exact peer marker, dispositions, issue statuses, and nonempty canonical creation gates. Add each mutation as a negative test.
+  - separator
+  - heading "8. Capacity arithmetic and snapshot provenance can be malformed while validation passes" [level=3]
+  - paragraph:
+    - strong: Exact archive paths
+  - list:
+    - listitem:
+      - paragraph:
+        - code: scripts/validate-linear-batch.mjs
+    - listitem:
+      - paragraph:
+        - code: scripts/validate-linear-batch.test.mjs
+    - listitem:
+      - paragraph:
+        - code: docs/project-management/linear/tts-research-best-in-class-batch-draft.json
+    - listitem:
+      - paragraph:
+        - code: docs/project-management/linear/tts-research-capacity-snapshot-20260710T071226+0200.json
+  - paragraph:
+    - strong: Exact probe
+  - paragraph: "Each mutation was independently accepted:"
+  - text: JavaScript
+  - button "Copy" [e190]
+  - code: packet.capacitySnapshot.activeUnarchivedBefore = -1; packet.capacitySnapshot.activeUnarchivedAfter = -1;
+  - text: JavaScript
+  - button "Copy" [e191]
+  - code: packet.capacitySnapshot.hasNextPage = true;
+  - text: JavaScript
+  - button "Copy" [e192]
+  - code: packet.capacitySnapshot.repoArtifact = "docs/project-management/linear/does-not-exist.json";
+  - text: JavaScript
+  - button "Copy" [e193]
+  - code: packet.capacitySnapshot.requiresParentFreshApiVerificationBeforeCreation = false;
+  - paragraph:
+    - strong: Observed result
+  - paragraph:
+    - code: validatePacket
+    - text: accepted negative active counts, incomplete pagination, a nonexistent source artifact, and disabling the fresh pre-creation verification requirement.
+    - code: loadInputs()
+    - text: does not load the referenced capacity artifact.
+  - paragraph:
+    - strong: Expected result
+  - paragraph: Counts must be nonnegative integers; pagination must be complete; available-slot and prefix arithmetic must exactly reconcile; the referenced snapshot must exist and match the packet’s project, cap, counts, pagination, source, and capture timestamp; the fresh API verification gate must remain mandatory.
+  - paragraph:
+    - strong: Smallest bounded repair
+  - paragraph:
+    - text: Load the referenced capacity artifact in
+    - code: loadInputs()
+    - text: and validate its schema and exact bindings. Require nonnegative safe integers,
+    - code: hasNextPage === false
+    - text: ", exact"
+    - code: availableSlots
+    - text: ", exact cap arithmetic, a repository-contained artifact path, and"
+    - code: requiresParentFreshApiVerificationBeforeCreation === true
+    - text: . Add all four negative probes.
+  - separator
+  - heading "9. Existing-issue reconciliation validates only two packet copies against each other, not against source evidence" [level=3]
+  - paragraph:
+    - strong: Exact archive paths
+  - list:
+    - listitem:
+      - paragraph:
+        - code: scripts/validate-linear-batch.mjs
+    - listitem:
+      - paragraph:
+        - code: scripts/validate-linear-batch.test.mjs
+    - listitem:
+      - paragraph:
+        - code: docs/project-management/linear/tts-research-best-in-class-batch-draft.json
+    - listitem:
+      - paragraph:
+        - code: docs/project-management/linear/tts-research-existing-issues-20260710T071540+0200.json
+    - listitem:
+      - paragraph:
+        - code: docs/project-management/linear/tts-research-completed-archive-20260709T214157+0200.json
+    - listitem:
+      - paragraph:
+        - code: docs/project-management/linear/tts-research-completed-archive-20260709T214157+0200.results.json
+  - paragraph:
+    - strong: Exact probe
+  - paragraph: "Replace every identifier in both:"
+  - button "Copy" [e194]
+  - code: issues[].existingIssueLinks[] existingIssueReconciliation.mappings[].links[]
+  - paragraph: "with:"
+  - button "Copy" [e195]
+  - code: QQP-999999
+  - paragraph: while preserving each relationship and rationale, regenerate Markdown, and run the validator.
+  - paragraph:
+    - strong: Observed result
+  - paragraph:
+    - text: Validation and Markdown parity pass.
+    - code: QQP-999999
+    - text: is absent from both authoritative issue artifacts.
+  - paragraph:
+    - strong: Expected result
+  - paragraph: Every reconciled identifier must exist in the declared source evidence and belong to the intended project/team. Its active/completed/archive classification and relationship must be compatible with the packet claim.
+  - paragraph:
+    - strong: Smallest bounded repair
+  - paragraph:
+    - text: Load
+    - code: existingIssueReconciliation.sourceArtifact
+    - text: and the completed archive during validation. Require every link identifier to resolve exactly once, verify project/team and status/archive classification, validate allowed relationships against that classification, and reject missing or duplicate identifiers. Add the
+    - code: QQP-999999
+    - text: mutation test.
+  - separator
+  - heading "10. BIC-01 requires performance evidence from infrastructure owned by its downstream dependent" [level=3]
+  - paragraph:
+    - strong: Exact archive paths
+  - list:
+    - listitem:
+      - paragraph:
+        - code: docs/project-management/linear/tts-research-best-in-class-batch-draft.json
+    - listitem:
+      - paragraph:
+        - code: docs/project-management/linear/tts-research-best-in-class-batch-draft.md
+    - listitem:
+      - paragraph:
+        - code: scripts/validate-linear-batch.mjs
+    - listitem:
+      - paragraph:
+        - code: scripts/validate-linear-batch.test.mjs
+    - listitem:
+      - paragraph:
+        - code: package.json
+  - paragraph:
+    - strong: Exact probe
+  - paragraph: "BIC-01 requires:"
+  - button "Copy" [e196]
+  - code: output/bic/bic-01/startup-runtime.raw.json output/bic/bic-01/startup-runtime.summary.json output/bic/bic-01/startup-runtime.run-manifest.json
+  - paragraph: and one discarded warmup, ten measured runs, p50/p95/max/CV, exact-source binding, and zero failures.
+  - paragraph: "Its commands are only:"
+  - button "Copy" [e197]
+  - code: API_PORT=8087 PORT=5174 mise start -- pnpm start:local mise exec -- pnpm test:scripts mise exec -- pnpm check
+  - paragraph:
+    - code: package.json
+    - text: has no
+    - code: bench:startup
+    - text: script. BIC-18 says it will create the reproducible runtime measurement harnesses and run
+    - code: pnpm bench:startup
+    - text: ", but BIC-18 directly depends on BIC-01."
+  - paragraph:
+    - strong: Observed result
+  - paragraph: BIC-01 cannot be independently closed after its declared dependencies without either manually creating non-reproducible artifacts or implementing infrastructure assigned to BIC-18. The packet validator accepts this hidden dependency inversion.
+  - paragraph:
+    - strong: Expected result
+  - paragraph: The issue requiring measurement artifacts must own an exact producing/validating command, or depend on the issue that creates that command. A downstream issue blocked by BIC-01 cannot supply BIC-01’s acceptance infrastructure.
+  - paragraph:
+    - strong: Smallest bounded repair
+  - paragraph:
+    - text: Make BIC-01 own a minimal reproducible startup-measurement harness and add
+    - code: mise exec -- pnpm bench:startup
+    - text: to its scope and verification commands. Narrow BIC-18 to reuse and extend that harness for resource/process-tree gates. Extend the packet validator so every measurement-bearing issue must list its exact artifact-producing command.
+  - separator
+  - heading "11. BIC-02’s exact Go verification command cannot run from the repository root" [level=3]
+  - paragraph:
+    - strong: Exact archive paths
+  - list:
+    - listitem:
+      - paragraph:
+        - code: docs/project-management/linear/tts-research-best-in-class-batch-draft.json
+    - listitem:
+      - paragraph:
+        - code: docs/project-management/linear/tts-research-best-in-class-batch-draft.md
+    - listitem:
+      - paragraph:
+        - code: backend/go.mod
+  - paragraph:
+    - strong: Exact probe
+  - paragraph: "From the archive root:"
+  - text: Bash
+  - button "Copy" [e198]
+  - code: go test ./... -timeout=180s
+  - paragraph:
+    - strong: Observed result
+  - paragraph:
+    - text: Exit status
+    - code: "1"
+    - text: ":"
+  - button "Copy" [e199]
+  - code: "pattern ./...: directory prefix . does not contain main module or its selected dependencies"
+  - paragraph:
+    - text: The repository root has no
+    - code: go.mod
+    - text: or
+    - code: go.work
+    - text: ; the module is under
+    - code: backend/
+    - text: .
+  - paragraph:
+    - strong: Expected result
+  - paragraph: Every listed verification command must be directly runnable from the repository root, consistent with the rest of the packet commands.
+  - paragraph:
+    - strong: Smallest bounded repair
+  - paragraph: "Replace it with an exact root-runnable command, for example:"
+  - text: Bash
+  - button "Copy" [e200]
+  - code: mise exec -- go -C backend test ./... -timeout=180s
+  - paragraph: Add a packet test that executes or structurally validates the command from the declared working directory.
+  - separator
+  - heading "12. BIC-20’s commands cannot prove its clean-worktree or remote-branch acceptance criterion" [level=3]
+  - paragraph:
+    - strong: Exact archive paths
+  - list:
+    - listitem:
+      - paragraph:
+        - code: docs/project-management/linear/tts-research-best-in-class-batch-draft.json
+    - listitem:
+      - paragraph:
+        - code: docs/project-management/linear/tts-research-best-in-class-batch-draft.md
+    - listitem:
+      - paragraph:
+        - code: package.json
+  - paragraph:
+    - strong: Exact probe
+  - paragraph: "In a temporary Git repository with one committed file:"
+  - text: Bash
+  - button "Copy" [e201]
+  - code: printf 'changed-without-whitespace-errors\n' > tracked.txt git diff --check git status --porcelain=v1 --untracked-files=all git remote
+  - paragraph:
+    - strong: Observed result
+  - button "Copy" [e202]
+  - code: "git diff --check exit status: 0 status: M tracked.txt remote count: 0"
+  - paragraph:
+    - text: BIC-20’s only Git command is
+    - code: git diff --check
+    - text: ; neither
+    - code: pnpm check
+    - text: nor another listed command checks cleanliness, an upstream, or local/remote commit equality.
+  - paragraph:
+    - strong: Expected result
+  - paragraph: Final closeout must fail for any tracked or untracked worktree change, missing upstream, failed fetch, or local/remote divergence.
+  - paragraph:
+    - strong: Smallest bounded repair
+  - paragraph: "Add explicit root-runnable commands equivalent to:"
+  - text: Bash
+  - button "Copy" [e203]
+  - code: "git diff --check test -z \"$(git status --porcelain=v1 --untracked-files=all)\" git fetch --prune git rev-parse --verify '@{upstream}' >/dev/null test \"$(git rev-parse HEAD)\" = \"$(git rev-parse '@{upstream}')\""
+  - paragraph: Add negative fixtures for a dirty tracked file, an untracked file, no upstream, ahead, and behind states.
+  - group "Response actions":
+    - button "Copy response" [e204]
+    - button "Pro feedback" [e205]
+    - button "Add to project sources" [e206]
+    - button "Switch model" [e207]
+    - button "More actions" [e208]
+  - button "Add files and more" [e209]
+  - textbox "Chat with ChatGPT" [e210]:
+    - paragraph: Ask ChatGPT
+  - button "Pro" [e211]
+  - button "Start dictation" [e212]:
+    - img
+  - button "Start Voice" [e213]
+  - text: ChatGPT can make mistakes. Check important info.
+- alert
+- status
+```

@@ -67,6 +67,32 @@ describe("voice cloning timing", () => {
       PROFILE_UPDATED,
     );
   });
+
+  it("marks validation failure as attention before profile activation", () => {
+    const profile = completedProfile();
+    const target = profile.cloneTargets?.["kokoro-clone"];
+    if (!target?.validation) {
+      throw new Error("test fixture should include validation");
+    }
+    target.validation.status = "failed";
+    target.validation.error = "Speaker likeness was below threshold.";
+    const activity = resolveVoiceCloningActivity({
+      activeEngineId: "kokoro",
+      buildingArtifactKey: null,
+      createCandidateId: null,
+      error: null,
+      isAnalyzing: false,
+      now: Date.parse("2026-01-01T00:09:00.000Z"),
+      profileSource: null,
+      profiles: [profile],
+      selectedProfile: profile,
+    });
+
+    expect(activity.status).toBe("attention");
+    expect(activity.stages.find((stage) => stage.label === "Validate Voice")?.status).toBe(
+      "failed",
+    );
+  });
 });
 
 function completedProfile(): VoiceProfile {

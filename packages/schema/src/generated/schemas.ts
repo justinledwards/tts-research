@@ -1217,6 +1217,389 @@ export const highlightMapV1Schema = {
   },
 } as const;
 
+export const highlightMapV2Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tts-research.local/schemas/highlight-map.v2.schema.json",
+  title: "Highlight Map v2",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "sourceId",
+    "scopeKey",
+    "generatedAudioId",
+    "speechPlanId",
+    "contentIrVersion",
+    "generatedAt",
+    "durationMs",
+    "timingLevels",
+    "summary",
+    "entries",
+  ],
+  properties: {
+    schemaVersion: {
+      const: "highlight-map.v2",
+    },
+    sourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    scopeKey: {
+      type: "string",
+      minLength: 1,
+    },
+    generatedAudioId: {
+      type: "string",
+      minLength: 1,
+    },
+    speechPlanId: {
+      type: "string",
+      minLength: 1,
+    },
+    contentIrVersion: {
+      const: "content-ir.v1",
+    },
+    generatedAt: {
+      type: "string",
+      format: "date-time",
+    },
+    durationMs: {
+      type: "integer",
+      minimum: 0,
+    },
+    timingLevels: {
+      type: "array",
+      minItems: 1,
+      uniqueItems: true,
+      items: {
+        $ref: "#/$defs/timingLevel",
+      },
+    },
+    summary: {
+      $ref: "#/$defs/highlightMapV2Summary",
+    },
+    entries: {
+      type: "array",
+      minItems: 1,
+      items: {
+        $ref: "#/$defs/timingEntry",
+      },
+    },
+    warnings: {
+      $ref: "#/$defs/alignmentWarnings",
+    },
+    metadata: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+  $defs: {
+    timingLevel: {
+      type: "string",
+      enum: ["word", "phrase", "sentence", "block"],
+    },
+    timingSource: {
+      type: "string",
+      enum: ["provider-word", "provider-mark", "forced-alignment", "phrase-estimate", "heuristic"],
+    },
+    fallbackMode: {
+      type: "string",
+      enum: [
+        "none",
+        "word-to-phrase",
+        "phrase-to-sentence",
+        "sentence-to-block",
+        "block-only",
+        "stale-audio",
+        "unavailable",
+      ],
+    },
+    alignmentWarnings: {
+      type: "array",
+      items: {
+        type: "string",
+      },
+    },
+    nullableIndex: {
+      type: ["integer", "null"],
+      minimum: 0,
+    },
+    nullableTimeMs: {
+      type: ["integer", "null"],
+      minimum: 0,
+    },
+    readingPosition: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        bookSourceId: {
+          type: "string",
+        },
+        scopeKey: {
+          type: "string",
+        },
+        activeWordIndex: {
+          type: "integer",
+          minimum: 0,
+        },
+        nodeId: {
+          type: "string",
+        },
+        locator: {
+          $ref: "content-ir.v1.schema.json#/$defs/locator",
+        },
+        locatorEnvelope: {
+          $ref: "locator-envelope.v1.schema.json",
+        },
+        textQuote: {
+          type: "string",
+        },
+      },
+    },
+    highlightMapV2Summary: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "status",
+        "primaryLevel",
+        "entryCount",
+        "wordCount",
+        "phraseCount",
+        "sentenceCount",
+        "blockCount",
+        "timingSources",
+        "confidence",
+        "driftBudgetMs",
+        "fallbackMode",
+        "degraded",
+      ],
+      properties: {
+        status: {
+          type: "string",
+          minLength: 1,
+        },
+        primaryLevel: {
+          $ref: "#/$defs/timingLevel",
+        },
+        entryCount: {
+          type: "integer",
+          minimum: 0,
+        },
+        wordCount: {
+          type: "integer",
+          minimum: 0,
+        },
+        phraseCount: {
+          type: "integer",
+          minimum: 0,
+        },
+        sentenceCount: {
+          type: "integer",
+          minimum: 0,
+        },
+        blockCount: {
+          type: "integer",
+          minimum: 0,
+        },
+        timingSources: {
+          type: "array",
+          minItems: 1,
+          uniqueItems: true,
+          items: {
+            $ref: "#/$defs/timingSource",
+          },
+        },
+        confidence: {
+          type: "number",
+          minimum: 0,
+          maximum: 1,
+        },
+        driftBudgetMs: {
+          type: "integer",
+          minimum: 0,
+        },
+        fallbackMode: {
+          $ref: "#/$defs/fallbackMode",
+        },
+        degraded: {
+          type: "boolean",
+        },
+        reason: {
+          type: "string",
+        },
+        alignmentWarnings: {
+          $ref: "#/$defs/alignmentWarnings",
+        },
+      },
+    },
+    timingEntry: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "level",
+        "sourceId",
+        "scopeKey",
+        "generatedAudioId",
+        "speechPlanId",
+        "contentIrVersion",
+        "sourceLocator",
+        "nodeId",
+        "textQuote",
+        "rawText",
+        "normalizedText",
+        "spokenText",
+        "tokenIndex",
+        "fragmentIndex",
+        "sentenceIndex",
+        "audioStartMs",
+        "audioEndMs",
+        "providerTimingStartMs",
+        "providerTimingEndMs",
+        "alignedStartMs",
+        "alignedEndMs",
+        "timingSource",
+        "confidence",
+        "driftBudgetMs",
+        "alignmentWarnings",
+        "fallbackMode",
+      ],
+      properties: {
+        entryId: {
+          type: "string",
+        },
+        level: {
+          $ref: "#/$defs/timingLevel",
+        },
+        sourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        scopeKey: {
+          type: "string",
+          minLength: 1,
+        },
+        generatedAudioId: {
+          type: "string",
+          minLength: 1,
+        },
+        speechPlanId: {
+          type: "string",
+          minLength: 1,
+        },
+        spokenTokenId: {
+          type: "string",
+        },
+        contentIrVersion: {
+          const: "content-ir.v1",
+        },
+        sourceLocator: {
+          $ref: "content-ir.v1.schema.json#/$defs/locator",
+        },
+        nodeId: {
+          type: "string",
+          minLength: 1,
+        },
+        segmentId: {
+          type: "string",
+        },
+        sourceWordId: {
+          type: "string",
+        },
+        sourceWordIndex: {
+          type: "integer",
+          minimum: 0,
+        },
+        textQuote: {
+          type: "string",
+        },
+        rawText: {
+          type: "string",
+        },
+        normalizedText: {
+          type: "string",
+        },
+        spokenText: {
+          type: "string",
+        },
+        readingPosition: {
+          $ref: "#/$defs/readingPosition",
+        },
+        tokenIndex: {
+          $ref: "#/$defs/nullableIndex",
+        },
+        fragmentIndex: {
+          $ref: "#/$defs/nullableIndex",
+        },
+        sentenceIndex: {
+          $ref: "#/$defs/nullableIndex",
+        },
+        audioStartMs: {
+          type: "integer",
+          minimum: 0,
+        },
+        audioEndMs: {
+          type: "integer",
+          minimum: 0,
+        },
+        providerTimingStartMs: {
+          $ref: "#/$defs/nullableTimeMs",
+        },
+        providerTimingEndMs: {
+          $ref: "#/$defs/nullableTimeMs",
+        },
+        alignedStartMs: {
+          $ref: "#/$defs/nullableTimeMs",
+        },
+        alignedEndMs: {
+          $ref: "#/$defs/nullableTimeMs",
+        },
+        timingSource: {
+          $ref: "#/$defs/timingSource",
+        },
+        confidence: {
+          type: "number",
+          minimum: 0,
+          maximum: 1,
+        },
+        driftBudgetMs: {
+          type: "integer",
+          minimum: 0,
+        },
+        alignmentWarnings: {
+          $ref: "#/$defs/alignmentWarnings",
+        },
+        fallbackMode: {
+          $ref: "#/$defs/fallbackMode",
+        },
+        allowsOverlap: {
+          type: "boolean",
+        },
+        traceability: {
+          $ref: "#/$defs/textTraceability",
+        },
+      },
+    },
+    textTraceability: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        sourceTextMatch: {
+          type: "string",
+        },
+        normalizedTextMatch: {
+          type: "string",
+        },
+        spokenTextMatch: {
+          type: "string",
+        },
+        policyTransform: {
+          type: "string",
+        },
+      },
+    },
+  },
+} as const;
+
 export const fragmentTimingV1Schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://tts-research.local/schemas/fragment-timing.v1.schema.json",
@@ -1483,13 +1866,1739 @@ export const tokenTimingV1Schema = {
   },
 } as const;
 
+export const sourceEnvelopeV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tts-research.local/schemas/source-envelope.v1.schema.json",
+  title: "SourceEnvelope v1",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "sourceId",
+    "sourceKind",
+    "origin",
+    "projectId",
+    "createdAt",
+    "currentRevisionId",
+    "lifecycle",
+  ],
+  properties: {
+    schemaVersion: {
+      const: "source-envelope.v1",
+    },
+    sourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceKind: {
+      enum: ["project", "quick_listen_temporary", "imported"],
+    },
+    origin: {
+      type: "object",
+      additionalProperties: false,
+      required: ["method"],
+      properties: {
+        method: {
+          enum: ["upload", "url", "paste", "generated"],
+        },
+        uri: {
+          type: "string",
+        },
+        fileName: {
+          type: "string",
+        },
+        contentType: {
+          type: "string",
+        },
+        contentHash: {
+          type: "string",
+        },
+        byteLength: {
+          type: "integer",
+          minimum: 0,
+        },
+      },
+    },
+    projectId: {
+      type: "string",
+      minLength: 1,
+    },
+    createdAt: {
+      type: "string",
+      format: "date-time",
+    },
+    currentRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    lifecycle: {
+      enum: ["active", "temporary", "promoted", "archived", "deleted"],
+    },
+    expiresAt: {
+      type: "string",
+      format: "date-time",
+    },
+    promotedToSourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    metadata: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+} as const;
+
+export const sourceRevisionV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tts-research.local/schemas/source-revision.v1.schema.json",
+  title: "SourceRevision v1",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "revisionId",
+    "sourceId",
+    "createdAt",
+    "revisionOrdinal",
+    "revisionState",
+    "contentHash",
+    "rawArtifact",
+  ],
+  properties: {
+    schemaVersion: {
+      const: "source-revision.v1",
+    },
+    revisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    createdAt: {
+      type: "string",
+      format: "date-time",
+    },
+    revisionOrdinal: {
+      type: "integer",
+      minimum: 1,
+    },
+    revisionState: {
+      enum: ["current", "superseded", "archived"],
+    },
+    contentHash: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceFingerprint: {
+      type: "string",
+      minLength: 1,
+    },
+    rawArtifact: {
+      type: "object",
+      additionalProperties: false,
+      required: ["artifactId", "uri", "sha256"],
+      properties: {
+        artifactId: {
+          type: "string",
+          minLength: 1,
+        },
+        uri: {
+          type: "string",
+          minLength: 1,
+        },
+        sha256: {
+          type: "string",
+          minLength: 1,
+        },
+        contentType: {
+          type: "string",
+        },
+        byteLength: {
+          type: "integer",
+          minimum: 0,
+        },
+      },
+    },
+    supersedesRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    supersededByRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    repairOverlayId: {
+      type: "string",
+      minLength: 1,
+    },
+    metadata: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+} as const;
+
+export const extractionRevisionV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tts-research.local/schemas/extraction-revision.v1.schema.json",
+  title: "ExtractionRevision v1",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "extractionRevisionId",
+    "sourceId",
+    "sourceRevisionId",
+    "adapter",
+    "adapterVersion",
+    "startedAt",
+    "status",
+    "emittedUnitIds",
+  ],
+  properties: {
+    schemaVersion: {
+      const: "extraction-revision.v1",
+    },
+    extractionRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    adapter: {
+      type: "string",
+      minLength: 1,
+    },
+    adapterVersion: {
+      type: "string",
+      minLength: 1,
+    },
+    startedAt: {
+      type: "string",
+      format: "date-time",
+    },
+    completedAt: {
+      type: "string",
+      format: "date-time",
+    },
+    status: {
+      enum: ["running", "complete", "complete_with_warnings", "failed", "interrupted_retriable"],
+    },
+    emittedUnitIds: {
+      type: "array",
+      items: {
+        type: "string",
+        minLength: 1,
+      },
+      default: [],
+    },
+    warnings: {
+      type: "array",
+      items: {
+        type: "string",
+      },
+    },
+    retryAfterRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    metadata: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+} as const;
+
+export const readingUnitManifestV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tts-research.local/schemas/reading-unit-manifest.v1.schema.json",
+  title: "ReadingUnitManifest v1",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "manifestId",
+    "sourceId",
+    "sourceRevisionId",
+    "extractionRevisionId",
+    "manifestRevision",
+    "state",
+    "generatedAt",
+    "units",
+    "summary",
+  ],
+  properties: {
+    schemaVersion: {
+      const: "reading-unit-manifest.v1",
+    },
+    manifestId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    extractionRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    manifestRevision: {
+      type: "integer",
+      minimum: 1,
+    },
+    generatedAt: {
+      type: "string",
+      format: "date-time",
+    },
+    state: {
+      enum: ["current", "degraded", "superseded", "stale", "failed", "interrupted_retriable"],
+    },
+    supersededByManifestId: {
+      type: "string",
+      minLength: 1,
+    },
+    units: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["unitId", "orderKey", "readiness", "fingerprint"],
+        properties: {
+          unitId: {
+            type: "string",
+            minLength: 1,
+          },
+          orderKey: {
+            type: "string",
+            minLength: 1,
+          },
+          nodeId: {
+            type: "string",
+            minLength: 1,
+          },
+          readiness: {
+            enum: ["pending_extraction", "blocked", "readable", "narratable", "alignable"],
+          },
+          contentIrId: {
+            type: "string",
+            minLength: 1,
+          },
+          locator: {
+            $ref: "content-ir.v1.schema.json#/$defs/locator",
+          },
+          fingerprint: {
+            type: "string",
+            minLength: 1,
+          },
+          blockedReason: {
+            type: "string",
+          },
+          warnings: {
+            type: "array",
+            items: {
+              type: "string",
+            },
+          },
+          provenance: {
+            type: "object",
+            additionalProperties: true,
+          },
+        },
+      },
+    },
+    summary: {
+      type: "object",
+      additionalProperties: false,
+      required: ["unitCount", "readableCount", "narratableCount", "blockedCount", "pendingCount"],
+      properties: {
+        unitCount: {
+          type: "integer",
+          minimum: 0,
+        },
+        readableCount: {
+          type: "integer",
+          minimum: 0,
+        },
+        narratableCount: {
+          type: "integer",
+          minimum: 0,
+        },
+        blockedCount: {
+          type: "integer",
+          minimum: 0,
+        },
+        pendingCount: {
+          type: "integer",
+          minimum: 0,
+        },
+        degraded: {
+          type: "boolean",
+        },
+      },
+    },
+    warnings: {
+      type: "array",
+      items: {
+        type: "string",
+      },
+    },
+    metadata: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+} as const;
+
+export const readalongManifestV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tts-research.local/schemas/readalong-manifest.v1.schema.json",
+  title: "ReadalongManifest v1",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "manifestId",
+    "sourceId",
+    "sourceRevisionId",
+    "extractionRevisionId",
+    "readingUnitManifestId",
+    "manifestRevision",
+    "state",
+    "generatedAt",
+    "unitIds",
+  ],
+  properties: {
+    schemaVersion: {
+      const: "readalong-manifest.v1",
+    },
+    manifestId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    extractionRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    readingUnitManifestId: {
+      type: "string",
+      minLength: 1,
+    },
+    manifestRevision: {
+      type: "integer",
+      minimum: 1,
+    },
+    generatedAt: {
+      type: "string",
+      format: "date-time",
+    },
+    state: {
+      enum: ["current", "degraded", "superseded", "stale", "failed", "interrupted_retriable"],
+    },
+    supersededByManifestId: {
+      type: "string",
+      minLength: 1,
+    },
+    unitIds: {
+      type: "array",
+      items: {
+        type: "string",
+        minLength: 1,
+      },
+      default: [],
+    },
+    speechPlanIds: {
+      type: "array",
+      items: {
+        type: "string",
+        minLength: 1,
+      },
+      default: [],
+    },
+    audioArtifactIds: {
+      type: "array",
+      items: {
+        type: "string",
+        minLength: 1,
+      },
+      default: [],
+    },
+    highlightMapIds: {
+      type: "array",
+      items: {
+        type: "string",
+        minLength: 1,
+      },
+      default: [],
+    },
+    artifactCompatibilityIds: {
+      type: "array",
+      items: {
+        type: "string",
+        minLength: 1,
+      },
+      default: [],
+    },
+    syncFidelityDecisionIds: {
+      type: "array",
+      items: {
+        type: "string",
+        minLength: 1,
+      },
+      default: [],
+    },
+    progressIds: {
+      type: "array",
+      items: {
+        type: "string",
+        minLength: 1,
+      },
+      default: [],
+    },
+    repairOverlayIds: {
+      type: "array",
+      items: {
+        type: "string",
+        minLength: 1,
+      },
+      default: [],
+    },
+    warnings: {
+      type: "array",
+      items: {
+        type: "string",
+      },
+    },
+    metadata: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+} as const;
+
+export const audioArtifactV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tts-research.local/schemas/audio-artifact.v1.schema.json",
+  title: "AudioArtifact v1",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "artifactId",
+    "sourceId",
+    "sourceRevisionId",
+    "extractionRevisionId",
+    "readalongManifestId",
+    "segmentIds",
+    "state",
+    "generatedAt",
+    "provider",
+    "format",
+    "compatibilityKey",
+    "retry",
+  ],
+  properties: {
+    schemaVersion: {
+      const: "audio-artifact.v1",
+    },
+    artifactId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    extractionRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    readalongManifestId: {
+      type: "string",
+      minLength: 1,
+    },
+    segmentIds: {
+      type: "array",
+      items: {
+        type: "string",
+        minLength: 1,
+      },
+      default: [],
+    },
+    state: {
+      enum: [
+        "generating",
+        "unchecked",
+        "checked",
+        "stale",
+        "replaced",
+        "failed",
+        "retryable",
+        "interrupted_retriable",
+      ],
+    },
+    generatedAt: {
+      type: "string",
+      format: "date-time",
+    },
+    checkedAt: {
+      type: "string",
+      format: "date-time",
+    },
+    provider: {
+      type: "object",
+      additionalProperties: false,
+      required: ["name"],
+      properties: {
+        name: {
+          type: "string",
+          minLength: 1,
+        },
+        voiceId: {
+          type: "string",
+          minLength: 1,
+        },
+        model: {
+          type: "string",
+          minLength: 1,
+        },
+      },
+    },
+    format: {
+      enum: ["mp3", "wav", "ogg", "aac"],
+    },
+    durationMs: {
+      type: "integer",
+      minimum: 0,
+    },
+    uri: {
+      type: "string",
+    },
+    checksum: {
+      type: "string",
+    },
+    compatibilityKey: {
+      type: "string",
+      minLength: 1,
+    },
+    replacementOfArtifactId: {
+      type: "string",
+      minLength: 1,
+    },
+    replacedByArtifactId: {
+      type: "string",
+      minLength: 1,
+    },
+    failureCode: {
+      type: "string",
+    },
+    failureMessage: {
+      type: "string",
+    },
+    retry: {
+      type: "object",
+      additionalProperties: false,
+      required: ["retryable", "scope"],
+      properties: {
+        retryable: {
+          type: "boolean",
+        },
+        scope: {
+          enum: ["none", "artifact", "segment"],
+        },
+        reason: {
+          type: "string",
+        },
+        attempt: {
+          type: "integer",
+          minimum: 0,
+        },
+        nextAttemptAfter: {
+          type: "string",
+          format: "date-time",
+        },
+      },
+    },
+    metadata: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+} as const;
+
+export const artifactCompatibilityV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tts-research.local/schemas/artifact-compatibility.v1.schema.json",
+  title: "ArtifactCompatibility v1",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "compatibilityId",
+    "artifactId",
+    "sourceId",
+    "sourceRevisionId",
+    "targetSourceRevisionId",
+    "decision",
+    "reuseAllowed",
+    "checkedAt",
+    "reasons",
+  ],
+  properties: {
+    schemaVersion: {
+      const: "artifact-compatibility.v1",
+    },
+    compatibilityId: {
+      type: "string",
+      minLength: 1,
+    },
+    artifactId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    targetSourceRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    decision: {
+      enum: [
+        "compatible",
+        "compatible_with_degraded_sync",
+        "stale_due_to_revision",
+        "stale_due_to_repair",
+        "incompatible",
+        "replacement_required",
+      ],
+    },
+    reuseAllowed: {
+      type: "boolean",
+    },
+    checkedAt: {
+      type: "string",
+      format: "date-time",
+    },
+    compatibleUnitIds: {
+      type: "array",
+      items: {
+        type: "string",
+        minLength: 1,
+      },
+      default: [],
+    },
+    staleUnitIds: {
+      type: "array",
+      items: {
+        type: "string",
+        minLength: 1,
+      },
+      default: [],
+    },
+    reasons: {
+      type: "array",
+      items: {
+        type: "string",
+      },
+    },
+    metadata: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+} as const;
+
+export const repairOverlayV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tts-research.local/schemas/repair-overlay.v1.schema.json",
+  title: "RepairOverlay v1",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "overlayId",
+    "sourceId",
+    "sourceRevisionId",
+    "targetRevisionId",
+    "createdAt",
+    "immutable",
+    "changes",
+    "summary",
+  ],
+  properties: {
+    schemaVersion: {
+      const: "repair-overlay.v1",
+    },
+    overlayId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    targetRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    createdAt: {
+      type: "string",
+      format: "date-time",
+    },
+    createdBy: {
+      type: "string",
+    },
+    immutable: {
+      const: true,
+    },
+    changes: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["changeId", "op", "unitId", "reason"],
+        properties: {
+          changeId: {
+            type: "string",
+            minLength: 1,
+          },
+          op: {
+            enum: ["replace_text", "insert_text", "delete_text", "mark_blocked", "metadata_patch"],
+          },
+          unitId: {
+            type: "string",
+            minLength: 1,
+          },
+          locator: {
+            $ref: "content-ir.v1.schema.json#/$defs/locator",
+          },
+          beforeText: {
+            type: "string",
+          },
+          afterText: {
+            type: "string",
+          },
+          reason: {
+            type: "string",
+          },
+        },
+      },
+    },
+    summary: {
+      type: "string",
+    },
+    metadata: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+} as const;
+
+export const revisionMapV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tts-research.local/schemas/revision-map.v1.schema.json",
+  title: "RevisionMap v1",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "revisionMapId",
+    "sourceId",
+    "fromSourceRevisionId",
+    "toSourceRevisionId",
+    "generatedAt",
+    "cause",
+    "confidence",
+    "unitMappings",
+  ],
+  properties: {
+    schemaVersion: {
+      const: "revision-map.v1",
+    },
+    revisionMapId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    fromSourceRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    toSourceRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    generatedAt: {
+      type: "string",
+      format: "date-time",
+    },
+    cause: {
+      enum: ["repair_overlay", "extraction_correction", "promotion"],
+    },
+    overlayId: {
+      type: "string",
+      minLength: 1,
+    },
+    confidence: {
+      type: "number",
+      minimum: 0,
+      maximum: 1,
+    },
+    unitMappings: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["fromUnitId", "toUnitId", "confidence"],
+        properties: {
+          fromUnitId: {
+            type: "string",
+            minLength: 1,
+          },
+          toUnitId: {
+            type: "string",
+            minLength: 1,
+          },
+          confidence: {
+            type: "number",
+            minimum: 0,
+            maximum: 1,
+          },
+          status: {
+            enum: ["matched", "changed", "deleted", "inserted", "blocked"],
+          },
+        },
+      },
+    },
+    locatorMappings: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["fromLocator", "toLocator", "confidence"],
+        properties: {
+          fromLocator: {
+            $ref: "content-ir.v1.schema.json#/$defs/locator",
+          },
+          toLocator: {
+            $ref: "content-ir.v1.schema.json#/$defs/locator",
+          },
+          confidence: {
+            type: "number",
+            minimum: 0,
+            maximum: 1,
+          },
+          textQuote: {
+            type: "string",
+          },
+        },
+      },
+    },
+    progressMappings: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["fromProgressId", "toProgressId", "confidence"],
+        properties: {
+          fromProgressId: {
+            type: "string",
+            minLength: 1,
+          },
+          toProgressId: {
+            type: "string",
+            minLength: 1,
+          },
+          confidence: {
+            type: "number",
+            minimum: 0,
+            maximum: 1,
+          },
+        },
+      },
+    },
+    metadata: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+} as const;
+
+export const promotionCrosswalkV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tts-research.local/schemas/promotion-crosswalk.v1.schema.json",
+  title: "PromotionCrosswalk v1",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "crosswalkId",
+    "promotedAt",
+    "fromSourceId",
+    "toSourceId",
+    "fromManifestId",
+    "toManifestId",
+    "identityMappings",
+  ],
+  properties: {
+    schemaVersion: {
+      const: "promotion-crosswalk.v1",
+    },
+    crosswalkId: {
+      type: "string",
+      minLength: 1,
+    },
+    promotedAt: {
+      type: "string",
+      format: "date-time",
+    },
+    fromSourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    toSourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    fromManifestId: {
+      type: "string",
+      minLength: 1,
+    },
+    toManifestId: {
+      type: "string",
+      minLength: 1,
+    },
+    identityMappings: {
+      type: "object",
+      additionalProperties: false,
+      required: ["sourceRevisionIds", "readingUnitIds", "audioArtifactIds", "progressIds"],
+      properties: {
+        sourceRevisionIds: {
+          $ref: "#/$defs/idMapArray",
+        },
+        extractionRevisionIds: {
+          $ref: "#/$defs/idMapArray",
+        },
+        readingUnitManifestIds: {
+          $ref: "#/$defs/idMapArray",
+        },
+        readalongManifestIds: {
+          $ref: "#/$defs/idMapArray",
+        },
+        readingUnitIds: {
+          $ref: "#/$defs/idMapArray",
+        },
+        audioArtifactIds: {
+          $ref: "#/$defs/idMapArray",
+        },
+        highlightMapIds: {
+          $ref: "#/$defs/idMapArray",
+        },
+        progressIds: {
+          $ref: "#/$defs/idMapArray",
+        },
+        repairOverlayIds: {
+          $ref: "#/$defs/idMapArray",
+        },
+      },
+    },
+    metadata: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+  $defs: {
+    idMapArray: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["from", "to"],
+        properties: {
+          from: {
+            type: "string",
+            minLength: 1,
+          },
+          to: {
+            type: "string",
+            minLength: 1,
+          },
+          confidence: {
+            type: "number",
+            minimum: 0,
+            maximum: 1,
+          },
+        },
+      },
+    },
+  },
+} as const;
+
+export const sourceManifestEventV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tts-research.local/schemas/source-manifest-event.v1.schema.json",
+  title: "SourceManifestEvent v1",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "eventId",
+    "sourceId",
+    "sequence",
+    "occurredAt",
+    "eventType",
+    "snapshotAvailable",
+    "subject",
+  ],
+  properties: {
+    schemaVersion: {
+      const: "source-manifest-event.v1",
+    },
+    eventId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    sequence: {
+      type: "integer",
+      minimum: 1,
+    },
+    occurredAt: {
+      type: "string",
+      format: "date-time",
+    },
+    eventType: {
+      enum: [
+        "source_revision_created",
+        "extraction_revision_updated",
+        "reading_unit_manifest_written",
+        "readalong_manifest_written",
+        "audio_artifact_updated",
+        "progress_updated",
+        "repair_overlay_created",
+        "promotion_crosswalk_created",
+        "artifact_interrupted_retriable",
+      ],
+    },
+    snapshotAvailable: {
+      type: "boolean",
+    },
+    cursor: {
+      type: "string",
+      minLength: 1,
+    },
+    subject: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        sourceRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        extractionRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        readingUnitManifestId: {
+          type: "string",
+          minLength: 1,
+        },
+        readalongManifestId: {
+          type: "string",
+          minLength: 1,
+        },
+        audioArtifactId: {
+          type: "string",
+          minLength: 1,
+        },
+        progressId: {
+          type: "string",
+          minLength: 1,
+        },
+        repairOverlayId: {
+          type: "string",
+          minLength: 1,
+        },
+        promotionCrosswalkId: {
+          type: "string",
+          minLength: 1,
+        },
+        state: {
+          type: "string",
+        },
+      },
+    },
+    snapshotManifestId: {
+      type: "string",
+      minLength: 1,
+    },
+    metadata: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+} as const;
+
+export const durableProgressV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tts-research.local/schemas/durable-progress.v1.schema.json",
+  title: "DurableProgress v1",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "progressId",
+    "sourceId",
+    "readalongManifestId",
+    "sourceRevisionId",
+    "kind",
+    "state",
+    "updatedAt",
+    "canonical",
+    "locatorEnvelope",
+    "position",
+  ],
+  properties: {
+    schemaVersion: {
+      const: "durable-progress.v1",
+    },
+    progressId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    readalongManifestId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    audioArtifactId: {
+      type: "string",
+      minLength: 1,
+    },
+    kind: {
+      enum: ["resume", "bookmark", "highlight"],
+    },
+    state: {
+      enum: [
+        "current",
+        "degraded",
+        "stale",
+        "superseded",
+        "failed",
+        "interrupted_retriable",
+        "remapped",
+      ],
+    },
+    updatedAt: {
+      type: "string",
+      format: "date-time",
+    },
+    canonical: {
+      type: "boolean",
+    },
+    locatorEnvelope: {
+      $ref: "locator-envelope.v1.schema.json",
+    },
+    position: {
+      type: "object",
+      additionalProperties: false,
+      required: ["unitId"],
+      properties: {
+        unitId: {
+          type: "string",
+          minLength: 1,
+        },
+        segmentId: {
+          type: "string",
+          minLength: 1,
+        },
+        activeWordIndex: {
+          type: "integer",
+          minimum: 0,
+        },
+        audioOffsetMs: {
+          type: "integer",
+          minimum: 0,
+        },
+        textQuote: {
+          type: "string",
+        },
+      },
+    },
+    metadata: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+} as const;
+
+export const resumeResolutionV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tts-research.local/schemas/resume-resolution.v1.schema.json",
+  title: "ResumeResolution v1",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "resolutionId",
+    "progressId",
+    "sourceId",
+    "requestedAt",
+    "decision",
+    "reason",
+    "resolvedReadalongManifestId",
+    "resolvedLocatorEnvelope",
+  ],
+  properties: {
+    schemaVersion: {
+      const: "resume-resolution.v1",
+    },
+    resolutionId: {
+      type: "string",
+      minLength: 1,
+    },
+    progressId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    requestedAt: {
+      type: "string",
+      format: "date-time",
+    },
+    decision: {
+      enum: [
+        "auto_resume_current",
+        "auto_resume_degraded",
+        "resume_audio_only",
+        "resume_source_only",
+        "offer_retry",
+        "offer_old_vs_repaired",
+        "auto_resume_remapped",
+        "blocked_failed",
+      ],
+    },
+    reason: {
+      type: "string",
+    },
+    resolvedReadalongManifestId: {
+      type: "string",
+      minLength: 1,
+    },
+    resolvedLocatorEnvelope: {
+      $ref: "locator-envelope.v1.schema.json",
+    },
+    revisionMapId: {
+      type: "string",
+      minLength: 1,
+    },
+    staleProgressId: {
+      type: "string",
+      minLength: 1,
+    },
+    retryArtifactId: {
+      type: "string",
+      minLength: 1,
+    },
+    offers: {
+      type: "array",
+      items: {
+        type: "string",
+      },
+    },
+    metadata: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+} as const;
+
+export const syncFidelityDecisionV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tts-research.local/schemas/sync-fidelity-decision.v1.schema.json",
+  title: "SyncFidelityDecision v1",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "decisionId",
+    "sourceId",
+    "sourceRevisionId",
+    "readalongManifestId",
+    "audioArtifactId",
+    "generatedAt",
+    "fidelity",
+    "exactAllowed",
+    "evidence",
+  ],
+  properties: {
+    schemaVersion: {
+      const: "sync-fidelity-decision.v1",
+    },
+    decisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceId: {
+      type: "string",
+      minLength: 1,
+    },
+    sourceRevisionId: {
+      type: "string",
+      minLength: 1,
+    },
+    readalongManifestId: {
+      type: "string",
+      minLength: 1,
+    },
+    audioArtifactId: {
+      type: "string",
+      minLength: 1,
+    },
+    highlightMapId: {
+      type: "string",
+      minLength: 1,
+    },
+    generatedAt: {
+      type: "string",
+      format: "date-time",
+    },
+    fidelity: {
+      enum: ["exact_word", "phrase", "block", "audio_only", "source_only", "none"],
+    },
+    exactAllowed: {
+      type: "boolean",
+    },
+    fallbackReason: {
+      type: "string",
+    },
+    evidence: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "sourceRevisionCurrent",
+        "mappingValid",
+        "timingConfidence",
+        "lowResourceMode",
+        "artifactCompatible",
+        "confidence",
+      ],
+      properties: {
+        sourceRevisionCurrent: {
+          type: "boolean",
+        },
+        mappingValid: {
+          type: "boolean",
+        },
+        timingConfidence: {
+          type: "boolean",
+        },
+        lowResourceMode: {
+          type: "boolean",
+        },
+        artifactCompatible: {
+          type: "boolean",
+        },
+        confidence: {
+          type: "number",
+          minimum: 0,
+          maximum: 1,
+        },
+        driftBudgetMs: {
+          type: "integer",
+          minimum: 0,
+        },
+      },
+    },
+    metadata: {
+      type: "object",
+      additionalProperties: true,
+    },
+  },
+} as const;
+
+export const readerWorkspaceSnapshotV1Schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://tts-research.local/schemas/reader-workspace-snapshot.v1.schema.json",
+  title: "ReaderWorkspaceSnapshot v1",
+  description:
+    "Bounded server-authored transport projection for restoring one project's readable source and optional paused playback state. Shape validation does not grant compatibility authority to a browser; the server validates revision, run, media, timing, and progress semantics.",
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "schemaVersion",
+    "projectId",
+    "projectRevision",
+    "readMode",
+    "sourceId",
+    "sourceRevisionId",
+    "sourceContentHash",
+    "runId",
+    "runCompatibilityKey",
+    "mediaManifestVersion",
+    "timingRevision",
+    "syncFidelity",
+    "readerLocator",
+    "playbackCursorMs",
+    "playbackRate",
+    "followPreference",
+    "updatedAt",
+  ],
+  properties: {
+    schemaVersion: {
+      const: "reader_workspace_snapshot.v1",
+    },
+    projectId: {
+      type: "string",
+      minLength: 1,
+      maxLength: 512,
+    },
+    projectRevision: {
+      type: "integer",
+      minimum: 0,
+      maximum: 9007199254740991,
+    },
+    readMode: {
+      enum: ["paused", "readable"],
+    },
+    sourceId: {
+      type: "string",
+      maxLength: 512,
+    },
+    sourceRevisionId: {
+      type: "string",
+      maxLength: 512,
+    },
+    sourceContentHash: {
+      type: "string",
+      maxLength: 256,
+    },
+    runId: {
+      type: ["string", "null"],
+      minLength: 1,
+      maxLength: 512,
+    },
+    runCompatibilityKey: {
+      type: ["string", "null"],
+      minLength: 1,
+      maxLength: 1024,
+    },
+    mediaManifestVersion: {
+      type: ["integer", "null"],
+      minimum: 0,
+      maximum: 9007199254740991,
+    },
+    timingRevision: {
+      type: ["integer", "null"],
+      minimum: 0,
+      maximum: 9007199254740991,
+    },
+    syncFidelity: {
+      enum: ["exact_word", "phrase", "block", "audio_only", "source_only", "none", null],
+    },
+    readerLocator: {
+      anyOf: [
+        {
+          $ref: "locator-envelope.v1.schema.json",
+        },
+        {
+          type: "null",
+        },
+      ],
+    },
+    playbackCursorMs: {
+      type: ["integer", "null"],
+      minimum: 0,
+      maximum: 9007199254740991,
+    },
+    playbackRate: {
+      type: ["number", "null"],
+      exclusiveMinimum: 0,
+      maximum: 4,
+    },
+    followPreference: {
+      type: ["boolean", "null"],
+    },
+    updatedAt: {
+      type: "string",
+      format: "date-time",
+    },
+  },
+  allOf: [
+    {
+      if: {
+        properties: {
+          sourceId: {
+            const: "",
+          },
+        },
+      },
+      then: {
+        properties: {
+          readMode: {
+            const: "paused",
+          },
+          sourceRevisionId: {
+            const: "",
+          },
+          sourceContentHash: {
+            const: "",
+          },
+          runId: {
+            const: null,
+          },
+          runCompatibilityKey: {
+            const: null,
+          },
+          mediaManifestVersion: {
+            const: null,
+          },
+          timingRevision: {
+            const: null,
+          },
+          syncFidelity: {
+            const: "none",
+          },
+          readerLocator: {
+            const: null,
+          },
+          playbackCursorMs: {
+            const: null,
+          },
+          playbackRate: {
+            const: 1,
+          },
+          followPreference: {
+            const: null,
+          },
+        },
+      },
+      else: {
+        properties: {
+          sourceId: {
+            minLength: 1,
+          },
+          sourceRevisionId: {
+            minLength: 1,
+          },
+          sourceContentHash: {
+            minLength: 1,
+          },
+        },
+      },
+    },
+    {
+      if: {
+        properties: {
+          runId: {
+            type: "string",
+          },
+        },
+      },
+      then: {
+        properties: {
+          runCompatibilityKey: {
+            type: "string",
+          },
+        },
+      },
+    },
+    {
+      if: {
+        properties: {
+          runCompatibilityKey: {
+            type: "string",
+          },
+        },
+      },
+      then: {
+        properties: {
+          runId: {
+            type: "string",
+          },
+        },
+      },
+    },
+  ],
+} as const;
+
 export const schemaByKind = {
   "content-ir.v1": contentIrV1Schema,
   "locator-envelope.v1": locatorEnvelopeV1Schema,
   "speech-plan.v1": speechPlanV1Schema,
   "highlight-map.v1": highlightMapV1Schema,
+  "highlight-map.v2": highlightMapV2Schema,
   "fragment-timing.v1": fragmentTimingV1Schema,
   "token-timing.v1": tokenTimingV1Schema,
+  "source-envelope.v1": sourceEnvelopeV1Schema,
+  "source-revision.v1": sourceRevisionV1Schema,
+  "extraction-revision.v1": extractionRevisionV1Schema,
+  "reading-unit-manifest.v1": readingUnitManifestV1Schema,
+  "readalong-manifest.v1": readalongManifestV1Schema,
+  "audio-artifact.v1": audioArtifactV1Schema,
+  "artifact-compatibility.v1": artifactCompatibilityV1Schema,
+  "repair-overlay.v1": repairOverlayV1Schema,
+  "revision-map.v1": revisionMapV1Schema,
+  "promotion-crosswalk.v1": promotionCrosswalkV1Schema,
+  "source-manifest-event.v1": sourceManifestEventV1Schema,
+  "durable-progress.v1": durableProgressV1Schema,
+  "resume-resolution.v1": resumeResolutionV1Schema,
+  "sync-fidelity-decision.v1": syncFidelityDecisionV1Schema,
+  "reader_workspace_snapshot.v1": readerWorkspaceSnapshotV1Schema,
 } as const;
 
 export const schemaBundle = {
@@ -2713,6 +4822,394 @@ export const schemaBundle = {
         },
       },
     },
+    "highlight-map.v2": {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://tts-research.local/schemas/highlight-map.v2.schema.json",
+      title: "Highlight Map v2",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "schemaVersion",
+        "sourceId",
+        "scopeKey",
+        "generatedAudioId",
+        "speechPlanId",
+        "contentIrVersion",
+        "generatedAt",
+        "durationMs",
+        "timingLevels",
+        "summary",
+        "entries",
+      ],
+      properties: {
+        schemaVersion: {
+          const: "highlight-map.v2",
+        },
+        sourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        scopeKey: {
+          type: "string",
+          minLength: 1,
+        },
+        generatedAudioId: {
+          type: "string",
+          minLength: 1,
+        },
+        speechPlanId: {
+          type: "string",
+          minLength: 1,
+        },
+        contentIrVersion: {
+          const: "content-ir.v1",
+        },
+        generatedAt: {
+          type: "string",
+          format: "date-time",
+        },
+        durationMs: {
+          type: "integer",
+          minimum: 0,
+        },
+        timingLevels: {
+          type: "array",
+          minItems: 1,
+          uniqueItems: true,
+          items: {
+            $ref: "#/$defs/timingLevel",
+          },
+        },
+        summary: {
+          $ref: "#/$defs/highlightMapV2Summary",
+        },
+        entries: {
+          type: "array",
+          minItems: 1,
+          items: {
+            $ref: "#/$defs/timingEntry",
+          },
+        },
+        warnings: {
+          $ref: "#/$defs/alignmentWarnings",
+        },
+        metadata: {
+          type: "object",
+          additionalProperties: true,
+        },
+      },
+      $defs: {
+        timingLevel: {
+          type: "string",
+          enum: ["word", "phrase", "sentence", "block"],
+        },
+        timingSource: {
+          type: "string",
+          enum: [
+            "provider-word",
+            "provider-mark",
+            "forced-alignment",
+            "phrase-estimate",
+            "heuristic",
+          ],
+        },
+        fallbackMode: {
+          type: "string",
+          enum: [
+            "none",
+            "word-to-phrase",
+            "phrase-to-sentence",
+            "sentence-to-block",
+            "block-only",
+            "stale-audio",
+            "unavailable",
+          ],
+        },
+        alignmentWarnings: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        nullableIndex: {
+          type: ["integer", "null"],
+          minimum: 0,
+        },
+        nullableTimeMs: {
+          type: ["integer", "null"],
+          minimum: 0,
+        },
+        readingPosition: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            bookSourceId: {
+              type: "string",
+            },
+            scopeKey: {
+              type: "string",
+            },
+            activeWordIndex: {
+              type: "integer",
+              minimum: 0,
+            },
+            nodeId: {
+              type: "string",
+            },
+            locator: {
+              $ref: "content-ir.v1.schema.json#/$defs/locator",
+            },
+            locatorEnvelope: {
+              $ref: "locator-envelope.v1.schema.json",
+            },
+            textQuote: {
+              type: "string",
+            },
+          },
+        },
+        highlightMapV2Summary: {
+          type: "object",
+          additionalProperties: false,
+          required: [
+            "status",
+            "primaryLevel",
+            "entryCount",
+            "wordCount",
+            "phraseCount",
+            "sentenceCount",
+            "blockCount",
+            "timingSources",
+            "confidence",
+            "driftBudgetMs",
+            "fallbackMode",
+            "degraded",
+          ],
+          properties: {
+            status: {
+              type: "string",
+              minLength: 1,
+            },
+            primaryLevel: {
+              $ref: "#/$defs/timingLevel",
+            },
+            entryCount: {
+              type: "integer",
+              minimum: 0,
+            },
+            wordCount: {
+              type: "integer",
+              minimum: 0,
+            },
+            phraseCount: {
+              type: "integer",
+              minimum: 0,
+            },
+            sentenceCount: {
+              type: "integer",
+              minimum: 0,
+            },
+            blockCount: {
+              type: "integer",
+              minimum: 0,
+            },
+            timingSources: {
+              type: "array",
+              minItems: 1,
+              uniqueItems: true,
+              items: {
+                $ref: "#/$defs/timingSource",
+              },
+            },
+            confidence: {
+              type: "number",
+              minimum: 0,
+              maximum: 1,
+            },
+            driftBudgetMs: {
+              type: "integer",
+              minimum: 0,
+            },
+            fallbackMode: {
+              $ref: "#/$defs/fallbackMode",
+            },
+            degraded: {
+              type: "boolean",
+            },
+            reason: {
+              type: "string",
+            },
+            alignmentWarnings: {
+              $ref: "#/$defs/alignmentWarnings",
+            },
+          },
+        },
+        timingEntry: {
+          type: "object",
+          additionalProperties: false,
+          required: [
+            "level",
+            "sourceId",
+            "scopeKey",
+            "generatedAudioId",
+            "speechPlanId",
+            "contentIrVersion",
+            "sourceLocator",
+            "nodeId",
+            "textQuote",
+            "rawText",
+            "normalizedText",
+            "spokenText",
+            "tokenIndex",
+            "fragmentIndex",
+            "sentenceIndex",
+            "audioStartMs",
+            "audioEndMs",
+            "providerTimingStartMs",
+            "providerTimingEndMs",
+            "alignedStartMs",
+            "alignedEndMs",
+            "timingSource",
+            "confidence",
+            "driftBudgetMs",
+            "alignmentWarnings",
+            "fallbackMode",
+          ],
+          properties: {
+            entryId: {
+              type: "string",
+            },
+            level: {
+              $ref: "#/$defs/timingLevel",
+            },
+            sourceId: {
+              type: "string",
+              minLength: 1,
+            },
+            scopeKey: {
+              type: "string",
+              minLength: 1,
+            },
+            generatedAudioId: {
+              type: "string",
+              minLength: 1,
+            },
+            speechPlanId: {
+              type: "string",
+              minLength: 1,
+            },
+            spokenTokenId: {
+              type: "string",
+            },
+            contentIrVersion: {
+              const: "content-ir.v1",
+            },
+            sourceLocator: {
+              $ref: "content-ir.v1.schema.json#/$defs/locator",
+            },
+            nodeId: {
+              type: "string",
+              minLength: 1,
+            },
+            segmentId: {
+              type: "string",
+            },
+            sourceWordId: {
+              type: "string",
+            },
+            sourceWordIndex: {
+              type: "integer",
+              minimum: 0,
+            },
+            textQuote: {
+              type: "string",
+            },
+            rawText: {
+              type: "string",
+            },
+            normalizedText: {
+              type: "string",
+            },
+            spokenText: {
+              type: "string",
+            },
+            readingPosition: {
+              $ref: "#/$defs/readingPosition",
+            },
+            tokenIndex: {
+              $ref: "#/$defs/nullableIndex",
+            },
+            fragmentIndex: {
+              $ref: "#/$defs/nullableIndex",
+            },
+            sentenceIndex: {
+              $ref: "#/$defs/nullableIndex",
+            },
+            audioStartMs: {
+              type: "integer",
+              minimum: 0,
+            },
+            audioEndMs: {
+              type: "integer",
+              minimum: 0,
+            },
+            providerTimingStartMs: {
+              $ref: "#/$defs/nullableTimeMs",
+            },
+            providerTimingEndMs: {
+              $ref: "#/$defs/nullableTimeMs",
+            },
+            alignedStartMs: {
+              $ref: "#/$defs/nullableTimeMs",
+            },
+            alignedEndMs: {
+              $ref: "#/$defs/nullableTimeMs",
+            },
+            timingSource: {
+              $ref: "#/$defs/timingSource",
+            },
+            confidence: {
+              type: "number",
+              minimum: 0,
+              maximum: 1,
+            },
+            driftBudgetMs: {
+              type: "integer",
+              minimum: 0,
+            },
+            alignmentWarnings: {
+              $ref: "#/$defs/alignmentWarnings",
+            },
+            fallbackMode: {
+              $ref: "#/$defs/fallbackMode",
+            },
+            allowsOverlap: {
+              type: "boolean",
+            },
+            traceability: {
+              $ref: "#/$defs/textTraceability",
+            },
+          },
+        },
+        textTraceability: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            sourceTextMatch: {
+              type: "string",
+            },
+            normalizedTextMatch: {
+              type: "string",
+            },
+            spokenTextMatch: {
+              type: "string",
+            },
+            policyTransform: {
+              type: "string",
+            },
+          },
+        },
+      },
+    },
     "fragment-timing.v1": {
       $schema: "https://json-schema.org/draft/2020-12/schema",
       $id: "https://tts-research.local/schemas/fragment-timing.v1.schema.json",
@@ -2976,6 +5473,1719 @@ export const schemaBundle = {
           },
         },
       },
+    },
+    "source-envelope.v1": {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://tts-research.local/schemas/source-envelope.v1.schema.json",
+      title: "SourceEnvelope v1",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "schemaVersion",
+        "sourceId",
+        "sourceKind",
+        "origin",
+        "projectId",
+        "createdAt",
+        "currentRevisionId",
+        "lifecycle",
+      ],
+      properties: {
+        schemaVersion: {
+          const: "source-envelope.v1",
+        },
+        sourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceKind: {
+          enum: ["project", "quick_listen_temporary", "imported"],
+        },
+        origin: {
+          type: "object",
+          additionalProperties: false,
+          required: ["method"],
+          properties: {
+            method: {
+              enum: ["upload", "url", "paste", "generated"],
+            },
+            uri: {
+              type: "string",
+            },
+            fileName: {
+              type: "string",
+            },
+            contentType: {
+              type: "string",
+            },
+            contentHash: {
+              type: "string",
+            },
+            byteLength: {
+              type: "integer",
+              minimum: 0,
+            },
+          },
+        },
+        projectId: {
+          type: "string",
+          minLength: 1,
+        },
+        createdAt: {
+          type: "string",
+          format: "date-time",
+        },
+        currentRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        lifecycle: {
+          enum: ["active", "temporary", "promoted", "archived", "deleted"],
+        },
+        expiresAt: {
+          type: "string",
+          format: "date-time",
+        },
+        promotedToSourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        metadata: {
+          type: "object",
+          additionalProperties: true,
+        },
+      },
+    },
+    "source-revision.v1": {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://tts-research.local/schemas/source-revision.v1.schema.json",
+      title: "SourceRevision v1",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "schemaVersion",
+        "revisionId",
+        "sourceId",
+        "createdAt",
+        "revisionOrdinal",
+        "revisionState",
+        "contentHash",
+        "rawArtifact",
+      ],
+      properties: {
+        schemaVersion: {
+          const: "source-revision.v1",
+        },
+        revisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        createdAt: {
+          type: "string",
+          format: "date-time",
+        },
+        revisionOrdinal: {
+          type: "integer",
+          minimum: 1,
+        },
+        revisionState: {
+          enum: ["current", "superseded", "archived"],
+        },
+        contentHash: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceFingerprint: {
+          type: "string",
+          minLength: 1,
+        },
+        rawArtifact: {
+          type: "object",
+          additionalProperties: false,
+          required: ["artifactId", "uri", "sha256"],
+          properties: {
+            artifactId: {
+              type: "string",
+              minLength: 1,
+            },
+            uri: {
+              type: "string",
+              minLength: 1,
+            },
+            sha256: {
+              type: "string",
+              minLength: 1,
+            },
+            contentType: {
+              type: "string",
+            },
+            byteLength: {
+              type: "integer",
+              minimum: 0,
+            },
+          },
+        },
+        supersedesRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        supersededByRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        repairOverlayId: {
+          type: "string",
+          minLength: 1,
+        },
+        metadata: {
+          type: "object",
+          additionalProperties: true,
+        },
+      },
+    },
+    "extraction-revision.v1": {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://tts-research.local/schemas/extraction-revision.v1.schema.json",
+      title: "ExtractionRevision v1",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "schemaVersion",
+        "extractionRevisionId",
+        "sourceId",
+        "sourceRevisionId",
+        "adapter",
+        "adapterVersion",
+        "startedAt",
+        "status",
+        "emittedUnitIds",
+      ],
+      properties: {
+        schemaVersion: {
+          const: "extraction-revision.v1",
+        },
+        extractionRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        adapter: {
+          type: "string",
+          minLength: 1,
+        },
+        adapterVersion: {
+          type: "string",
+          minLength: 1,
+        },
+        startedAt: {
+          type: "string",
+          format: "date-time",
+        },
+        completedAt: {
+          type: "string",
+          format: "date-time",
+        },
+        status: {
+          enum: [
+            "running",
+            "complete",
+            "complete_with_warnings",
+            "failed",
+            "interrupted_retriable",
+          ],
+        },
+        emittedUnitIds: {
+          type: "array",
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+          default: [],
+        },
+        warnings: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        retryAfterRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        metadata: {
+          type: "object",
+          additionalProperties: true,
+        },
+      },
+    },
+    "reading-unit-manifest.v1": {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://tts-research.local/schemas/reading-unit-manifest.v1.schema.json",
+      title: "ReadingUnitManifest v1",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "schemaVersion",
+        "manifestId",
+        "sourceId",
+        "sourceRevisionId",
+        "extractionRevisionId",
+        "manifestRevision",
+        "state",
+        "generatedAt",
+        "units",
+        "summary",
+      ],
+      properties: {
+        schemaVersion: {
+          const: "reading-unit-manifest.v1",
+        },
+        manifestId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        extractionRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        manifestRevision: {
+          type: "integer",
+          minimum: 1,
+        },
+        generatedAt: {
+          type: "string",
+          format: "date-time",
+        },
+        state: {
+          enum: ["current", "degraded", "superseded", "stale", "failed", "interrupted_retriable"],
+        },
+        supersededByManifestId: {
+          type: "string",
+          minLength: 1,
+        },
+        units: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["unitId", "orderKey", "readiness", "fingerprint"],
+            properties: {
+              unitId: {
+                type: "string",
+                minLength: 1,
+              },
+              orderKey: {
+                type: "string",
+                minLength: 1,
+              },
+              nodeId: {
+                type: "string",
+                minLength: 1,
+              },
+              readiness: {
+                enum: ["pending_extraction", "blocked", "readable", "narratable", "alignable"],
+              },
+              contentIrId: {
+                type: "string",
+                minLength: 1,
+              },
+              locator: {
+                $ref: "content-ir.v1.schema.json#/$defs/locator",
+              },
+              fingerprint: {
+                type: "string",
+                minLength: 1,
+              },
+              blockedReason: {
+                type: "string",
+              },
+              warnings: {
+                type: "array",
+                items: {
+                  type: "string",
+                },
+              },
+              provenance: {
+                type: "object",
+                additionalProperties: true,
+              },
+            },
+          },
+        },
+        summary: {
+          type: "object",
+          additionalProperties: false,
+          required: [
+            "unitCount",
+            "readableCount",
+            "narratableCount",
+            "blockedCount",
+            "pendingCount",
+          ],
+          properties: {
+            unitCount: {
+              type: "integer",
+              minimum: 0,
+            },
+            readableCount: {
+              type: "integer",
+              minimum: 0,
+            },
+            narratableCount: {
+              type: "integer",
+              minimum: 0,
+            },
+            blockedCount: {
+              type: "integer",
+              minimum: 0,
+            },
+            pendingCount: {
+              type: "integer",
+              minimum: 0,
+            },
+            degraded: {
+              type: "boolean",
+            },
+          },
+        },
+        warnings: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        metadata: {
+          type: "object",
+          additionalProperties: true,
+        },
+      },
+    },
+    "readalong-manifest.v1": {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://tts-research.local/schemas/readalong-manifest.v1.schema.json",
+      title: "ReadalongManifest v1",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "schemaVersion",
+        "manifestId",
+        "sourceId",
+        "sourceRevisionId",
+        "extractionRevisionId",
+        "readingUnitManifestId",
+        "manifestRevision",
+        "state",
+        "generatedAt",
+        "unitIds",
+      ],
+      properties: {
+        schemaVersion: {
+          const: "readalong-manifest.v1",
+        },
+        manifestId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        extractionRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        readingUnitManifestId: {
+          type: "string",
+          minLength: 1,
+        },
+        manifestRevision: {
+          type: "integer",
+          minimum: 1,
+        },
+        generatedAt: {
+          type: "string",
+          format: "date-time",
+        },
+        state: {
+          enum: ["current", "degraded", "superseded", "stale", "failed", "interrupted_retriable"],
+        },
+        supersededByManifestId: {
+          type: "string",
+          minLength: 1,
+        },
+        unitIds: {
+          type: "array",
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+          default: [],
+        },
+        speechPlanIds: {
+          type: "array",
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+          default: [],
+        },
+        audioArtifactIds: {
+          type: "array",
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+          default: [],
+        },
+        highlightMapIds: {
+          type: "array",
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+          default: [],
+        },
+        artifactCompatibilityIds: {
+          type: "array",
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+          default: [],
+        },
+        syncFidelityDecisionIds: {
+          type: "array",
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+          default: [],
+        },
+        progressIds: {
+          type: "array",
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+          default: [],
+        },
+        repairOverlayIds: {
+          type: "array",
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+          default: [],
+        },
+        warnings: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        metadata: {
+          type: "object",
+          additionalProperties: true,
+        },
+      },
+    },
+    "audio-artifact.v1": {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://tts-research.local/schemas/audio-artifact.v1.schema.json",
+      title: "AudioArtifact v1",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "schemaVersion",
+        "artifactId",
+        "sourceId",
+        "sourceRevisionId",
+        "extractionRevisionId",
+        "readalongManifestId",
+        "segmentIds",
+        "state",
+        "generatedAt",
+        "provider",
+        "format",
+        "compatibilityKey",
+        "retry",
+      ],
+      properties: {
+        schemaVersion: {
+          const: "audio-artifact.v1",
+        },
+        artifactId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        extractionRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        readalongManifestId: {
+          type: "string",
+          minLength: 1,
+        },
+        segmentIds: {
+          type: "array",
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+          default: [],
+        },
+        state: {
+          enum: [
+            "generating",
+            "unchecked",
+            "checked",
+            "stale",
+            "replaced",
+            "failed",
+            "retryable",
+            "interrupted_retriable",
+          ],
+        },
+        generatedAt: {
+          type: "string",
+          format: "date-time",
+        },
+        checkedAt: {
+          type: "string",
+          format: "date-time",
+        },
+        provider: {
+          type: "object",
+          additionalProperties: false,
+          required: ["name"],
+          properties: {
+            name: {
+              type: "string",
+              minLength: 1,
+            },
+            voiceId: {
+              type: "string",
+              minLength: 1,
+            },
+            model: {
+              type: "string",
+              minLength: 1,
+            },
+          },
+        },
+        format: {
+          enum: ["mp3", "wav", "ogg", "aac"],
+        },
+        durationMs: {
+          type: "integer",
+          minimum: 0,
+        },
+        uri: {
+          type: "string",
+        },
+        checksum: {
+          type: "string",
+        },
+        compatibilityKey: {
+          type: "string",
+          minLength: 1,
+        },
+        replacementOfArtifactId: {
+          type: "string",
+          minLength: 1,
+        },
+        replacedByArtifactId: {
+          type: "string",
+          minLength: 1,
+        },
+        failureCode: {
+          type: "string",
+        },
+        failureMessage: {
+          type: "string",
+        },
+        retry: {
+          type: "object",
+          additionalProperties: false,
+          required: ["retryable", "scope"],
+          properties: {
+            retryable: {
+              type: "boolean",
+            },
+            scope: {
+              enum: ["none", "artifact", "segment"],
+            },
+            reason: {
+              type: "string",
+            },
+            attempt: {
+              type: "integer",
+              minimum: 0,
+            },
+            nextAttemptAfter: {
+              type: "string",
+              format: "date-time",
+            },
+          },
+        },
+        metadata: {
+          type: "object",
+          additionalProperties: true,
+        },
+      },
+    },
+    "artifact-compatibility.v1": {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://tts-research.local/schemas/artifact-compatibility.v1.schema.json",
+      title: "ArtifactCompatibility v1",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "schemaVersion",
+        "compatibilityId",
+        "artifactId",
+        "sourceId",
+        "sourceRevisionId",
+        "targetSourceRevisionId",
+        "decision",
+        "reuseAllowed",
+        "checkedAt",
+        "reasons",
+      ],
+      properties: {
+        schemaVersion: {
+          const: "artifact-compatibility.v1",
+        },
+        compatibilityId: {
+          type: "string",
+          minLength: 1,
+        },
+        artifactId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        targetSourceRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        decision: {
+          enum: [
+            "compatible",
+            "compatible_with_degraded_sync",
+            "stale_due_to_revision",
+            "stale_due_to_repair",
+            "incompatible",
+            "replacement_required",
+          ],
+        },
+        reuseAllowed: {
+          type: "boolean",
+        },
+        checkedAt: {
+          type: "string",
+          format: "date-time",
+        },
+        compatibleUnitIds: {
+          type: "array",
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+          default: [],
+        },
+        staleUnitIds: {
+          type: "array",
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+          default: [],
+        },
+        reasons: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        metadata: {
+          type: "object",
+          additionalProperties: true,
+        },
+      },
+    },
+    "repair-overlay.v1": {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://tts-research.local/schemas/repair-overlay.v1.schema.json",
+      title: "RepairOverlay v1",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "schemaVersion",
+        "overlayId",
+        "sourceId",
+        "sourceRevisionId",
+        "targetRevisionId",
+        "createdAt",
+        "immutable",
+        "changes",
+        "summary",
+      ],
+      properties: {
+        schemaVersion: {
+          const: "repair-overlay.v1",
+        },
+        overlayId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        targetRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        createdAt: {
+          type: "string",
+          format: "date-time",
+        },
+        createdBy: {
+          type: "string",
+        },
+        immutable: {
+          const: true,
+        },
+        changes: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["changeId", "op", "unitId", "reason"],
+            properties: {
+              changeId: {
+                type: "string",
+                minLength: 1,
+              },
+              op: {
+                enum: [
+                  "replace_text",
+                  "insert_text",
+                  "delete_text",
+                  "mark_blocked",
+                  "metadata_patch",
+                ],
+              },
+              unitId: {
+                type: "string",
+                minLength: 1,
+              },
+              locator: {
+                $ref: "content-ir.v1.schema.json#/$defs/locator",
+              },
+              beforeText: {
+                type: "string",
+              },
+              afterText: {
+                type: "string",
+              },
+              reason: {
+                type: "string",
+              },
+            },
+          },
+        },
+        summary: {
+          type: "string",
+        },
+        metadata: {
+          type: "object",
+          additionalProperties: true,
+        },
+      },
+    },
+    "revision-map.v1": {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://tts-research.local/schemas/revision-map.v1.schema.json",
+      title: "RevisionMap v1",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "schemaVersion",
+        "revisionMapId",
+        "sourceId",
+        "fromSourceRevisionId",
+        "toSourceRevisionId",
+        "generatedAt",
+        "cause",
+        "confidence",
+        "unitMappings",
+      ],
+      properties: {
+        schemaVersion: {
+          const: "revision-map.v1",
+        },
+        revisionMapId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        fromSourceRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        toSourceRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        generatedAt: {
+          type: "string",
+          format: "date-time",
+        },
+        cause: {
+          enum: ["repair_overlay", "extraction_correction", "promotion"],
+        },
+        overlayId: {
+          type: "string",
+          minLength: 1,
+        },
+        confidence: {
+          type: "number",
+          minimum: 0,
+          maximum: 1,
+        },
+        unitMappings: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["fromUnitId", "toUnitId", "confidence"],
+            properties: {
+              fromUnitId: {
+                type: "string",
+                minLength: 1,
+              },
+              toUnitId: {
+                type: "string",
+                minLength: 1,
+              },
+              confidence: {
+                type: "number",
+                minimum: 0,
+                maximum: 1,
+              },
+              status: {
+                enum: ["matched", "changed", "deleted", "inserted", "blocked"],
+              },
+            },
+          },
+        },
+        locatorMappings: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["fromLocator", "toLocator", "confidence"],
+            properties: {
+              fromLocator: {
+                $ref: "content-ir.v1.schema.json#/$defs/locator",
+              },
+              toLocator: {
+                $ref: "content-ir.v1.schema.json#/$defs/locator",
+              },
+              confidence: {
+                type: "number",
+                minimum: 0,
+                maximum: 1,
+              },
+              textQuote: {
+                type: "string",
+              },
+            },
+          },
+        },
+        progressMappings: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["fromProgressId", "toProgressId", "confidence"],
+            properties: {
+              fromProgressId: {
+                type: "string",
+                minLength: 1,
+              },
+              toProgressId: {
+                type: "string",
+                minLength: 1,
+              },
+              confidence: {
+                type: "number",
+                minimum: 0,
+                maximum: 1,
+              },
+            },
+          },
+        },
+        metadata: {
+          type: "object",
+          additionalProperties: true,
+        },
+      },
+    },
+    "promotion-crosswalk.v1": {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://tts-research.local/schemas/promotion-crosswalk.v1.schema.json",
+      title: "PromotionCrosswalk v1",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "schemaVersion",
+        "crosswalkId",
+        "promotedAt",
+        "fromSourceId",
+        "toSourceId",
+        "fromManifestId",
+        "toManifestId",
+        "identityMappings",
+      ],
+      properties: {
+        schemaVersion: {
+          const: "promotion-crosswalk.v1",
+        },
+        crosswalkId: {
+          type: "string",
+          minLength: 1,
+        },
+        promotedAt: {
+          type: "string",
+          format: "date-time",
+        },
+        fromSourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        toSourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        fromManifestId: {
+          type: "string",
+          minLength: 1,
+        },
+        toManifestId: {
+          type: "string",
+          minLength: 1,
+        },
+        identityMappings: {
+          type: "object",
+          additionalProperties: false,
+          required: ["sourceRevisionIds", "readingUnitIds", "audioArtifactIds", "progressIds"],
+          properties: {
+            sourceRevisionIds: {
+              $ref: "#/$defs/idMapArray",
+            },
+            extractionRevisionIds: {
+              $ref: "#/$defs/idMapArray",
+            },
+            readingUnitManifestIds: {
+              $ref: "#/$defs/idMapArray",
+            },
+            readalongManifestIds: {
+              $ref: "#/$defs/idMapArray",
+            },
+            readingUnitIds: {
+              $ref: "#/$defs/idMapArray",
+            },
+            audioArtifactIds: {
+              $ref: "#/$defs/idMapArray",
+            },
+            highlightMapIds: {
+              $ref: "#/$defs/idMapArray",
+            },
+            progressIds: {
+              $ref: "#/$defs/idMapArray",
+            },
+            repairOverlayIds: {
+              $ref: "#/$defs/idMapArray",
+            },
+          },
+        },
+        metadata: {
+          type: "object",
+          additionalProperties: true,
+        },
+      },
+      $defs: {
+        idMapArray: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["from", "to"],
+            properties: {
+              from: {
+                type: "string",
+                minLength: 1,
+              },
+              to: {
+                type: "string",
+                minLength: 1,
+              },
+              confidence: {
+                type: "number",
+                minimum: 0,
+                maximum: 1,
+              },
+            },
+          },
+        },
+      },
+    },
+    "source-manifest-event.v1": {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://tts-research.local/schemas/source-manifest-event.v1.schema.json",
+      title: "SourceManifestEvent v1",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "schemaVersion",
+        "eventId",
+        "sourceId",
+        "sequence",
+        "occurredAt",
+        "eventType",
+        "snapshotAvailable",
+        "subject",
+      ],
+      properties: {
+        schemaVersion: {
+          const: "source-manifest-event.v1",
+        },
+        eventId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        sequence: {
+          type: "integer",
+          minimum: 1,
+        },
+        occurredAt: {
+          type: "string",
+          format: "date-time",
+        },
+        eventType: {
+          enum: [
+            "source_revision_created",
+            "extraction_revision_updated",
+            "reading_unit_manifest_written",
+            "readalong_manifest_written",
+            "audio_artifact_updated",
+            "progress_updated",
+            "repair_overlay_created",
+            "promotion_crosswalk_created",
+            "artifact_interrupted_retriable",
+          ],
+        },
+        snapshotAvailable: {
+          type: "boolean",
+        },
+        cursor: {
+          type: "string",
+          minLength: 1,
+        },
+        subject: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            sourceRevisionId: {
+              type: "string",
+              minLength: 1,
+            },
+            extractionRevisionId: {
+              type: "string",
+              minLength: 1,
+            },
+            readingUnitManifestId: {
+              type: "string",
+              minLength: 1,
+            },
+            readalongManifestId: {
+              type: "string",
+              minLength: 1,
+            },
+            audioArtifactId: {
+              type: "string",
+              minLength: 1,
+            },
+            progressId: {
+              type: "string",
+              minLength: 1,
+            },
+            repairOverlayId: {
+              type: "string",
+              minLength: 1,
+            },
+            promotionCrosswalkId: {
+              type: "string",
+              minLength: 1,
+            },
+            state: {
+              type: "string",
+            },
+          },
+        },
+        snapshotManifestId: {
+          type: "string",
+          minLength: 1,
+        },
+        metadata: {
+          type: "object",
+          additionalProperties: true,
+        },
+      },
+    },
+    "durable-progress.v1": {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://tts-research.local/schemas/durable-progress.v1.schema.json",
+      title: "DurableProgress v1",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "schemaVersion",
+        "progressId",
+        "sourceId",
+        "readalongManifestId",
+        "sourceRevisionId",
+        "kind",
+        "state",
+        "updatedAt",
+        "canonical",
+        "locatorEnvelope",
+        "position",
+      ],
+      properties: {
+        schemaVersion: {
+          const: "durable-progress.v1",
+        },
+        progressId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        readalongManifestId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        audioArtifactId: {
+          type: "string",
+          minLength: 1,
+        },
+        kind: {
+          enum: ["resume", "bookmark", "highlight"],
+        },
+        state: {
+          enum: [
+            "current",
+            "degraded",
+            "stale",
+            "superseded",
+            "failed",
+            "interrupted_retriable",
+            "remapped",
+          ],
+        },
+        updatedAt: {
+          type: "string",
+          format: "date-time",
+        },
+        canonical: {
+          type: "boolean",
+        },
+        locatorEnvelope: {
+          $ref: "locator-envelope.v1.schema.json",
+        },
+        position: {
+          type: "object",
+          additionalProperties: false,
+          required: ["unitId"],
+          properties: {
+            unitId: {
+              type: "string",
+              minLength: 1,
+            },
+            segmentId: {
+              type: "string",
+              minLength: 1,
+            },
+            activeWordIndex: {
+              type: "integer",
+              minimum: 0,
+            },
+            audioOffsetMs: {
+              type: "integer",
+              minimum: 0,
+            },
+            textQuote: {
+              type: "string",
+            },
+          },
+        },
+        metadata: {
+          type: "object",
+          additionalProperties: true,
+        },
+      },
+    },
+    "resume-resolution.v1": {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://tts-research.local/schemas/resume-resolution.v1.schema.json",
+      title: "ResumeResolution v1",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "schemaVersion",
+        "resolutionId",
+        "progressId",
+        "sourceId",
+        "requestedAt",
+        "decision",
+        "reason",
+        "resolvedReadalongManifestId",
+        "resolvedLocatorEnvelope",
+      ],
+      properties: {
+        schemaVersion: {
+          const: "resume-resolution.v1",
+        },
+        resolutionId: {
+          type: "string",
+          minLength: 1,
+        },
+        progressId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        requestedAt: {
+          type: "string",
+          format: "date-time",
+        },
+        decision: {
+          enum: [
+            "auto_resume_current",
+            "auto_resume_degraded",
+            "resume_audio_only",
+            "resume_source_only",
+            "offer_retry",
+            "offer_old_vs_repaired",
+            "auto_resume_remapped",
+            "blocked_failed",
+          ],
+        },
+        reason: {
+          type: "string",
+        },
+        resolvedReadalongManifestId: {
+          type: "string",
+          minLength: 1,
+        },
+        resolvedLocatorEnvelope: {
+          $ref: "locator-envelope.v1.schema.json",
+        },
+        revisionMapId: {
+          type: "string",
+          minLength: 1,
+        },
+        staleProgressId: {
+          type: "string",
+          minLength: 1,
+        },
+        retryArtifactId: {
+          type: "string",
+          minLength: 1,
+        },
+        offers: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        metadata: {
+          type: "object",
+          additionalProperties: true,
+        },
+      },
+    },
+    "sync-fidelity-decision.v1": {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://tts-research.local/schemas/sync-fidelity-decision.v1.schema.json",
+      title: "SyncFidelityDecision v1",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "schemaVersion",
+        "decisionId",
+        "sourceId",
+        "sourceRevisionId",
+        "readalongManifestId",
+        "audioArtifactId",
+        "generatedAt",
+        "fidelity",
+        "exactAllowed",
+        "evidence",
+      ],
+      properties: {
+        schemaVersion: {
+          const: "sync-fidelity-decision.v1",
+        },
+        decisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceId: {
+          type: "string",
+          minLength: 1,
+        },
+        sourceRevisionId: {
+          type: "string",
+          minLength: 1,
+        },
+        readalongManifestId: {
+          type: "string",
+          minLength: 1,
+        },
+        audioArtifactId: {
+          type: "string",
+          minLength: 1,
+        },
+        highlightMapId: {
+          type: "string",
+          minLength: 1,
+        },
+        generatedAt: {
+          type: "string",
+          format: "date-time",
+        },
+        fidelity: {
+          enum: ["exact_word", "phrase", "block", "audio_only", "source_only", "none"],
+        },
+        exactAllowed: {
+          type: "boolean",
+        },
+        fallbackReason: {
+          type: "string",
+        },
+        evidence: {
+          type: "object",
+          additionalProperties: false,
+          required: [
+            "sourceRevisionCurrent",
+            "mappingValid",
+            "timingConfidence",
+            "lowResourceMode",
+            "artifactCompatible",
+            "confidence",
+          ],
+          properties: {
+            sourceRevisionCurrent: {
+              type: "boolean",
+            },
+            mappingValid: {
+              type: "boolean",
+            },
+            timingConfidence: {
+              type: "boolean",
+            },
+            lowResourceMode: {
+              type: "boolean",
+            },
+            artifactCompatible: {
+              type: "boolean",
+            },
+            confidence: {
+              type: "number",
+              minimum: 0,
+              maximum: 1,
+            },
+            driftBudgetMs: {
+              type: "integer",
+              minimum: 0,
+            },
+          },
+        },
+        metadata: {
+          type: "object",
+          additionalProperties: true,
+        },
+      },
+    },
+    "reader_workspace_snapshot.v1": {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://tts-research.local/schemas/reader-workspace-snapshot.v1.schema.json",
+      title: "ReaderWorkspaceSnapshot v1",
+      description:
+        "Bounded server-authored transport projection for restoring one project's readable source and optional paused playback state. Shape validation does not grant compatibility authority to a browser; the server validates revision, run, media, timing, and progress semantics.",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "schemaVersion",
+        "projectId",
+        "projectRevision",
+        "readMode",
+        "sourceId",
+        "sourceRevisionId",
+        "sourceContentHash",
+        "runId",
+        "runCompatibilityKey",
+        "mediaManifestVersion",
+        "timingRevision",
+        "syncFidelity",
+        "readerLocator",
+        "playbackCursorMs",
+        "playbackRate",
+        "followPreference",
+        "updatedAt",
+      ],
+      properties: {
+        schemaVersion: {
+          const: "reader_workspace_snapshot.v1",
+        },
+        projectId: {
+          type: "string",
+          minLength: 1,
+          maxLength: 512,
+        },
+        projectRevision: {
+          type: "integer",
+          minimum: 0,
+          maximum: 9007199254740991,
+        },
+        readMode: {
+          enum: ["paused", "readable"],
+        },
+        sourceId: {
+          type: "string",
+          maxLength: 512,
+        },
+        sourceRevisionId: {
+          type: "string",
+          maxLength: 512,
+        },
+        sourceContentHash: {
+          type: "string",
+          maxLength: 256,
+        },
+        runId: {
+          type: ["string", "null"],
+          minLength: 1,
+          maxLength: 512,
+        },
+        runCompatibilityKey: {
+          type: ["string", "null"],
+          minLength: 1,
+          maxLength: 1024,
+        },
+        mediaManifestVersion: {
+          type: ["integer", "null"],
+          minimum: 0,
+          maximum: 9007199254740991,
+        },
+        timingRevision: {
+          type: ["integer", "null"],
+          minimum: 0,
+          maximum: 9007199254740991,
+        },
+        syncFidelity: {
+          enum: ["exact_word", "phrase", "block", "audio_only", "source_only", "none", null],
+        },
+        readerLocator: {
+          anyOf: [
+            {
+              $ref: "locator-envelope.v1.schema.json",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        playbackCursorMs: {
+          type: ["integer", "null"],
+          minimum: 0,
+          maximum: 9007199254740991,
+        },
+        playbackRate: {
+          type: ["number", "null"],
+          exclusiveMinimum: 0,
+          maximum: 4,
+        },
+        followPreference: {
+          type: ["boolean", "null"],
+        },
+        updatedAt: {
+          type: "string",
+          format: "date-time",
+        },
+      },
+      allOf: [
+        {
+          if: {
+            properties: {
+              sourceId: {
+                const: "",
+              },
+            },
+          },
+          then: {
+            properties: {
+              readMode: {
+                const: "paused",
+              },
+              sourceRevisionId: {
+                const: "",
+              },
+              sourceContentHash: {
+                const: "",
+              },
+              runId: {
+                const: null,
+              },
+              runCompatibilityKey: {
+                const: null,
+              },
+              mediaManifestVersion: {
+                const: null,
+              },
+              timingRevision: {
+                const: null,
+              },
+              syncFidelity: {
+                const: "none",
+              },
+              readerLocator: {
+                const: null,
+              },
+              playbackCursorMs: {
+                const: null,
+              },
+              playbackRate: {
+                const: 1,
+              },
+              followPreference: {
+                const: null,
+              },
+            },
+          },
+          else: {
+            properties: {
+              sourceId: {
+                minLength: 1,
+              },
+              sourceRevisionId: {
+                minLength: 1,
+              },
+              sourceContentHash: {
+                minLength: 1,
+              },
+            },
+          },
+        },
+        {
+          if: {
+            properties: {
+              runId: {
+                type: "string",
+              },
+            },
+          },
+          then: {
+            properties: {
+              runCompatibilityKey: {
+                type: "string",
+              },
+            },
+          },
+        },
+        {
+          if: {
+            properties: {
+              runCompatibilityKey: {
+                type: "string",
+              },
+            },
+          },
+          then: {
+            properties: {
+              runId: {
+                type: "string",
+              },
+            },
+          },
+        },
+      ],
     },
   },
 } as const;

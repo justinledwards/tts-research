@@ -150,6 +150,13 @@ func (service *Service) GetProjectStorageSummary(id string) (ProjectStorageSumma
 				path:     filepath.Join(jobDir, highlightmap.HighlightMapFilename),
 			},
 			{
+				kind:     "highlight_map_v2",
+				label:    "Highlight map v2",
+				url:      fmt.Sprintf("/api/voice-jobs/%s/highlight-map-v2", job.ID),
+				filename: safeDownloadFilename(project.Name, job, "highlight-map-v2", ".json"),
+				path:     filepath.Join(jobDir, highlightmap.HighlightMapV2Filename),
+			},
+			{
 				kind:     "fragment_timing",
 				label:    "Fragment timing",
 				url:      fmt.Sprintf("/api/voice-jobs/%s/timing/fragments", job.ID),
@@ -162,6 +169,13 @@ func (service *Service) GetProjectStorageSummary(id string) (ProjectStorageSumma
 				url:      fmt.Sprintf("/api/voice-jobs/%s/timing/tokens", job.ID),
 				filename: safeDownloadFilename(project.Name, job, "token-timing", ".json"),
 				path:     filepath.Join(jobDir, highlightmap.TokenTimingFilename),
+			},
+			{
+				kind:     "alignment_quality",
+				label:    "Alignment quality",
+				url:      fmt.Sprintf("/api/voice-jobs/%s/timing/alignment", job.ID),
+				filename: safeDownloadFilename(project.Name, job, "alignment-quality", ".json"),
+				path:     filepath.Join(jobDir, highlightmap.AlignmentQualityFilename),
 			},
 		}
 		for _, download := range timingDownloads {

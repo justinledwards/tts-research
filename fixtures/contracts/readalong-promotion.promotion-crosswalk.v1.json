@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "promotion-crosswalk.v1",
+  "crosswalkId": "promo-ql-001",
+  "promotedAt": "2026-05-17T01:15:00Z",
+  "fromSourceId": "quicklisten-temp-001",
+  "toSourceId": "contract-markdown",
+  "fromManifestId": "ram-ql-001",
+  "toManifestId": "ram-md-002",
+  "identityMappings": {
+    "sourceRevisionIds": [
+      {
+        "from": "sr-ql-001",
+        "to": "sr-md-002",
+        "confidence": 0.91
+      }
+    ],
+    "extractionRevisionIds": [
+      {
+        "from": "er-ql-001",
+        "to": "er-md-002",
+        "confidence": 0.91
+      }
+    ],
+    "readingUnitManifestIds": [
+      {
+        "from": "rum-ql-001",
+        "to": "rum-md-002",
+        "confidence": 0.91
+      }
+    ],
+    "readalongManifestIds": [
+      {
+        "from": "ram-ql-001",
+        "to": "ram-md-002",
+        "confidence": 0.91
+      }
+    ],
+    "readingUnitIds": [
+      {
+        "from": "unit-ql-0001",
+        "to": "unit-md-0001",
+        "confidence": 0.95
+      }
+    ],
+    "audioArtifactIds": [
+      {
+        "from": "audio-ql-001",
+        "to": "audio-md-checked",
+        "confidence": 0.85
+      }
+    ],
+    "progressIds": [
+      {
+        "from": "progress-ql-001",
+        "to": "progress-md-current",
+        "confidence": 0.95
+      }
+    ],
+    "repairOverlayIds": []
+  },
+  "metadata": {
+    "linksExistingIssue": "QQP-4"
+  }
+}

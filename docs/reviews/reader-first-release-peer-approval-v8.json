@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-07-11T01:02:47Z",
+  "peerReview": {
+    "archive": "tts-research-reader-first-peer-review-v8.zip",
+    "archiveSha256": "b91a683ac8c94bd44ca618b53b275cbe93c2d55d8a5cac1b11e6d9d1aeafc7de",
+    "responsePath": "docs/reviews/chatgpt-reader-first-release-response-v8.md",
+    "responseSha256": "db77ea725ec44d7916c12ff243554a5b7ae34975e2b2ad61d283a6fb221bfe01",
+    "verdict": "PEER APPROVED"
+  },
+  "liveCapacity": {
+    "checkedAt": "2026-07-11T01:02:47Z",
+    "projectId": "010252d0-b34c-473d-82f2-05bc4d7bc685",
+    "projectName": "TTS-Research",
+    "teamId": "cdc92ef0-dc69-47b5-8896-312dbc1e2d93",
+    "teamKey": "QQP",
+    "pagesRead": 1,
+    "hasNextPage": false,
+    "unarchivedCount": 0,
+    "activeCount": 0,
+    "cap": 20,
+    "availableSlots": 20,
+    "duplicateRfaIssues": []
+  },
+  "parentDecision": {
+    "peerApproved": true,
+    "linearCreationAuthorized": true,
+    "linearIssueIdsAuthorized": [
+      "RFA-01",
+      "RFA-02",
+      "RFA-03",
+      "RFA-04",
+      "RFA-05",
+      "RFA-06",
+      "RFA-07",
+      "RFA-08",
+      "RFA-09",
+      "RFA-10",
+      "RFA-11",
+      "RFA-12",
+      "RFA-13",
+      "RFA-14",
+      "RFA-15",
+      "RFA-16",
+      "RFA-17",
+      "RFA-18",
+      "RFA-19",
+      "RFA-20"
+    ],
+    "productImplementationAuthorized": false,
+    "postCreationProductCandidates": ["RFA-01"],
+    "reason": "Exact v8 Peer approval plus fresh 0/20 live capacity permits the approved 20-issue Linear batch. Product implementation remains closed until creation and native dependency verification complete."
+  }
+}

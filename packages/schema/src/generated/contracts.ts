@@ -5,13 +5,45 @@ export const CONTENT_IR_SCHEMA_VERSION = "content-ir.v1";
 export const LOCATOR_ENVELOPE_SCHEMA_VERSION = "locator-envelope.v1";
 export const SPEECH_PLAN_SCHEMA_VERSION = "speech-plan.v1";
 export const HIGHLIGHT_MAP_SCHEMA_VERSION = "highlight-map.v1";
+export const HIGHLIGHT_MAP_V2_SCHEMA_VERSION = "highlight-map.v2";
 export const TIMING_SCHEMA_VERSION = "timing.v1";
+export const SOURCE_ENVELOPE_SCHEMA_VERSION = "source-envelope.v1";
+export const SOURCE_REVISION_SCHEMA_VERSION = "source-revision.v1";
+export const EXTRACTION_REVISION_SCHEMA_VERSION = "extraction-revision.v1";
+export const READING_UNIT_MANIFEST_SCHEMA_VERSION = "reading-unit-manifest.v1";
+export const READALONG_MANIFEST_SCHEMA_VERSION = "readalong-manifest.v1";
+export const AUDIO_ARTIFACT_SCHEMA_VERSION = "audio-artifact.v1";
+export const ARTIFACT_COMPATIBILITY_SCHEMA_VERSION = "artifact-compatibility.v1";
+export const REPAIR_OVERLAY_SCHEMA_VERSION = "repair-overlay.v1";
+export const REVISION_MAP_SCHEMA_VERSION = "revision-map.v1";
+export const PROMOTION_CROSSWALK_SCHEMA_VERSION = "promotion-crosswalk.v1";
+export const SOURCE_MANIFEST_EVENT_SCHEMA_VERSION = "source-manifest-event.v1";
+export const DURABLE_PROGRESS_SCHEMA_VERSION = "durable-progress.v1";
+export const RESUME_RESOLUTION_SCHEMA_VERSION = "resume-resolution.v1";
+export const SYNC_FIDELITY_DECISION_SCHEMA_VERSION = "sync-fidelity-decision.v1";
+export const READER_WORKSPACE_SNAPSHOT_SCHEMA_VERSION = "reader_workspace_snapshot.v1";
 
 export type ContentIRSchemaVersion = typeof CONTENT_IR_SCHEMA_VERSION;
 export type LocatorEnvelopeSchemaVersion = typeof LOCATOR_ENVELOPE_SCHEMA_VERSION;
 export type SpeechPlanSchemaVersion = typeof SPEECH_PLAN_SCHEMA_VERSION;
 export type HighlightMapSchemaVersion = typeof HIGHLIGHT_MAP_SCHEMA_VERSION;
+export type HighlightMapV2SchemaVersion = typeof HIGHLIGHT_MAP_V2_SCHEMA_VERSION;
 export type TimingSchemaVersion = typeof TIMING_SCHEMA_VERSION;
+export type SourceEnvelopeSchemaVersion = typeof SOURCE_ENVELOPE_SCHEMA_VERSION;
+export type SourceRevisionSchemaVersion = typeof SOURCE_REVISION_SCHEMA_VERSION;
+export type ExtractionRevisionSchemaVersion = typeof EXTRACTION_REVISION_SCHEMA_VERSION;
+export type ReadingUnitManifestSchemaVersion = typeof READING_UNIT_MANIFEST_SCHEMA_VERSION;
+export type ReadalongManifestSchemaVersion = typeof READALONG_MANIFEST_SCHEMA_VERSION;
+export type AudioArtifactSchemaVersion = typeof AUDIO_ARTIFACT_SCHEMA_VERSION;
+export type ArtifactCompatibilitySchemaVersion = typeof ARTIFACT_COMPATIBILITY_SCHEMA_VERSION;
+export type RepairOverlaySchemaVersion = typeof REPAIR_OVERLAY_SCHEMA_VERSION;
+export type RevisionMapSchemaVersion = typeof REVISION_MAP_SCHEMA_VERSION;
+export type PromotionCrosswalkSchemaVersion = typeof PROMOTION_CROSSWALK_SCHEMA_VERSION;
+export type SourceManifestEventSchemaVersion = typeof SOURCE_MANIFEST_EVENT_SCHEMA_VERSION;
+export type DurableProgressSchemaVersion = typeof DURABLE_PROGRESS_SCHEMA_VERSION;
+export type ResumeResolutionSchemaVersion = typeof RESUME_RESOLUTION_SCHEMA_VERSION;
+export type SyncFidelityDecisionSchemaVersion = typeof SYNC_FIDELITY_DECISION_SCHEMA_VERSION;
+export type ReaderWorkspaceSnapshotSchemaVersion = typeof READER_WORKSPACE_SNAPSHOT_SCHEMA_VERSION;
 
 export interface ContentIRDocument {
   schemaVersion: ContentIRSchemaVersion;
@@ -408,4 +440,402 @@ export interface HighlightMap {
   fragments: HighlightFragment[];
   tokens: HighlightToken[];
   warnings?: string[];
+}
+
+export type HighlightMapV2TimingLevel = "word" | "phrase" | "sentence" | "block";
+
+export type HighlightMapV2TimingSource =
+  | "provider-word"
+  | "provider-mark"
+  | "forced-alignment"
+  | "phrase-estimate"
+  | "heuristic";
+
+export type HighlightMapV2FallbackMode =
+  | "none"
+  | "word-to-phrase"
+  | "phrase-to-sentence"
+  | "sentence-to-block"
+  | "block-only"
+  | "stale-audio"
+  | "unavailable";
+
+export interface HighlightMapV2Summary {
+  status: string;
+  primaryLevel: HighlightMapV2TimingLevel;
+  entryCount: number;
+  wordCount: number;
+  phraseCount: number;
+  sentenceCount: number;
+  blockCount: number;
+  timingSources: HighlightMapV2TimingSource[];
+  confidence: number;
+  driftBudgetMs: number;
+  fallbackMode: HighlightMapV2FallbackMode;
+  degraded: boolean;
+  reason?: string;
+  alignmentWarnings?: string[];
+}
+
+export interface HighlightMapV2Traceability {
+  sourceTextMatch?: string;
+  normalizedTextMatch?: string;
+  spokenTextMatch?: string;
+  policyTransform?: string;
+}
+
+export interface HighlightMapV2Entry {
+  entryId?: string;
+  level: HighlightMapV2TimingLevel;
+  sourceId: string;
+  scopeKey: string;
+  generatedAudioId: string;
+  speechPlanId: string;
+  spokenTokenId?: string;
+  contentIrVersion: ContentIRSchemaVersion;
+  sourceLocator: ContentIRLocator;
+  nodeId: string;
+  segmentId?: string;
+  sourceWordId?: string;
+  sourceWordIndex?: number;
+  textQuote: string;
+  rawText: string;
+  normalizedText: string;
+  spokenText: string;
+  readingPosition?: ReadingPosition;
+  tokenIndex: number | null;
+  fragmentIndex: number | null;
+  sentenceIndex: number | null;
+  audioStartMs: number;
+  audioEndMs: number;
+  providerTimingStartMs: number | null;
+  providerTimingEndMs: number | null;
+  alignedStartMs: number | null;
+  alignedEndMs: number | null;
+  timingSource: HighlightMapV2TimingSource;
+  confidence: number;
+  driftBudgetMs: number;
+  alignmentWarnings: string[];
+  fallbackMode: HighlightMapV2FallbackMode;
+  allowsOverlap?: boolean;
+  traceability?: HighlightMapV2Traceability;
+}
+
+export interface HighlightMapV2 {
+  schemaVersion: HighlightMapV2SchemaVersion;
+  sourceId: string;
+  scopeKey: string;
+  generatedAudioId: string;
+  speechPlanId: string;
+  contentIrVersion: ContentIRSchemaVersion;
+  generatedAt: string;
+  durationMs: number;
+  timingLevels: HighlightMapV2TimingLevel[];
+  summary: HighlightMapV2Summary;
+  entries: HighlightMapV2Entry[];
+  warnings?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export type ReadalongManifestState =
+  | "current"
+  | "degraded"
+  | "superseded"
+  | "stale"
+  | "failed"
+  | "interrupted_retriable";
+export type ReadingUnitReadiness =
+  | "pending_extraction"
+  | "blocked"
+  | "readable"
+  | "narratable"
+  | "alignable";
+export type AudioArtifactState =
+  | "generating"
+  | "unchecked"
+  | "checked"
+  | "stale"
+  | "replaced"
+  | "failed"
+  | "retryable"
+  | "interrupted_retriable";
+export type SyncFidelity =
+  | "exact_word"
+  | "phrase"
+  | "block"
+  | "audio_only"
+  | "source_only"
+  | "none";
+
+export interface SourceEnvelope {
+  schemaVersion: SourceEnvelopeSchemaVersion;
+  sourceId: string;
+  sourceKind: "project" | "quick_listen_temporary" | "imported";
+  projectId: string;
+  currentRevisionId: string;
+  lifecycle: "active" | "temporary" | "promoted" | "archived" | "deleted";
+  origin: Record<string, unknown>;
+  createdAt: string;
+  expiresAt?: string;
+  promotedToSourceId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SourceRevision {
+  schemaVersion: SourceRevisionSchemaVersion;
+  revisionId: string;
+  sourceId: string;
+  createdAt: string;
+  revisionOrdinal: number;
+  revisionState: "current" | "superseded" | "archived";
+  contentHash: string;
+  rawArtifact: Record<string, unknown>;
+  sourceFingerprint?: string;
+  supersedesRevisionId?: string;
+  supersededByRevisionId?: string;
+  repairOverlayId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ExtractionRevision {
+  schemaVersion: ExtractionRevisionSchemaVersion;
+  extractionRevisionId: string;
+  sourceId: string;
+  sourceRevisionId: string;
+  adapter: string;
+  adapterVersion: string;
+  startedAt: string;
+  completedAt?: string;
+  status: "running" | "complete" | "complete_with_warnings" | "failed" | "interrupted_retriable";
+  emittedUnitIds: string[];
+  warnings?: string[];
+  retryAfterRevisionId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ReadingUnitManifest {
+  schemaVersion: ReadingUnitManifestSchemaVersion;
+  manifestId: string;
+  sourceId: string;
+  sourceRevisionId: string;
+  extractionRevisionId: string;
+  manifestRevision: number;
+  state: ReadalongManifestState;
+  generatedAt: string;
+  supersededByManifestId?: string;
+  units: ReadingUnit[];
+  summary: Record<string, unknown>;
+  warnings?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface ReadingUnit {
+  unitId: string;
+  orderKey: string;
+  readiness: ReadingUnitReadiness;
+  nodeId?: string;
+  contentIrId?: string;
+  locator?: ContentIRLocator;
+  fingerprint: string;
+  blockedReason?: string;
+  warnings?: string[];
+  provenance?: Record<string, unknown>;
+}
+
+export interface ReadalongManifest {
+  schemaVersion: ReadalongManifestSchemaVersion;
+  manifestId: string;
+  sourceId: string;
+  sourceRevisionId: string;
+  extractionRevisionId: string;
+  readingUnitManifestId: string;
+  manifestRevision: number;
+  state: ReadalongManifestState;
+  generatedAt: string;
+  supersededByManifestId?: string;
+  unitIds: string[];
+  speechPlanIds?: string[];
+  audioArtifactIds?: string[];
+  highlightMapIds?: string[];
+  artifactCompatibilityIds?: string[];
+  syncFidelityDecisionIds?: string[];
+  progressIds?: string[];
+  repairOverlayIds?: string[];
+  warnings?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface AudioArtifact {
+  schemaVersion: AudioArtifactSchemaVersion;
+  artifactId: string;
+  sourceId: string;
+  sourceRevisionId: string;
+  extractionRevisionId: string;
+  readalongManifestId: string;
+  segmentIds: string[];
+  state: AudioArtifactState;
+  generatedAt: string;
+  checkedAt?: string;
+  provider: Record<string, unknown>;
+  format: "mp3" | "wav" | "ogg" | "aac";
+  durationMs?: number;
+  uri?: string;
+  checksum?: string;
+  compatibilityKey: string;
+  replacementOfArtifactId?: string;
+  replacedByArtifactId?: string;
+  failureCode?: string;
+  failureMessage?: string;
+  retry: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ArtifactCompatibility {
+  schemaVersion: ArtifactCompatibilitySchemaVersion;
+  compatibilityId: string;
+  artifactId: string;
+  sourceId: string;
+  sourceRevisionId: string;
+  targetSourceRevisionId: string;
+  decision: string;
+  reuseAllowed: boolean;
+  checkedAt: string;
+  compatibleUnitIds?: string[];
+  staleUnitIds?: string[];
+  reasons: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface RepairOverlay {
+  schemaVersion: RepairOverlaySchemaVersion;
+  overlayId: string;
+  sourceId: string;
+  sourceRevisionId: string;
+  targetRevisionId: string;
+  createdAt: string;
+  immutable: true;
+  changes: Record<string, unknown>[];
+  summary: string;
+  createdBy?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface RevisionMap {
+  schemaVersion: RevisionMapSchemaVersion;
+  revisionMapId: string;
+  sourceId: string;
+  fromSourceRevisionId: string;
+  toSourceRevisionId: string;
+  generatedAt: string;
+  cause: "repair_overlay" | "extraction_correction" | "promotion";
+  overlayId?: string;
+  confidence: number;
+  unitMappings: Record<string, unknown>[];
+  locatorMappings?: Record<string, unknown>[];
+  progressMappings?: Record<string, unknown>[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface PromotionCrosswalk {
+  schemaVersion: PromotionCrosswalkSchemaVersion;
+  crosswalkId: string;
+  promotedAt: string;
+  fromSourceId: string;
+  toSourceId: string;
+  fromManifestId: string;
+  toManifestId: string;
+  identityMappings: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SourceManifestEvent {
+  schemaVersion: SourceManifestEventSchemaVersion;
+  eventId: string;
+  sourceId: string;
+  sequence: number;
+  occurredAt: string;
+  eventType: string;
+  snapshotAvailable: boolean;
+  subject: Record<string, unknown>;
+  cursor?: string;
+  snapshotManifestId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface DurableProgress {
+  schemaVersion: DurableProgressSchemaVersion;
+  progressId: string;
+  sourceId: string;
+  readalongManifestId: string;
+  sourceRevisionId: string;
+  audioArtifactId?: string;
+  kind: "resume" | "bookmark" | "highlight";
+  state:
+    | "current"
+    | "degraded"
+    | "stale"
+    | "superseded"
+    | "failed"
+    | "interrupted_retriable"
+    | "remapped";
+  updatedAt: string;
+  canonical: boolean;
+  locatorEnvelope: LocatorEnvelope;
+  position: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ResumeResolution {
+  schemaVersion: ResumeResolutionSchemaVersion;
+  resolutionId: string;
+  progressId: string;
+  sourceId: string;
+  requestedAt: string;
+  decision: string;
+  reason: string;
+  resolvedReadalongManifestId: string;
+  resolvedLocatorEnvelope: LocatorEnvelope;
+  revisionMapId?: string;
+  staleProgressId?: string;
+  retryArtifactId?: string;
+  offers?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface SyncFidelityDecision {
+  schemaVersion: SyncFidelityDecisionSchemaVersion;
+  decisionId: string;
+  sourceId: string;
+  sourceRevisionId: string;
+  readalongManifestId: string;
+  audioArtifactId: string;
+  highlightMapId?: string;
+  generatedAt: string;
+  fidelity: SyncFidelity;
+  exactAllowed: boolean;
+  fallbackReason?: string;
+  evidence: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export type ReaderWorkspaceReadMode = "paused" | "readable";
+
+export interface ReaderWorkspaceSnapshot {
+  schemaVersion: ReaderWorkspaceSnapshotSchemaVersion;
+  projectId: string;
+  projectRevision: number;
+  readMode: ReaderWorkspaceReadMode;
+  sourceId: string;
+  sourceRevisionId: string;
+  sourceContentHash: string;
+  runId: string | null;
+  runCompatibilityKey: string | null;
+  mediaManifestVersion: number | null;
+  timingRevision: number | null;
+  syncFidelity: SyncFidelity | null;
+  readerLocator: LocatorEnvelope | null;
+  playbackCursorMs: number | null;
+  playbackRate: number | null;
+  followPreference: boolean | null;
+  updatedAt: string;
 }

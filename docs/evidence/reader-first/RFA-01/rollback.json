@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "tts-research.reader-first-evidence-manifest.v1",
+  "immutable": true,
+  "supersessionOnly": true,
+  "linearIssueId": "QQP-613",
+  "captureStartedAt": "2026-07-11T02:21:49.755Z",
+  "captureCompletedAt": "2026-07-11T02:21:50.057Z",
+  "sourceCommit": "0f74143156a970c04b404a650f724b572e0ee2fd",
+  "strategy": "disable_rfa_01_new_behavior_keep_prior_compatible_state",
+  "disableNewBehaviorBoundary": {
+    "preserve": [
+      "source_content",
+      "committed_compatible_artifacts",
+      "server_authoritative_revisions"
+    ],
+    "never": ["delete_valid_artifacts", "infer_rebuild", "restore_browser_authority"]
+  },
+  "authorizationState": {
+    "status": "peer_approved_linear_created_rfa_01_product_authorized",
+    "authorizedIssues": ["RFA-01"],
+    "browserAuthority": false,
+    "rebuildInference": false
+  },
+  "issueId": "RFA-01",
+  "correlationId": "48a0a3dc-9961-4774-917c-cb0d3cc31085",
+  "acceptanceProbeId": "RFA-01-ROLLBACK",
+  "command": "node --input-type=module -e 'import assert from \"node:assert/strict\"; import {readFile} from \"node:fs/promises\"; const packet=JSON.parse(await readFile(\"docs/project-management/linear/tts-research-reader-first-release-batch-draft.json\",\"utf8\")); const issue=packet.issues.find(({localId})=>localId===\"RFA-01\"); assert.equal(issue.rollbackBoundary.strategy,\"disable_rfa_01_new_behavior_keep_prior_compatible_state\"); assert.deepEqual(issue.rollbackBoundary.preserve,[\"source_content\",\"committed_compatible_artifacts\",\"server_authoritative_revisions\"]); assert.deepEqual(issue.rollbackBoundary.never,[\"delete_valid_artifacts\",\"infer_rebuild\",\"restore_browser_authority\"]); console.log(`RFA-01 rollback boundary passed: preserve=${issue.rollbackBoundary.preserve.join(\",\")} never=${issue.rollbackBoundary.never.join(\",\")}`);'",
+  "executionMode": "subprocess_exact_command",
+  "fixtureSha256s": {
+    "docs/architecture/reader-first-release-contract-v2.json": "a3b2f75fa7393f93f0d2494bc5825c44e758dd2220d1fc3a78300d72a43ec868",
+    "docs/project-management/linear/tts-research-reader-first-release-batch-draft.json": "aa5e20a24b856caea74b78d224ac80307b7290f05cc35cb4169da7d9e1bdd44b",
+    "scripts/validate-reader-first-release.mjs": "7fe7f5bcd2e4ba5e2b11d6d2b75c5c509201b86b70aa61e11651071ef028a41e"
+  },
+  "measurementProfile": "static_rollback_contract_assertion_no_product_mutation",
+  "rawOutputPath": "docs/evidence/reader-first/RFA-01/rollback.json#/rawOutput",
+  "evidenceSemantics": "static_attestation_of_recorded_execution",
+  "reviewer": "Hermes Agent RFA-01 evidence capture producer v1",
+  "toolVersions": {
+    "node": "v26.1.0",
+    "git": "2.43.0"
+  },
+  "operatingSystem": {
+    "platform": "linux",
+    "release": "6.18.33.2-microsoft-standard-WSL2",
+    "architecture": "x64"
+  },
+  "hardwareProfile": {
+    "cpuModel": "AMD Ryzen 5 7535HS with Radeon Graphics",
+    "logicalCpuCount": 6,
+    "totalMemoryBytes": 58971992064
+  },
+  "approvalBindingPath": "docs/reviews/reader-first-release-peer-approval-v8.json",
+  "approvalBindingSha256": "29710a3b5af4fc21be5091b454a57fc7c2b14d363a9fc46706e403e901e7ecef",
+  "archiveName": "tts-research-reader-first-peer-review-v8.zip",
+  "archiveSha256": "b91a683ac8c94bd44ca618b53b275cbe93c2d55d8a5cac1b11e6d9d1aeafc7de",
+  "commitOrArchiveSha256": "b91a683ac8c94bd44ca618b53b275cbe93c2d55d8a5cac1b11e6d9d1aeafc7de",
+  "startedAt": "2026-07-11T02:21:50.015Z",
+  "completedAt": "2026-07-11T02:21:50.057Z",
+  "observedAt": "2026-07-11T02:21:50.057Z",
+  "exitCode": 0,
+  "stdout": "RFA-01 rollback boundary passed: preserve=source_content,committed_compatible_artifacts,server_authoritative_revisions never=delete_valid_artifacts,infer_rebuild,restore_browser_authority\n",
+  "stderr": "",
+  "rawOutput": "RFA-01 rollback boundary passed: preserve=source_content,committed_compatible_artifacts,server_authoritative_revisions never=delete_valid_artifacts,infer_rebuild,restore_browser_authority\n",
+  "outputSha256": "beab6a987d0844591c3431d3a27ce187f1d8d03d40d2da4b3c0772acd095a7fb",
+  "result": "pass"
+}

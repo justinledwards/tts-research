@@ -4,10 +4,11 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
-export async function createRunContext({ kind, rootDir }) {
+export async function createRunContext({ kind, outputDir: configuredOutputDir, rootDir }) {
   const startedAt = new Date();
   const runId = startedAt.toISOString().replaceAll(/[:.]/g, "-");
   const outputDir =
+    configuredOutputDir ??
     process.env.VALIDATE_LOCAL_OUTPUT_DIR ??
     path.join(rootDir, "output", "validate-local", "latest");
   const logsDir = path.join(outputDir, "logs");
@@ -178,6 +179,7 @@ export async function finalizeRun(context) {
   context.summary.status = failed ? "failed" : "passed";
   context.summary.endedAt = endedAt.toISOString();
   context.summary.durationMs = endedAt.getTime() - Date.parse(context.summary.startedAt);
+  context.summary.degradedStates = summarizeRunDegradedStates(context.summary.steps);
   context.summary.reports = {
     json: path.join(context.outputDir, "summary.json"),
     markdown: path.join(context.outputDir, "report.md"),
@@ -204,7 +206,7 @@ export function renderThresholdTable(thresholds) {
     .join("\n");
 }
 
-function renderMarkdownReport(summary) {
+export function renderMarkdownReport(summary) {
   const lines = [
     `# ${summary.kind} report`,
     "",
@@ -227,6 +229,9 @@ function renderMarkdownReport(summary) {
       )} | [log](${encodeURI(log)}) |`,
     );
   }
+
+  lines.push("", "## Degraded States", "", renderDegradedStatesMarkdown(summary.degradedStates));
+  lines.push("", "## QA Report Artifacts", "", renderArtifactsMarkdown(summary));
 
   for (const step of summary.steps.filter((item) => item.thresholds?.length || item.metrics)) {
     lines.push("", `## ${step.title}`, "");
@@ -253,7 +258,7 @@ function renderMarkdownReport(summary) {
   return lines.join("\n");
 }
 
-function renderDegradedStatesMarkdown(degradedStates) {
+export function renderDegradedStatesMarkdown(degradedStates) {
   if (!degradedStates?.total) {
     return "Degraded states: none.";
   }
@@ -274,7 +279,7 @@ function formatDegradedDetail(detail) {
   return entries.map(([key, value]) => `${key}=${String(value)}`).join(", ");
 }
 
-function renderHTMLReport(summary, markdown) {
+export function renderHTMLReport(summary, markdown) {
   const title = `${summary.kind} report`;
   return `<!doctype html>
 <html lang="en">
@@ -290,6 +295,10 @@ function renderHTMLReport(summary, markdown) {
     table { border-collapse: collapse; width: 100%; background: white; }
     th, td { border: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; }
     th { background: #f3f4f6; }
+    .section { margin-top: 28px; }
+    .passed { color: #166534; font-weight: 700; }
+    .failed { color: #991b1b; font-weight: 700; }
+    .muted { color: #6b7280; }
     pre { background: #111827; border-radius: 8px; color: #e5e7eb; overflow: auto; padding: 14px; }
     a { color: #c2410c; }
   </style>
@@ -315,12 +324,156 @@ function renderHTMLReport(summary, markdown) {
         .join("\n")}
     </tbody>
   </table>
+  <section class="section">
+    <h2>Degraded States</h2>
+    ${renderDegradedStatesHTML(summary.degradedStates)}
+  </section>
+  <section class="section">
+    <h2>QA Report Artifacts</h2>
+    ${renderArtifactsHTML(summary)}
+  </section>
+  <section class="section">
+    <h2>Step Details</h2>
+    ${renderStepDetailsHTML(summary)}
+  </section>
   <h2>Markdown Source</h2>
   <pre>${escapeHTML(markdown)}</pre>
 </main>
 </body>
 </html>
 `;
+}
+
+export function summarizeRunDegradedStates(steps) {
+  const items = [];
+  for (const step of steps ?? []) {
+    for (const item of step.metrics?.degradedStates?.items ?? []) {
+      items.push({
+        ...item,
+        stepId: step.id,
+        stepTitle: step.title,
+      });
+    }
+  }
+  const byName = {};
+  const bySurface = {};
+  for (const item of items) {
+    byName[item.name] = (byName[item.name] ?? 0) + 1;
+    bySurface[item.surface] = (bySurface[item.surface] ?? 0) + 1;
+  }
+  return {
+    byName,
+    bySurface,
+    items,
+    total: items.length,
+  };
+}
+
+function renderDegradedStatesHTML(degradedStates) {
+  if (!degradedStates?.total) {
+    return '<p class="muted">Degraded states: none.</p>';
+  }
+  return `<table>
+    <thead><tr><th>Name</th><th>Surface</th><th>Fixture</th><th>Step</th><th>Detail</th></tr></thead>
+    <tbody>
+      ${(degradedStates.items ?? [])
+        .map(
+          (item) =>
+            `<tr><td>${escapeHTML(item.name)}</td><td>${escapeHTML(
+              item.surface,
+            )}</td><td>${escapeHTML(item.kind ?? "-")}</td><td>${escapeHTML(
+              item.stepTitle ?? item.stepId ?? "-",
+            )}</td><td>${escapeHTML(formatDegradedDetail(item.detail))}</td></tr>`,
+        )
+        .join("\n")}
+    </tbody>
+  </table>`;
+}
+
+function renderArtifactsMarkdown(summary) {
+  const rows = summary.steps.flatMap((step) =>
+    Object.entries(step.artifacts ?? {}).map(([name, artifactPath]) => ({
+      name,
+      path: artifactPath,
+      step,
+    })),
+  );
+  if (rows.length === 0) {
+    return "No QA artifacts recorded.";
+  }
+  return [
+    "| Step | Artifact | Path |",
+    "| --- | --- | --- |",
+    ...rows.map((row) => {
+      const relativePath = path.relative(summary.outputDir, row.path);
+      return `| ${escapeMarkdown(row.step.title)} | ${escapeMarkdown(row.name)} | [${escapeMarkdown(relativePath)}](${encodeURI(relativePath)}) |`;
+    }),
+  ].join("\n");
+}
+
+function renderArtifactsHTML(summary) {
+  const rows = summary.steps.flatMap((step) =>
+    Object.entries(step.artifacts ?? {}).map(([name, artifactPath]) => ({
+      name,
+      path: artifactPath,
+      step,
+    })),
+  );
+  if (rows.length === 0) {
+    return '<p class="muted">No QA artifacts recorded.</p>';
+  }
+  return `<table>
+    <thead><tr><th>Step</th><th>Artifact</th><th>Path</th></tr></thead>
+    <tbody>
+      ${rows
+        .map((row) => {
+          const relativePath = path.relative(summary.outputDir, row.path);
+          return `<tr><td>${escapeHTML(row.step.title)}</td><td>${escapeHTML(
+            row.name,
+          )}</td><td><a href="${escapeHTML(encodeURI(relativePath))}">${escapeHTML(
+            relativePath,
+          )}</a></td></tr>`;
+        })
+        .join("\n")}
+    </tbody>
+  </table>`;
+}
+
+function renderStepDetailsHTML(summary) {
+  const steps = summary.steps.filter((step) => step.thresholds?.length || step.metrics);
+  if (steps.length === 0) {
+    return '<p class="muted">No metric-bearing steps.</p>';
+  }
+  return steps
+    .map((step) => {
+      const thresholds = step.thresholds?.length
+        ? `<table>
+            <thead><tr><th>Status</th><th>Metric</th><th>Actual</th><th>Operator</th><th>Expected</th></tr></thead>
+            <tbody>
+              ${step.thresholds
+                .map(
+                  (item) =>
+                    `<tr><td class="${item.passed ? "passed" : "failed"}">${
+                      item.passed ? "PASS" : "FAIL"
+                    }</td><td>${escapeHTML(item.metric)}</td><td>${escapeHTML(
+                      formatMetricValue(item.actual),
+                    )}</td><td>${escapeHTML(item.operator)}</td><td>${escapeHTML(
+                      formatMetricValue(item.expected),
+                    )}</td></tr>`,
+                )
+                .join("\n")}
+            </tbody>
+          </table>`
+        : '<p class="muted">No thresholds.</p>';
+      const degradedStates = step.metrics?.degradedStates
+        ? renderDegradedStatesHTML(step.metrics.degradedStates)
+        : "";
+      const metrics = step.metrics
+        ? `<pre>${escapeHTML(JSON.stringify(step.metrics, null, 2))}</pre>`
+        : "";
+      return `<section class="section"><h3>${escapeHTML(step.title)}</h3>${thresholds}${degradedStates}${metrics}</section>`;
+    })
+    .join("\n");
 }
 
 function nextStepIndex(context) {
@@ -337,7 +490,7 @@ function shellQuote(value) {
   return /^[A-Za-z0-9_./:=@+-]+$/.test(text) ? text : JSON.stringify(text);
 }
 
-function formatDuration(durationMs) {
+export function formatDuration(durationMs) {
   if (!Number.isFinite(durationMs)) {
     return "0ms";
   }

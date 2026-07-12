@@ -27,12 +27,19 @@ func (service *Service) refreshTimingArtifacts(ctx context.Context, id string, f
 		durationMS = sumTimingSegmentDurations(segments)
 	}
 
-	normalized, warnings := service.normalizeJobTiming(ctx, job, segments, durationMS, final)
+	alignmentResult, err := service.normalizeJobTiming(ctx, job, segments, durationMS, final)
+	if err != nil {
+		return nil, err
+	}
+	normalized := alignmentResult.Timing
+	warnings := alignmentResult.Warnings
 	scopeContent, _ := service.timingScopeContent(job.VoiceJob)
+	scopeKey := scopeKeyForJob(job.VoiceJob)
+	timingSourceID := firstNonEmpty(job.PreparedSourceID, job.BookSourceID, job.TemporarySourceID, job.ID)
 	highlight := highlightmap.Build(highlightmap.BuildRequest{
 		JobID:        job.ID,
-		BookSourceID: job.BookSourceID,
-		ScopeKey:     scopeKeyForJob(job.VoiceJob),
+		BookSourceID: timingSourceID,
+		ScopeKey:     scopeKey,
 		Text:         scopeContent.Text,
 		WordSpans:    highlightWordSpans(scopeContent.WordSpans),
 		Fragments:    normalized.Fragments,
@@ -42,6 +49,19 @@ func (service *Service) refreshTimingArtifacts(ctx context.Context, id string, f
 	highlight.Warnings = uniqueStrings(append(highlight.Warnings, warnings...))
 	highlight.Summary.Warnings = highlight.Warnings
 	highlight.Summary.LowConfidence = highlight.Summary.LowConfidence || len(warnings) > 0 && highlight.Mode == highlightmap.ModePhrase
+	highlightV2 := highlightmap.BuildV2(highlightmap.BuildV2Request{
+		JobID:        job.ID,
+		BookSourceID: timingSourceID,
+		ScopeKey:     scopeKey,
+		SpeechPlanID: job.ID,
+		Text:         scopeContent.Text,
+		WordSpans:    highlightWordSpans(scopeContent.WordSpans),
+		Fragments:    normalized.Fragments,
+		Tokens:       normalized.Tokens,
+		GeneratedAt:  time.Now().UTC(),
+		Quality:      alignmentResult.Quality,
+		Warnings:     warnings,
+	})
 	jobDir, err := service.jobArtifactDir(id)
 	if err != nil {
 		return nil, err
@@ -49,13 +69,31 @@ func (service *Service) refreshTimingArtifacts(ctx context.Context, id string, f
 	if err := highlightmap.PersistArtifacts(jobDir, highlight, normalized.Fragments, normalized.Tokens); err != nil {
 		return nil, err
 	}
+	if err := highlightmap.PersistHighlightMapV2(jobDir, highlightV2); err != nil {
+		return nil, err
+	}
+	if err := highlightmap.PersistAlignmentQuality(jobDir, alignmentResult.Quality); err != nil {
+		return nil, err
+	}
+	syncFidelity := deriveSyncFidelityDecision(syncFidelityDecisionInput{
+		Job:         job.VoiceJob,
+		Highlight:   highlightV2,
+		Quality:     alignmentResult.Quality,
+		GeneratedAt: highlightV2.GeneratedAt,
+		Final:       final,
+		LowResource: service.options.SyncLowResourceMode,
+	})
 
 	artifacts := TimingArtifacts{
-		Status:            highlight.Status,
-		Summary:           highlight.Summary,
-		HighlightMapURL:   fmt.Sprintf("/api/voice-jobs/%s/highlight-map", id),
-		FragmentTimingURL: fmt.Sprintf("/api/voice-jobs/%s/timing/fragments", id),
-		TokenTimingURL:    fmt.Sprintf("/api/voice-jobs/%s/timing/tokens", id),
+		Status:              highlight.Status,
+		Summary:             highlight.Summary,
+		HighlightMapURL:     fmt.Sprintf("/api/voice-jobs/%s/highlight-map", id),
+		HighlightMapV2URL:   fmt.Sprintf("/api/voice-jobs/%s/highlight-map-v2", id),
+		FragmentTimingURL:   fmt.Sprintf("/api/voice-jobs/%s/timing/fragments", id),
+		TokenTimingURL:      fmt.Sprintf("/api/voice-jobs/%s/timing/tokens", id),
+		AlignmentQualityURL: fmt.Sprintf("/api/voice-jobs/%s/timing/alignment", id),
+		SyncFidelity:        &syncFidelity,
+		AlignmentQuality:    &alignmentResult.Quality,
 	}
 	var updatedJob VoiceJob
 	service.updateJob(id, func(job *storedJob) {
@@ -76,30 +114,11 @@ func (service *Service) normalizeJobTiming(
 	segments []alignment.SegmentInput,
 	durationMS int,
 	final bool,
-) (alignment.NormalizedTiming, []string) {
+) (alignment.AlignmentServiceResult, error) {
 	nativeEvents := nativeEventsForSegments(job.nativeTimingEvents, len(segments))
-	if len(nativeEvents) > 0 {
-		if normalized, ok := alignment.NormalizeNativeEvents(alignment.NormalizeRequest{
-			JobID:        job.ID,
-			DurationMS:   durationMS,
-			GeneratedAt:  time.Now().UTC(),
-			Segments:     segments,
-			NativeEvents: nativeEvents,
-		}); ok {
-			return normalized, nil
-		}
-	}
-
-	warnings := make([]string, 0)
-	if final && job.AudioPath != "" && service.options.Alignment.Enabled {
-		aligned, err := alignment.Align(ctx, alignment.AlignRequest{
-			JobID:      job.ID,
-			AudioPath:  job.AudioPath,
-			DurationMS: durationMS,
-			Language:   firstNonEmpty(job.TTSLanguage, job.Locale, job.VoiceProfileLanguage),
-			Segments:   segments,
-			WorkDir:    filepath.Join(service.options.JobDataDir, ".alignment-work"),
-		}, alignment.AlignerOptions{
+	alignmentService := alignment.NewAlignmentService(alignment.AlignmentServiceOptions{
+		Mode: service.options.Alignment.Mode,
+		Aligner: alignment.AlignerOptions{
 			Enabled:          service.options.Alignment.Enabled,
 			Preferred:        service.options.Alignment.Preferred,
 			MFABin:           service.options.Alignment.MFABin,
@@ -108,23 +127,20 @@ func (service *Service) normalizeJobTiming(
 			AeneasPython:     service.options.Alignment.AeneasPython,
 			GentleURL:        service.options.Alignment.GentleURL,
 			Timeout:          time.Duration(service.options.Alignment.TimeoutSeconds) * time.Second,
-		})
-		if err == nil {
-			return aligned, nil
-		}
-		warnings = append(warnings, "post-alignment unavailable: "+err.Error())
-	}
-
-	normalized, err := alignment.NormalizeTiming(alignment.NormalizeRequest{
-		JobID:       job.ID,
-		DurationMS:  durationMS,
-		GeneratedAt: time.Now().UTC(),
-		Segments:    segments,
+		},
+		WorkDir:                        filepath.Join(service.options.JobDataDir, ".alignment-work"),
+		AlignmentRequiredForWordTiming: service.options.Alignment.RequiredForWordHighlight,
 	})
-	if err != nil {
-		warnings = append(warnings, err.Error())
-	}
-	return normalized, warnings
+	return alignmentService.Generate(ctx, alignment.AlignmentServiceRequest{
+		JobID:        job.ID,
+		AudioPath:    job.AudioPath,
+		DurationMS:   durationMS,
+		GeneratedAt:  time.Now().UTC(),
+		Language:     firstNonEmpty(job.TTSLanguage, job.Locale, job.VoiceProfileLanguage),
+		Segments:     segments,
+		NativeEvents: nativeEvents,
+		Final:        final,
+	})
 }
 
 func (service *Service) GetJobWithTiming(id string, includeTiming bool) (VoiceJob, error) {
@@ -137,6 +153,9 @@ func (service *Service) GetJobWithTiming(id string, includeTiming bool) (VoiceJo
 	}
 	if tokens, readErr := service.GetTokenTiming(id); readErr == nil {
 		job.Timing.TokenTiming = &tokens
+	}
+	if quality, readErr := service.GetAlignmentQuality(id); readErr == nil {
+		job.Timing.AlignmentQuality = &quality
 	}
 	return job, nil
 }
@@ -155,6 +174,42 @@ func (service *Service) GetHighlightMap(id string) (highlightmap.HighlightMap, e
 			return highlightmap.HighlightMap{}, ErrAudioNotReady
 		}
 		return highlightmap.HighlightMap{}, err
+	}
+	return payload, nil
+}
+
+func (service *Service) GetHighlightMapV2(id string) (highlightmap.HighlightMapV2, error) {
+	if _, err := service.GetJob(id); err != nil {
+		return highlightmap.HighlightMapV2{}, err
+	}
+	jobDir, err := service.jobArtifactDir(id)
+	if err != nil {
+		return highlightmap.HighlightMapV2{}, err
+	}
+	payload, err := highlightmap.ReadHighlightMapV2(jobDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return highlightmap.HighlightMapV2{}, ErrAudioNotReady
+		}
+		return highlightmap.HighlightMapV2{}, err
+	}
+	return payload, nil
+}
+
+func (service *Service) GetAlignmentQuality(id string) (alignment.AlignmentQualityReport, error) {
+	if _, err := service.GetJob(id); err != nil {
+		return alignment.AlignmentQualityReport{}, err
+	}
+	jobDir, err := service.jobArtifactDir(id)
+	if err != nil {
+		return alignment.AlignmentQualityReport{}, err
+	}
+	var payload alignment.AlignmentQualityReport
+	if err := highlightmap.ReadAlignmentQuality(jobDir, &payload); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return alignment.AlignmentQualityReport{}, ErrAudioNotReady
+		}
+		return alignment.AlignmentQualityReport{}, err
 	}
 	return payload, nil
 }
@@ -208,14 +263,67 @@ func (service *Service) storedJobSnapshot(id string) (storedJob, error) {
 }
 
 func (service *Service) jobArtifactDir(id string) (string, error) {
-	return filepath.Abs(filepath.Join(service.options.JobDataDir, id))
+	return service.jobArtifactDirByID(id)
 }
 
 func (service *Service) timingScopeContent(job VoiceJob) (BookSourceScopeContent, error) {
-	if strings.TrimSpace(job.BookSourceID) == "" {
-		return BookSourceScopeContent{}, ErrBookSourceNotFound
+	if strings.TrimSpace(job.BookSourceID) != "" {
+		return service.GetBookSourceScope(job.BookSourceID, job.BookScope)
 	}
-	return service.GetBookSourceScope(job.BookSourceID, job.BookScope)
+	if strings.TrimSpace(job.PreparedSourceID) != "" {
+		source, ok := service.preparedSourceByID(job.PreparedSourceID)
+		if !ok {
+			return BookSourceScopeContent{}, ErrPreparedSourceNotFound
+		}
+		return preparedSourceTimingScopeContent(job, source), nil
+	}
+	if strings.TrimSpace(job.TemporarySourceID) != "" {
+		session, err := service.getTemporarySource(job.TemporarySourceID, false)
+		if err != nil {
+			return BookSourceScopeContent{}, err
+		}
+		return preparedSourceTimingScopeContent(job, preparedSourceFromTemporarySession(session)), nil
+	}
+	return BookSourceScopeContent{}, ErrBookSourceNotFound
+}
+
+func preparedSourceTimingScopeContent(job VoiceJob, source PreparedSource) BookSourceScopeContent {
+	selected := map[string]struct{}{}
+	for _, id := range job.SelectedBlockIDs {
+		if trimmed := strings.TrimSpace(id); trimmed != "" {
+			selected[trimmed] = struct{}{}
+		}
+	}
+	blocks := make([]NarrationBlock, 0, len(source.Blocks))
+	for _, block := range source.Blocks {
+		if len(selected) > 0 {
+			if _, ok := selected[block.ID]; !ok {
+				continue
+			}
+		}
+		if block.SpeakMode == NarrationSpeakModeSkip || strings.TrimSpace(block.SpokenText) == "" {
+			continue
+		}
+		blocks = append(blocks, block)
+	}
+	text := strings.TrimSpace(job.InputText)
+	if text == "" {
+		text = preparedSourceSpeechText(blocks)
+	}
+	spans := normalizeBookSpanIndexes(buildBookWordSpans(text, 0, 0, 0))
+	return BookSourceScopeContent{
+		BookSourceID:         source.ID,
+		Scope:                BookScope{Type: BookScopeTypeBook, Label: "Prepared source"},
+		Text:                 text,
+		WordSpans:            spans,
+		WordCount:            len(spans),
+		EstimatedDurationMS:  estimateBookDurationMS(len(spans)),
+		SourceStructureValid: true,
+		Blocks:               blocks,
+		SkippedItems:         append([]SkippedSourceItem(nil), source.SkippedItems...),
+		Summary:              summarizePreparedSource(blocks),
+		Warnings:             append([]string(nil), source.Warnings...),
+	}
 }
 
 func timingSegmentsForJob(job storedJob, final bool) []alignment.SegmentInput {
@@ -287,6 +395,12 @@ func highlightWordSpans(spans []BookSourceWordSpan) []highlightmap.WordSpan {
 
 func scopeKeyForJob(job VoiceJob) string {
 	if job.BookScope == nil {
+		if strings.TrimSpace(job.PreparedSourceID) != "" {
+			return "prepared-source"
+		}
+		if strings.TrimSpace(job.TemporarySourceID) != "" {
+			return "temporary-source"
+		}
 		return ""
 	}
 	switch job.BookScope.Type {
@@ -306,11 +420,13 @@ func scopeKeyForJob(job VoiceJob) string {
 
 func timingURLsForJob(id string, summary highlightmap.Summary) *TimingArtifacts {
 	return &TimingArtifacts{
-		Status:            summary.Status,
-		Summary:           summary,
-		HighlightMapURL:   fmt.Sprintf("/api/voice-jobs/%s/highlight-map", id),
-		FragmentTimingURL: fmt.Sprintf("/api/voice-jobs/%s/timing/fragments", id),
-		TokenTimingURL:    fmt.Sprintf("/api/voice-jobs/%s/timing/tokens", id),
+		Status:              summary.Status,
+		Summary:             summary,
+		HighlightMapURL:     fmt.Sprintf("/api/voice-jobs/%s/highlight-map", id),
+		HighlightMapV2URL:   fmt.Sprintf("/api/voice-jobs/%s/highlight-map-v2", id),
+		FragmentTimingURL:   fmt.Sprintf("/api/voice-jobs/%s/timing/fragments", id),
+		TokenTimingURL:      fmt.Sprintf("/api/voice-jobs/%s/timing/tokens", id),
+		AlignmentQualityURL: fmt.Sprintf("/api/voice-jobs/%s/timing/alignment", id),
 	}
 }
 

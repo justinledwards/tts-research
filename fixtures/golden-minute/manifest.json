@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "golden-minute-manifest.v1",
+  "id": "golden-minute-readalong",
+  "title": "Golden Minute Read-along Fixture",
+  "samplePath": "sample.md",
+  "expectedSpeechPlanPath": "expected-speech-plan.json",
+  "expectedTimingPath": "expected-timing.json",
+  "durationBudget": {
+    "minMs": 55000,
+    "maxMs": 70000
+  },
+  "requiredFeatures": {
+    "narrationSegments": {
+      "min": 6,
+      "max": 8
+    },
+    "heading": true,
+    "paragraphTransitions": true,
+    "abbreviation": "Dr.",
+    "number": "47",
+    "quotedPhrase": "Start with the listener, then chase the waveform.",
+    "citationToken": "[^gm1]",
+    "longSentenceMinWords": 30,
+    "shortSentenceMaxWords": 3,
+    "naturalPauseMarker": "waits for a breath",
+    "sourceLocator": "golden-minute://resume-anchor"
+  },
+  "referenceAudio": {
+    "requiredProvider": "mock",
+    "localMockTimingBaseline": "expected-timing.json",
+    "optionalKokoroAudioPath": null,
+    "cloudDependency": false
+  }
+}

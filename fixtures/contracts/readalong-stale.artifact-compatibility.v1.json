@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "artifact-compatibility.v1",
+  "compatibilityId": "compat-md-stale",
+  "artifactId": "audio-md-stale",
+  "sourceId": "contract-markdown",
+  "sourceRevisionId": "sr-md-001",
+  "targetSourceRevisionId": "sr-md-002",
+  "decision": "stale_due_to_repair",
+  "reuseAllowed": false,
+  "checkedAt": "2026-05-17T01:13:31Z",
+  "compatibleUnitIds": [],
+  "staleUnitIds": ["unit-md-0001"],
+  "reasons": ["repair overlay changed source text and invalidated checked timing"]
+}
